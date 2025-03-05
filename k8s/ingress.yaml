@@ -8,10 +8,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - agents.cloud.snova.ai
+    - aiskagents.cloud.snova.ai
     secretName: cloud-snova-ai-tls
   rules:
-  - host: agents.cloud.snova.ai
+  - host: aiskagents.cloud.snova.ai
     http:
       paths:
       - path: /

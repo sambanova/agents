@@ -6,7 +6,6 @@ deploy:
 	
 	@echo "Deploying backend to Kubernetes..."
 	make -C frontend/sales-agent-crew deploy
-
-	@echo "Deploying application to Kubernetes..."
+ing application to Kubernetes..."
 	cat k8s/ingress.yaml | kubectl apply -f -
 	

@@ -29,6 +29,9 @@ spec:
             cpu: 500m
             memory: 256Mi
         args: ["--appendonly", "yes"]  # Enable persistence within container
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data  # Redis default data directory
         livenessProbe:
           tcpSocket:
             port: 6379
@@ -38,4 +41,9 @@ spec:
           tcpSocket:
             port: 6379
           initialDelaySeconds: 5
-          periodSeconds: 10 
+          periodSeconds: 10
+      volumes:
+      - name: redis-data
+        hostPath:
+          path: /data/redis  # Directory on the host machine
+          type: DirectoryOrCreate  # Creates the directory if it doesn't exist 
