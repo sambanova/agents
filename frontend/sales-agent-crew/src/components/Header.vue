@@ -8,16 +8,17 @@
           <img
             src="/logo.svg" 
             alt="Samba Sales Agents Logo" 
-            class="h-6 md:hidden"
+            class="h-6 md:hidden size-[30px]"
+            
           />
           <img 
             src="/logo-icon.svg" 
             alt="Samba Sales Agents Logo" 
-            class="hidden md:h-8 md:block"
+            class="hidden md:h-8 md:block size-[30px]"
           />
         </div>
         <h1 class="text-[16px]  font-bold text-primary-brandTextPrimary tracking-tight text-center">
-          Co-Pilot
+          Agents
         </h1>
       </div>
 
@@ -117,6 +118,7 @@ function openSettings() {
 }
 
 function onKeysUpdated() {
+  
   emit('keysUpdated')
 }
 

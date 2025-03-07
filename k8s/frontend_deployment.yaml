@@ -1,23 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: samba-copilot-frontend
+  name: aiskagents-frontend
+  namespace: default
   labels:
-    app: samba-copilot-frontend
+    app: aiskagents-frontend
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: samba-copilot-frontend
+      app: aiskagents-frontend
   template:
     metadata:
       labels:
-        app: samba-copilot-frontend
+        app: aiskagents-frontend
     spec:
       imagePullSecrets:
       - name: regcred
       containers:
-      - name: samba-copilot-frontend-container
+      - name: aiskagents-frontend-container
         image: {{DOCKER_IMAGE}}
         imagePullPolicy: Always
         ports:
@@ -26,6 +27,6 @@ spec:
         - name: CLERK_SECRET_KEY
           valueFrom:
             secretKeyRef:
-              name: samba-copilot-frontend-secrets
+              name: aiskagents-frontend-secrets
               key: CLERK_SECRET_KEY
 

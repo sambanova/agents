@@ -1,16 +1,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: samba-copilot-backend
+  name: aiskagents-backend
+  namespace: default
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: samba-copilot-backend
+      app: aiskagents-backend
   template:
     metadata:
       labels:
-        app: samba-copilot-backend
+        app: aiskagents-backend
     spec:
       terminationGracePeriodSeconds: 60
       affinity:
@@ -23,12 +24,12 @@ spec:
                 - key: app
                   operator: In
                   values:
-                  - samba-copilot-backend
+                  - aiskagents-backend
               topologyKey: kubernetes.io/hostname
       imagePullSecrets:
       - name: regcred
       containers:
-      - name: samba-copilot-backend-container
+      - name: aiskagents-backend-container
         image: {{DOCKER_IMAGE}}
         imagePullPolicy: Always
         lifecycle:
@@ -65,21 +66,21 @@ spec:
         - name: WORKERS
           value: "1"
         - name: REDIS_HOST
-          value: redis
+          value: redis.redis.svc.cluster.local
         - name: REDIS_PORT
           value: "6379"
         - name: LANGTRACE_API_KEY
           valueFrom:
             secretKeyRef:
-              name: samba-copilot-backend-secrets
+              name: aiskagents-backend-secrets
               key: LANGTRACE_API_KEY
         - name: TAVILY_API_KEY
           valueFrom:
             secretKeyRef:
-              name: samba-copilot-backend-secrets
+              name: aiskagents-backend-secrets
               key: TAVILY_API_KEY
         - name: CLERK_JWT_ISSUER
           valueFrom:
             secretKeyRef:
-              name: samba-copilot-backend-secrets
+              name: aiskagents-backend-secrets
               key: CLERK_JWT_ISSUER

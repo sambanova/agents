@@ -15,8 +15,12 @@ from crewai.flow.flow import Flow, listen, start
 from dotenv import load_dotenv
 
 load_dotenv()
-from langtrace_python_sdk import langtrace
-langtrace.init(api_key=os.getenv("LANGTRACE_API_KEY"))
+
+# Only import and initialize langtrace if API key is set
+if os.getenv("LANGTRACE_API_KEY"):
+    from langtrace_python_sdk import langtrace
+    langtrace.init(api_key=os.getenv("LANGTRACE_API_KEY"))
+
 
 from .crews.edu_content_writer.edu_content_writer_crew import EduContentWriterCrew
 from .crews.edu_research.edu_research_crew import EducationalPlan, EduResearchCrew

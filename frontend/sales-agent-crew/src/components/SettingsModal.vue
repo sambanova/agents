@@ -294,15 +294,17 @@ const missingKeys = ref({
 // Load keys on mount and check if modal should be open
 onMounted(async () => {
   await loadKeys()
-  checkRequiredKeys() // Ensure modal opens if needed
+ await checkRequiredKeys() // Ensure modal opens if needed
   emitterMitt.on('check-keys', checkRequiredKeys);
+  emitterMitt.emit('keys-updated',  missingKeys.value );
 
 })
 
 
 // Watch for provider changes and check required keys dynamically
-watch(() => props.provider, () => {
-  checkRequiredKeys()
+watch(() => props.provider, async () => {
+  await checkRequiredKeys()
+  updateAndCallEvents()
 })
 watch([exaKey, serperKey, sambanovaKey, fireworksKey], () => {
   // checkRequiredKeys()
@@ -359,13 +361,14 @@ const handleModelSelection = () => {
 // ✅ Function to check if required keys are missing
 const checkRequiredKeys = () => {
   missingKeys.value = {
-    exaKey: !exaKey.value,
-    serperKey: !serperKey.value,
-    sambanovaKey: props.provider === 'sambanova' && !sambanovaKey.value,
-    fireworksKey: props.provider === 'fireworks' && !fireworksKey.value
+    exa: !exaKey.value,
+    serper: !serperKey.value,
+    sambanova: props.provider === 'sambanova' && !sambanovaKey.value,
+    fireworks: props.provider === 'fireworks' && !fireworksKey.value
   }
 
   isOpen.value = Object.values(missingKeys.value).some((missing) => missing)
+  emitterMitt.emit('keys-updated',  missingKeys.value );
 
 }
 
@@ -392,7 +395,9 @@ const saveSambanovaKey = async () => {
     localStorage.setItem(`sambanova_key_${userId.value}`, encryptedKey)
     successMessage.value = 'SambaNova API key saved successfully!'
     await updateBackendKeys()
-    emit('keysUpdated')
+    updateAndCallEvents()
+
+
   } catch (error) {
     console.error('Failed to save SambaNova key:', error)
     errorMessage.value = 'Failed to save SambaNova API key'
@@ -413,8 +418,9 @@ const clearSambanovaKey =async () => {
   sambanovaKey.value = ''
   successMessage.value = 'SambaNova API key cleared successfully!'
   await updateBackendKeys()
-  emit('keysUpdated')
+  updateAndCallEvents()
   clearMessagesAfterDelay()
+  emitterMitt.emit('keys-updated',  missingKeys.value );
 
 }
 
@@ -428,7 +434,7 @@ const saveExaKey = async () => {
     localStorage.setItem(`exa_key_${userId.value}`, encryptedKey)
     successMessage.value = 'Exa API key saved successfully!'
     await updateBackendKeys()
-    emit('keysUpdated')
+    updateAndCallEvents()
   } catch (error) {
     console.error('Failed to save Exa key:', error)
     errorMessage.value = 'Failed to save Exa API key'
@@ -437,13 +443,15 @@ const saveExaKey = async () => {
   }
 }
 
-const clearExaKey = () => {
+const clearExaKey =async () => {
   localStorage.removeItem(`exa_key_${userId.value}`)
   exaKey.value = ''
   successMessage.value = 'Exa API key cleared successfully!'
-  updateBackendKeys()
-  emit('keysUpdated')
+ await  updateBackendKeys()
+ 
   clearMessagesAfterDelay()
+  updateAndCallEvents()
+
 }
 
 const saveSerperKey = async () => {
@@ -456,7 +464,9 @@ const saveSerperKey = async () => {
     localStorage.setItem(`serper_key_${userId.value}`, encryptedKey)
     successMessage.value = 'Serper API key saved successfully!'
     await updateBackendKeys()
-    emit('keysUpdated')
+   
+    updateAndCallEvents()
+
   } catch (error) {
     console.error('Failed to save Serper key:', error)
     errorMessage.value = 'Failed to save Serper API key'
@@ -484,6 +494,9 @@ const updateBackendKeys = async () => {
     if (response.status === 200) {
       console.log('API keys updated in backend successfully')
     }
+
+
+
   } catch (error) {
     console.error('Error updating API keys in backend:', error)
     errorMessage.value = 'Failed to update API keys in backend'
@@ -500,7 +513,8 @@ const saveFireworksKey = async () => {
     localStorage.setItem(`fireworks_key_${userId.value}`, encryptedKey)
     successMessage.value = 'Fireworks API key saved successfully!'
     await updateBackendKeys()
-    emit('keysUpdated')
+    updateAndCallEvents()
+
   } catch (error) {
     console.error('Failed to save Fireworks key:', error)
     errorMessage.value = 'Failed to save Fireworks API key'
@@ -514,23 +528,37 @@ const clearMessagesAfterDelay = () => {
     errorMessage.value = ''
     successMessage.value = ''
   }, 3000)
+
+  
 }
-const clearFireworksKey = () => {
+const clearFireworksKey = async() => {
   localStorage.removeItem(`fireworks_key_${userId.value}`)
   fireworksKey.value = ''
   successMessage.value = 'Fireworks API key cleared successfully!'
-  updateBackendKeys()
-  emit('keysUpdated')
+  await updateBackendKeys()
+  
   clearMessagesAfterDelay()
+  updateAndCallEvents()
+
 }
 
-const clearSerperKey = () => {
+const clearSerperKey = async () => {
   localStorage.removeItem(`serper_key_${userId.value}`)
   serperKey.value = ''
   successMessage.value = 'Serper API key cleared successfully!'
-  updateBackendKeys()
-  emit('keysUpdated')
+  await updateBackendKeys()
+  updateAndCallEvents()
   clearMessagesAfterDelay()
+
+}
+
+const updateAndCallEvents=async()=>{
+
+  await checkRequiredKeys()
+
+  emit('keysUpdated')
+  emitterMitt.emit('keys-updated',  missingKeys.value );
+
 }
 
 // ✅ Expose methods for parent component

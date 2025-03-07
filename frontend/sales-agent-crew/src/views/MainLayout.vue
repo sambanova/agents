@@ -73,8 +73,8 @@
           />
 
           <!-- RESULTS SECTION -->
-          <div  v-if="hasResults" class="mt-6 w-full h-full space-y-6">
-            <div class="grid grid-cols-1 gap-6">
+          <div  v-if="hasResults" class="mt-6  w-full h-full space-y-6">
+            <div class="grid grid-cols-1 pb-[200px] gap-6">
               <!-- SALES LEADS Results -->
               <template v-if="queryType === 'sales_leads'">
                 <CompanyResultCard

@@ -1,6 +1,6 @@
 # Variables
 BASE_URL ?= us-west2-docker.pkg.dev/acp-starterkits-development-57/oci-us-west2-starerkits
-IMAGE_NAME ?= samba-copilot-frontend
+IMAGE_NAME ?= aiskagents-frontend
 TAG ?= 0.0.1-$(shell date '+%Y%m%d')
 DOCKER_IMAGE := $(BASE_URL)/$(IMAGE_NAME)
 PLATFORMS ?= linux/amd64,linux/arm64

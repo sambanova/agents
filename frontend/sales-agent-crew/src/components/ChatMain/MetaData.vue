@@ -1,5 +1,5 @@
 <template>
-    <div class="inline-block mx-2 my-2 p-2 bg-[#F9FAFB] border border-gray-200 rounded-lg">
+    <div class="inline-block mx-1 my-2 p-2 bg-[#F9FAFB] border border-gray-200 rounded-lg">
       <!-- Inline metadata items with rocket icon -->
       <div class="flex items-center flex-wrap gap-x-1 text-sm text-gray-700 text-[12px] text-primary-brandTextSecondary">
   <!-- Green Rocket Icon -->

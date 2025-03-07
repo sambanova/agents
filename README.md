@@ -1,210 +1,149 @@
-![Samba Sales Co-Pilot Logo](https://sambanova.ai/hubfs/sambanova-logo-black.png)
+![Samba Agents Logo](https://sambanova.ai/hubfs/sambanova-logo-black.png)
 
-# SambaNova Agents
+<h1 style="font-size: 3em;">Agents</h1>
 
-An intelligent sales and research assistant powered by SambaNova AI. This application helps sales teams and researchers by automatically:
+The Agents application routes requests to four different agents: General assistant agent, Sales leads agent, Deep research agent, and a Finance analysis agent. The agents process tens of thousands of tokens that generates lightning fast and accurate results. The Agents application helps sales teams and researchers by:
 
-- Generating qualified sales information with company insights
-- Creating detailed research reports and educational content
-- Intelligently routing queries to the appropriate service
-- Supporting voice input for natural interaction
+- Generating qualified sales information with company insights.
+- Creating detailed research reports and educational content.
+- Intelligently routing queries to the appropriate service.
+- Supporting voice input for natural interaction.
 
-## Features
+The basic process of the Agents application is described below.
 
-### General Assistant
-The application includes a general-purpose AI assistant that can help with:
-- Answering basic questions and queries
-- Providing explanations and clarifications
-- Offering technical support
-- Assisting with general research tasks
+1. User query processing
+   - User submits a query via text or voice input.
+   - The application analyzes the query to determine its category (general assistance, sales leads, research, or financial analysis).
 
-Example General Queries:
-- "What's the difference between supervised and unsupervised learning?"
-- "Can you explain how REST APIs work?"
-- "What are the best practices for data visualization?"
-- "How do I optimize database queries?"
-- "Explain the concept of containerization"
+1. Agent assignment
+   - The query is routed to the appropriate agent based on content and intent.
+   - If the query spans multiple domains, agents collaborate to provide a comprehensive response.
+   
+1. Data retrieval and processing
+   - The selected agent fetches relevant data from available APIs and knowledge bases.
+   - AI models process and structure the information for clarity and accuracy.
+   
+1. Response generation
+   - The application generates a structured response.
+   - The response is formatted based on the query type (e.g., report format for research, tabular format for financial analysis).
 
-### Intelligent Query Routing
+1. User interaction and feedback
+   - The user reviews the response and may refine the query.
+   - The system continuously learns from interactions to improve future responses.
 
-The application automatically determines whether your query is best suited for:
+# Prerequisites
 
-- Sales lead Information Gathering
-- Educational content/research creation
-- Financial Analysis and Market Research
-- More tasks to come!
+Ensure to install the prerequisites.
+   - [Python 3.8 or later](https://www.python.org/downloads/)
+   - [Node.js 16 or later](https://nodejs.org/en/download)
+   - [Yarn](https://classic.yarnpkg.com/en/docs/install)
 
-### Sales Lead Information
+Get the following API keys to setup the Agents application.
+   - [SambaNova API key](https://cloud.sambanova.ai/)
+   - [Serper API key](https://serper.dev/) for web search
+   - [Exa API key](https://exa.co/) for company data
+   - [Fireworks API key](https://fireworks.ai/) 
 
-When in sales mode, Samba Co-Pilot will:
+# Setup and run the application
 
-- Find relevant companies matching your criteria
-- Extract key company information
-- Provide funding status and insights
-- Generate customized sales approaches
+You can setup and run the application in two ways - Cloud hosted version or locally hosted version.
 
-Example Sales Queries:
-- "Find AI startups in Silicon Valley with Series B funding"
-- "Which healthcare companies in Boston are working on drug discovery?"
-- "Show me cybersecurity companies in Israel with enterprise clients"
-- "Find sustainable energy startups in Nordic countries"
-- "Show me B2B SaaS companies in Singapore with over 100 employees"
+## Cloud hosted version
 
-### Research & Content Generation
+This version is hosted on SambaNova Cloud. No need to install dependencies locally.
 
-For research queries, the system will:
+1. Go to the [Agents application](https://aiskagents.cloud.snova.ai/) login page.
+1. Sign in using Clerk authentication (you will receive an email with login instructions).
+1. Once you login, go to settings and add the API keys.
+1. Start using the application to enhance sales workflows, conduct research, and gain actionable insights.
 
-- Analyze topics in-depth
-- Create structured research reports
-- Provide educational content
-- Include relevant citations and sources
+## Locally hosted version
 
-Example Research Queries:
-- "Explain quantum computing and its applications in cryptography"
-- "How does CRISPR gene editing work in modern medicine?"
-- "What's the relationship between AI and neuromorphic computing?"
-- "Explain the impact of blockchain on supply chain management"
-- "How do machine learning algorithms handle natural language processing?"
-- "What are the latest developments in fusion energy research?"
+### Frontend setup
 
-### Financial Analysis & Market Research
-For financial queries, Samba Co-Pilot will:
-- Analyze company financial performance
-- Track market trends and competitive positioning
-- Evaluate stock performance and valuation metrics
-- Generate investment insights
-- Monitor industry-specific metrics
-- Compare companies within sectors
+Follow the steps below to install the frontend for the Agents application.
 
-Example Financial Queries:
-- "Analyze Tesla's recent performance and future growth prospects"
-- "How is the semiconductor industry performing this quarter?"
-- "Compare cloud revenue growth between Microsoft Azure and AWS"
-- "What's the market outlook for AI chip manufacturers?"
-- "Evaluate Apple's financial health considering recent product launches"
-- "Compare profitability metrics between major EV manufacturers"
+> **Note**: For the following commands, go to `/frontend/sales-agent-crew/` directory.
 
-### Voice Input Support
+1. Install Vue.js dependencies
 
-- Click the microphone icon to start voice input
-- Automatic transcription of speech to text
-- Hands-free operation support
+   ```bash
+   yarn install
+   ```
 
-### Additional Features
+1. Run a local development environment
 
-- 🔐 Secure API key management with encryption
-- 📜 Chat history tracking
-- 📥 Results export functionality
-- 🔄 Real-time query routing
-- 📊 Detailed company insights
-- 💹 Financial analysis and market trends
-- ✍️ AI-generated outreach templates
+   ```bash
+   yarn dev
+   ```
 
-## Technical Setup
+1. Create a production build
 
-### Prerequisites
+   ```bash
+   yarn build
+   ```
 
-- Python 3.8 or higher.
-- Node.js 16 or higher.
-- Yarn.
-- API Keys:
-  - SambaNova API key. get it from https://cloud.sambanova.ai/
-  - Serper API key (for web search). get it from https://serper.dev/
-  - Exa API key (for company data). get it from https://exa.co/
+### Backend setup
 
-> **Important**: After logging in, click the settings gear icon ⚙️ (located next to your user photo) to configure your API keys. The application requires these keys to function properly.
+Follow the steps below to install the backend for the Agents application.
 
-### Frontend
+> **Note**: For the following commands, go to `/backend/` directory.
 
-For the following commands, go to `/frontend/sales-agent-crew/` directory.
+1. Install Python dependencies - Create and activate a virtual environment (for example with venv) and install the project dependencies inside it.
 
-#### Install Vue.js dependencies
+   ```bash
+   python -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
 
-```bash
-yarn install
-```
+2. Run the application
 
-#### Run a local development environment
+   ```bash
+   uvicorn api.main:app --reload
+   ```
 
-```bash
-yarn dev
-```
+### Environment variables setup
 
-#### Create a production build
+> **Note**: For the frontend environment variables, go to `/frontend/sales-agent-crew/`.
 
-```bash
-yarn build
-```
+1. Create a `.env` file.
+   ```bash
+   VITE_API_URL=your_api_url
+   ```
 
-### Backend
+1. Start the FastAPI backend server.
 
-For the following commands, go to `/backend/` directory.
+   ```bash
+   # From the project root
+   cd backend
+   uvicorn api.main:app --reload
+   ```
 
-#### Install Python dependencies
+2. Start the Vue.js frontend development server.
 
-Create and activate a virtual environment (for example with venv) and install the project dependencies inside it.
+   ```bash
+   # From the project root
+   cd frontend/sales-agent-crew/
+   yarn dev
+   ```
 
-```bash
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
+3. Open your browser and navigate to:
 
-#### Run the application
+   ```bash
+   http://localhost:5174/
+   ```
 
-```bash
-uvicorn api.main:app --reload
-```
+### API keys setup
 
-## Environment Variables
+1. Access the settings modal to configure the API keys mentioned in the [prerequisites](#prerequisites) section.
+1. Ensure that API keys are encrypted before storing them in localStorage.
 
-For the frontend, go to `/frontend/sales-agent-crew/` and create a `.env` file with:
+# Architecture
 
-```bash
-VITE_API_URL=your_api_url
-```
+![Agents Architecture Diagram](backend/images/architecture-diagram.jpg)
 
-## Running the Application
-
-1. Start the FastAPI backend server:
-
-```bash
-# From the project root
-cd backend
-uvicorn api.main:app --reload
-```
-
-2. Start the Vue.js frontend development server:
-
-```bash
-# From the project root
-cd frontend/sales-agent-crew/
-yarn dev
-```
-
-3. Open your browser and navigate to:\*
-
-```bash
- http://localhost:5174/
-```
-
-\*Update the URL in the LeadGenerationAPI CORS API if it's different.
-
-## API Keys Setup
-
-Access the settings modal to configure your:
-
-- SambaNova API key
-- Serper API key
-- Exa API key
-
-All keys are encrypted before storaging them in localStorage.
-
-## Architecture
-
-![Co-Pilot Architecture Diagram](backend/Co-Pilot%20Workflow-2025-02-21-221704.png)
-
-Built with:
+This application is built with:
 
 - Vue 3 + Composition API
 - Vite
@@ -212,24 +151,158 @@ Built with:
 - Clerk for authentication
 - Axios for API calls
 
-## Tech Stack
+# Technology stack
 
-### Frontend
+The stack is designed to offer high-performance and scalability for both frontend and backend needs. See the frontend and backend technology stack listed in the table below.
 
-- Vue.js 3 (Composition API)
-- TailwindCSS for styling
-- Vite for build tooling
-- Clerk for authentication
+<table style="width:40%; border: 1px solid #000; border-collapse: collapse;">
+  <thead>
+      <tr style="background-color: #f0f0f0;"> <!-- Shading applied here -->
+      <th style="border: 1px solid #000; width: 30%; text-align: left; vertical-align: top;">Category</th>
+      <th style="border: 1px solid #000; width: 80%; text-align: left; vertical-align: top;">Technologies used</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="border: 1px solid #000; width: 30%; text-align: left; vertical-align: top;"><strong>Frontend</strong></td>
+      <td style="border: 1px solid #000; width: 80%; text-align: left; vertical-align: top;">
+        <ul>
+          <li>Vue.js 3 (Composition API)</li>
+          <li>TailwindCSS for styling</li>
+          <li>Vite for build tooling</li>
+          <li>Clerk for authentication</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid #000; width: 30%; text-align: left; vertical-align: top;"><strong>Backend</strong></td>
+      <td style="border: 1px solid #000; width: 80%; text-align: left; vertical-align: top;">
+        <ul>
+          <li>FastAPI</li>
+          <li>CrewAI</li>
+          <li>SambaNova Agentic Cloud</li>
+          <li>Exa Search API</li>
+          <li>Financial Data APIs</li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
-### Backend Integration
 
-- FastAPI
-- CrewAI
-- SambaNova Agentic Cloud
-- Exa Search API
-- Financial Data APIs
+# Features
 
-## Usage
+This section describes the agents and feature capabilities of the application. 
+
+## General assistant
+
+The General assistant agent helps with:
+
+- Answering basic questions and queries.
+- Providing explanations and clarifications.
+- Offering technical support.
+- Assisting with general research tasks.
+
+### Example queries
+
+Example queries for general assistance are listed below.
+
+- "What's the difference between supervised and unsupervised learning?"
+- "Can you explain how REST APIs work?"
+- "What are the best practices for data visualization?"
+- "How do I optimize database queries?"
+- "Explain the concept of containerization"
+
+## Sales leads
+
+The application uses the Sales leads agent to:
+
+- Find relevant companies matching your criteria.
+- Extract key company information.
+- Provide funding status and insights.
+- Generate customized sales approaches.
+
+### Example queries
+
+Example queries for sales leads information are listed below.
+
+- "Find AI startups in Silicon Valley with Series B funding"
+- "Which healthcare companies in Boston are working on drug discovery?"
+- "Show me cybersecurity companies in Israel with enterprise clients"
+- "Find sustainable energy startups in Nordic countries"
+- "Show me B2B SaaS companies in Singapore with over 100 employees"
+
+## Deep research
+
+For research queries, the application uses the Deep research agent to:
+
+- Analyze topics in-depth
+- Create structured research reports
+- Provide educational content
+- Include relevant citations and sources
+
+### Example queries
+
+Example queries for research and content generation are listed below.
+
+- "Explain quantum computing and its applications in cryptography"
+- "How does CRISPR gene editing work in modern medicine?"
+- "What's the relationship between AI and neuromorphic computing?"
+- "Explain the impact of blockchain on supply chain management"
+- "How do machine learning algorithms handle natural language processing?"
+- "What are the latest developments in fusion energy research?"
+
+## Financial analysis
+
+For financial queries, the application uses the Financial analysis agent to:
+
+- Analyze company financial performance
+- Track market trends and competitive positioning
+- Evaluate stock performance and valuation metrics
+- Generate investment insights
+- Monitor industry-specific metrics
+- Compare companies within sectors
+
+### Example queries
+
+Example queries for financial analysis and market research are listed below.
+
+- "Analyze Tesla's recent performance and future growth prospects"
+- "How is the semiconductor industry performing this quarter?"
+- "Compare cloud revenue growth between Microsoft Azure and AWS"
+- "What's the market outlook for AI chip manufacturers?"
+- "Evaluate Apple's financial health considering recent product launches"
+- "Compare profitability metrics between major EV manufacturers"
+
+## Intelligent query routing
+
+The application automatically determines the best category for your query, ensuring efficient processing. Query routing is automatically done for use-cases such as:
+
+- Sales lead information gathering
+- Educational content/research creation
+- Financial analysis and market research
+
+## Voice input support
+
+The application allows you to make queries using audio input. Simply click the microphone icon to start speaking. It also offers:
+
+- Automatic speech-to-text transcription
+- Hands-free operation for convenience
+
+## Additional features
+
+Additional features of the application are listed below.
+
+- 🔐 Secure API key management – Encrypted for maximum protection
+- 📜 Chat history tracking – Easily access past conversations
+- 📥 Results export functionality – Download and share insights effortlessly
+- 🔄 Real-time query routing – Instant categorization for accurate responses
+- 📊 Detailed company insights – In-depth business data at your fingertips
+- 💹 Financial analysis and market trends – Stay ahead with real-time analytics
+- ✍ AI-generated outreach templates – Craft professional messages instantly
+
+
+# Usage
 
 1. **Configure API Keys**
 
@@ -249,7 +322,7 @@ Built with:
    - Export functionality available
    - Save important searches
 
-## Contributing
+# Contributing
 
 1. Fork the repository
 2. Create your feature branch
@@ -257,6 +330,6 @@ Built with:
 4. Push to the branch
 5. Create a new Pull Request
 
-## License
+# License
 
 [MIT License](LICENSE)

@@ -1,10 +1,11 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: samba-copilot-frontend
+  name: aiskagents-frontend
+  namespace: default
 spec:
   selector:
-    app: samba-copilot-frontend
+    app: aiskagents-frontend
   ports:
     - protocol: TCP
       port: 80

@@ -1,4 +1,4 @@
-![Samba Sales Co-Pilot Logo](https://sambanova.ai/hubfs/sambanova-logo-black.png)
+![Samba Agents Logo](https://sambanova.ai/hubfs/sambanova-logo-black.png)
 
 
 # Contributing to SambaNova Agents

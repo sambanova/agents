@@ -1,7 +1,8 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: samba-copilot-ingress
+  name: aiskagents-ingress
+  namespace: default
   annotations:
     kubernetes.io/ingress.class: "nginx"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
@@ -19,13 +20,13 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: samba-copilot-frontend
+            name: aiskagents-frontend
             port:
               number: 80
       - path: /api
         pathType: Prefix
         backend:
           service:
-            name: samba-copilot-backend
+            name: aiskagents-backend
             port:
               number: 80
