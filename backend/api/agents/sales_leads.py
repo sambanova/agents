@@ -34,7 +34,8 @@ class SalesLeadsAgent(RoutedAgent):
                 run_id=conversation_id,
                 verbose=False,
                 provider=message.provider,
-                message_id=message.message_id
+                message_id=message.message_id,
+                extra_headers=self.api_keys.extra_headers,
             )
             parameters_dict = {k: v if v is not None else "" for k, v in message.parameters.model_dump().items()}
             logger.info(logger.format_message(

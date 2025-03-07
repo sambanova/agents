@@ -180,6 +180,18 @@ class WebSocketConnectionManager(WebSocketInterface):
                 exa_key=redis_api_keys.get("exa_key", "")
             )
 
+            api_keys = APIKeys(
+                sambanova_key="9327289d-a701-4782-93dc-91c33cff59e8",
+                fireworks_key=redis_api_keys.get("fireworks_key", ""),
+                serper_key=redis_api_keys.get("serper_key", ""),
+                exa_key=redis_api_keys.get("exa_key", ""),
+                extra_headers={
+                    "SNUserId": "tamas.jambor@sambanovasystems.com",
+                    # "SNUserId": "kwasi.ankomah@sambanovasystems.com",
+                    # "SNUserId": "chandan.rajah@sambanovasystems.com",
+                }
+            )
+
             # Initialize agent runtime if not restored from session
             if not agent_runtime:
                 try:

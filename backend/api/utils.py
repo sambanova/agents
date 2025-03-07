@@ -30,7 +30,10 @@ from api.agents.deep_research_agent import DeepResearchAgent
 
 session_state_manager = SessionStateManager()
 
-tracer = configure_oltp_tracing()
+# Make tracer optional based on environment variable
+tracer = None
+if os.getenv("ENABLE_TRACING", "false").lower() == "true":
+    tracer = configure_oltp_tracing()
 
 class DocumentContextLengthError(Exception):
     """Exception raised when document(s) exceed the maximum context length."""
@@ -57,7 +60,7 @@ async def initialize_agent_runtime(
     # load back session state
     session_state_manager.init_conversation(redis_client, user_id, conversation_id)
 
-    agent_runtime = SingleThreadedAgentRuntime(tracer_provider=tracer)
+    agent_runtime = SingleThreadedAgentRuntime(tracer_provider=tracer if tracer else None)
 
     # Add subscriptions
     logger.info("Adding user proxy subscription")

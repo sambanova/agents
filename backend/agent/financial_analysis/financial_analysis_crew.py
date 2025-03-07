@@ -207,17 +207,16 @@ class FinancialAnalysisCrew:
         docs_included: bool = False,
         redis_client: Redis = None,
         message_id: str = None,
-        verbose: bool = True
+        verbose: bool = True,
+        extra_headers: Dict[str, str] = {}
     ):
         model_info = model_registry.get_model_info(model_key="llama-3.1-8b", provider=provider)
         self.llm =  CustomLLM(
             model=model_info["crewai_prefix"] + "/" + model_info["model"],
             temperature=0.0,
             max_tokens=8192,
-            api_key="9327289d-a701-4782-93dc-91c33cff59e8",
-            extra_headers={
-                "SNUserId": "chandan.rajah@sambanovasystems.com"
-            }
+            api_key=llm_api_key,
+            extra_headers=extra_headers
         )
         aggregator_model_info = model_registry.get_model_info(model_key="llama-3.3-70b", provider=provider)
         self.aggregator_llm = CustomLLM(

@@ -57,7 +57,7 @@ class APIKeys(BaseModel):
     fireworks_key: str = ""
     serper_key: str
     exa_key: str
-    headers: Dict[str, str] = Field(default_factory=dict)
+    extra_headers: Dict[str, str] = Field(default_factory=dict)
 
 class FinancialAnalysis(BaseModel):
     ticker: Optional[str] = Field(default=None, description="The ticker of the company")

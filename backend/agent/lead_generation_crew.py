@@ -2,6 +2,8 @@ import sys
 import os
 import uuid
 
+from agent.crewai_llm import CustomLLM
+
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
@@ -15,10 +17,10 @@ if os.getenv("LANGTRACE_API_KEY"):
     from langtrace_python_sdk import langtrace
     langtrace.init(api_key=os.getenv("LANGTRACE_API_KEY"))
 
-from crewai import Agent, Task, Crew, LLM, Process
+from crewai import Agent, Task, Crew, Process
 from tools.company_intelligence_tool import CompanyIntelligenceTool
 from tools.market_research_tool import MarketResearchTool
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Optional, Tuple
 from pydantic import BaseModel
 from utils.agent_thought import RedisConversationLogger
 from config.model_registry import model_registry
@@ -77,16 +79,17 @@ class ResearchCrew:
         user_id: str = "",
         run_id: str = "",
         message_id: str = "",
+        extra_headers: Optional[Dict[str, str]] = None,
         verbose: bool = True,
     ):
 
         model_info = model_registry.get_model_info(model_key="llama-3.3-70b", provider=provider)
-        self.llm = LLM(
+        self.llm =  CustomLLM(
             model=model_info["crewai_prefix"] + "/" + model_info["model"],
-            temperature=0.00,
+            temperature=0.0,
             max_tokens=8192,
             api_key=llm_api_key,
-            base_url=model_info["url"]
+            extra_headers=extra_headers
         )
         self.exa_key = exa_key
         self.user_id = user_id

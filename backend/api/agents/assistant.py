@@ -173,16 +173,14 @@ class AssistantAgentWrapper(RoutedAgent):
                     model=model_info["model"],
                     base_url=model_info["url"],
                     temperature=0.0,
+                    api_key=getattr(self.api_keys, model_registry.get_api_key_env(provider=provider)),
                     model_info={
                         "json_output": False,
                         "function_calling": True,
                         "family": "unknown",
                         "vision": False,
                     },
-                    api_key="9327289d-a701-4782-93dc-91c33cff59e8",
-                    default_headers={
-                        "SNUserId": "tamas.jambor@sambanovasystems.com"
-                    }
+                    default_headers=self.api_keys.extra_headers
                 ),
                 tools=[
                     get_current_time,

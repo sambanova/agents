@@ -145,6 +145,7 @@ class DeepResearchAgent(RoutedAgent):
                 
             ),
             provider=message.provider,
+            extra_headers=self.api_keys.extra_headers
         )
 
         graph = builder.compile(checkpointer=memory)

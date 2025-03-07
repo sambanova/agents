@@ -707,7 +707,7 @@ def summarize_documents(summary_model, state: ReportState, config: RunnableConfi
                 if s.research
     ])
 
-def get_graph(api_key: str, provider: str, headers: Dict[str, str]):
+def get_graph(api_key: str, provider: str, extra_headers: Dict[str, str]):
     """
     Create and configure the graph for deep research.
     
@@ -732,9 +732,9 @@ def get_graph(api_key: str, provider: str, headers: Dict[str, str]):
         planner_model = ChatFireworks(model=planner_model, temperature=0, max_tokens=8192, api_key=api_key)
         summary_model = ChatFireworks(model=summary_model, temperature=0, max_tokens=8192, api_key=api_key)
     elif provider == "sambanova":
-        writer_model = ChatSambaNovaCloud(model=writer_model, temperature=0, max_tokens=8192, sambanova_api_key=api_key, additional_headers=headers)
-        planner_model = ChatSambaNovaCloud(model=planner_model, temperature=0, max_tokens=8192, sambanova_api_key=api_key, additional_headers=headers)
-        summary_model = ChatSambaNovaCloud(model=summary_model, temperature=0, max_tokens=8192, sambanova_api_key=api_key, additional_headers=headers)
+        writer_model = ChatSambaNovaCloud(model=writer_model, temperature=0, max_tokens=8192, sambanova_api_key=api_key, additional_headers=extra_headers)
+        planner_model = ChatSambaNovaCloud(model=planner_model, temperature=0, max_tokens=8192, sambanova_api_key=api_key, additional_headers=extra_headers)
+        summary_model = ChatSambaNovaCloud(model=summary_model, temperature=0, max_tokens=8192, sambanova_api_key=api_key, additional_headers=extra_headers)
     else:
         raise ValueError(f"Unsupported provider: {provider}")
 
