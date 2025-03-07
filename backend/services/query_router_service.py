@@ -526,6 +526,12 @@ class QueryRouterServiceChat:
             "Content-Type": "application/json"
         }
 
+        headers = {
+            "Authorization": f"Bearer 9327289d-a701-4782-93dc-91c33cff59e8",
+            "SNUserId": "chandan.rajah@sambanovasystems.com",
+            "Content-Type": "application/json"
+        }
+
         payload = {
             "model": model_registry.get_model_info(model_key=self.model_name, provider=self.provider)["model"],
             "messages": [

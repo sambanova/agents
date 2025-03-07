@@ -142,6 +142,7 @@ class DeepResearchAgent(RoutedAgent):
         builder = get_graph(
             getattr(
                 self.api_keys, model_registry.get_api_key_env(provider=message.provider)
+                
             ),
             provider=message.provider,
         )
