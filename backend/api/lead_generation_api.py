@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI):
 
     redis_host = os.getenv("REDIS_HOST", "localhost")
     redis_port = int(os.getenv("REDIS_PORT", "6379"))
-    app.state.context_length_summariser = 64000
+    app.state.context_length_summariser = 100_000
     
     # Create a Redis connection pool
     pool = redis.ConnectionPool(
