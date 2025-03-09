@@ -254,8 +254,7 @@
   </div>
 </template>
 <script setup>
-import { ref, onMounted } from 'vue'
-import { ref, watch, defineProps, defineExpose, defineEmits, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { encryptKey, decryptKey } from '../utils/encryption'
 import axios from 'axios'
 import emitterMitt from '@/utils/eventBus.js';
@@ -266,7 +265,7 @@ const props = defineProps({
 
 const emit = defineEmits(['keysUpdated'])
 
-const { userId } = useAuth()
+const userId = ref('anonymous_user')
 
 const isOpen = ref(false)
 const sambanovaKey = ref('')
