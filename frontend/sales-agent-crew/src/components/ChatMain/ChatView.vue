@@ -324,7 +324,6 @@ import ChatBubble from '@/components/ChatMain/ChatBubble.vue'
 import ChatLoaderBubble from '@/components/ChatMain/ChatLoaderBubble.vue'
 const router = useRouter()
 const route = useRoute()
-import { useAuth } from '@clerk/vue'
 import { decryptKey } from '../../utils/encryption'
 import ErrorModal from '../ErrorModal.vue'
 import { uploadDocument } from '../../services/api'
@@ -355,7 +354,7 @@ async function createNewChat() {
       {}, 
       {
         headers: {
-          'Authorization': `Bearer ${await window.Clerk.session.getToken()}`,
+          'Content-Type': 'application/json'
         }
       }
     )
@@ -519,7 +518,7 @@ async function loadPreviousChat(convId) {
       `${import.meta.env.VITE_API_URL}/chat/history/${convId}`,
       {
         headers: {
-          'Authorization': `Bearer ${await window.Clerk.session.getToken()}`,
+          'Content-Type': 'application/json'
         }
       }
     )
@@ -678,8 +677,7 @@ const uploadStatus = ref(null)
 const uploadedDocuments = ref([])
 const selectedDocuments = ref([])
 
-// Clerk
-const { userId } = useAuth()
+const userId = ref('anonymous_user')
 
 async function loadKeys() {
   try {
@@ -961,7 +959,7 @@ async function handleFileUpload(event) {
       formData,
       {
         headers: {
-          'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+          'Content-Type': 'multipart/form-data'
         }
       }
     )
@@ -988,7 +986,7 @@ async function loadUserDocuments() {
       `${import.meta.env.VITE_API_URL}/documents`,
       {
         headers: {
-          'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+          'Content-Type': 'application/json'
         }
       }
     )
@@ -1142,16 +1140,16 @@ async function connectWebSocket() {
       },
       {
         headers: {
-          'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+          'Content-Type': 'application/json'
         }
       }
     )
     const WEBSOCKET_URL = `${import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:8000'}/chat`
-    const token = await window.Clerk.session.getToken()
     const fullUrl = `${WEBSOCKET_URL}?conversation_id=${currentId.value}`
     socket.value = new WebSocket(fullUrl)
     socket.value.onopen = () => {
       console.log('WebSocket connection opened')
+      const token = localStorage.getItem('access_token') || 'anonymous_user';
       socket.value.send(JSON.stringify({
         type: 'auth',
         token: `Bearer ${token}`
@@ -1248,7 +1246,7 @@ async function removeDocument(docId) {
       `${import.meta.env.VITE_API_URL}/documents/${docId}`,
       {
         headers: {
-          'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+          'Content-Type': 'application/json'
         }
       }
     )

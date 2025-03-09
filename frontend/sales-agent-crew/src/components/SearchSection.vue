@@ -334,7 +334,6 @@
 
 <script setup>
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
-import { useAuth } from '@clerk/vue'
 import { decryptKey } from '../utils/encryption'
 import ErrorModal from './ErrorModal.vue'
 import axios from 'axios'
@@ -382,14 +381,11 @@ const uploadStatus = ref(null)
 const uploadedDocuments = ref([])
 const selectedDocuments = ref([])
 
-// Clerk
-const { userId } = useAuth()
-
 async function loadKeys() {
   try {
-    const encryptedSambanovaKey = localStorage.getItem(`sambanova_key_${userId.value}`)
-    const encryptedExaKey = localStorage.getItem(`exa_key_${userId.value}`)
-    const encryptedSerperKey = localStorage.getItem(`serper_key_${userId.value}`)
+    const encryptedSambanovaKey = localStorage.getItem(`sambanova_key`)
+    const encryptedExaKey = localStorage.getItem(`exa_key`)
+    const encryptedSerperKey = localStorage.getItem(`serper_key`)
 
     if (encryptedSambanovaKey) {
       sambanovaKey.value = await decryptKey(encryptedSambanovaKey)
@@ -475,7 +471,7 @@ async function performSearch() {
           'x-sambanova-key': sambanovaKey.value || '',
           'x-serper-key': serperKey.value || '',
           'x-exa-key': exaKey.value || '',
-          'x-user-id': userId.value || '',
+          'x-user-id': 'anonymous_user',
           'x-run-id': props.runId || '',
           'x-session-id': props.sessionId || ''
         }
@@ -711,7 +707,7 @@ async function loadUserDocuments() {
       `${import.meta.env.VITE_API_URL}/documents`,
       {
         headers: {
-          'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+          'Content-Type': 'application/json'
         }
       }
     )

@@ -69,14 +69,9 @@
                   d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         </button>
-
-        <SignedIn>
-          <UserButton 
-
-            afterSignOutUrl="/login"
-            :appearance="{ elements: { avatarBox: 'bg-primary-brandAvatarGray h-8 w-8 sm:h-10 sm:w-10' } }"
-          />
-        </SignedIn>
+        
+        <!-- Token Setter Button -->
+        <TokenSetter />
       </div>
     </div>
     <SettingsModal ref="settingsModalRef" @keysUpdated="onKeysUpdated" />
@@ -84,11 +79,11 @@
 </template>
 
 <script setup>
-import { ref, computed, watch ,inject, onMounted} from 'vue'
-import { SignedIn, UserButton } from '@clerk/vue'
+import { ref, computed, watch, inject, onMounted} from 'vue'
 import SettingsModal from './SettingsModal.vue'
 import ToggleSwitch from '@/components/Common/UIComponents/ToggleSwitch.vue'
 import SelectProvider from '@/components/ChatMain/SelectProvider.vue'
+import TokenSetter from '@/components/Common/TokenSetter.vue'
 // import Dropdown from './Dropdown.vue'
 
 // Inject the shared state provided in MainLayout.vue.

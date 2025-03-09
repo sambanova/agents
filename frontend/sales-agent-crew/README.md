@@ -112,7 +112,19 @@ Example Financial Queries:
   - Serper API key (for web search). get it from https://serper.dev/
   - Exa API key (for company data). get it from https://exa.co/
 
-> **Important**: After logging in, click the settings gear icon ⚙️ (located next to your user photo) to configure your API keys. The application requires these keys to function properly.
+> **Important**: Click the settings gear icon ⚙️ to configure your API keys. The application requires these keys to function properly.
+
+### Authentication
+
+The application supports authentication using access tokens. You can provide an access token in several ways:
+
+1. **URL Parameter**: Open the app with a token in the URL: `http://localhost:5174/?token=your_access_token`
+
+2. **Token Dialog**: Click the key icon in the header to manually set or update your access token.
+
+3. **Programmatically**: Access the root Vue instance to set the token: `app.$root.setAuthToken('your_token')`
+
+The token will be stored securely in localStorage and automatically included in all API requests.
 
 ### Frontend
 
@@ -209,7 +221,7 @@ Built with:
 - Vue 3 + Composition API
 - Vite
 - TailwindCSS
-- Clerk for authentication
+- Token-based authentication
 - Axios for API calls
 
 ## Tech Stack
@@ -219,7 +231,7 @@ Built with:
 - Vue.js 3 (Composition API)
 - TailwindCSS for styling
 - Vite for build tooling
-- Clerk for authentication
+- Token-based authentication
 
 ### Backend Integration
 

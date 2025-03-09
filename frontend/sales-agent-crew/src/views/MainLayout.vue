@@ -36,7 +36,7 @@
           <ChatView
             :conversationId="selectedConversationId"
             @metadataChanged="metadataChanged"
-            :userId="clerkUserId"
+            :userId="'anonymous_user'"
             class="flex-1"
             @agentThoughtsDataChanged="agentThoughtsDataChanged"
           />
@@ -124,18 +124,17 @@
         <!-- RIGHT SIDEBAR: Real-time Agent Logs for the current user + run ID -->
     <AgentSidebar
      v-if="!chatMode"
-      :userId="clerkUserId"
+      :userId="'anonymous_user'"
       :runId="currentRunId"
     />
 
     
     <ChatAgentSidebar
       v-if="chatMode"
-      :userId="clerkUserId"
+      :userId="'anonymous_user'"
       :runId="currentRunId"
       :agentData="agentData"
-       :metadata="metadata"
-
+      :metadata="metadata"
     />
 
     </div>
@@ -145,8 +144,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch, onBeforeUnmount,provide } from 'vue'
-import { useUser } from '@clerk/vue'
+import { ref, onMounted, computed, watch, onBeforeUnmount, provide } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 
 /** We import both old + chat sidebars as local variables. */
@@ -216,9 +214,7 @@ const isDev = ref(import.meta.env.DEV)
 // Header ref
 const headerRef = ref(null)
 
-// Clerk user ID
-const { user } = useUser()
-const clerkUserId = computed(() => user.value?.id || 'anonymous_user')
+// User ID removed
 
 
 const agentData=ref([])

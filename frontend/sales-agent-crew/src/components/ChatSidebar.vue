@@ -38,8 +38,8 @@
 <script setup>
 import { ref, watch,onMounted, computed } from 'vue'
 
-import { useAuth } from '@clerk/vue'
 import { decryptKey } from '@/utils/encryption'   // adapt path if needed
+import { getAccessToken } from '@/utils/auth'
 import { useRoute, useRouter } from 'vue-router'
 import SILogo from '@/components/icons/SILogo.vue'  
 import emitterMitt from '@/utils/eventBus.js';
@@ -56,9 +56,7 @@ const route = useRoute()
  */
 const emit = defineEmits(['selectConversation'])
 
-/** Clerk user */
-const { userId } = useAuth()
-
+const userId = ref('anonymous_user')
 const sambanovaKey = ref(null)
 const serperKey = ref(null)
 const exaKey = ref(null)
@@ -94,8 +92,7 @@ async function deleteChat( conversationId) {
   try {
     const response = await axios.delete(url, {
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+        'Content-Type': 'application/json'
       }
     });
     // console.log('Chat deleted successfully:', response.data);
@@ -143,7 +140,7 @@ async function loadChats() {
       `${import.meta.env.VITE_API_URL}/chat/list`,   
       {
         headers: {
-          'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+          'Content-Type': 'application/json'
         }
       }
     )

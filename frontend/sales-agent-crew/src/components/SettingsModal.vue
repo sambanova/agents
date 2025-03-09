@@ -255,7 +255,6 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useAuth } from '@clerk/vue'
 import { encryptKey, decryptKey } from '../utils/encryption'
 import axios from 'axios'
 
@@ -274,8 +273,6 @@ const exaKeyVisible = ref(false)
 const serperKeyVisible = ref(false)
 const fireworksKeyVisible = ref(false)
 
-const { userId } = useAuth()
-
 // Define the emit function
 const emit = defineEmits(['keysUpdated'])
 
@@ -286,11 +283,11 @@ onMounted(async () => {
 
 const loadKeys = async () => {
   try {
-    const savedSambanovaKey = localStorage.getItem(`sambanova_key_${userId.value}`)
-    const savedExaKey = localStorage.getItem(`exa_key_${userId.value}`)
-    const savedSerperKey = localStorage.getItem(`serper_key_${userId.value}`)
-    const savedFireworksKey = localStorage.getItem(`fireworks_key_${userId.value}`)
-    const savedModel = localStorage.getItem(`selected_model_${userId.value}`)
+    const savedSambanovaKey = localStorage.getItem(`sambanova_key`)
+    const savedExaKey = localStorage.getItem(`exa_key`)
+    const savedSerperKey = localStorage.getItem(`serper_key`)
+    const savedFireworksKey = localStorage.getItem(`fireworks_key`)
+    const savedModel = localStorage.getItem(`selected_model`)
 
     sambanovaKey.value = savedSambanovaKey
       ? await decryptKey(savedSambanovaKey)
@@ -307,7 +304,7 @@ const loadKeys = async () => {
     
     // If no model was saved, save the default
     if (!savedModel) {
-      localStorage.setItem(`selected_model_${userId.value}`, selectedModel.value)
+      localStorage.setItem(`selected_model`, selectedModel.value)
     } else {
       selectedModel.value = savedModel
     }
@@ -325,7 +322,7 @@ const saveSambanovaKey = async () => {
       return
     }
     const encryptedKey = await encryptKey(sambanovaKey.value)
-    localStorage.setItem(`sambanova_key_${userId.value}`, encryptedKey)
+    localStorage.setItem(`sambanova_key`, encryptedKey)
     successMessage.value = 'SambaNova API key saved successfully!'
     await updateBackendKeys()
     emit('keysUpdated')
@@ -338,7 +335,7 @@ const saveSambanovaKey = async () => {
 }
 
 const clearSambanovaKey = () => {
-  localStorage.removeItem(`sambanova_key_${userId.value}`)
+  localStorage.removeItem(`sambanova_key`)
   sambanovaKey.value = ''
   successMessage.value = 'SambaNova API key cleared successfully!'
   updateBackendKeys()
@@ -353,7 +350,7 @@ const saveExaKey = async () => {
       return
     }
     const encryptedKey = await encryptKey(exaKey.value)
-    localStorage.setItem(`exa_key_${userId.value}`, encryptedKey)
+    localStorage.setItem(`exa_key`, encryptedKey)
     successMessage.value = 'Exa API key saved successfully!'
     await updateBackendKeys()
     emit('keysUpdated')
@@ -366,7 +363,7 @@ const saveExaKey = async () => {
 }
 
 const clearExaKey = () => {
-  localStorage.removeItem(`exa_key_${userId.value}`)
+  localStorage.removeItem(`exa_key`)
   exaKey.value = ''
   successMessage.value = 'Exa API key cleared successfully!'
   updateBackendKeys()
@@ -381,7 +378,7 @@ const saveSerperKey = async () => {
       return
     }
     const encryptedKey = await encryptKey(serperKey.value)
-    localStorage.setItem(`serper_key_${userId.value}`, encryptedKey)
+    localStorage.setItem(`serper_key`, encryptedKey)
     successMessage.value = 'Serper API key saved successfully!'
     await updateBackendKeys()
     emit('keysUpdated')
@@ -400,7 +397,7 @@ const saveFireworksKey = async () => {
       return
     }
     const encryptedKey = await encryptKey(fireworksKey.value)
-    localStorage.setItem(`fireworks_key_${userId.value}`, encryptedKey)
+    localStorage.setItem(`fireworks_key`, encryptedKey)
     successMessage.value = 'Fireworks API key saved successfully!'
     await updateBackendKeys()
     emit('keysUpdated')
@@ -413,7 +410,7 @@ const saveFireworksKey = async () => {
 }
 
 const clearFireworksKey = () => {
-  localStorage.removeItem(`fireworks_key_${userId.value}`)
+  localStorage.removeItem(`fireworks_key`)
   fireworksKey.value = ''
   successMessage.value = 'Fireworks API key cleared successfully!'
   updateBackendKeys()
@@ -422,7 +419,7 @@ const clearFireworksKey = () => {
 }
 
 const clearSerperKey = () => {
-  localStorage.removeItem(`serper_key_${userId.value}`)
+  localStorage.removeItem(`serper_key`)
   serperKey.value = ''
   successMessage.value = 'Serper API key cleared successfully!'
   updateBackendKeys()
@@ -473,11 +470,7 @@ const updateBackendKeys = async () => {
       fireworks_key: fireworksKey.value || ''
     }
 
-    const response = await axios.post(url, postParams, {
-      headers: {
-        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
-      }
-    })
+    const response = await axios.post(url, postParams)
     if (response.status === 200) {
       console.log('API keys updated in backend successfully')
     }
@@ -488,7 +481,7 @@ const updateBackendKeys = async () => {
 }
 
 const handleModelSelection = () => {
-  localStorage.setItem(`selected_model_${userId.value}`, selectedModel.value)
+  localStorage.setItem(`selected_model`, selectedModel.value)
   emit('keysUpdated')
 }
 
