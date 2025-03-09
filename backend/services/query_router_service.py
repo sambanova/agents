@@ -406,6 +406,7 @@ class QueryRouterServiceChat:
         redis_client: Optional[redis.Redis] = None,
         user_id: Optional[str] = None,
         conversation_id: Optional[str] = None,
+        extra_headers: Optional[Dict[str, str]] = None,
     ):
         self.llm_api_key = llm_api_key
         self.provider = provider
@@ -415,7 +416,7 @@ class QueryRouterServiceChat:
         self.user_id = user_id
         self.conversation_id = conversation_id
         self.message_id = message_id
-
+        self.extra_headers = extra_headers
         # Expanded / refined keywords for educational content (including some "report", "compare", etc.)
         self.edu_keywords = [
             "explain", "guide", "learn", "teach", "understand", "what is",
@@ -523,7 +524,8 @@ class QueryRouterServiceChat:
         """
         headers = {
             "Authorization": f"Bearer {self.llm_api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            **self.extra_headers
         }
 
         payload = {

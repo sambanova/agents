@@ -25,7 +25,8 @@ if os.getenv("LANGTRACE_API_KEY"):
     langtrace.init(api_key=os.getenv("LANGTRACE_API_KEY"))
 
 # crewai imports
-from crewai import Agent, Task, Crew, LLM, Process
+from crewai import Agent, Task, Crew, Process
+from crewai_llm import CustomLLM
 from utils.agent_thought import RedisConversationLogger
 from crewai.tools import tool
 from crewai_tools import SerperDevTool
@@ -206,18 +207,19 @@ class FinancialAnalysisCrew:
         docs_included: bool = False,
         redis_client: Redis = None,
         message_id: str = None,
-        verbose: bool = True
+        verbose: bool = True,
+        extra_headers: Dict[str, str] = {}
     ):
         model_info = model_registry.get_model_info(model_key="llama-3.1-8b", provider=provider)
-        self.llm = LLM(
+        self.llm =  CustomLLM(
             model=model_info["crewai_prefix"] + "/" + model_info["model"],
             temperature=0.0,
             max_tokens=8192,
             api_key=llm_api_key,
-            base_url=model_info["url"],
+            extra_headers=extra_headers
         )
         aggregator_model_info = model_registry.get_model_info(model_key="llama-3.3-70b", provider=provider)
-        self.aggregator_llm = LLM(
+        self.aggregator_llm = CustomLLM(
             model=aggregator_model_info["crewai_prefix"] + "/" + aggregator_model_info["model"],
             temperature=0.0,
             max_tokens=8192,

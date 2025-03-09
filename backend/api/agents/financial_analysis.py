@@ -104,7 +104,8 @@ class FinancialAnalysisAgent(RoutedAgent):
                 run_id=conversation_id,
                 docs_included=True if message.docs else False,
                 verbose=False,
-                message_id=message.message_id
+                message_id=message.message_id,
+                extra_headers=self.api_keys.extra_headers,
             )
 
             parameters = message.parameters.model_dump()

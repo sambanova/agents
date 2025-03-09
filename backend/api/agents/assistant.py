@@ -172,14 +172,15 @@ class AssistantAgentWrapper(RoutedAgent):
                 model_client=OpenAIChatCompletionClient(
                     model=model_info["model"],
                     base_url=model_info["url"],
-                    api_key=getattr(self.api_keys, model_registry.get_api_key_env(provider=provider)),
                     temperature=0.0,
+                    api_key=getattr(self.api_keys, model_registry.get_api_key_env(provider=provider)),
                     model_info={
                         "json_output": False,
                         "function_calling": True,
                         "family": "unknown",
                         "vision": False,
                     },
+                    default_headers=self.api_keys.extra_headers
                 ),
                 tools=[
                     get_current_time,

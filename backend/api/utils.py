@@ -60,7 +60,7 @@ async def initialize_agent_runtime(
     # load back session state
     session_state_manager.init_conversation(redis_client, user_id, conversation_id)
 
-    agent_runtime = SingleThreadedAgentRuntime(tracer_provider=tracer)
+    agent_runtime = SingleThreadedAgentRuntime(tracer_provider=tracer if tracer else None)
 
     # Add subscriptions
     logger.info("Adding user proxy subscription")

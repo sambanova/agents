@@ -2,7 +2,7 @@
 import functools
 import json
 import time
-from typing import Literal, List, Optional, Tuple, Any, Callable
+from typing import Dict, Literal, List, Optional, Tuple, Any, Callable
 import os
 import re
 
@@ -707,7 +707,7 @@ def summarize_documents(summary_model, state: ReportState, config: RunnableConfi
                 if s.research
     ])
 
-def get_graph(api_key: str, provider: str):
+def get_graph(api_key: str, provider: str, extra_headers: Dict[str, str]):
     """
     Create and configure the graph for deep research.
     
@@ -726,9 +726,9 @@ def get_graph(api_key: str, provider: str):
         planner_model = ChatFireworks(base_url=planner_model_config["url"], model=planner_model_config["model"], temperature=0, max_tokens=8192, api_key=api_key)
         summary_model = ChatFireworks(base_url=summary_model_config["url"], model=summary_model_config["model"], temperature=0, max_tokens=8192, api_key=api_key)
     elif provider == "sambanova":
-        writer_model = ChatSambaNovaCloud(sambanova_url=writer_model_config["long_url"], model=writer_model_config["model"], temperature=0, max_tokens=8192, sambanova_api_key=api_key)
-        planner_model = ChatSambaNovaCloud(sambanova_url=planner_model_config["long_url"], model=planner_model_config["model"], temperature=0, max_tokens=8192, sambanova_api_key=api_key)
-        summary_model = ChatSambaNovaCloud(sambanova_url=summary_model_config["long_url"], model=summary_model_config["model"], temperature=0, max_tokens=8192, sambanova_api_key=api_key)
+        writer_model = ChatSambaNovaCloud(model=writer_model, temperature=0, max_tokens=8192, sambanova_api_key=api_key, additional_headers=extra_headers)
+        planner_model = ChatSambaNovaCloud(model=planner_model, temperature=0, max_tokens=8192, sambanova_api_key=api_key, additional_headers=extra_headers)
+        summary_model = ChatSambaNovaCloud(model=summary_model, temperature=0, max_tokens=8192, sambanova_api_key=api_key, additional_headers=extra_headers)
     else:
         raise ValueError(f"Unsupported provider: {provider}")
 

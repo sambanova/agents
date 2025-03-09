@@ -71,6 +71,8 @@ class SemanticRouterAgent(RoutedAgent):
             model=model_registry.get_model_info(provider=provider, model_key=_reasoning_model_name)["model"],
             base_url=model_registry.get_model_info(provider=provider, model_key=_reasoning_model_name)["url"],
             api_key=getattr(api_keys, model_registry.get_api_key_env(provider=provider)),
+            default_headers=self.api_keys.extra_headers,
+            temperature=0.0,
             model_info={
                 "json_output": False,
                 "function_calling": True,
@@ -84,6 +86,7 @@ class SemanticRouterAgent(RoutedAgent):
             model=model_registry.get_model_info(provider=provider, model_key=self._structure_extraction_model_name)["model"],
             base_url=model_registry.get_model_info(provider=provider, model_key=self._structure_extraction_model_name)["url"],
             api_key=getattr(api_keys, model_registry.get_api_key_env(provider=provider)),
+            default_headers=self.api_keys.extra_headers,
             temperature=0.0,
             model_info={
                 "json_output": False,
@@ -98,6 +101,7 @@ class SemanticRouterAgent(RoutedAgent):
             model=model_registry.get_model_info(provider=provider, model_key=self._context_summary_model_name)["model"],
             base_url=model_registry.get_model_info(provider=provider, model_key=self._context_summary_model_name)["url"],
             api_key=getattr(api_keys, model_registry.get_api_key_env(provider=provider)),
+            default_headers=self.api_keys.extra_headers,
             temperature=0.0,
             model_info={
                 "json_output": False,
@@ -207,6 +211,7 @@ class SemanticRouterAgent(RoutedAgent):
             api_key = getattr(self.api_keys, model_registry.get_api_key_env(message.provider))
             router = QueryRouterServiceChat(
                 llm_api_key=api_key,
+                extra_headers=self.api_keys.extra_headers,
                 provider=message.provider,
                 model_name=message.planner_model,
                 websocket_manager=self.websocket_manager,
