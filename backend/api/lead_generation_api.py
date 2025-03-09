@@ -1,5 +1,5 @@
-from fastapi import Depends, FastAPI, File, Query, Request, UploadFile
-from fastapi_clerk_auth import ClerkConfig, ClerkHTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 from pydantic import BaseModel
 import json
@@ -9,14 +9,14 @@ from fastapi.middleware.cors import CORSMiddleware
 import time
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional, Dict, Any, List
+from typing import Annotated, Optional, Dict, Any, List
 from contextlib import asynccontextmanager
 
 from api.agents.user_proxy import UserProxyAgent
 from api.websocket_manager import WebSocketConnectionManager
 
-from api.utils import load_documents
 from api.data_types import APIKeys
+from api.auth import decode_access_token
 from utils.logging import logger
 import os
 import sys
@@ -61,9 +61,35 @@ class EduContentRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str
 
-CLERK_JWT_ISSUER = os.environ.get("CLERK_JWT_ISSUER")
-clerk_config = ClerkConfig(jwks_url=CLERK_JWT_ISSUER)
-clerk_auth_guard = ClerkHTTPBearer(config=clerk_config)
+security = HTTPBearer()
+
+## Given a JWT token in Authorization header, return the user_id
+async def get_current_user(token: Annotated[str, Depends(security)]):
+    """Validate the bearer token and return the current user."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        # Extract the token from the authorization header
+        if isinstance(token, HTTPAuthorizationCredentials):
+            token_cred = token.credentials
+        elif isinstance(token, str):
+            token_cred = token
+
+        payload = decode_access_token(token_cred)
+        if payload is None:
+            raise credentials_exception
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+
+        return user_id
+    except Exception:
+        raise credentials_exception
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -126,20 +152,6 @@ class LeadGenerationAPI:
         self.setup_cors()
         self.setup_routes()
         self.executor = ThreadPoolExecutor(max_workers=2)
-
-    def verify_conversation_exists(self, user_id: str, conversation_id: str) -> bool:
-        """
-        Verify if a conversation exists for the given user.
-        
-        Args:
-            user_id (str): The ID of the user
-            conversation_id (str): The ID of the conversation
-            
-        Returns:
-            bool: True if conversation exists, False otherwise
-        """
-        meta_key = f"chat_metadata:{user_id}:{conversation_id}"
-        return bool(self.app.state.redis_client.exists(meta_key))
 
     def setup_cors(self):
         allowed_origins = os.getenv('ALLOWED_ORIGINS', '*').split(',')
@@ -216,9 +228,9 @@ class LeadGenerationAPI:
                         return
                     
                     token_data = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token.split(' ')[1])
-                    user_id = get_user_id_from_token(token_data)
-
-                    if not user_id:
+                    try:
+                        user_id = await get_current_user(token_data)
+                    except HTTPException:
                         await websocket.close(code=4001, reason="Invalid authentication token")
                         return
 
@@ -262,165 +274,10 @@ class LeadGenerationAPI:
                 print(f"[/route] Error determining route: {str(e)}")
                 return JSONResponse(status_code=500, content={"error": str(e)})
 
-        @self.app.post("/execute/{query_type}")
-        async def execute_query(
-            request: Request,
-            query_type: str,
-            parameters: Dict[str, Any]
-        ):
-            sambanova_key = request.headers.get("x-sambanova-key")
-            serper_key = request.headers.get("x-serper-key")
-            exa_key = request.headers.get("x-exa-key")
-
-            user_id = request.headers.get("x-user-id", "")
-            run_id = request.headers.get("x-run-id", "")
-
-            try:
-                # Load document chunks if document_ids are provided
-                if "document_ids" in parameters:
-                    combined_text = load_documents(user_id, parameters["document_ids"], self.app.state.redis_client, self.app.state.context_length_summariser)
-                    parameters["docs"] = combined_text
-
-                if query_type == "sales_leads":
-                    if not exa_key:
-                        return JSONResponse(
-                            status_code=401,
-                            content={"error": "Missing required Exa API key for sales leads"}
-                        )
-                    crew = ResearchCrew(
-                        llm_api_key=sambanova_key,
-                        exa_key=exa_key,
-                        user_id=user_id,
-                        run_id=run_id,
-                        provider="sambanova"
-                    )
-                    raw_result = await self.execute_research(crew, parameters)
-                    parsed_result = json.loads(raw_result)
-                    outreach_list = parsed_result.get("outreach_list", [])
-                    return JSONResponse(content={"results": outreach_list})
-
-                elif query_type == "educational_content" or query_type == "deep_research":                        
-                    if not serper_key:
-                        return JSONResponse(
-                            status_code=401,
-                            content={"error": "Missing required Serper API key for educational content"}
-                        )
-                    edu_flow = SambaResearchFlow(
-                        llm_api_key=sambanova_key,
-                        serper_key=serper_key,
-                        user_id=user_id,
-                        run_id=run_id,
-                        provider="sambanova",
-                        docs_included="docs" in parameters and parameters["docs"] is not None
-                    )
-                    edu_inputs = {
-                        "topic": parameters["topic"] if query_type == "educational_content" else parameters["deep_research_topic"],
-                        "audience_level": parameters.get("audience_level", "intermediate"),
-                        "additional_context": ", ".join(parameters.get("focus_areas", []))
-                    }
-                    if "docs" in parameters and parameters["docs"] is not None:
-                        edu_inputs["docs"] = parameters["docs"]
-                    edu_flow.input_variables = edu_inputs
-                    loop = asyncio.get_running_loop()
-                    result = await loop.run_in_executor(None, edu_flow.kickoff)
-
-                    if isinstance(result, str):
-                        sections_with_content = json.loads(result)
-                    else:
-                        sections_with_content = result
-
-                    return JSONResponse(content=sections_with_content)
-
-                elif query_type == "financial_analysis":
-                    if not exa_key or not serper_key:
-                        return JSONResponse(
-                            status_code=401,
-                            content={"error": "Missing required Exa or Serper API keys for financial analysis"}
-                        )
-                    crew = FinancialAnalysisCrew(
-                        llm_api_key=sambanova_key,
-                        exa_key=exa_key,
-                        serper_key=serper_key,
-                        user_id=user_id,
-                        run_id=run_id,
-                        provider="sambanova",
-                        docs_included="docs" in parameters and parameters["docs"] is not None
-                    )
-                    raw_result = await self.execute_financial(crew, parameters, "sambanova")
-                    parsed_fin = json.loads(raw_result)
-                    return JSONResponse(content=parsed_fin)
-
-                else:
-                    return JSONResponse(
-                        status_code=400,
-                        content={"error": f"Unknown query type: {query_type}"}
-                    )
-
-            except Exception as e:
-                print(f"[/execute/{query_type}] Error executing query: {str(e)}")
-                return JSONResponse(status_code=500, content={"error": str(e)})
-
-        @self.app.get("/stream/logs")
-        async def stream_logs(request: Request, user_id: str, run_id: str):
-            """
-            SSE endpoint that streams agent logs for the given user_id + run_id.
-            """
-            channel = f"agent_thoughts:{user_id}:{run_id}"
-            print(f"[stream_logs] Starting SSE for user_id={user_id}, run_id={run_id}, channel={channel}")
-
-            try:
-                local_redis = self.app.state.redis_client
-
-                pubsub = local_redis.pubsub(ignore_subscribe_messages=True)
-                pubsub.subscribe(channel)
-
-                async def event_generator():
-                    try:
-                        yield {
-                            "event": "message",
-                            "data": json.dumps({
-                                "type": "connection_established",
-                                "message": "Connected to SSE stream"
-                            })
-                        }
-                        while True:
-                            if await request.is_disconnected():
-                                print("[stream_logs] Client disconnected")
-                                break
-
-                            message = pubsub.get_message(timeout=1.0)
-                            if message and message["type"] == "message":
-                                data_str = message["data"]
-                                yield {
-                                    "event": "message",
-                                    "data": data_str
-                                }
-
-                            await asyncio.sleep(0.25)
-                            yield {
-                                "event": "ping",
-                                "data": json.dumps({"type":"ping"})
-                            }
-                    except Exception as ex:
-                        print(f"[stream_logs] Error in SSE generator: {ex}")
-                    finally:
-                        print("[stream_logs] unsubscribing, closing pubsub")
-                        pubsub.unsubscribe()
-                        pubsub.close()
-
-                return EventSourceResponse(
-                    event_generator(),
-                    media_type="text/event-stream",
-                    headers={"Cache-Control":"no-cache","Connection":"keep-alive"}
-                )
-            except Exception as e:
-                print(f"[stream_logs] Error setting up SSE: {e}")
-                return JSONResponse(status_code=500, content={"error": str(e)})
-
         @self.app.post("/chat/init")
         async def init_chat(
             chat_name: Optional[str] = None,
-            token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard)
+            user_id: str = Depends(get_current_user)
         ):
             """
             Initializes a new chat session and stores the provided API keys.
@@ -428,15 +285,8 @@ class LeadGenerationAPI:
             
             Args:
                 chat_name (Optional[str]): Optional name for the chat. If not provided, a default will be used.
-                token_data (HTTPAuthorizationCredentials): The authentication token data
+                user_id (str): The ID of the user
             """
-            # Get and verify authenticated user
-            user_id = get_user_id_from_token(token_data)
-            if not user_id:
-                return JSONResponse(
-                    status_code=401,
-                    content={"error": "Invalid authentication token"}
-                )
 
             try:
                 # Generate a unique chat ID
@@ -482,7 +332,7 @@ class LeadGenerationAPI:
         @self.app.get("/chat/history/{conversation_id}")
         async def get_conversation_messages(
             conversation_id: str,
-            token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard)
+            user_id: str = Depends(get_current_user)
         ):
             """
             Retrieve all messages for a specific conversation.
@@ -490,15 +340,7 @@ class LeadGenerationAPI:
             Args:
                 user_id (str): The ID of the user
                 conversation_id (str): The ID of the conversation
-                token_data (HTTPAuthorizationCredentials): The authentication token data
             """
-            # Verify the authenticated user matches the requested user_id
-            user_id = get_user_id_from_token(token_data)
-            if not user_id:
-                return JSONResponse(
-                    status_code=401,
-                    content={"error": "Invalid authentication token"}
-                )
 
             try:
                 # Verify conversation exists and belongs to user
@@ -538,7 +380,7 @@ class LeadGenerationAPI:
 
         @self.app.get("/chat/list")
         async def list_chats(
-            token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard)
+            user_id: str = Depends(get_current_user)
         ):
             """
             Get list of all chats for a user, sorted by most recent first.
@@ -548,13 +390,6 @@ class LeadGenerationAPI:
                 token_data (HTTPAuthorizationCredentials): The authentication token data
             """
             try:
-                # Verify the authenticated user matches the requested user_id
-                user_id = get_user_id_from_token(token_data)
-                if not user_id:
-                    return JSONResponse(
-                        status_code=401,
-                        content={"error": "Invalid authentication token"}
-                    )
 
                 # Get conversation IDs from sorted set, newest first
                 user_chats_key = f"user_chats:{user_id}"
@@ -592,7 +427,7 @@ class LeadGenerationAPI:
         @self.app.delete("/chat/{conversation_id}")
         async def delete_chat(
             conversation_id: str,
-            token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard)
+            user_id: str = Depends(get_current_user)
         ):
             """
             Delete a chat conversation and all its associated data.
@@ -603,14 +438,6 @@ class LeadGenerationAPI:
                 token_data (HTTPAuthorizationCredentials): The authentication token data
             """
             try:
-                # Verify the authenticated user matches the requested user_id
-                user_id = get_user_id_from_token(token_data)
-                if not user_id:
-                    return JSONResponse(
-                        status_code=401,
-                        content={"error": "Invalid authentication token"},
-                    )
-
                 # Verify chat exists and belongs to user
                 meta_key = f"chat_metadata:{user_id}:{conversation_id}"
                 if not self.app.state.redis_client.exists(meta_key):
@@ -648,121 +475,13 @@ class LeadGenerationAPI:
                     content={"error": f"Failed to delete chat: {str(e)}"}
                 )
 
-        # ----------------------------------------------------------------
-        # NEW ENDPOINT: /newsletter_chat/init
-        # ----------------------------------------------------------------
-        @self.app.post("/newsletter_chat/init")
-        def init_newsletter_chat(request: Request):
-            """
-            Initializes a conversation with ConvoNewsletterCrew using the provided keys.
-            """
-            sambanova_key = request.headers.get("x-sambanova-key","")
-            serper_key = request.headers.get("x-serper-key","")
-            exa_key = request.headers.get("x-exa-key","")
-            user_id = request.headers.get("x-user-id","anonymous")
-            run_id = request.headers.get("x-run-id","")
-
-            try:
-                init_data = crew_chat.api_init_conversation(
-                    sambanova_key=sambanova_key,
-                    serper_key=serper_key,
-                    exa_key=exa_key,
-                    user_id=user_id,
-                    run_id=run_id
-                )
-                return JSONResponse(
-                    status_code=200,
-                    content={
-                        "conversation_id": init_data["conversation_id"],
-                        "assistant_message": init_data["assistant_message"]
-                    }
-                )
-            except Exception as e:
-                print(f"[/newsletter_chat/init] Error: {str(e)}")
-                return JSONResponse(status_code=500, content={"error": str(e)})
-
-        # ----------------------------------------------------------------
-        # NEW ENDPOINT: /newsletter_chat/message/{conversation_id}
-        # ----------------------------------------------------------------
-        @self.app.post("/newsletter_chat/message/{conversation_id}")
-        def newsletter_chat_message(conversation_id: str, body: ChatRequest, request: Request):
-            """
-            Sends a user message to an existing conversation, returning assistant's reply.
-            """
-            user_id = request.headers.get("x-user-id","anonymous")
-            user_message = body.message.strip()
-            if not user_message:
-                return JSONResponse(
-                    status_code=400,
-                    content={"error": "Empty user message."}
-                )
-            try:
-                response_text = crew_chat.api_process_message(
-                    conversation_id,
-                    user_message,
-                    user_id=user_id
-                )
-                return JSONResponse(
-                    status_code=200,
-                    content={"assistant_response": response_text}
-                )
-            except ValueError as ve:
-                print(f"[/newsletter_chat/message] Not found: {str(ve)}")
-                return JSONResponse(
-                    status_code=404,
-                    content={"error": str(ve)}
-                )
-            except Exception as e:
-                print(f"[/newsletter_chat/message] Error: {str(e)}")
-                return JSONResponse(
-                    status_code=500,
-                    content={"error": str(e)}
-                )
-
-        # ----------------------------------------------------------------
-        # NEW ENDPOINT: /newsletter_chat/history/{conversation_id}
-        # ----------------------------------------------------------------
-        @self.app.get("/newsletter_chat/history/{conversation_id}")
-        def conversation_history(conversation_id: str, request: Request):
-            """
-            Returns the entire messages list for the specified conversation, 
-            so the front end can show the entire conversation from start.
-            """
-            user_id = request.headers.get("x-user-id","anonymous")
-            try:
-                data = crew_chat.api_get_full_history(conversation_id, user_id)
-                return JSONResponse(
-                    status_code=200,
-                    content=data
-                )
-            except ValueError as ve:
-                return JSONResponse(
-                    status_code=404,
-                    content={"error":str(ve)}
-                )
-            except Exception as e:
-                print(f"[/newsletter_chat/history] Error: {str(e)}")
-                return JSONResponse(
-                    status_code=500,
-                    content={"error": str(e)}
-                )
-
-        # ~~~~ Existing Helper Methods for Sales Leads, Fin Analysis, etc. ~~~~
-
         @self.app.post("/upload")
         async def upload_document(
             file: UploadFile = File(...),
-            token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard)
+            user_id: str = Depends(get_current_user)
         ):
             """Upload and process a document."""
             try:
-                # Get and verify authenticated user
-                user_id = get_user_id_from_token(token_data)
-                if not user_id:
-                    return JSONResponse(
-                        status_code=401,
-                        content={"error": "Invalid authentication token"},
-                    )
 
                 # Generate unique document ID
                 document_id = str(uuid.uuid4())
@@ -819,18 +538,10 @@ class LeadGenerationAPI:
 
         @self.app.get("/documents")
         async def get_user_documents(
-            token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard)
+            user_id: str = Depends(get_current_user)
         ):
             """Retrieve all documents for a user."""
             try:
-                # Verify the authenticated user matches the requested user_id
-
-                user_id = get_user_id_from_token(token_data)
-                if not user_id:
-                    return JSONResponse(
-                        status_code=401,
-                        content={"error": "Invalid authentication token"},
-                    )
 
                 # Get all document IDs for the user
                 user_docs_key = f"user_documents:{user_id}"
@@ -862,17 +573,10 @@ class LeadGenerationAPI:
         @self.app.get("/documents/{document_id}/chunks")
         async def get_document_chunks_by_id(
             document_id: str,
-            token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard)
+            user_id: str = Depends(get_current_user)
         ):
             """Retrieve chunks for a specific document."""
             try:
-                # Verify the authenticated user matches the requested user_id
-                user_id = get_user_id_from_token(token_data)
-                if not user_id:
-                    return JSONResponse(
-                        status_code=401,
-                        content={"error": "Invalid authentication token"},
-                    )
 
                 # Verify document belongs to user
                 user_docs_key = f"user_documents:{user_id}"
@@ -904,18 +608,10 @@ class LeadGenerationAPI:
         @self.app.delete("/documents/{document_id}")
         async def delete_document(
             document_id: str,
-            token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard)
+            user_id: str = Depends(get_current_user)
         ):
             """Delete a document and its associated data from the database."""
             try:
-                # Verify the authenticated user matches the requested user_id
-                user_id = get_user_id_from_token(token_data)
-                if not user_id:
-                    return JSONResponse(
-                        status_code=401,
-                        content={"error": "Invalid authentication token"},
-                    )
-
                 # Verify document belongs to user
                 user_docs_key = f"user_documents:{user_id}"
                 if not self.app.state.redis_client.sismember(user_docs_key, document_id):
@@ -947,7 +643,7 @@ class LeadGenerationAPI:
         @self.app.post("/set_api_keys")
         async def set_api_keys(
             keys: APIKeys,
-            token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard)
+            user_id: str = Depends(get_current_user)
         ):
             """
             Store API keys for a user in Redis.
@@ -955,17 +651,8 @@ class LeadGenerationAPI:
             Args:
                 user_id (str): The ID of the user
                 keys (APIKeys): The API keys to store
-                token_data (HTTPAuthorizationCredentials): The authentication token data
             """
             try:
-                # Verify the authenticated user matches the requested user_id
-                user_id = get_user_id_from_token(token_data)
-                if not user_id:
-                    return JSONResponse(
-                        status_code=401,
-                        content={"error": "Invalid authentication token"},
-                    )
-
                 # Store keys in Redis with user-specific prefix
                 key_prefix = f"api_keys:{user_id}"
                 self.app.state.redis_client.hset(
@@ -992,24 +679,15 @@ class LeadGenerationAPI:
 
         @self.app.get("/get_api_keys")
         async def get_api_keys(
-            token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard)
+            user_id: str = Depends(get_current_user)
         ):
             """
             Retrieve stored API keys for a user.
             
             Args:
                 user_id (str): The ID of the user
-                token_data (HTTPAuthorizationCredentials): The authentication token data
             """
             try:
-                # Verify the authenticated user matches the requested user_id
-                user_id = get_user_id_from_token(token_data)
-                if not user_id:
-                    return JSONResponse(
-                        status_code=401,
-                        content={"error": "Invalid authentication token"},
-                    )
-
                 key_prefix = f"api_keys:{user_id}"
                 stored_keys = self.app.state.redis_client.hgetall(key_prefix)
 
