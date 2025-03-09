@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiskagents-frontend
+  namespace: default
+  labels:
+    app: aiskagents-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aiskagents-frontend
+  template:
+    metadata:
+      labels:
+        app: aiskagents-frontend
+    spec:
+      imagePullSecrets:
+      - name: regcred
+      containers:
+      - name: aiskagents-frontend-container
+        image: {{DOCKER_IMAGE}}
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        env:
+        - name: CLERK_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aiskagents-frontend-secrets
+              key: CLERK_SECRET_KEY
+

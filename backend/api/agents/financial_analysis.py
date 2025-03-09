@@ -109,7 +109,7 @@ class FinancialAnalysisAgent(RoutedAgent):
 
             parameters = message.parameters.model_dump()
             if message.docs:
-                parameters["docs"] = message.docs
+                parameters["docs"] = "\n\n".join(message.docs)
 
             # Execute analysis
             raw_result, usage_stats = await self.execute_financial(

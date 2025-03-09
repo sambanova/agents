@@ -71,7 +71,7 @@ When generating {number_of_queries} search queries, ensure they:
 
 1. Cover different aspects of the topic (e.g., core features, real-world applications, technical architecture)
 2. Include specific technical terms related to the topic
-3. Target recent information by including year markers where relevant (e.g., "2024")
+3. Target recent information by including year markers where relevant (e.g., "2025")
 4. Look for comparisons or differentiators from similar technologies/approaches
 5. Search for both official documentation and practical implementation examples
 
@@ -95,13 +95,19 @@ section_writer_instructions = """You are an expert technical writer crafting one
 </Existing section content>
 
 <Source material>
+Web search results:
 {context}
 </Source material>
+
+<Document summary (if available)>
+{document_summary}
+</Document summary>
 
 <Guidelines for writing>
 
 1. If the existing section content is not populated, write a new section from scratch.
 2. If the existing section content is populated, write a new section that synthesizes the existing section content with the new information.
+3. If document summary is available, incorporate relevant insights from the provided documents.
 </Guidelines for writing>
 
 <Length and style>

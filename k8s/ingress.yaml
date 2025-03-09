@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aiskagents-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "30m"  # Allows uploads up to 30MB
+spec:
+  tls:
+  - hosts:
+    - aiskagents.cloud.snova.ai
+    secretName: cloud-snova-ai-tls
+  rules:
+  - host: aiskagents.cloud.snova.ai
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: aiskagents-frontend
+            port:
+              number: 80
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: aiskagents-backend
+            port:
+              number: 80

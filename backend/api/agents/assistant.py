@@ -187,7 +187,7 @@ class AssistantAgentWrapper(RoutedAgent):
                     yahoo_finance_search,
                     functools.partial(exa_news_search, self.api_keys.exa_key),
                 ],
-                system_message="You are a helpful AI assistant. You have access to real-time stock data and news information and you should use the company ticker when searching for stock data. Use the tools provided to assist the user with their request regarding current affairs. Do not ignore the results of the tools.",
+                system_message="You are a helpful AI assistant. You have access to real-time stock data and news information and you should use the company ticker when searching for stock data. Use the tools provided to assist the user with their request regarding current affairs. Use the provided documents to answer questions if the user asks about them.",
                 reflect_on_tool_use=True,
             )
             return self._assistant_instance
@@ -207,11 +207,16 @@ class AssistantAgentWrapper(RoutedAgent):
                     f"Processing request: '{message.parameters.query[:100]}...'",
                 )
             )
-            agent_message = TextMessage(content=message.parameters.query, source="user")
+            user_messages = []
+            if message.docs:
+                user_messages.append(TextMessage(content="These are my uploaded documents:\n\n" + "\n\n".join(
+                    [f"Document {i+1}:\n{doc}" for i, doc in enumerate(message.docs)]
+                ), source="user"))
+            user_messages.append(TextMessage(content=message.parameters.query, source="user"))
 
             start_time = time.time()
             response = await self.get_assistant(message.provider).on_messages(
-                [agent_message], ctx.cancellation_token
+                user_messages, ctx.cancellation_token
             )
             logger.info(
                 logger.format_message(

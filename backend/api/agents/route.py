@@ -14,6 +14,7 @@ from autogen_core import (
     type_subscription,
 )
 from autogen_core.models import SystemMessage, UserMessage, CreateResult
+from autogen_core.models import AssistantMessage as AssistantMessageCore
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 import redis
 
@@ -92,7 +93,7 @@ class SemanticRouterAgent(RoutedAgent):
             },
         )
 
-        self._context_summary_model_name = "llama-3.1-70b"
+        self._context_summary_model_name = "llama-3.3-70b"
         self._context_summary_model = lambda provider: OpenAIChatCompletionClient(
             model=model_registry.get_model_info(provider=provider, model_key=self._context_summary_model_name)["model"],
             base_url=model_registry.get_model_info(provider=provider, model_key=self._context_summary_model_name)["url"],
@@ -219,14 +220,23 @@ class SemanticRouterAgent(RoutedAgent):
 
             if len(history) > 0:
                 model_response = await self._context_summary_model(message.provider).create(
-                    list(history)
-                    + [UserMessage(content="Summarize the messages so far in a few sentences.", source="user")]
+                    [SystemMessage(content=f"""You are a helpful assistant that summarises conversations for other processes to use as a context. 
+                                   Follow the instructions below to create the summary:
+                                   - Mention the user has uploaded {len(message.docs) if message.docs else 0} documents, do not mention the content of the documents.
+                                   - Include the topics and entities discussed in the conversation.
+                                   - Include the main points discussed in the conversation.
+                                   - Include the summary of the questions asked by the user.
+                                   - Include the summary of the responses provided by the assistant.
+                                   - Include the overall summary of the conversation.
+                                   """, source="system")]
+                    + list(history)
+                    + [UserMessage(content="Summarize the messages so far in a few sentences including your responses. Focus on including the topis", source="user")]
                 )
                 context_summary = model_response.content
             else:
                 context_summary = ""
 
-            route_result: QueryType = await router.route_query(message.content, context_summary)
+            route_result: QueryType = await router.route_query(message.content, context_summary, len(message.docs) if message.docs else 0)
 
             self._session_manager.add_to_history(
                     conversation_id,

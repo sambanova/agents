@@ -19,8 +19,10 @@ if parent_of_parent_dir not in sys.path:
 
 from dotenv import load_dotenv
 
-from langtrace_python_sdk import langtrace
-langtrace.init(api_key=os.getenv("LANGTRACE_API_KEY"))
+# Only import and initialize langtrace if API key is set
+if os.getenv("LANGTRACE_API_KEY"):
+    from langtrace_python_sdk import langtrace
+    langtrace.init(api_key=os.getenv("LANGTRACE_API_KEY"))
 
 # crewai imports
 from crewai import Agent, Task, Crew, LLM, Process
@@ -212,6 +214,7 @@ class FinancialAnalysisCrew:
             temperature=0.0,
             max_tokens=8192,
             api_key=llm_api_key,
+            base_url=model_info["url"],
         )
         aggregator_model_info = model_registry.get_model_info(model_key="llama-3.3-70b", provider=provider)
         self.aggregator_llm = LLM(
@@ -219,6 +222,7 @@ class FinancialAnalysisCrew:
             temperature=0.0,
             max_tokens=8192,
             api_key=llm_api_key,
+            base_url=aggregator_model_info["url"],
         )
         self.exa_key = exa_key
         self.serper_key = serper_key

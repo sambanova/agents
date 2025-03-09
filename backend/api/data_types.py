@@ -88,7 +88,7 @@ class EducationalContent(BaseModel):
 class EndUserMessage(BaseAgentMessage):
     content: str
     use_planner: bool = False
-    docs: Optional[str] = None
+    docs: Optional[List[str]] = None
     provider: str
     planner_model: str
     message_id: str
@@ -99,7 +99,7 @@ class AgentRequest(BaseModel):
         FinancialAnalysis, SalesLeads, AssistantMessage, UserQuestion, DeepResearch
     ]
     query: str
-    docs: Optional[str] = None
+    docs: Optional[List[str]] = None
     provider: str
     message_id: str
     @model_validator(mode="after")

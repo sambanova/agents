@@ -3,7 +3,7 @@
   <div ref="agentContainer"  v-if="agentThoughtsData.length"  class="flex flex-col p-1 overflow-y-auto overflow-x-hidden 
    border border-primary-brandFrame bg-white rounded-lg h-full border-l 
     transition-all duration-300 "
-  :class="collapsed ? 'w-[64px]  ' : 'w-80'">
+  :class="collapsed ? 'w-[64px]  ' : 'w-[280px]'">
       <!-- Collapse/Expand Button -->
       <button
       :class="collapsed?'w-100 h-[36px]  mx-auto':' ' "
@@ -41,8 +41,8 @@
    
   </div>
  
-   <div class="mx-1">
-    <ol class="relative pl-3">  
+   <div class="mx-2">
+    <ol class="relative pl-2">  
       <TimelineItem  
       v-for="(thought, index) in agentThoughtsData"
       :key="index"

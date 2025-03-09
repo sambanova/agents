@@ -139,7 +139,7 @@ class UserProxyAgent(RoutedAgent):
                 conversation_id,
                 AssistantMessage(
                     content=message.data.model_dump_json(), 
-                    source=ctx.sender.type
+                    source=ctx.sender.type if ctx.sender else "assistant"
                 ),
             )
 

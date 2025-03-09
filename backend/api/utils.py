@@ -30,8 +30,17 @@ from api.agents.deep_research_agent import DeepResearchAgent
 
 session_state_manager = SessionStateManager()
 
-tracer = configure_oltp_tracing()
+# Make tracer optional based on environment variable
+tracer = None
+if os.getenv("ENABLE_TRACING", "false").lower() == "true":
+    tracer = configure_oltp_tracing()
 
+class DocumentContextLengthError(Exception):
+    """Exception raised when document(s) exceed the maximum context length."""
+    def __init__(self, total_tokens: int, max_tokens: int):
+        self.total_tokens = total_tokens
+        self.max_tokens = max_tokens
+        super().__init__(f"Combined documents exceed maximum context window size of {max_tokens} tokens (got {total_tokens} tokens). Please reduce the number or size of documents.")
 
 async def initialize_agent_runtime(
     redis_client: redis.Redis,
@@ -78,7 +87,7 @@ async def initialize_agent_runtime(
         lambda: FinancialAnalysisAgent(api_keys=api_keys),
     )
 
-    # Keep old educational content agent for “basic” usage
+    # Keep old educational content agent for "basic" usage
     await EducationalContentAgent.register(
         agent_runtime,
         "educational_content",
@@ -127,8 +136,9 @@ def estimate_tokens_regex(text: str) -> int:
         return len(re.findall(r"\w+|\S", text))
 
 
-def load_documents(user_id: str, document_ids: List[str], redis_client: redis.Redis, context_length_summariser: int) -> str:
-    chunks_text = []
+def load_documents(user_id: str, document_ids: List[str], redis_client: redis.Redis, context_length_summariser: int) -> List[str]:
+    documents = []
+    total_tokens = 0
 
     for doc_id in document_ids:
         # Verify document exists and belongs to user
@@ -141,19 +151,14 @@ def load_documents(user_id: str, document_ids: List[str], redis_client: redis.Re
 
         if chunks_data:
             chunks = json.loads(chunks_data)
-            chunks_text.extend([chunk['text'] for chunk in chunks])
+            doc_text = "\n".join([chunk['text'] for chunk in chunks])
+            token_count = estimate_tokens_regex(doc_text)
+            
+            # Update total token count and check if it would exceed the limit
+            if total_tokens + token_count > context_length_summariser:
+                raise DocumentContextLengthError(total_tokens + token_count, context_length_summariser)
+            
+            total_tokens += token_count
+            documents.append(doc_text)
 
-    if chunks_text:
-        combined_text = "\n".join(chunks_text)
-        token_count = estimate_tokens_regex(combined_text)
-        # Check if combined document chunks exceed context length
-        if (
-            token_count > context_length_summariser
-        ): 
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "error": "Combined document length exceeds maximum context window size. Please reduce the number or size of documents."
-                },
-            )
-        return combined_text
+    return documents

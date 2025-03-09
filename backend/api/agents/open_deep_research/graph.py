@@ -339,7 +339,7 @@ async def generate_report_plan(writer_model, planner_model, state: ReportState, 
     logger.info(logger.format_message(session_id, f"Generated plan with {len(sections)} sections"))
     return {"sections": sections}
 
-def human_feedback(state: ReportState, config: RunnableConfig) -> Command[Literal["generate_report_plan","build_section_with_web_research"]]:
+def human_feedback(state: ReportState, config: RunnableConfig) -> Command[Literal["generate_report_plan","build_section_with_web_research", "summarize_documents"]]:
     sections = state["sections"]
     sec_str = "\n\n".join(
         f"<b>Section {i+1}:</b> {s.name} - {s.description}\n"
@@ -347,11 +347,14 @@ def human_feedback(state: ReportState, config: RunnableConfig) -> Command[Litera
     )
     fb = interrupt(sec_str)
     if isinstance(fb, bool):
-        return Command(goto=[
-            Send("build_section_with_web_research", {"section": s, "search_iterations": 0})
-            for s in sections
-            if s.research
-        ])
+        if state.get("document"):
+            return Command(goto="summarize_documents")
+        else:
+            return Command(goto=[
+                Send("build_section_with_web_research", {"section": s, "search_iterations": 0})
+                for s in sections
+                if s.research
+            ])
     elif isinstance(fb, str):
         return Command(goto="generate_report_plan", update={"feedback_on_report_plan": fb})
     else:
@@ -485,11 +488,13 @@ def write_section(
 
     logger.info(logger.format_message(session_id, f"Writing section: {sec.name}"))
     src = state["source_str"]
+    doc_summary = state.get("document_summary", "")
     sys_inst = section_writer_instructions.format(
         section_title=sec.name,
         section_topic=sec.description,
         context=src,
         section_content=sec.content,
+        document_summary=doc_summary
     )
 
     llm_config_section_writing = RunnableConfig(callbacks=[usage_handler_section_writing], tags=["section_writing"])
@@ -653,6 +658,54 @@ def compile_final_report(state: ReportState, config: RunnableConfig):
     )
     return {"final_report": final_text, "deep_research_report": report}
 
+def summarize_documents(summary_model, state: ReportState, config: RunnableConfig):
+    """
+    Summarize provided documents if they exist.
+    """
+    configurable = Configuration.from_runnable_config(config)
+    usage_handler = UsageCallback(provider=configurable.provider)
+    session_id = get_session_id_from_config(configurable)
+    
+    document = state.get("document", None)
+    if not document:
+        logger.info(logger.format_message(session_id, "No documents provided for summarization"))
+        return {"document_summary": ""}
+        
+    logger.info(logger.format_message(session_id, f"Summarizing a {len(document)} word document"))
+    
+    
+    sys_inst = """You are a document summarizer. Your task is to:
+    1. Read through the provided documents
+    2. Extract the key information, main points, and important findings
+    3. Create a comprehensive but concise summary that captures the essential information
+    4. Focus on factual information that would be relevant for research
+    5. Maintain objectivity and accuracy
+    
+    Format your response as a clear, well-structured summary."""
+
+    llm_config = RunnableConfig(callbacks=[usage_handler], tags=["document_summarization"])
+    
+    summary = invoke_llm_with_tracking(
+        llm=summary_model,
+        messages=[
+            SystemMessage(content=sys_inst),
+            HumanMessage(content=f"Please summarize the following document:\n\n{document}")
+        ],
+        task="Summarize provided document",
+        config=llm_config,
+        usage_handler=usage_handler,
+        configurable=configurable,
+        session_id=session_id,
+        llm_name=get_model_name(summary_model)
+    )
+
+    # After summarization, initiate section building
+    sections = state.get("sections", [])
+    return Command(goto=[
+                Send("build_section_with_web_research", {"section": s, "search_iterations": 0, "document_summary": summary.content})
+                for s in sections
+                if s.research
+    ])
 
 def get_graph(api_key: str, provider: str):
     """
@@ -661,23 +714,21 @@ def get_graph(api_key: str, provider: str):
     Args:
         api_key: The API key for the LLM provider
         provider: The LLM provider to use (fireworks or sambanova)
-        redis_client: Optional Redis client for caching and state management
+        documents: Optional list of documents to process
     """
     model_name = "llama-3.3-70b"
-    planner_model: str = model_registry.get_model_info(model_key=model_name, provider=provider)[
-        "model"
-    ] 
-    model_name = "llama-3.3-70b"
-    writer_model: str = model_registry.get_model_info(model_key=model_name, provider=provider)[
-        "model"
-    ] 
+    planner_model_config: str = model_registry.get_model_info(model_key=model_name, provider=provider)
+    writer_model_config: str = model_registry.get_model_info(model_key=model_name, provider=provider)
+    summary_model_config: str = model_registry.get_model_info(model_key=model_name, provider=provider)
 
     if provider == "fireworks":    
-        writer_model = ChatFireworks(model=writer_model, temperature=0, max_tokens=8192, api_key=api_key)
-        planner_model = ChatFireworks(model=planner_model, temperature=0, max_tokens=8192, api_key=api_key)
+        writer_model = ChatFireworks(base_url=writer_model_config["url"], model=writer_model_config["model"], temperature=0, max_tokens=8192, api_key=api_key)
+        planner_model = ChatFireworks(base_url=planner_model_config["url"], model=planner_model_config["model"], temperature=0, max_tokens=8192, api_key=api_key)
+        summary_model = ChatFireworks(base_url=summary_model_config["url"], model=summary_model_config["model"], temperature=0, max_tokens=8192, api_key=api_key)
     elif provider == "sambanova":
-        writer_model = ChatSambaNovaCloud(model=writer_model, temperature=0, max_tokens=8192, sambanova_api_key=api_key)
-        planner_model = ChatSambaNovaCloud(model=planner_model, temperature=0, max_tokens=8192, sambanova_api_key=api_key)
+        writer_model = ChatSambaNovaCloud(sambanova_url=writer_model_config["long_url"], model=writer_model_config["model"], temperature=0, max_tokens=8192, sambanova_api_key=api_key)
+        planner_model = ChatSambaNovaCloud(sambanova_url=planner_model_config["long_url"], model=planner_model_config["model"], temperature=0, max_tokens=8192, sambanova_api_key=api_key)
+        summary_model = ChatSambaNovaCloud(sambanova_url=summary_model_config["long_url"], model=summary_model_config["model"], temperature=0, max_tokens=8192, sambanova_api_key=api_key)
     else:
         raise ValueError(f"Unsupported provider: {provider}")
 
@@ -693,6 +744,7 @@ def get_graph(api_key: str, provider: str):
     builder = StateGraph(ReportState, input=ReportStateInput, output=ReportStateOutput, config_schema=Configuration)
     builder.add_node("generate_report_plan", functools.partial(generate_report_plan, writer_model, planner_model))
     builder.add_node("human_feedback", human_feedback)
+    builder.add_node("summarize_documents", functools.partial(summarize_documents, summary_model))
     builder.add_node("build_section_with_web_research", section_builder.compile())
     builder.add_node("gather_completed_sections", gather_completed_sections)
     builder.add_node("write_final_sections", functools.partial(write_final_sections, writer_model))

@@ -9,10 +9,10 @@
     ></div>
         
     <span  class="absolute flex items-center justify-center w-6 h-6 bg-white rounded-full -start-3 ring-8 ring-white">
-      <component class="size-[18px]"  :is="iconComponent"  />
+      <component class="size-[16px]"  :is="iconComponent"  />
     </span>
 
-    <h3  :class="collapsed?'invisible':''" class="flex ml-6 capitalize items-center mb-1 text-primary-brandTextPrimary text-[14px]">
+    <h3  :class="collapsed?'invisible':''" class="flex ml-5 font-medium capitalize items-center mb-1 text-primary-brandTextPrimary text-[14px]">
       {{ formatKey(data?.agent_name) }} 
       <!-- <span class="bg-blue-100 text-blue-800 text-sm font-medium me-2 px-2.5 py-0.5 rounded-sm ms-3">Latest</span> -->
     </h3>

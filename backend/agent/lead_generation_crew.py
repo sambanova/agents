@@ -10,8 +10,10 @@ if parent_dir not in sys.path:
 from dotenv import load_dotenv
 load_dotenv()
 
-from langtrace_python_sdk import langtrace
-langtrace.init(api_key=os.getenv("LANGTRACE_API_KEY"))
+# Only import and initialize langtrace if API key is set
+if os.getenv("LANGTRACE_API_KEY"):
+    from langtrace_python_sdk import langtrace
+    langtrace.init(api_key=os.getenv("LANGTRACE_API_KEY"))
 
 from crewai import Agent, Task, Crew, LLM, Process
 from tools.company_intelligence_tool import CompanyIntelligenceTool

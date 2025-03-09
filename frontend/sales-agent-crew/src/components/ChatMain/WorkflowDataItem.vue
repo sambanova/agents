@@ -10,8 +10,8 @@
           <!-- Left: Text Content -->
           <div class="grow">
             <h3 class="text-sm text-primary-bodyText flex items-center">
-              <span class="inline-block w-[75%] truncate">
-                {{ item.llm_name }} 
+              <span class="inline-block w-[75%] truncate capitalize">
+                {{ getTextAfterLastSlash(item.llm_name) }} 
               </span>
               <span class="ml-1 w-[15%]">
                 ({{ item.count }})
@@ -70,4 +70,16 @@ watch(
   },
   { deep: true, immediate: true }
 );
+
+
+function getTextAfterLastSlash(str) {
+  if (!str.includes('/')) {
+    // If there is no slash, return the original string
+    return str;
+  }
+  return str.substring(str.lastIndexOf('/') + 1);
+}
+
+
+
 </script>

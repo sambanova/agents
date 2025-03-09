@@ -12,10 +12,14 @@
   </div>
   <!-- Right buttons -->
   <div class="flex hidden space-x-2">
-    <button class=" text-sm h-[30px] py-1 px-2.5 bg-[#EE7624] text-white rounded">
+    <button 
+    
+    class=" text-sm h-[30px] py-1 px-2.5 bg-[#EE7624] text-white rounded">
       View full report
     </button>
-    <button class=" text-sm h-[30px] py-1 px-2.5 bg-[#EAECF0] text-[#344054] rounded">
+    <button
+    @click="genPDF"
+    class=" text-sm h-[30px] py-1 px-2.5 bg-[#EAECF0] text-[#344054] rounded">
       Download PDF
     </button>
   </div>
@@ -139,6 +143,9 @@
             <!-- Input -->
             <div class="relative">
               <textarea
+
+              @focus="checkAndOpenSettings"
+
                 @keydown="handleKeyDown"
                 v-model="searchQuery"
                 type="search"
@@ -339,13 +346,31 @@ const selectedOption = inject('selectedOption')
 const eventData = ref(null);
 function handleButtonClick(data) {
   eventData.value = data.message;
-  console.log('Button click received:', data);
-
+  
   chatName.value=''
   createNewChat()
 
 }
 
+
+async function genPDF() {
+  try {
+    const sampleContent = {
+    report: [
+      {
+        title: 'Introduction',
+        high_level_goal: 'Understand the basics of Vue 3',
+        why_important: 'Vue 3 is a modern framework with reactivity features.',
+        generated_content: '## Vue 3 Overview\nVue 3 introduces Composition API, better performance, and more...'
+      }
+    ]
+  };
+
+  downloadPDF(sampleContent);
+  }catch(e){
+console.log("PDF gen error",e)
+  }
+}
 
 async function createNewChat() {
   try {
@@ -509,6 +534,12 @@ async function loadFullHistory() {
     console.error('[ChatView] Error loading conversation history:', err)
     messages.value = []
   }
+}
+
+
+const checkAndOpenSettings = () => {
+  emitterMitt.emit('check-keys', { message: 'check keys!' });
+
 }
 
 async function loadPreviousChat(convId) {
@@ -1144,7 +1175,15 @@ async function connectWebSocket() {
         }
       }
     )
-    const WEBSOCKET_URL = `${import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:8000'}/chat`
+    
+    // Use the same base URL pattern as API calls
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const baseUrl = import.meta.env.PROD 
+      ? `${wsProtocol}//${window.location.host}/api`  // Use the current origin in production
+      : (import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:8000')
+    
+    const WEBSOCKET_URL = `${baseUrl}/chat`
+    const token = await window.Clerk.session.getToken()
     const fullUrl = `${WEBSOCKET_URL}?conversation_id=${currentId.value}`
     socket.value = new WebSocket(fullUrl)
     socket.value.onopen = () => {
@@ -1161,7 +1200,6 @@ async function connectWebSocket() {
         if(receivedData.event=="user_message" || receivedData.event=="completion"){
           try {
             if(receivedData.event=="completion"){
-              console.log("completionMetaData.value=receivedData.data.metadata",completionMetaData.value)
               let metaDataComplettion = JSON.parse(receivedData.data)
               completionMetaData.value = metaDataComplettion.metadata
               emit('metadataChanged', completionMetaData.value)
@@ -1178,13 +1216,13 @@ async function connectWebSocket() {
         else if(receivedData.event==="think"){
           let dataParsed = JSON.parse(receivedData.data)
           agentThoughtsData.value.push(dataParsed)
-          console.log("Socket on message:think ", dataParsed.agent_name)
+          
           statusText.value = dataParsed.agent_name
           emit('agentThoughtsDataChanged', agentThoughtsData.value)
           try{
-            console.log("think parsed",dataParsed.metadata)
+            
           addOrUpdateModel(dataParsed.metadata)
-          console.log("workflowData:",workflowData)
+          
           AutoScrollToBottom()
 
           } catch(e){
@@ -1197,7 +1235,7 @@ async function connectWebSocket() {
         else if(receivedData.event==="planner"){
           let dataParsed = JSON.parse(receivedData.data)
           addOrUpdateModel(dataParsed.metadata)
-          console.log("workflowData:",workflowData)
+          
           AutoScrollToBottom()
         }
         else{
@@ -1236,8 +1274,6 @@ function addOrUpdatePlannerText(newEntry) {
     plannerTextData.value.push(newEntry);
   }
 
-
-  console.log("plannerTextData: ",plannerTextData.value)
 }
 
 async function removeDocument(docId) {

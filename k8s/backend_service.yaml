@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiskagents-backend
+  namespace: default
+spec:
+  selector:
+    app: aiskagents-backend
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 hours
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000

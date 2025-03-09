@@ -133,7 +133,10 @@ class DeepResearchAgent(RoutedAgent):
             graph_input = Command(resume=user_text)
         else:
             # brand-new request with the entire user query in topic
-            graph_input = {"topic": message.parameters.deep_research_topic}
+            if message.docs:
+                graph_input = {"topic": message.parameters.deep_research_topic, "document": "\n\n".join(message.docs)}
+            else:
+                graph_input = {"topic": message.parameters.deep_research_topic}
 
         memory = self._get_or_create_memory(session_id)
         builder = get_graph(

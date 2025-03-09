@@ -667,7 +667,7 @@ class QueryRouterServiceChat:
 
         return chosen_type
 
-    async def route_query(self, query: str, context_summary: str = "") -> QueryType:
+    async def route_query(self, query: str, context_summary: str = "", num_docs: int = 0) -> QueryType:
         """
         Main routing method:
           1) Detect type using _detect_query_type
@@ -682,6 +682,8 @@ class QueryRouterServiceChat:
         To decide on the route take into account the user's query and the context summary.
 
         User query: "{query}"
+
+        The user has uploaded {num_docs} documents that are available to the agents. 
         
         Context summary: "{context_summary}"
 
@@ -692,7 +694,12 @@ class QueryRouterServiceChat:
         4. Generate the appropriate JSON response using the following agents:
 
         "type": "assistant",
-        "description": "Handles user queries that do not fit into other specific categories. ALWAYS Route messages here if they are general queries that do not specify a destination or service. If the query is a factual answer or quick information about a company person or product, use this agent. If the user is asking about current affairs, also use this agent.",
+        "description": "Use this agent if,
+        - The query do not fit into other specific categories
+        - The query is general and does not specify a destination or service
+        - The query is a factual question or quick information about a company person or product
+        - The user is asking about current affairs
+        - The user is asking a question about uploaded documents and the documents are uploaded.",
         "examples": "'What is the weather in Tokyo?', 'What is the capital of France?' What is Tesla's stock price today? What is the latest news on Apple?",
 
         Query: "What is the weather in Tokyo?"

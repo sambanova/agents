@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiskagents-backend
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: aiskagents-backend
+  template:
+    metadata:
+      labels:
+        app: aiskagents-backend
+    spec:
+      terminationGracePeriodSeconds: 60
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - aiskagents-backend
+              topologyKey: kubernetes.io/hostname
+      imagePullSecrets:
+      - name: regcred
+      containers:
+      - name: aiskagents-backend-container
+        image: {{DOCKER_IMAGE}}
+        imagePullPolicy: Always
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 10"]
+        ports:
+        - containerPort: 8000
+        resources:
+          limits:
+            cpu: "1"
+            memory: "1Gi"
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        env:
+        - name: PORT
+          value: "8000"
+        - name: HOST
+          value: "0.0.0.0"
+        - name: WORKERS
+          value: "1"
+        - name: REDIS_HOST
+          value: redis.redis.svc.cluster.local
+        - name: REDIS_PORT
+          value: "6379"
+        - name: LANGTRACE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aiskagents-backend-secrets
+              key: LANGTRACE_API_KEY
+        - name: TAVILY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aiskagents-backend-secrets
+              key: TAVILY_API_KEY
+        - name: CLERK_JWT_ISSUER
+          valueFrom:
+            secretKeyRef:
+              name: aiskagents-backend-secrets
+              key: CLERK_JWT_ISSUER

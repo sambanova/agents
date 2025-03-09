@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI):
 
     redis_host = os.getenv("REDIS_HOST", "localhost")
     redis_port = int(os.getenv("REDIS_PORT", "6379"))
-    app.state.context_length_summariser = 64000
+    app.state.context_length_summariser = 100_000
     
     # Create a Redis connection pool
     pool = redis.ConnectionPool(
@@ -83,7 +83,10 @@ async def lifespan(app: FastAPI):
         port=redis_port,
         db=0,
         decode_responses=True,
-        max_connections=20  # Adjust based on expected concurrent connections
+        max_connections=100,
+        socket_timeout=5,  # Add timeout to prevent hanging connections
+        socket_connect_timeout=5,  # Add connection timeout
+        health_check_interval=30  # Add health check to remove stale connections
     )
     
     # Create Redis client with connection pool
@@ -119,7 +122,7 @@ def get_user_id_from_token(token: HTTPAuthorizationCredentials) -> str:
 
 class LeadGenerationAPI:
     def __init__(self):
-        self.app = FastAPI(lifespan=lifespan)
+        self.app = FastAPI(lifespan=lifespan, root_path="/api")
         self.setup_cors()
         self.setup_routes()
         self.executor = ThreadPoolExecutor(max_workers=2)
@@ -166,6 +169,22 @@ class LeadGenerationAPI:
         )
 
     def setup_routes(self):
+        @self.app.get("/health")
+        async def health_check():
+            """Health check endpoint for Kubernetes liveness and readiness probes."""
+            try:
+                # Check Redis connection
+                self.app.state.redis_client.ping()
+                return JSONResponse(
+                    status_code=200,
+                    content={"status": "healthy", "message": "Service is running"}
+                )
+            except Exception as e:
+                return JSONResponse(
+                    status_code=503,
+                    content={"status": "unhealthy", "message": str(e)}
+                )
+
         # WebSocket endpoint to handle user messages
         @self.app.websocket("/chat")
         async def websocket_endpoint(

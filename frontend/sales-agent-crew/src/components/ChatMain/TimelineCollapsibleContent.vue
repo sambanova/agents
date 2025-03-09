@@ -1,18 +1,18 @@
 <template>
   <div class="mx-2 mb-2" >
     <div @click="isOpen = !isOpen" class="flex justify-between items-center cursor-pointer">
-      <div class="flex items-start flex-1 no-wrap">
+      <div class="flex items-center align-items-center flex-1 no-wrap">
         <CorrectIcon class="mr-1 flex-shrink-0" />
         <!-- If heading is non-numeric, display formatted key -->
-        <span v-if="!isNumeric(heading)" class="text-primary-brandTextSecondary text-sm">
+        <span v-if="!isNumeric(heading)" class="line-clamp-1 text-primary-brandTextSecondary truncate text-sm">
           {{ formatKey(heading) }}:
         </span>
         <!-- If heading is numeric and value has a name property, display that -->
-        <span v-else-if="isNumeric(heading) && value.name" class="text-primary-brandTextSecondary text-sm">
+        <span v-else-if="isNumeric(heading) && value.name" class="line-clamp-1 text-primary-brandTextSecondary text-sm">
           {{ value.name ? value.name : value.search }}
         </span>
         <!-- Otherwise if heading is numeric, display fallback (e.g. search_query) -->
-        <span v-else-if="isNumeric(heading)" class="text-primary-brandTextSecondary text-sm">
+        <span v-else-if="isNumeric(heading)" class="line-clamp-1  text-primary-brandTextSecondary text-sm">
           {{ value?.search_query }}
         </span>
       </div>

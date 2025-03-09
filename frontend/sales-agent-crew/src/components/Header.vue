@@ -1,23 +1,24 @@
 <!-- src/components/Header.vue -->
 <template>
   <header class=" bg-primary-bodyBg sticky top-0 z-50  ">
-    <div class="h-16 mx-auto px-4 sm:px-6 flex items-center justify-between">
+    <div class="h-[56px] mx-auto px-4 sm:px-6 flex items-center justify-between">
       <!-- Left: Brand -->
       <div class="flex items-center space-x-2 sm:space-x-4">
         <div class="flex-shrink-0">
           <img
             src="/logo.svg" 
             alt="Samba Sales Agents Logo" 
-            class="h-6 md:hidden"
+            class="h-6 md:hidden size-[30px]"
+            
           />
           <img 
             src="/logo-icon.svg" 
             alt="Samba Sales Agents Logo" 
-            class="hidden md:h-8 md:block"
+            class="hidden md:h-8 md:block size-[30px]"
           />
         </div>
-        <h1 class="text-lg sm:text-2xl font-bold text-gray-900 tracking-tight text-center">
-          Co-Pilot
+        <h1 class="text-[16px]  font-bold text-primary-brandTextPrimary tracking-tight text-center">
+          Agents
         </h1>
       </div>
 
@@ -56,7 +57,7 @@
 
         <button
           @click="openSettings"
-          class="p-2 text-gray-600 hover:text-gray-900 transition-colors"
+          class="p-2 text-gray-600 hover:text-primary-brandTextPrimary transition-colors"
         >
           <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" 
@@ -74,7 +75,8 @@
         <TokenSetter />
       </div>
     </div>
-    <SettingsModal ref="settingsModalRef" @keysUpdated="onKeysUpdated" />
+    
+    <SettingsModal :provider="selectedOption.value" ref="settingsModalRef" @keysUpdated="onKeysUpdated" />
   </header>
 </template>
 
@@ -99,15 +101,19 @@ watch(chatMode, (val) => {
 
 onMounted(async () => {
   emit('modeToggled', true)
-  
+  settingsModalRef.value?.checkRequiredKeys()
+
 })
 
 const settingsModalRef = ref(null)
 function openSettings() {
-  settingsModalRef.value.isOpen = true
+  // settingsModalRef.value.isOpen = true
+  settingsModalRef.value?.openModal()
+
 }
 
 function onKeysUpdated() {
+  
   emit('keysUpdated')
 }
 
