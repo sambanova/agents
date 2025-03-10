@@ -181,7 +181,7 @@ async function loadChats() {
 
   } catch (err) {
     console.error('Error creating new chat:', err)
-    alert('Failed to create new conversation. Check keys or console.')
+    // alert('Failed to create new conversation. Check keys or console.')
   }
 }
 

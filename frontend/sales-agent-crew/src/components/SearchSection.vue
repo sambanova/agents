@@ -340,6 +340,7 @@ import axios from 'axios'
 import { uploadDocument } from '../services/api'
 import Popover from '@/components/Common/UIComponents/CustomPopover.vue'
 import { DocumentArrowUpIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { getAccessToken } from '@/utils/auth'
 
 
 const props = defineProps({
