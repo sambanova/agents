@@ -258,6 +258,7 @@ import { ref, watch, onMounted } from 'vue'
 import { encryptKey, decryptKey } from '../utils/encryption'
 import axios from 'axios'
 import emitterMitt from '@/utils/eventBus.js';
+import { getAuthHeader } from '@/utils/auth';
 
 const props = defineProps({
   provider: String, // Current provider name passed from parent
@@ -493,17 +494,10 @@ const updateBackendKeys = async () => {
       fireworks_key: fireworksKey.value || ''
     }
 
-    // Get the authentication token
-    const token = localStorage.getItem('access_token');
-    
-    // Add the Authorization header with bearer token
     const headers = {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Authorization': getAuthHeader()
     };
-    
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
 
     const response = await axios.post(url, postParams, { headers })
     if (response.status === 200) {
