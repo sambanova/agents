@@ -102,10 +102,12 @@ let cId=route.params.id
 
 async function deleteChat( conversationId) {
   const url = `${import.meta.env.VITE_API_URL}/chat/${conversationId}`;
+  const token = getAccessToken();
   try {
     const response = await axios.delete(url, {
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
       }
     });
     // console.log('Chat deleted successfully:', response.data);
@@ -163,12 +165,13 @@ const missingKeysArray = computed(() => {
 })
 async function loadChats() {
   try {
-    const uid = userId.value || 'anonymous'
-    const resp = await axios.get(
-      `${import.meta.env.VITE_API_URL}/chat/list`,   
+    const token = getAccessToken();
+    const response = await axios.get(
+      `${import.meta.env.VITE_API_URL}/chat/list`,
       {
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
         }
       }
     )

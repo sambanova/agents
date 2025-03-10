@@ -340,6 +340,7 @@ import { DocumentArrowUpIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import HorizontalScroll from '@/components/Common/UIComponents/HorizontalScroll.vue'
 import emitterMitt from '@/utils/eventBus.js';
 import { data } from 'autoprefixer'
+import { getAccessToken } from '@/utils/auth'
 
 // Inject the shared selectedOption from MainLayout.vue.
 const selectedOption = inject('selectedOption')
@@ -373,13 +374,15 @@ console.log("PDF gen error",e)
 }
 
 async function createNewChat() {
+  const token = getAccessToken();
   try {
     const resp = await axios.post(
       `${import.meta.env.VITE_API_URL}/chat/init`, 
       {}, 
       {
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
         }
       }
     )
@@ -545,11 +548,13 @@ const checkAndOpenSettings = () => {
 async function loadPreviousChat(convId) {
   try {
     isLoading.value = true
+    const token = getAccessToken();
     const resp = await axios.get(
       `${import.meta.env.VITE_API_URL}/chat/history/${convId}`,
       {
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
         }
       }
     )
@@ -985,12 +990,14 @@ async function handleFileUpload(event) {
     uploadStatus.value = { type: 'info', message: 'Uploading document...' }
     const formData = new FormData()
     formData.append('file', file)
+    const token = getAccessToken();
     const response = await axios.post(
       `${import.meta.env.VITE_API_URL}/upload`,
       formData,
       {
         headers: {
-          'Content-Type': 'multipart/form-data'
+          'Content-Type': 'multipart/form-data',
+          'Authorization': token ? `Bearer ${token}` : ''
         }
       }
     )
@@ -1013,11 +1020,13 @@ async function handleFileUpload(event) {
 
 async function loadUserDocuments() {
   try {
+    const token = getAccessToken();
     const response = await axios.get(
       `${import.meta.env.VITE_API_URL}/documents`,
       {
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
         }
       }
     )
@@ -1160,7 +1169,8 @@ function addOrUpdateModel(newData, message_id) {
 async function connectWebSocket() {
   try {
     await loadKeys()
-
+    const token = getAccessToken();
+    
     await axios.post(
       `${import.meta.env.VITE_API_URL}/set_api_keys`,
       {
@@ -1171,7 +1181,8 @@ async function connectWebSocket() {
       },
       {
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
         }
       }
     )
@@ -1183,7 +1194,6 @@ async function connectWebSocket() {
       : (import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:8000')
     
     const WEBSOCKET_URL = `${baseUrl}/chat`
-    const token = await window.Clerk.session.getToken()
     const fullUrl = `${WEBSOCKET_URL}?conversation_id=${currentId.value}`
     socket.value = new WebSocket(fullUrl)
     socket.value.onopen = () => {
@@ -1278,11 +1288,13 @@ function addOrUpdatePlannerText(newEntry) {
 
 async function removeDocument(docId) {
   try {
+    const token = getAccessToken();
     await axios.delete(
       `${import.meta.env.VITE_API_URL}/documents/${docId}`,
       {
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
         }
       }
     )

@@ -703,11 +703,13 @@ async function handleFileUpload(event) {
 // Load user's documents on mount
 async function loadUserDocuments() {
   try {
+    const token = getAccessToken();
     const response = await axios.get(
       `${import.meta.env.VITE_API_URL}/documents`,
       {
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
         }
       }
     )

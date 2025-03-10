@@ -493,7 +493,19 @@ const updateBackendKeys = async () => {
       fireworks_key: fireworksKey.value || ''
     }
 
-    const response = await axios.post(url, postParams)
+    // Get the authentication token
+    const token = localStorage.getItem('access_token');
+    
+    // Add the Authorization header with bearer token
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await axios.post(url, postParams, { headers })
     if (response.status === 200) {
       console.log('API keys updated in backend successfully')
     }
