@@ -3,7 +3,7 @@ import asyncio
 import json
 from typing import Any, Union
 import uuid
-from redis import Redis
+from api.services.redis_service import SecureRedisService
 
 from autogen_core import MessageContext
 from autogen_core import (
@@ -38,7 +38,7 @@ class DeepResearchAgent(RoutedAgent):
     """
 
     def __init__(
-        self, api_keys: APIKeys, redis_client: Redis = None
+        self, api_keys: APIKeys, redis_client: SecureRedisService = None
     ):
         super().__init__("DeepResearchAgent")
         self.api_keys = api_keys

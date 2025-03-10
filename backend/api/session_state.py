@@ -20,7 +20,7 @@ class SessionStateManager:
         """
         # Load existing messages from Redis
         messages_key = f"messages:{user_id}:{conversation_id}"
-        messages_data = redis_client.lrange(messages_key, 0, -1)
+        messages_data = redis_client.lrange(messages_key, 0, -1, user_id)
         
         # Initialize history deque
         history = deque(maxlen=self.history_length)

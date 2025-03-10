@@ -439,7 +439,7 @@ class SemanticRouterAgent(RoutedAgent):
                     "message_id": message.message_id,
                     "timestamp": datetime.now().isoformat(),
                 }
-                self.redis_client.rpush(message_key, json.dumps(final_message_data))
+                self.redis_client.rpush(message_key, json.dumps(final_message_data), user_id)
                 await self.websocket.send_text(json.dumps(final_message_data))
 
                 cleaned_response = re.sub(

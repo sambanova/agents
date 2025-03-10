@@ -18,6 +18,7 @@ from autogen_agentchat.agents import AssistantAgent
 
 from api.otlp_tracing import configure_oltp_tracing
 from api.websocket_interface import WebSocketInterface
+from api.services.redis_service import SecureRedisService
 from utils.logging import logger
 from api.session_state import SessionStateManager
 from api.agents.user_proxy import UserProxyAgent
@@ -43,7 +44,7 @@ class DocumentContextLengthError(Exception):
         super().__init__(f"Combined documents exceed maximum context window size of {max_tokens} tokens (got {total_tokens} tokens). Please reduce the number or size of documents.")
 
 async def initialize_agent_runtime(
-    redis_client: redis.Redis,
+    redis_client: SecureRedisService,
     api_keys: APIKeys,
     user_id: str,
     conversation_id: str,
@@ -84,7 +85,7 @@ async def initialize_agent_runtime(
     await FinancialAnalysisAgent.register(
         agent_runtime,
         "financial_analysis",
-        lambda: FinancialAnalysisAgent(api_keys=api_keys),
+        lambda: FinancialAnalysisAgent(api_keys=api_keys, redis_client=redis_client),
     )
 
     # Keep old educational content agent for "basic" usage
@@ -97,7 +98,7 @@ async def initialize_agent_runtime(
     await SalesLeadsAgent.register(
         agent_runtime,
         "sales_leads",
-        lambda: SalesLeadsAgent(api_keys=api_keys),
+        lambda: SalesLeadsAgent(api_keys=api_keys, redis_client=redis_client),
     )
 
     await AssistantAgentWrapper.register(
@@ -136,7 +137,7 @@ def estimate_tokens_regex(text: str) -> int:
         return len(re.findall(r"\w+|\S", text))
 
 
-def load_documents(user_id: str, document_ids: List[str], redis_client: redis.Redis, context_length_summariser: int) -> List[str]:
+def load_documents(user_id: str, document_ids: List[str], redis_client: SecureRedisService, context_length_summariser: int) -> List[str]:
     documents = []
     total_tokens = 0
 
@@ -147,7 +148,7 @@ def load_documents(user_id: str, document_ids: List[str], redis_client: redis.Re
             continue  # Skip if document doesn't belong to user
 
         chunks_key = f"document_chunks:{doc_id}"
-        chunks_data = redis_client.get(chunks_key)
+        chunks_data = redis_client.get(chunks_key, user_id)
 
         if chunks_data:
             chunks = json.loads(chunks_data)

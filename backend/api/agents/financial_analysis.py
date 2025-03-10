@@ -16,6 +16,7 @@ from agent.financial_analysis.financial_analysis_crew import (
     FinancialAnalysisCrew,
     FinancialAnalysisResult,
 )
+from api.services.redis_service import SecureRedisService
 from config.model_registry import model_registry
 from services.financial_user_prompt_extractor_service import FinancialPromptExtractor
 
@@ -24,7 +25,6 @@ from ..data_types import (
     AgentRequest,
     AgentStructuredResponse,
     APIKeys,
-    AssistantResponse,
     ErrorResponse,
 )
 from utils.logging import logger
@@ -35,10 +35,12 @@ class FinancialAnalysisAgent(RoutedAgent):
     def __init__(
         self,
         api_keys: APIKeys,
+        redis_client: SecureRedisService,
     ) -> None:
         super().__init__("FinancialAnalysisAgent")
         logger.info(logger.format_message(None, f"Initializing FinancialAnalysisAgent with ID: {self.id}"))
         self.api_keys = api_keys
+        self.redis_client = redis_client
 
     async def execute_financial(
         self, crew: FinancialAnalysisCrew, parameters: Dict[str, Any], provider: str
@@ -104,8 +106,9 @@ class FinancialAnalysisAgent(RoutedAgent):
                 run_id=conversation_id,
                 docs_included=True if message.docs else False,
                 verbose=False,
-                message_id=message.message_id,
                 extra_headers=self.api_keys.extra_headers,
+                message_id=message.message_id, 
+                redis_client=self.redis_client
             )
 
             parameters = message.parameters.model_dump()

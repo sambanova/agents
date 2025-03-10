@@ -16,7 +16,7 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langgraph.constants import Send
 from langgraph.graph import START, END, StateGraph
 from langgraph.types import interrupt, Command
-from redis import Redis
+from api.services.redis_service import SecureRedisService
 
 from config.model_registry import model_registry
 
@@ -89,7 +89,7 @@ def create_publish_callback(
     message_id: str,
     agent_name: str,
     workflow_name: str,
-    redis_client: Redis,
+    redis_client: SecureRedisService,
     token_usage_callback: Callable[[dict], None] = None,
 ):
    

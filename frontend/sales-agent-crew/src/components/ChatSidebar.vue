@@ -7,7 +7,7 @@
       <button
         class="p-2 border w-full border-primary-brandBorder text-primary-brandColor rounded  text-sm"
         @click="createNewChat"
-        :disabled="missingKeys.length > 0"
+        :disabled="missingKeysArray.length > 0"
       >
         + New Chat
       </button>
@@ -206,7 +206,7 @@ function saveConversations() {
 
 /** Start a new conversation => calls /newsletter_chat/init with decrypted keys */
 async function createNewChat() {
-
+  
   emitterMitt.emit('new-chat', { message: 'The new chat button was clicked!' });
 
 

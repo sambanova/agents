@@ -1,5 +1,5 @@
 <template>
-  <div class="w-auto mx-1 my-4 min-h-[144px] h-auto p-2 rounded border border-[#C8E6C9] bg-[#FDEDD7] flex flex-col items-center justify-center space-y-2">
+  <div class="w-auto mx-1 my-4 min-h-[144px] h-auto p-2 rounded border border-[#FEF7EE] bg-[#FDEDD7] flex flex-col items-center justify-center space-y-2">
     <!-- Top line with icon and heading -->
     <div class="flex items-center space-x-2">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

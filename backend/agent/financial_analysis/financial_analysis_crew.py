@@ -4,7 +4,7 @@ import uuid
 import json
 from typing import Dict, Any, List, Optional, Tuple, Union
 import numpy as np
-from redis import Redis
+from api.services.redis_service import SecureRedisService
 import yfinance as yf
 
 from services.structured_output_parser import CustomConverter
@@ -205,7 +205,7 @@ class FinancialAnalysisCrew:
         user_id: str = "",
         run_id: str = "",
         docs_included: bool = False,
-        redis_client: Redis = None,
+        redis_client: SecureRedisService = None,
         message_id: str = None,
         verbose: bool = True,
         extra_headers: Dict[str, str] = {}

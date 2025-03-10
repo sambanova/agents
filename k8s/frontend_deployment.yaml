@@ -29,4 +29,8 @@ spec:
             secretKeyRef:
               name: aiskagents-frontend-secrets
               key: CLERK_SECRET_KEY
+        - name: VITE_ENABLE_USER_KEYS
+          value: "false"
+        - name: VITE_ENABLE_WORKFLOW_TOGGLE
+          value: "false"
 

@@ -48,6 +48,7 @@ from services.financial_user_prompt_extractor_service import FinancialPromptExtr
 from agent.financial_analysis.financial_analysis_crew import FinancialAnalysisCrew
 # For document processing
 from services.document_processing_service import DocumentProcessingService
+from api.services.redis_service import SecureRedisService
 
 class QueryRequest(BaseModel):
     query: str
@@ -116,11 +117,10 @@ async def lifespan(app: FastAPI):
         health_check_interval=30  # Add health check to remove stale connections
     )
     
-    # Create Redis client with connection pool
-    app.state.redis_client = redis.Redis(
-        connection_pool=pool,
-        decode_responses=True
-    )
+   
+    # Create SecureRedisService with Redis client
+    app.state.redis_client = SecureRedisService(connection_pool=pool, decode_responses=True)
+    
     print(f"[LeadGenerationAPI] Using Redis at {redis_host}:{redis_port} with connection pool")
 
     app.state.manager = WebSocketConnectionManager(
@@ -305,13 +305,11 @@ class LeadGenerationAPI:
                     "user_id": user_id
                 }
                 chat_meta_key = f"chat_metadata:{user_id}:{conversation_id}"
-                self.app.state.redis_client.set(chat_meta_key, json.dumps(metadata))
+                self.app.state.redis_client.set(chat_meta_key, json.dumps(metadata), user_id)
 
                 # Add to user's conversation list
                 user_chats_key = f"user_chats:{user_id}"
                 self.app.state.redis_client.zadd(user_chats_key, {conversation_id: timestamp})
-
-                # TODO: init autogen agent
 
                 return JSONResponse(
                     status_code=200,
@@ -353,7 +351,7 @@ class LeadGenerationAPI:
                     )
 
                 message_key = f"messages:{user_id}:{conversation_id}"
-                messages = self.app.state.redis_client.lrange(message_key, 0, -1)
+                messages = self.app.state.redis_client.lrange(message_key, 0, -1, user_id)
 
                 if not messages:
                     return JSONResponse(
@@ -392,7 +390,7 @@ class LeadGenerationAPI:
             """
             try:
 
-                # Get conversation IDs from sorted set, newest first
+                # Get all conversation IDs for the user, sorted by most recent
                 user_chats_key = f"user_chats:{user_id}"
                 conversation_ids = self.app.state.redis_client.zrevrange(user_chats_key, 0, -1)
 
@@ -406,7 +404,7 @@ class LeadGenerationAPI:
                 chats = []
                 for conv_id in conversation_ids:
                     meta_key = f"chat_metadata:{user_id}:{conv_id}"
-                    meta_data = self.app.state.redis_client.get(meta_key)
+                    meta_data = self.app.state.redis_client.get(meta_key, user_id)
                     if meta_data:
                         data = json.loads(meta_data)
                         if "name" not in data:
@@ -505,7 +503,7 @@ class LeadGenerationAPI:
 
                 # Store document metadata
                 doc_key = f"document:{document_id}"
-                self.app.state.redis_client.set(doc_key, json.dumps(document_metadata))
+                self.app.state.redis_client.set(doc_key, json.dumps(document_metadata), user_id)
 
                 # Add to user's document list
                 user_docs_key = f"user_documents:{user_id}"
@@ -523,7 +521,7 @@ class LeadGenerationAPI:
                     }
                     for chunk in chunks
                 ]
-                self.app.state.redis_client.set(chunks_key, json.dumps(chunks_data))
+                self.app.state.redis_client.set(chunks_key, json.dumps(chunks_data), user_id)
 
                 return JSONResponse(
                     status_code=200,
@@ -557,10 +555,16 @@ class LeadGenerationAPI:
                 # Get metadata for each document
                 documents = []
                 for doc_id in doc_ids:
+                    # For deterministically encrypted values, we need to use the same method
+                    # when checking for document existence
                     doc_key = f"document:{doc_id}"
-                    doc_data = self.app.state.redis_client.get(doc_key)
+                    doc_data = self.app.state.redis_client.get(doc_key, user_id)
                     if doc_data:
-                        documents.append(json.loads(doc_data))
+                        try:
+                            documents.append(json.loads(doc_data))
+                        except json.JSONDecodeError:
+                            # Skip invalid JSON
+                            continue
 
                 return JSONResponse(
                     status_code=200,
@@ -589,7 +593,7 @@ class LeadGenerationAPI:
 
                 # Get document chunks
                 chunks_key = f"document_chunks:{document_id}"
-                chunks_data = self.app.state.redis_client.get(chunks_key)
+                chunks_data = self.app.state.redis_client.get(chunks_key, user_id)
 
                 if not chunks_data:
                     return JSONResponse(
@@ -663,7 +667,8 @@ class LeadGenerationAPI:
                         "serper_key": keys.serper_key,
                         "exa_key": keys.exa_key,
                         "fireworks_key": keys.fireworks_key
-                    }
+                    },
+                    user_id=user_id
                 )
 
                 return JSONResponse(
@@ -690,7 +695,7 @@ class LeadGenerationAPI:
             """
             try:
                 key_prefix = f"api_keys:{user_id}"
-                stored_keys = self.app.state.redis_client.hgetall(key_prefix)
+                stored_keys = self.app.state.redis_client.hgetall(key_prefix, user_id)
 
                 if not stored_keys:
                     return JSONResponse(
@@ -757,5 +762,15 @@ def create_app():
     return api.app
 
 if __name__ == "__main__":
+    # Configure logging for uvicorn
+    from utils.logging import configure_uvicorn_logging
+    configure_uvicorn_logging()
+    
+    # Create and run the application
     app = create_app()
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(
+        app, 
+        host="127.0.0.1", 
+        port=8000,
+        log_config=None  # Disable uvicorn's default logging config
+    )

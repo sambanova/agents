@@ -25,9 +25,11 @@
       <!-- Right: Chat mode toggle, date/time, settings, user -->
       <div class="flex items-center space-x-4">
         
-        <SelectProvider  v-model:selectedOption="selectedOption" />
+        <span class="invisible">
+        <SelectProvider   v-model:selectedOption="selectedOption" />
+      </span>
         <!-- NEW: Chat Mode Toggle -->
-        <div class="flex items-center space-x-2">
+        <div v-if="isWorkflowEnabled" class="flex items-center space-x-2">
           <ToggleSwitch v-model:chatMode="chatMode" label="" />
 
           <!-- <label for="modeToggle" class="text-sm text-right text-gray-600">Chat Mode</label>
@@ -87,6 +89,11 @@ import ToggleSwitch from '@/components/Common/UIComponents/ToggleSwitch.vue'
 import SelectProvider from '@/components/ChatMain/SelectProvider.vue'
 import TokenSetter from '@/components/Common/TokenSetter.vue'
 // import Dropdown from './Dropdown.vue'
+
+
+const isWorkflowEnabled = computed(() => {
+  return import.meta.env.VITE_ENABLE_WORKFLOW_TOGGLE === 'true'
+})
 
 // Inject the shared state provided in MainLayout.vue.
 const selectedOption = inject('selectedOption')

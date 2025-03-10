@@ -4,7 +4,7 @@ metadata:
   name: aiskagents-backend
   namespace: default
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: aiskagents-backend
@@ -28,6 +28,11 @@ spec:
               topologyKey: kubernetes.io/hostname
       imagePullSecrets:
       - name: regcred
+      volumes:
+      - name: logs-volume
+        hostPath:
+          path: /data/aiskagents-logs  # Directory on the host machine
+          type: DirectoryOrCreate  # Creates the directory if it doesn't exist
       containers:
       - name: aiskagents-backend-container
         image: {{DOCKER_IMAGE}}
@@ -38,6 +43,9 @@ spec:
               command: ["/bin/sh", "-c", "sleep 10"]
         ports:
         - containerPort: 8000
+        volumeMounts:
+        - name: logs-volume
+          mountPath: /app/logs
         resources:
           limits:
             cpu: "1"
@@ -69,6 +77,23 @@ spec:
           value: redis.redis.svc.cluster.local
         - name: REDIS_PORT
           value: "6379"
+        - name: ENABLE_TRACING
+          value: "false"
+        - name: OTEL_SDK_DISABLED
+          value: "true"
+        - name: LOG_DIR
+          value: "/app/logs"
+        - name: ENABLE_USER_KEYS
+          value: "false"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: REDIS_MASTER_SALT
+          valueFrom:
+            secretKeyRef:
+              name: aiskagents-backend-secrets
+              key: REDIS_MASTER_SALT
         - name: LANGTRACE_API_KEY
           valueFrom:
             secretKeyRef:
@@ -84,3 +109,18 @@ spec:
             secretKeyRef:
               name: aiskagents-backend-secrets
               key: CLERK_JWT_ISSUER
+        - name: EXA_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aiskagents-backend-secrets
+              key: EXA_KEY
+        - name: SERPER_KEY
+          valueFrom: 
+            secretKeyRef:
+              name: aiskagents-backend-secrets
+              key: SERPER_KEY
+        - name: FIREWORKS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aiskagents-backend-secrets
+              key: FIREWORKS_KEY

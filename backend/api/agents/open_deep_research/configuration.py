@@ -3,7 +3,6 @@ import os
 from enum import Enum
 from dataclasses import dataclass, field, fields
 from typing import Any, Callable, Optional
-from redis import Redis
 
 from langchain_core.runnables import RunnableConfig
 from typing_extensions import Annotated

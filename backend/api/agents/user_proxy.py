@@ -117,7 +117,8 @@ class UserProxyAgent(RoutedAgent):
                 asyncio.create_task(asyncio.to_thread(
                     self.redis_client.rpush,
                     message_key,
-                    json.dumps(message_data)
+                    json.dumps(message_data),
+                    user_id
                 )),
                 asyncio.create_task(self.websocket_manager.send_message(user_id, conversation_id, message_data))
             ]

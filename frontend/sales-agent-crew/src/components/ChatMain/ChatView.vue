@@ -374,6 +374,8 @@ console.log("PDF gen error",e)
 }
 
 async function createNewChat() {
+
+  
   try {
     const resp = await axios.post(
       `${import.meta.env.VITE_API_URL}/chat/init`, 

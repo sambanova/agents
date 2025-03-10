@@ -596,7 +596,7 @@ class QueryRouterServiceChat:
                     "timestamp": datetime.now().isoformat(),
                 }
                 message_key = f"messages:{self.user_id}:{self.conversation_id}"
-                self.redis_client.rpush(message_key, json.dumps(final_message_data))
+                self.redis_client.rpush(message_key, json.dumps(final_message_data), self.user_id)
                 await self.websocket_manager.send_message(self.user_id, self.conversation_id, final_message_data)
                 return parsed_content
 
