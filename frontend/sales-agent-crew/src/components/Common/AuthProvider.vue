@@ -39,6 +39,19 @@ function setToken() {
   }
 }
 
+onMounted(() => {
+  // Check URL for token parameter
+  const urlParams = new URLSearchParams(window.location.search);
+  const tokenParam = urlParams.get('token');
+  
+  if (tokenParam && !getAccessToken()) {
+    // Set token from URL parameter
+    setAccessToken(tokenParam);
+    // Reload the page to apply the token
+    window.location.reload();
+  }
+});
+
 // Expose methods for parent components
 defineExpose({
   setToken: (token) => {
