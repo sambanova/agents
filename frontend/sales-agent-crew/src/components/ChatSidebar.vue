@@ -166,7 +166,7 @@ const missingKeysArray = computed(() => {
 async function loadChats() {
   try {
     const token = getAccessToken();
-    const response = await axios.get(
+    const resp = await axios.get(
       `${import.meta.env.VITE_API_URL}/chat/list`,
       {
         headers: {
