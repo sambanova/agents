@@ -87,7 +87,8 @@ async def get_current_user(token: Annotated[str, Depends(security)]):
             raise credentials_exception
 
         return user_id
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error getting current user: {str(e)}")
         raise credentials_exception
 
 
