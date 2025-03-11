@@ -225,7 +225,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                 )
 
             api_keys = APIKeys(
-                sambanova_key="9327289d-a701-4782-93dc-91c33cff59e8",
+                sambanova_key=os.getenv("SAMBANOVA_WEB_API_KEY", ""),
                 fireworks_key=redis_api_keys.get("fireworks_key", ""),
                 serper_key=redis_api_keys.get("serper_key", ""),
                 exa_key=redis_api_keys.get("exa_key", ""),
