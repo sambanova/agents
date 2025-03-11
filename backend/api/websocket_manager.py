@@ -216,16 +216,20 @@ class WebSocketConnectionManager(WebSocketInterface):
                     exa_key=redis_api_keys.get("exa_key", "")
                 )
             else:
+                if os.getenv("SAMBANOVA_WEB_API_KEY"):
+                    sambanova_key = os.getenv("SAMBANOVA_WEB_API_KEY")
+                else:
+                    sambanova_key = redis_api_keys.get("sambanova_key", "")
                 # Initialize API keys object
                 api_keys = APIKeys(
-                    sambanova_key=redis_api_keys.get("sambanova_key", ""),
+                    sambanova_key=sambanova_key,
                     fireworks_key=os.getenv("FIREWORKS_KEY", ""),
                     serper_key=os.getenv("SERPER_KEY", ""),
                     exa_key=os.getenv("EXA_KEY", "")
                 )
 
             api_keys = APIKeys(
-                sambanova_key=os.getenv("SAMBANOVA_WEB_API_KEY", ""),
+                sambanova_key=sambanova_key,
                 fireworks_key=redis_api_keys.get("fireworks_key", ""),
                 serper_key=redis_api_keys.get("serper_key", ""),
                 exa_key=redis_api_keys.get("exa_key", ""),
