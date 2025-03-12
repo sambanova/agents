@@ -176,3 +176,5 @@ cython_debug/
 output/
 backend/output/
 notebooks/
+helm/aiskagents/values.dev.yaml
+helm/aiskagents/values.prod.yaml
