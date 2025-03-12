@@ -84,6 +84,7 @@ frontend:
 
 # Ingress configuration
 ingress:
+  name: aiskagents-ingress
   enabled: true
   className: "nginx"
   annotations:

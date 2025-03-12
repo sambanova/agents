@@ -4,19 +4,23 @@ ENV ?= dev
 # Environment-specific file paths
 VALUES_FILE = ./aiskagents/values.$(ENV).yaml
 
-# Extract repository information from values file
-BACKEND_REPO = $(shell grep -A2 "backend:" $(VALUES_FILE) | grep "repository:" | awk '{print $$2}')
-FRONTEND_REPO = $(shell grep -A2 "frontend:" $(VALUES_FILE) | grep "repository:" | awk '{print $$2}')
+# Extract backend repository from values file
+BACKEND_REPO = $(shell grep -A3 "backend:" $(VALUES_FILE) | grep "repository:" | sed 's/.*repository: *//')
+FRONTEND_REPO = $(shell grep -A3 "frontend:" $(VALUES_FILE) | grep "repository:" | sed 's/.*repository: *//')
+
+# Extract frontend environment variables from values file
+VITE_API_URL = $(shell grep -A20 "frontend:" $(VALUES_FILE) | grep "VITE_API_URL:" | sed 's/.*VITE_API_URL: *//;s/"//g')
+VITE_CLERK_PUBLISHABLE_KEY = $(shell grep -A20 "frontend:" $(VALUES_FILE) | grep "VITE_CLERK_PUBLISHABLE_KEY:" | sed 's/.*VITE_CLERK_PUBLISHABLE_KEY: *//;s/"//g')
 
 # Common variables
-BACKEND_IMAGE_NAME ?= aiskagents-backend
-FRONTEND_IMAGE_NAME ?= aiskagents-frontend
-BACKEND_BASE_URL ?= $(shell echo $(BACKEND_REPO) | sed 's/\/$(BACKEND_IMAGE_NAME)$$//')
-FRONTEND_BASE_URL ?= $(shell echo $(FRONTEND_REPO) | sed 's/\/$(FRONTEND_IMAGE_NAME)$$//')
 TAG ?= $(ENV)-$(shell date '+%Y%m%d')
-BACKEND_DOCKER_IMAGE = $(BACKEND_BASE_URL)/$(BACKEND_IMAGE_NAME)
-FRONTEND_DOCKER_IMAGE = $(FRONTEND_BASE_URL)/$(FRONTEND_IMAGE_NAME)
+BACKEND_DOCKER_IMAGE = $(BACKEND_REPO)
+FRONTEND_DOCKER_IMAGE = $(FRONTEND_REPO)
 CHART_PATH = ./aiskagents
+
+# Extract base URL for docker login
+BACKEND_BASE_URL = $(shell echo $(BACKEND_REPO) | cut -d/ -f1)
+FRONTEND_BASE_URL = $(shell echo $(FRONTEND_REPO) | cut -d/ -f1)
 
 # Phony targets
 .PHONY: build-backend build-frontend push-backend push-frontend build push deploy install upgrade uninstall clean help
@@ -29,8 +33,12 @@ build-backend:
 # Build the frontend Docker image
 build-frontend:
 	@echo "Building frontend Docker image $(FRONTEND_DOCKER_IMAGE):$(TAG) ($(ENV) environment)..."
+	@echo "Using VITE_API_URL: $(VITE_API_URL)"
+	@echo "Using VITE_CLERK_PUBLISHABLE_KEY: $(VITE_CLERK_PUBLISHABLE_KEY)"
 	cd ../frontend/sales-agent-crew && docker build \
 		--platform=linux/amd64 \
+		--build-arg VITE_API_URL=$(VITE_API_URL) \
+		--build-arg VITE_CLERK_PUBLISHABLE_KEY=$(VITE_CLERK_PUBLISHABLE_KEY) \
 		-t $(FRONTEND_DOCKER_IMAGE):$(TAG) .
 
 # Push the backend Docker image
@@ -57,8 +65,6 @@ push: push-backend push-frontend
 install:
 	@echo "Installing Helm chart using $(VALUES_FILE) ($(ENV) environment)..."
 	helm install aiskagents-$(ENV) $(CHART_PATH) \
-		--namespace aiskagents-$(ENV) \
-		--create-namespace \
 		--values $(VALUES_FILE) \
 		--set backend.image.tag=$(TAG) \
 		--set frontend.image.tag=$(TAG)
@@ -67,7 +73,6 @@ install:
 upgrade:
 	@echo "Upgrading Helm chart using $(VALUES_FILE) ($(ENV) environment)..."
 	helm upgrade aiskagents-$(ENV) $(CHART_PATH) \
-		--namespace aiskagents-$(ENV) \
 		--values $(VALUES_FILE) \
 		--set backend.image.tag=$(TAG) \
 		--set frontend.image.tag=$(TAG)
@@ -94,6 +99,8 @@ help:
 	@echo "Using values file: $(VALUES_FILE)"
 	@echo "Backend repository: $(BACKEND_REPO)"
 	@echo "Frontend repository: $(FRONTEND_REPO)"
+	@echo "VITE_API_URL: $(VITE_API_URL)"
+	@echo "VITE_CLERK_PUBLISHABLE_KEY: $(VITE_CLERK_PUBLISHABLE_KEY)"
 	@echo ""
 	@echo "Targets:"
 	@echo "  build-backend   Build the backend Docker image"
