@@ -20,6 +20,8 @@ from api.services.redis_service import SecureRedisService
 
 from config.model_registry import model_registry
 
+# We import our data models from the api module
+
 from .state import (
     ReportStateInput,
     ReportStateOutput,
