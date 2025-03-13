@@ -191,7 +191,7 @@
           </div>
 
           <!-- Fireworks API Key -->
-          <div v-if="isUserKeysEnabled">
+          <div v-if="isUserKeysEnabled" >
             <label class="block text-sm font-medium text-gray-700 mb-1">
               Fireworks API Key <span v-if="missingKeys.fireworks" class="text-red-500 text-sm mt-1">(*Required Key)</span>
               <a 
@@ -234,7 +234,7 @@
           </div>
 
           <!-- Model Selection -->
-          <div class="mt-6 border-t pt-4">
+          <div class="mt-6 border-t pt-4 flex flex-col">
             <label class="block text-sm font-medium text-gray-700 mb-2">
               Planner Model Selection
               <br>
@@ -253,14 +253,19 @@
             </select>
           </div>
 
-          <div class="mt-6 border-t pt-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
+          <div class="mt-6 border-t flex flex-row justify-between pt-4">
+            <div class="flex flex-col items-center">
+            <label class="block text-sm   font-medium text-gray-700 mb-2">
               Select provider
             </label>
             <SelectProvider  v-model:selectedOption="selectedOption" />
-
+          </div>
+          <div class="mt-6 flex flex-row items-center pt-4">
+            <a class="text-sm underline" href="https://community.sambanova.ai/c/agents/87" target="_blank">FAQ (SN Community)</a>
+            </div>
           </div>
         </div>
+
       </div>
     </div>
   </div>

@@ -1,5 +1,5 @@
 <template>
-  <div class="flex items-center bg-red-50 rounded-md p-4 shadow-sm">
+  <div class="flex items-center bg-red-50 rounded-md p-3 shadow-sm">
     <!-- Material-like Error Icon -->
     <div class="flex-shrink-0">
       <svg class="h-6 w-6 text-red-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">

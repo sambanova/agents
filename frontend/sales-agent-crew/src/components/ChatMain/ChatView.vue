@@ -61,17 +61,25 @@
             :provider=provider
              :messageId="currentMsgId"
           />
+
+
           <!-- End Chat Bubble -->
         <!-- </ul> -->
       </transition-group>
-
-      </div>
+          </div>
 
       <!-- Documents Section -->
       <div class="sticky z-1000 bottom-0 left-0 right-0 bg-white p-2">
-        <div class="sticky bottom-0 z-10 ">
+        <div class="sticky bottom-0 z-10  ">
+
+        
+
           <!-- Textarea -->
           <div class="max-w-4xl mx-auto lg:px-0">
+            <div v-if="errorMessage" class="m-1  w-full mx-auto space-y-5">
+        <ErrorComponent  :parsed="{ data: { error: errorMessage } }" />
+
+      </div>
             <!-- <div class="flex items-start mb-3">
               <StatusText v-if="isLoading" :text="statusText" />
             </div> -->
@@ -341,6 +349,10 @@ import { DocumentArrowUpIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import HorizontalScroll from '@/components/Common/UIComponents/HorizontalScroll.vue'
 import emitterMitt from '@/utils/eventBus.js';
 import { data } from 'autoprefixer'
+import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue'
+
+
+
 
 // Inject the shared selectedOption from MainLayout.vue.
 const selectedOption = inject('selectedOption')
@@ -390,7 +402,10 @@ async function createNewChat() {
     router.push(`/${cid}`)
   } catch (err) {
     console.error('Error creating new chat:', err)
-    alert('Failed to create new conversation. Check keys or console.')
+    errorMessage.value = 'Failed to create new conversation. Check keys or console.';
+    isLoading.value=false
+
+    // alert('Failed to create new conversation. Check keys or console.')
   }
 }
 
@@ -563,6 +578,7 @@ async function loadPreviousChat(convId) {
   } catch (err) {
     console.error('Error creating new chat:', err)
     alert('Failed to create new conversation. Check keys or console.')
+    isLoading.value = false
   }
 }
 const currentId = ref(route.params.id || '')
@@ -748,6 +764,7 @@ async function loadKeys() {
     console.error('Error loading keys:', error)
     errorMessage.value = 'Error loading API keys'
     showErrorModal.value = true
+    isLoading.value = false
   }
 }
 
@@ -1058,6 +1075,8 @@ function waitForSocketOpen(timeout = 5000) {
       elapsed += interval
       if (elapsed >= timeout) {
         clearInterval(checkInterval)
+        errorMessage.value = 'WebSocket connection error occurred.';
+        isLoading.value=false
         reject(new Error("Socket connection timeout"))
       }
     }, interval)
@@ -1078,9 +1097,7 @@ const addMessage = async () => {
     currentId.value = route.params.id; // update currentId from router params
   }
 
-  if(messagesData.value.length===0){
-    chatName.value=searchQuery.value
-  }
+  
 
   completionMetaData.value = null
   // plannerText.value = null
@@ -1109,16 +1126,22 @@ const addMessage = async () => {
   } else {
     messagePayload.document_ids = [];
   }
-  messagesData.value.push(messagePayload)
+  
   if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
     try {
       console.log("Socket not connected. Connecting...")
       connectWebSocket()
       await waitForSocketOpen()
+      if(messagesData.value.length===0){
+    chatName.value=searchQuery.value
+  }
       socket.value.send(JSON.stringify(messagePayload))
+      messagesData.value.push(messagePayload)
       isLoading.value = true
       console.log('Message sent after connecting:', messagePayload)
     } catch (error) {
+      errorMessage.value = 'WebSocket connection error occurred.';
+      isLoading.value=false
       console.error('Failed to connect and send message:', error)
     }
   } else {
@@ -1251,6 +1274,8 @@ async function connectWebSocket() {
     }
     socket.value.onerror = (error) => {
       console.error('WebSocket error:', error)
+      errorMessage.value = 'WebSocket connection error occurred.';
+
       isLoading.value = false
     }
     socket.value.onclose = () => {
