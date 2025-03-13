@@ -1,15 +1,16 @@
 import redis
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from .encryption_service import EncryptionService
 
 class SecureRedisService(redis.Redis):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.expiry_seconds = 120
         self.encryption = EncryptionService()
 
     def set(self, key: str, value: Any, user_id: str) -> bool:
         encrypted_value = self.encryption.encrypt(value, user_id)
-        return super().set(key, encrypted_value)
+        return super().set(key, encrypted_value, ex=self.expiry_seconds)
 
     def get(self, key: str, user_id: str) -> Any:
         encrypted_value = super().get(key)
@@ -19,7 +20,10 @@ class SecureRedisService(redis.Redis):
 
     def hset(self, name: str, mapping: Dict[str, Any], user_id: str) -> int:
         encrypted_mapping = self.encryption.encrypt_dict(mapping, user_id)
-        return super().hset(name, mapping=encrypted_mapping)
+        result = super().hset(name, mapping=encrypted_mapping)
+        if self.expiry_seconds is not None:
+            super().expire(name, self.expiry_seconds)
+        return result
 
     def hget(self, name: str, key: str, user_id: str) -> Any:
         encrypted_value = super().hget(name, key)
@@ -41,4 +45,15 @@ class SecureRedisService(redis.Redis):
 
     def rpush(self, name: str, value: Any, user_id: str) -> int:
         encrypted_value = self.encryption.encrypt(value, user_id)
-        return super().rpush(name, encrypted_value) 
+        result = super().rpush(name, encrypted_value)
+        if self.expiry_seconds is not None:
+            super().expire(name, self.expiry_seconds)
+        return result
+
+    def expire(self, name: str, time: int) -> bool:
+        """Set an expiration time (in seconds) on a key"""
+        return super().expire(name, time)
+
+    def ttl(self, name: str) -> int:
+        """Get the time to live for a key in seconds"""
+        return super().ttl(name) 
