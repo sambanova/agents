@@ -33,6 +33,12 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
+# Install vim in the final image and ensure it's accessible
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    vim \
+    && rm -rf /var/lib/apt/lists/* \
+    && which vim
+
 # Create non-root user
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app

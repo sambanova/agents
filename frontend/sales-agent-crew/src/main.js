@@ -21,7 +21,10 @@ const app = createApp(App)
 // Create a Pinia instance
 const pinia = createPinia()
 
-app.use(clerkPlugin, { publishableKey: PUBLISHABLE_KEY,  signInUrl: '/login' 
+app.use(clerkPlugin, { 
+  publishableKey: PUBLISHABLE_KEY,  
+  signInUrl: '/login',
+  signUpUrl: '/login'
 })
 app.use(pinia) // Register Pinia
 app.use(router)

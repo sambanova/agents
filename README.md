@@ -37,7 +37,7 @@ The basic process of the Agents application is described below.
 
 Ensure to install the prerequisites.
    - [Python 3.11](https://www.python.org/downloads/release/python-31111/) (exact version required)
-   - [Node.js 16 or later](https://nodejs.org/en/download)
+   - [Node.js 18.17.0 or later](https://nodejs.org/en/download)
    - [Yarn](https://classic.yarnpkg.com/en/docs/install)
    - [Redis](https://redis.io/download) (via Docker or Homebrew)
      

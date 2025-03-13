@@ -7,7 +7,7 @@ const routes = [
     path: '/:id?',
     name: 'home',
     component: MainLayout,
-    meta: { requiresAuth: true } // Optionally mark this route as protected
+    meta: { requiresAuth: true } // Optionally mark this route as protected and require authentication
 
   },
   {
