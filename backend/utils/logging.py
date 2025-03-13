@@ -170,7 +170,10 @@ class UnifiedLogger:
     def format_message(self, session_id: Optional[str], message: str) -> str:
         """Format log message with session ID if provided."""
         if session_id:
-            return f"[{session_id[28:32]}-{session_id[-4:]}] {message}"
+            if ":" in session_id:
+                split_session_id = session_id.split(":")
+                return f"[{split_session_id[-2][-4:]}:{split_session_id[-1][-4:]}] {message}"
+            return f"[{session_id[-4:]}] {message}"
         return message
 
     def debug(self, message: str) -> None:

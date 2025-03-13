@@ -14,6 +14,7 @@ import re  # Added for quick pattern matching to detect multiple companies
 from api.websocket_interface import WebSocketInterface
 from utils.json_utils import extract_json_from_string
 from config.model_registry import model_registry
+from utils.logging import logger
 
 class QueryType(BaseModel):
     # Possible types: "sales_leads", "educational_content", "financial_analysis", or "deep_research"
@@ -640,8 +641,10 @@ class QueryRouterServiceChat:
 
         api_url = model_registry.get_model_info(model_key=self.model_name, provider=self.provider)["long_url"]
 
+        logger.info(logger.format_message(f"{self.user_id}:{self.conversation_id}", f"QueryRouterServiceChat calling {api_url}"))
+
+        start_time = time.time()
         async with aiohttp.ClientSession() as session:
-            start_time = time.time()
             accumulated_content = ""
             async with session.post(api_url, headers=headers, json=payload) as response:
                 response.raise_for_status()
@@ -663,25 +666,29 @@ class QueryRouterServiceChat:
                         except json.JSONDecodeError:
                             continue
 
-                parsed_content = extract_json_from_string(accumulated_content)
+        end_time = time.time()
+        processing_time = end_time - start_time
+        if processing_time > 10:
+            logger.warning(logger.format_message(f"{self.user_id}:{self.conversation_id}", f"QueryRouterServiceChat processing time: {processing_time:.2f} seconds"))
+        else:
+            logger.info(logger.format_message(f"{self.user_id}:{self.conversation_id}", f"QueryRouterServiceChat processing time: {processing_time:.2f} seconds"))
 
-                end_time = time.time()
-                processing_time = end_time - start_time
-                planner_metadata["duration"] = processing_time
+        parsed_content = extract_json_from_string(accumulated_content)
+        planner_metadata["duration"] = processing_time
 
-                # Send final message
-                final_message_data = {
-                    "event": "planner",
-                    "data": json.dumps({"response": parsed_content, "metadata": planner_metadata}),
-                    "user_id": self.user_id,
-                    "conversation_id": self.conversation_id,
-                    "message_id": self.message_id,
-                    "timestamp": datetime.now().isoformat(),
-                }
-                message_key = f"messages:{self.user_id}:{self.conversation_id}"
-                self.redis_client.rpush(message_key, json.dumps(final_message_data), self.user_id)
-                await self.websocket_manager.send_message(self.user_id, self.conversation_id, final_message_data)
-                return parsed_content
+        # Send final message
+        final_message_data = {
+            "event": "planner",
+            "data": json.dumps({"response": parsed_content, "metadata": planner_metadata}),
+            "user_id": self.user_id,
+            "conversation_id": self.conversation_id,
+            "message_id": self.message_id,
+            "timestamp": datetime.now().isoformat(),
+        }
+        message_key = f"messages:{self.user_id}:{self.conversation_id}"
+        self.redis_client.rpush(message_key, json.dumps(final_message_data), self.user_id)
+        await self.websocket_manager.send_message(self.user_id, self.conversation_id, final_message_data)
+        return parsed_content
 
     def _normalize_educational_params(self, params: Dict) -> Dict:
         """Normalize educational content parameters with safe defaults."""
