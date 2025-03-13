@@ -2,11 +2,12 @@
 
 import os
 import json
+import time
 import requests
 from typing import Any, Type
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
-
+from utils.logging import logger
 class ExaDevToolSchema(BaseModel):
     search_query: str = Field(..., description="Search query for Exa semantic search.")
     search_type: str = Field(default="auto", description="Search type: 'auto', 'neural', etc.")
@@ -52,8 +53,14 @@ class ExaDevTool(BaseTool):
         }
 
         try:
+            start_time = time.time()
             response = requests.post("https://api.exa.ai/search", headers=headers, json=payload, timeout=30)
             response.raise_for_status()
+            elapsed_time = time.time() - start_time
+            if elapsed_time > 10:
+                logger.warning(f"Exa Dev Tool took {elapsed_time:.2f} seconds to complete search for query: {search_query}")
+            else:
+                logger.info(f"Exa Dev Tool took {elapsed_time:.2f} seconds to complete search for query: {search_query}")
             return response.json()
         except requests.exceptions.RequestException as e:
             return {"error": f"Exa search request failed: {e}"}

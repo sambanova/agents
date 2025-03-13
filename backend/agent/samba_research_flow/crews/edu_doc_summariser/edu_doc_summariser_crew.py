@@ -6,6 +6,7 @@ from crewai import Agent, Crew, Process, Task, LLM
 from crewai.project import CrewBase, agent, crew, task
 from crewai_tools import SerperDevTool
 from pydantic import BaseModel
+from agent.crewai_llm import CustomLLM
 from config.model_registry import model_registry
 from utils.agent_thought import RedisConversationLogger
 
@@ -48,7 +49,7 @@ class EduDocSummariserCrew:
         self.tasks = []
         self.llm_api_key = llm_api_key
         model_info = model_registry.get_model_info(model_key="llama-3.3-70b", provider=provider)
-        self.llm = LLM(
+        self.llm = CustomLLM(
             model=model_info["crewai_prefix"] + "/" + model_info["model"],
             temperature=0.00,
             max_tokens=8192,
