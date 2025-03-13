@@ -200,7 +200,6 @@ class FinancialAnalysisCrew:
         self,
         llm_api_key: str,
         provider: str,
-        exa_key: str,
         serper_key: str,
         user_id: str = "",
         run_id: str = "",
@@ -225,7 +224,6 @@ class FinancialAnalysisCrew:
             api_key=llm_api_key,
             base_url=aggregator_model_info["url"],
         )
-        self.exa_key = exa_key
         self.serper_key = serper_key
         self.user_id = user_id
         self.run_id = run_id

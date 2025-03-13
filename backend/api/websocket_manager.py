@@ -31,7 +31,7 @@ class WebSocketConnectionManager(WebSocketInterface):
         # Track last activity time for each session
         self.session_last_active: Dict[str, datetime] = {}
         # Session timeout (5 minutes)
-        self.SESSION_TIMEOUT = timedelta(minutes=5)
+        self.SESSION_TIMEOUT = timedelta(minutes=10)
         # Store pubsub instances
         self.pubsub_instances: Dict[str, redis.client.PubSub] = {}
         # Add cleanup task
