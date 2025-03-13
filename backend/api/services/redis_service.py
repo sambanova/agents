@@ -5,7 +5,7 @@ from .encryption_service import EncryptionService
 class SecureRedisService(redis.Redis):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.expiry_seconds = 120
+        self.expiry_seconds = 600
         self.encryption = EncryptionService()
 
     def set(self, key: str, value: Any, user_id: str) -> bool:
@@ -50,6 +50,18 @@ class SecureRedisService(redis.Redis):
             super().expire(name, self.expiry_seconds)
         return result
 
+    def zadd(self, name, *args, **kwargs):
+        result = super().zadd(name, *args, **kwargs)
+        if self.expiry_seconds is not None:
+            super().expire(name, self.expiry_seconds)
+        return result
+    
+    def sadd(self, name: str, *values) -> int:
+         result = super().sadd(name, *values)
+         if self.expiry_seconds is not None:
+             super().expire(name, self.expiry_seconds)
+         return result
+
     def expire(self, name: str, time: int) -> bool:
         """Set an expiration time (in seconds) on a key"""
         return super().expire(name, time)
@@ -57,3 +69,4 @@ class SecureRedisService(redis.Redis):
     def ttl(self, name: str) -> int:
         """Get the time to live for a key in seconds"""
         return super().ttl(name) 
+    
