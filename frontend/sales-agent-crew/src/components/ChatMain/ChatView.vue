@@ -514,7 +514,9 @@ const messagesContainer = ref(null)
 watch(
   () => route.params.id,
   (newId, oldId) => {
-    if (oldId && newId !== oldId) {
+    if ( newId !== oldId) {
+
+      
     completionMetaData.value = null;
     isLoading.value = false;
     messagesData.value = [];
@@ -1148,6 +1150,7 @@ const addMessage = async () => {
     try {
       isLoading.value = true
       socket.value.send(JSON.stringify(messagePayload))
+      messagesData.value.push(messagePayload)
       searchQuery.value = ''
     } catch (e) {
       console.error("ChatView error", e)
