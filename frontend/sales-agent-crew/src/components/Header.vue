@@ -18,7 +18,7 @@
           />
         </div>
         <h1 class="text-[16px]  font-bold text-primary-brandTextPrimary tracking-tight text-center">
-          Agents
+          Agents (Demo)
         </h1>
       </div>
 
