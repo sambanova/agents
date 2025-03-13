@@ -451,7 +451,7 @@ def invoke_llm_with_tracking(
     response = llm.invoke(messages, config=config)
     duration = time.time() - start_time
     if duration > 10:
-        logger.warning(logger.format_message(session_id, f"LLM {llm_name} took {duration} seconds to complete task {task}"))
+        logger.warning(logger.format_message(session_id, f"Deep Research - LLM {llm_name} took {duration:.2f} seconds to complete task {task}"))
 
     if len(usage_handler.usage) > 1:
         logger.warning(logger.format_message(session_id, f"Multiple usage objects found in callback. Using the first one."))
