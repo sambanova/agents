@@ -41,7 +41,7 @@ from .prompts import (
     section_grader_instructions,
 )
 from .configuration import Configuration, SearchAPI
-from .utils import APIKeyRotator, tavily_search_async, deduplicate_and_format_sources, format_sections, perplexity_search
+from .utils import tavily_search_async, deduplicate_and_format_sources, format_sections, perplexity_search
 
 # We import our data models
 from api.data_types import (

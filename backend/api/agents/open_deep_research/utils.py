@@ -183,7 +183,7 @@ async def _tavily_search_with_retry(query: str, client: AsyncTavilyClient, key_r
                 topic="general"
             )
             elapsed_time = time.time() - start_time
-            if elapsed_time > 5:
+            if elapsed_time > 10:
                 logger.warning(f"Deep Research - Tavily search took {elapsed_time:.2f} seconds for query: {query}")
             else:
                 logger.info(f"Deep Research - Tavily search took {elapsed_time:.2f} seconds for query: {query}")
