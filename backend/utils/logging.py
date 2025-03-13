@@ -35,7 +35,7 @@ class UnifiedLogger:
             return
 
         # Initialize standard Python logger
-        self.logger = logging.getLogger("co-pilot")
+        self.logger = logging.getLogger("aiskagents")
         self.logger.setLevel(logging.INFO)
 
         # Remove existing handlers

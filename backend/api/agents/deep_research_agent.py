@@ -26,6 +26,8 @@ from api.data_types import (
     DeepResearchReport,
     ErrorResponse,
 )
+from api.agents.open_deep_research.configuration import SearchAPI
+from api.agents.open_deep_research.utils import APIKeyRotator
 from config.model_registry import model_registry
 from utils.logging import logger
 from api.agents.open_deep_research.graph import create_publish_callback, get_graph
@@ -69,7 +71,8 @@ class DeepResearchAgent(RoutedAgent):
             self._session_threads[session_id] = {
                 "configurable": {
                     "thread_id": thread_id,
-                    "search_api": "tavily",
+                    "search_api": SearchAPI.TAVILY,
+                    "api_key_rotator": APIKeyRotator(env_var_prefix="TAVILY_API_KEY"),
                     "user_id": user_id,
                     "conversation_id": conversation_id,
                     "provider": llm_provider,
