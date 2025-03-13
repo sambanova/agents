@@ -7,6 +7,7 @@ import numpy as np
 from api.services.redis_service import SecureRedisService
 import yfinance as yf
 
+from agent.crewai_llm import CustomLLM
 from services.structured_output_parser import CustomConverter
 
 # Ensure our parent directories are in sys.path
@@ -199,7 +200,6 @@ class FinancialAnalysisCrew:
         self,
         llm_api_key: str,
         provider: str,
-        exa_key: str,
         serper_key: str,
         user_id: str = "",
         run_id: str = "",
@@ -209,7 +209,7 @@ class FinancialAnalysisCrew:
         verbose: bool = True
     ):
         model_info = model_registry.get_model_info(model_key="llama-3.1-8b", provider=provider)
-        self.llm = LLM(
+        self.llm = CustomLLM(
             model=model_info["crewai_prefix"] + "/" + model_info["model"],
             temperature=0.0,
             max_tokens=8192,
@@ -217,14 +217,13 @@ class FinancialAnalysisCrew:
             base_url=model_info["url"],
         )
         aggregator_model_info = model_registry.get_model_info(model_key="llama-3.3-70b", provider=provider)
-        self.aggregator_llm = LLM(
+        self.aggregator_llm = CustomLLM(
             model=aggregator_model_info["crewai_prefix"] + "/" + aggregator_model_info["model"],
             temperature=0.0,
             max_tokens=8192,
             api_key=llm_api_key,
             base_url=aggregator_model_info["url"],
         )
-        self.exa_key = exa_key
         self.serper_key = serper_key
         self.user_id = user_id
         self.run_id = run_id

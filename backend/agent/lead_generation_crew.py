@@ -3,6 +3,7 @@ import os
 import uuid
 
 from api.services.redis_service import SecureRedisService
+from agent.crewai_llm import CustomLLM
 
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if parent_dir not in sys.path:
@@ -84,7 +85,7 @@ class ResearchCrew:
     ):
 
         model_info = model_registry.get_model_info(model_key="llama-3.3-70b", provider=provider)
-        self.llm = LLM(
+        self.llm = CustomLLM(
             model=model_info["crewai_prefix"] + "/" + model_info["model"],
             temperature=0.00,
             max_tokens=8192,

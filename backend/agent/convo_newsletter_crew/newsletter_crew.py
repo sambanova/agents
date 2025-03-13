@@ -10,6 +10,7 @@ from crewai.project import CrewBase, agent, crew, task
 from crewai_tools import SerperDevTool
 
 # For logging user <-> agent conversation in Redis (optional but recommended)
+from agent.crewai_llm import CustomLLM
 from utils.agent_thought import RedisConversationLogger
 
 
@@ -41,7 +42,7 @@ class ConvoNewsletterCrew:
         # For brevity, we assume they're read automatically or injected.
 
         # Initialize your LLM with the SambaNova key
-        self.llm = LLM(
+        self.llm = CustomLLM(
             model="sambanova/Meta-Llama-3.1-70B-Instruct",
             temperature=0.0,
             max_tokens=8192,

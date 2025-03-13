@@ -40,7 +40,7 @@ from .prompts import (
     final_section_writer_instructions,
     section_grader_instructions,
 )
-from .configuration import Configuration
+from .configuration import Configuration, SearchAPI
 from .utils import tavily_search_async, deduplicate_and_format_sources, format_sections, perplexity_search
 
 # We import our data models
@@ -295,18 +295,13 @@ async def generate_report_plan(writer_model, planner_model, state: ReportState, 
     query_list = [q.search_query for q in results.queries]
     logger.info(logger.format_message(session_id, f"Generated {len(query_list)} search queries"))
 
-    # do web search if needed
-    if isinstance(configurable.search_api, str):
-        search_api = configurable.search_api
-    else:
-        search_api = configurable.search_api.value
-
-    logger.info(logger.format_message(session_id, f"Using search API: {search_api}"))
-    if search_api == "tavily":
-        search_results = await tavily_search_async(query_list)
+    logger.info(logger.format_message(session_id, f"Using search API: {configurable.search_api}"))
+    if configurable.search_api == SearchAPI.TAVILY:
+        logger.info(logger.format_message(session_id, f"Using Tavily API with key rotation for {len(query_list)} queries"))
+        search_results = await tavily_search_async(query_list, configurable.api_key_rotator)
         source_str = deduplicate_and_format_sources(search_results, max_tokens_per_source=1500, include_raw_content=False)
-    elif search_api == "perplexity":
-        search_results = perplexity_search(query_list)
+    elif configurable.search_api == SearchAPI.PERPLEXITY:
+        search_results = perplexity_search(query_list, configurable.api_key_rotator)
         source_str = deduplicate_and_format_sources(search_results, max_tokens_per_source=1000, include_raw_content=False)
     else:
         logger.error(logger.format_message(session_id, f"Unsupported search API: {configurable.search_api}"))
@@ -410,17 +405,13 @@ async def search_web(state: SectionState, config: RunnableConfig):
     query_list = [q.search_query for q in sq]
     logger.info(logger.format_message(session_id, f"Executing web search with {len(query_list)} queries"))
 
-    if isinstance(configurable.search_api, str):
-        search_api = configurable.search_api
-    else:
-        search_api = configurable.search_api.value
-
-    logger.info(logger.format_message(session_id, f"Using search API: {search_api}"))
-    if search_api == "tavily":
-        search_results = await tavily_search_async(query_list)
+    logger.info(logger.format_message(session_id, f"Using search API: {configurable.search_api}"))
+    if configurable.search_api == SearchAPI.TAVILY:
+        logger.info(logger.format_message(session_id, f"Using Tavily API with key rotation for {len(query_list)} queries"))
+        search_results = await tavily_search_async(query_list, configurable.api_key_rotator)
         src_str = deduplicate_and_format_sources(search_results, max_tokens_per_source=1500, include_raw_content=True)
-    elif search_api == "perplexity":
-        search_results = perplexity_search(query_list)
+    elif configurable.search_api == SearchAPI.PERPLEXITY:
+        search_results = perplexity_search(query_list, configurable.api_key_rotator)
         src_str = deduplicate_and_format_sources(search_results, max_tokens_per_source=5000, include_raw_content=False)
     else:
         logger.error(logger.format_message(session_id, f"Unsupported search API: {configurable.search_api}"))
@@ -459,6 +450,10 @@ def invoke_llm_with_tracking(
     start_time = time.time()
     response = llm.invoke(messages, config=config)
     duration = time.time() - start_time
+    if duration > 10:
+        logger.warning(logger.format_message(session_id, f"Deep Research - LLM {llm_name} took {duration:.2f} seconds to complete task {task}"))
+    else:
+        logger.info(logger.format_message(session_id, f"Deep Research - LLM {llm_name} took {duration:.2f} seconds to complete task {task}"))
 
     if len(usage_handler.usage) > 1:
         logger.warning(logger.format_message(session_id, f"Multiple usage objects found in callback. Using the first one."))

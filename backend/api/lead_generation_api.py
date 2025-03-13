@@ -339,7 +339,6 @@ class LeadGenerationAPI:
                         )
                     crew = FinancialAnalysisCrew(
                         llm_api_key=sambanova_key,
-                        exa_key=exa_key,
                         serper_key=serper_key,
                         user_id=user_id,
                         run_id=run_id,
