@@ -90,6 +90,11 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/proxy-body-size: "30m"
+  stickySession:
+    enabled: true
+    cookieName: "AISKAGENTS_ROUTE"
+    maxAge: "86400"
+    path: "/api"
   host: aiskagents.cloud.snova.ai
   tls:
     secretName: tls-secret-name
