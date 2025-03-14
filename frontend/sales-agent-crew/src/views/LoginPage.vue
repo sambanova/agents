@@ -1,13 +1,13 @@
 <template>
-  <div class="min-h-screen bg-gradient-to-br from-primary-50 to-blue-50 flex items-center justify-center p-4">
-    <div class="w-full flex flex-col xl:flex-row justify-between items-center">
-      <!-- Left side (login form) - always full width on screens < 1180px -->
-      <div class="w-full xl:w-[30%] flex flex-col justify-center items-center xl:pl-12">
-        <div class="text-center mb-8">
+  <div class="h-screen flex items-stretch  ">
+    <div class="w-full h-full flex flex-col md:flex-row">
+      <!-- Login box (1/3 on medium+, full width on small) -->
+      <div class="w-full h-full md:w-1/3 flex flex-col justify-center items-center p-4 md:pl-12">
+        <div class="text-center mb-2">
           <img 
             src="https://sambanova.ai/hubfs/sambanova-logo-black.png" 
             alt="SambaNova Logo" 
-            class="h-12 mx-auto mb-6"
+            class="h-[25px] mx-auto mb-2"
           />
           <h1 class="text-4xl font-bold text-primary-brandTextPrimary mb-2">Agents</h1>
           <p class="text-lg text-primary-brandTextSecondary">Agent Powered Intelligence</p>
@@ -32,9 +32,9 @@
               </button>
             </p>
           </div>
-          <div class="text-center mt-4 flex flex-row justify-between">
+          <div class="text-center mt-4 flex flex-row justify-between w-full">
             <a class="underline text-[12px]" href="/terms-of-service">Terms Of Service</a>
-            <a class=" underline text-[12px] mt-1" target="_blank" href="https://sambanova.ai/privacy-policy">Privacy Policy</a>
+            <a class="underline text-[12px]" target="_blank" href="https://sambanova.ai/privacy-policy">Privacy Policy</a>
           </div>
         </div>
         
@@ -60,19 +60,20 @@
         </div>
       </div>
 
-      <!-- Video - below login on screens < 1180px, on right side for larger screens -->
-      <div class="w-full xl:w-[70%] flex items-center justify-center mt-8 xl:mt-0 xl:pr-12">
-        <div class="p-2 rounded-xl bg-gradient-to-br from-[#EE7624] to-[#f59e67] shadow-xl max-w-full">
-          <video 
-            src="/Images/agent-screen-recording.webm" 
-            autoplay
-            loop
-            muted
-            playsinline
-            preload="auto"
-            class="rounded-lg max-h-[80vh] w-auto object-contain border-4 border-white"
-          ></video>
-        </div>
+      <!-- Video box (2/3 on medium+, full width on small) -->
+      <div class="w-full h-full  md:w-2/3 flex items-center justify-center  ">
+        <div class="shadow-lg  rounded-lg  max-h-[90vh] w-[90%] hover:w-full transition-all duration-300 border border-primary-bodyBg">
+  <video 
+    src="/Images/agent-screen-recording.webm" 
+    autoplay
+    loop
+    muted
+    playsinline
+    preload="auto"
+    class="  object-contain "
+  ></video>
+</div>
+
       </div>
     </div>
   </div>
@@ -87,7 +88,7 @@ const showSignUp = ref(true)
 </script>
 
 <style>
-.cl-footer{
+.cl-footer {
   display: none;
 }
 </style>
