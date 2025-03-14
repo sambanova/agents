@@ -2,7 +2,24 @@
   <div class="h-screen flex items-stretch  ">
     <div class="w-full h-full flex flex-col md:flex-row">
       <!-- Login box (1/3 on medium+, full width on small) -->
-      <div class="w-full h-full md:w-1/3 flex flex-col justify-center items-center p-4 md:pl-12">
+    
+      <!-- Video box (2/3 on medium+, full width on small) -->
+      <div class="w-full h-full  md:w-2/3 flex items-center justify-center  ">
+        <div class="shadow-lg  rounded-lg  max-h-[90vh] w-[90%] hover:w-full transition-all duration-300 border border-primary-bodyBg">
+  <video 
+    src="/Images/agent-screen-recording.webm" 
+    autoplay
+    loop
+    muted
+    playsinline
+    preload="auto"
+    class="  object-contain "
+  ></video>
+</div>
+
+      </div>
+      <div class="w-full h-full md:w-1/3 flex flex-col justify-center items-start p-4 md:pl-12">
+        <div class="w-auto">
         <div class="text-center mb-2">
           <img 
             src="https://sambanova.ai/hubfs/sambanova-logo-black.png" 
@@ -59,22 +76,8 @@
           </div>
         </div>
       </div>
-
-      <!-- Video box (2/3 on medium+, full width on small) -->
-      <div class="w-full h-full  md:w-2/3 flex items-center justify-center  ">
-        <div class="shadow-lg  rounded-lg  max-h-[90vh] w-[90%] hover:w-full transition-all duration-300 border border-primary-bodyBg">
-  <video 
-    src="/Images/agent-screen-recording.webm" 
-    autoplay
-    loop
-    muted
-    playsinline
-    preload="auto"
-    class="  object-contain "
-  ></video>
-</div>
-
       </div>
+
     </div>
   </div>
 </template>
