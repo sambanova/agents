@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI, File, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Query, Request, UploadFile, WebSocket
 from fastapi_clerk_auth import ClerkConfig, ClerkHTTPBearer, HTTPAuthorizationCredentials
 import jwt
 from pydantic import BaseModel
@@ -11,6 +11,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
+from fastapi.websockets import WebSocketState, WebSocketDisconnect
 
 from api.agents.user_proxy import UserProxyAgent
 from api.websocket_manager import WebSocketConnectionManager
@@ -23,8 +24,6 @@ import sys
 
 import redis
 import uuid
-from fastapi import FastAPI, WebSocket
-
 
 # SSE support
 from sse_starlette.sse import EventSourceResponse
@@ -207,25 +206,37 @@ class LeadGenerationAPI:
                 try:
                     auth_data = json.loads(auth_message)
                     if auth_data.get('type') != 'auth':
-                        await websocket.close(code=4001, reason="Authentication message expected")
+                        try:
+                            await websocket.close(code=4001, reason="Authentication message expected")
+                        except Exception as close_error:
+                            logger.error(f"Error closing WebSocket: {str(close_error)}")
                         return
                     
                     token = auth_data.get('token', '')
                     if not token.startswith('Bearer '):
-                        await websocket.close(code=4001, reason="Invalid authentication token format")
+                        try:
+                            await websocket.close(code=4001, reason="Invalid authentication token format")
+                        except Exception as close_error:
+                            logger.error(f"Error closing WebSocket: {str(close_error)}")
                         return
                     
                     token_data = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token.split(' ')[1])
                     user_id = get_user_id_from_token(token_data)
 
                     if not user_id:
-                        await websocket.close(code=4001, reason="Invalid authentication token")
+                        try:
+                            await websocket.close(code=4001, reason="Invalid authentication token")
+                        except Exception as close_error:
+                            logger.error(f"Error closing WebSocket: {str(close_error)}")
                         return
 
                     # Verify conversation exists and belongs to user
                     meta_key = f"chat_metadata:{user_id}:{conversation_id}"
                     if not self.app.state.redis_client.exists(meta_key):
-                        await websocket.close(code=4004, reason="Conversation not found")
+                        try:
+                            await websocket.close(code=4004, reason="Conversation not found")
+                        except Exception as close_error:
+                            logger.error(f"Error closing WebSocket: {str(close_error)}")
                         return
 
                     await self.app.state.manager.handle_websocket(
@@ -234,11 +245,21 @@ class LeadGenerationAPI:
                         conversation_id
                     )
                 except json.JSONDecodeError:
-                    await websocket.close(code=4001, reason="Invalid authentication message format")
+                    try:
+                        await websocket.close(code=4001, reason="Invalid authentication message format")
+                    except Exception as close_error:
+                        logger.error(f"Error closing WebSocket: {str(close_error)}")
                     return
             except Exception as e:
                 logger.error(f"[/chat/websocket] Error in WebSocket connection: {str(e)}")
-                await websocket.close(code=4000, reason="Internal server error")
+                # Only attempt to close if the connection is still open
+                try:
+                    if (websocket.client_state != WebSocketState.DISCONNECTED and 
+                        websocket.application_state != WebSocketState.DISCONNECTED):
+                        await websocket.close(code=4000, reason="Internal server error")
+                except Exception as close_error:
+                    logger.error(f"Error closing WebSocket: {str(close_error)}")
+                    # Just log the error, don't re-raise
 
         @self.app.post("/route")
         async def determine_route(request: Request, query_request: QueryRequest):
