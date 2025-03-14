@@ -218,6 +218,8 @@ class SemanticRouterAgent(RoutedAgent):
 
             history = self._session_manager.get_history(conversation_id)
 
+
+            start_time = time.time()
             if len(history) > 0:
                 model_response = await self._context_summary_model(message.provider).create(
                     [SystemMessage(content=f"""You are a helpful assistant that summarises conversations for other processes to use as a context. 
@@ -235,6 +237,19 @@ class SemanticRouterAgent(RoutedAgent):
                 context_summary = model_response.content
             else:
                 context_summary = ""
+            end_time = time.time()
+            context_summary_time = end_time - start_time
+            context_summary_log_message = f"Context summary took {context_summary_time} seconds"
+            if context_summary_time > 10:
+                logger.warning(logger.format_message(
+                    ctx.topic_id.source,
+                    context_summary_log_message
+                ))
+            else:
+                logger.info(logger.format_message(
+                    ctx.topic_id.source,
+                    context_summary_log_message
+                ))
 
             route_result: QueryType = await router.route_query(message.content, context_summary, len(message.docs) if message.docs else 0)
 
