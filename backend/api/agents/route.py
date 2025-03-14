@@ -237,7 +237,7 @@ class SemanticRouterAgent(RoutedAgent):
                 context_summary = model_response.content
                 end_time = time.time()
                 context_summary_time = end_time - start_time
-                context_summary_log_message = f"Context summary took {context_summary_time} seconds"
+                context_summary_log_message = f"Context summary took {context_summary_time:.2f  } seconds"
                 if context_summary_time > 10:
                     logger.warning(logger.format_message(
                         ctx.topic_id.source,
