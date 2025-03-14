@@ -219,8 +219,8 @@ class SemanticRouterAgent(RoutedAgent):
             history = self._session_manager.get_history(conversation_id)
 
 
-            start_time = time.time()
             if len(history) > 0:
+                start_time = time.time()
                 model_response = await self._context_summary_model(message.provider).create(
                     [SystemMessage(content=f"""You are a helpful assistant that summarises conversations for other processes to use as a context. 
                                    Follow the instructions below to create the summary:
@@ -235,21 +235,21 @@ class SemanticRouterAgent(RoutedAgent):
                     + [UserMessage(content="Summarize the messages so far in a few sentences including your responses. Focus on including the topis", source="user")]
                 )
                 context_summary = model_response.content
+                end_time = time.time()
+                context_summary_time = end_time - start_time
+                context_summary_log_message = f"Context summary took {context_summary_time} seconds"
+                if context_summary_time > 10:
+                    logger.warning(logger.format_message(
+                        ctx.topic_id.source,
+                        context_summary_log_message
+                    ))
+                else:
+                    logger.info(logger.format_message(
+                        ctx.topic_id.source,
+                        context_summary_log_message
+                    ))
             else:
                 context_summary = ""
-            end_time = time.time()
-            context_summary_time = end_time - start_time
-            context_summary_log_message = f"Context summary took {context_summary_time} seconds"
-            if context_summary_time > 10:
-                logger.warning(logger.format_message(
-                    ctx.topic_id.source,
-                    context_summary_log_message
-                ))
-            else:
-                logger.info(logger.format_message(
-                    ctx.topic_id.source,
-                    context_summary_log_message
-                ))
 
             route_result: QueryType = await router.route_query(message.content, context_summary, len(message.docs) if message.docs else 0)
 
