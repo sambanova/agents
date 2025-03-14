@@ -386,7 +386,7 @@ console.log("PDF gen error",e)
 }
 
 async function createNewChat() {
-  
+
   selectedDocuments.value=[]
   
   try {
@@ -517,7 +517,7 @@ watch(
   (newId, oldId) => {
     if ( newId !== oldId) {
 
-      
+      errorMessage.value=''
     completionMetaData.value = null;
     isLoading.value = false;
     messagesData.value = [];
@@ -528,7 +528,7 @@ watch(
   currentId.value = newId;
   
   if (socket.value) {
-    socket.value.close();
+    closeSocket()
   }
   connectWebSocket();
   }
@@ -729,6 +729,7 @@ const uploadStatus = ref(null)
 // Document-related reactive state
 const uploadedDocuments = ref([])
 const selectedDocuments = ref([])
+const manualSocketClose = ref(false);
 
 // Clerk
 const { userId } = useAuth()
@@ -1060,11 +1061,7 @@ function toggleDocumentSelection(docId) {
   }
 }
 
-onBeforeUnmount(() => {
-  if (socket.value) {
-    socket.value.close()
-  }
-})
+
 
 function waitForSocketOpen(timeout = 5000) {
   return new Promise((resolve, reject) => {
@@ -1089,6 +1086,7 @@ function waitForSocketOpen(timeout = 5000) {
 const  currentMsgId=ref('')
 const addMessage = async () => {
 
+errorMessage.value=''
 
   workflowData.value=[]
  
@@ -1152,7 +1150,8 @@ const addMessage = async () => {
       isLoading.value = true
       socket.value.send(JSON.stringify(messagePayload))
       messagesData.value.push(messagePayload)
-      searchQuery.value = ''
+       chatName.value=searchQuery.value
+       searchQuery.value = ''
     } catch (e) {
       console.error("ChatView error", e)
     }
@@ -1278,6 +1277,7 @@ async function connectWebSocket() {
     }
     socket.value.onerror = (error) => {
       console.error('WebSocket error:', error)
+      if (!manualSocketClose.value) 
       errorMessage.value = 'WebSocket connection error occurred.';
 
       isLoading.value = false
@@ -1291,7 +1291,15 @@ async function connectWebSocket() {
   }
 }
 
-
+function closeSocket() {
+  manualSocketClose.value = true;
+  if (socket.value) {
+    socket.value.close();
+  }
+}
+onBeforeUnmount(() => {
+  closeSocket();
+});
 function addOrUpdatePlannerText(newEntry) {
   // Find the index of an existing entry with the same message_id
   const index = plannerTextData.value.findIndex(
