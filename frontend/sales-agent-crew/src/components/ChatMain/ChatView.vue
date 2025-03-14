@@ -565,7 +565,7 @@ const checkAndOpenSettings = () => {
 
 async function loadPreviousChat(convId) {
   try {
-    isLoading.value = true
+    // isLoading.value = true
     const resp = await axios.get(
       `${import.meta.env.VITE_API_URL}/chat/history/${convId}`,
       {
