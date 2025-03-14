@@ -264,8 +264,55 @@
             <a class="text-sm underline" href="https://community.sambanova.ai/c/agents/87" target="_blank">FAQ (SN Community)</a>
             </div>
           </div>
+          
+          <!-- Delete Account Section -->
+          <div class="mt-8 pt-6 border-t border-gray-200">
+            <div class="relative">
+              <!-- Empty div to match the structure of other sections -->
+            </div>
+            <div class="flex justify-end space-x-2 mt-2">
+              <button 
+                @click="confirmDeleteAccount" 
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                Delete Account
+              </button>
+            </div>
+          </div>
         </div>
 
+        <!-- Delete Account Confirmation Modal -->
+        <div v-if="showDeleteConfirmation" class="fixed inset-0 z-50 overflow-y-auto" style="background-color: rgba(0, 0, 0, 0.5);">
+          <div class="flex min-h-screen items-center justify-center p-4">
+            <div class="relative w-full max-w-md bg-white rounded-lg shadow-lg p-6">
+              <div class="text-center">
+                <h3 class="mt-4 text-lg font-medium text-gray-900">Confirm Data Deletion</h3>
+                <p class="mt-2 text-sm text-gray-500">
+                  Are you sure you want to delete all your data? This will permanently delete all your conversations, documents, and API keys. This action cannot be undone and will log you out.
+                </p>
+                <div class="mt-6 flex justify-center space-x-4">
+                  <button 
+                    @click="cancelDeleteAccount" 
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    @click="executeDeleteAccount" 
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    :disabled="isDeleting"
+                  >
+                    <svg v-if="isDeleting" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    {{ isDeleting ? 'Deleting...' : 'Delete Data' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -619,4 +666,57 @@ defineExpose({
     fireworksKey: fireworksKey.value,
     selectedModel: selectedModel.value
 })
+
+// Delete account functionality
+const showDeleteConfirmation = ref(false)
+const isDeleting = ref(false)
+
+const confirmDeleteAccount = () => {
+  showDeleteConfirmation.value = true
+}
+
+const cancelDeleteAccount = () => {
+  showDeleteConfirmation.value = false
+}
+
+const executeDeleteAccount = async () => {
+  try {
+    isDeleting.value = true
+    
+    // Call the delete user data endpoint
+    const response = await axios.delete(`${import.meta.env.VITE_API_URL}/user/data`, {
+      headers: {
+        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+      }
+    })
+    
+    if (response.status === 200) {
+      // Clear local storage
+      const keysToRemove = [
+        `sambanova_key_${userId.value}`,
+        `exa_key_${userId.value}`,
+        `serper_key_${userId.value}`,
+        `fireworks_key_${userId.value}`
+      ]
+      
+      keysToRemove.forEach(key => localStorage.removeItem(key))
+      
+      // Show success message briefly
+      successMessage.value = 'Account data deleted successfully. Logging out...'
+      
+      // Log out the user after a short delay
+      setTimeout(async () => {
+        await window.Clerk.signOut()
+        // Redirect to login page
+        window.location.href = '/login'
+      }, 2000)
+    }
+  } catch (error) {
+    console.error('Error deleting account data:', error)
+    errorMessage.value = 'Failed to delete account data. Please try again.'
+    showDeleteConfirmation.value = false
+  } finally {
+    isDeleting.value = false
+  }
+}
 </script>

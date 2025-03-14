@@ -1031,6 +1031,75 @@ class LeadGenerationAPI:
                     content={"error": f"Failed to retrieve API keys: {str(e)}"}
                 )
 
+        @self.app.delete("/user/data")
+        async def delete_user_data(
+            token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard)
+        ):
+            """
+            Delete all data associated with the authenticated user.
+            This includes all conversations, documents, and API keys.
+            
+            Args:
+                token_data (HTTPAuthorizationCredentials): The authentication token data
+            """
+            try:
+                user_id = get_user_id_from_token(token_data)
+                if not user_id:
+                    return JSONResponse(
+                        status_code=401,
+                        content={"error": "Invalid authentication token"},
+                    )
+
+                # 1. Delete all conversations
+                user_chats_key = f"user_chats:{user_id}"
+                conversation_ids = self.app.state.redis_client.zrange(user_chats_key, 0, -1)
+                
+                for conversation_id in conversation_ids:
+                    # Close any active WebSocket connections
+                    connection = self.app.state.manager.get_connection(user_id, conversation_id)
+                    if connection:
+                        await connection.close(code=4000, reason="User data deleted")
+                        self.app.state.manager.remove_connection(user_id, conversation_id)
+                    
+                    # Delete chat metadata and messages
+                    meta_key = f"chat_metadata:{user_id}:{conversation_id}"
+                    message_key = f"messages:{user_id}:{conversation_id}"
+                    self.app.state.redis_client.delete(meta_key)
+                    self.app.state.redis_client.delete(message_key)
+                
+                # Delete the user's chat list
+                self.app.state.redis_client.delete(user_chats_key)
+                
+                # 2. Delete all documents
+                user_docs_key = f"user_documents:{user_id}"
+                doc_ids = self.app.state.redis_client.smembers(user_docs_key)
+                
+                for doc_id in doc_ids:
+                    # Delete document metadata and chunks
+                    doc_key = f"document:{doc_id}"
+                    chunks_key = f"document_chunks:{doc_id}"
+                    self.app.state.redis_client.delete(doc_key)
+                    self.app.state.redis_client.delete(chunks_key)
+                
+                # Delete the user's document list
+                self.app.state.redis_client.delete(user_docs_key)
+                
+                # 3. Delete API keys
+                key_prefix = f"api_keys:{user_id}"
+                self.app.state.redis_client.delete(key_prefix)
+                
+                return JSONResponse(
+                    status_code=200,
+                    content={"message": "All user data deleted successfully"}
+                )
+
+            except Exception as e:
+                print(f"[/user/data] Error deleting user data: {str(e)}")
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": f"Failed to delete user data: {str(e)}"}
+                )
+
     async def execute_research(self, crew: ResearchCrew, parameters: Dict[str, Any]):
         extractor = UserPromptExtractor(crew.llm.api_key)
         combined_text = " ".join([
