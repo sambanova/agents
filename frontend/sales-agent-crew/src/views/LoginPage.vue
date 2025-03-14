@@ -32,6 +32,10 @@
               </button>
             </p>
           </div>
+          <div class="text-center mt-4 flex flex-row justify-between">
+            <a class="underline text-[12px]" href="/terms-of-service">Terms Of Service</a>
+            <a class=" underline text-[12px] mt-1" target="_blank" href="https://sambanova.ai/privacy-policy">Privacy Policy</a>
+          </div>
         </div>
         
         <!-- Sign In component -->

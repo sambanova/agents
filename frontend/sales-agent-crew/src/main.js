@@ -24,7 +24,10 @@ const pinia = createPinia()
 app.use(clerkPlugin, { 
   publishableKey: PUBLISHABLE_KEY,  
   signInUrl: '/login',
-  signUpUrl: '/login'
+  signUpUrl: '/login',
+  initialState: {
+    bypassAuth: ['/terms-of-service'] // Allow unauthenticated users to access this route
+  }
 })
 app.use(pinia) // Register Pinia
 app.use(router)
