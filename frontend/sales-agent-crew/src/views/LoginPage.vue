@@ -4,7 +4,7 @@
       <!-- Login box (1/3 on medium+, full width on small) -->
     
       <!-- Video box (2/3 on medium+, full width on small) -->
-      <div class="w-full h-full  md:w-2/3 flex items-center justify-center  ">
+      <div class="w-full h-full  md:w-[60%] flex items-center justify-center  ">
         <div class="shadow-lg  rounded-lg  max-h-[90vh] w-[90%] hover:w-full transition-all duration-300 border border-primary-bodyBg">
   <video 
     src="/Images/agent-screen-recording.webm" 
@@ -18,7 +18,7 @@
 </div>
 
       </div>
-      <div class="w-full h-full md:w-1/3 flex flex-col justify-center items-start p-4 md:pl-12">
+      <div class="w-full h-full md:w-[40%] flex flex-col justify-center items-center p-4 md:pl-12">
         <div class="w-auto">
         <div class="text-center mb-2">
           <img 
