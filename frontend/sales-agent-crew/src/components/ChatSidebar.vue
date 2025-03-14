@@ -5,7 +5,7 @@
     <div class="px-4 py-2 flex items-center justify-between">
       
       <button
-        class="p-2 border w-full border-primary-brandBorder text-primary-brandColor rounded  text-sm"
+        class="p-2 w-full border  border-primary-brandBorder text-primary-brandColor text-sm rounded  "
         @click="createNewChat"
         :disabled="missingKeysArray.length > 0"
       >

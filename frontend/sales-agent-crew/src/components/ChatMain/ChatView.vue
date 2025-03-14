@@ -386,7 +386,8 @@ console.log("PDF gen error",e)
 }
 
 async function createNewChat() {
-
+  
+  selectedDocuments.value=[]
   
   try {
     const resp = await axios.post(

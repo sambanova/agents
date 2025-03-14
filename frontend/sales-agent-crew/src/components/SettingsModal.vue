@@ -73,13 +73,13 @@
             <div class="flex justify-end space-x-2 mt-2">
               <button 
                 @click="clearSambanovaKey"
-                class="px-3 py-1 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none"
+                class="px-3 py-1 text-sm border  border-primary-brandBorder text-primary-brandColor text-sm  rounded focus:outline-none"
               >
                 Clear Key
               </button>
               <button 
                 @click="saveSambanovaKey"
-                class="px-3 py-1 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none"
+                class="px-3 py-1 text-sm bg-primary-brandColor text-white rounded focus:outline-none"
               >
                 Save Key
               </button>
@@ -134,13 +134,13 @@
             <div class="flex justify-end space-x-2 mt-2">
               <button 
                 @click="clearExaKey"
-                class="px-3 py-1 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none"
+                class="px-3 py-1 text-sm border  border-primary-brandBorder text-primary-brandColor text-sm  rounded focus:outline-none"
               >
                 Clear Key
               </button>
               <button 
                 @click="saveExaKey"
-                class="px-3 py-1 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none"
+                class="px-3 py-1 text-sm bg-primary-brandColor text-white rounded focus:outline-none"
               >
                 Save Key
               </button>
@@ -177,13 +177,13 @@
             <div class="flex justify-end space-x-2 mt-2">
               <button 
                 @click="clearSerperKey"
-                class="px-3 py-1 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none"
+                class="px-3 py-1 text-sm border  border-primary-brandBorder text-primary-brandColor text-sm  rounded focus:outline-none"
               >
                 Clear Key
               </button>
               <button 
                 @click="saveSerperKey"
-                class="px-3 py-1 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none"
+                class="px-3 py-1 text-sm bg-primary-brandColor text-white rounded focus:outline-none"
               >
                 Save Key
               </button>
@@ -220,13 +220,13 @@
             <div class="flex justify-end space-x-2 mt-2">
               <button 
                 @click="clearFireworksKey"
-                class="px-3 py-1 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none"
+                class="px-3 py-1 text-sm border  border-primary-brandBorder text-primary-brandColor text-sm  rounded focus:outline-none"
               >
                 Clear Key
               </button>
               <button 
                 @click="saveFireworksKey"
-                class="px-3 py-1 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none"
+                class="px-3 py-1 text-sm bg-primary-brandColor text-white rounded focus:outline-none"
               >
                 Save Key
               </button>
@@ -273,7 +273,7 @@
             <div class="flex justify-end space-x-2 mt-2">
               <button 
                 @click="confirmDeleteAccount" 
-                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                class="inline-flex items-center px-3 py-1 text-sm bg-primary-brandColor text-white rounded focus:outline-none focus:outline-none "
               >
                 Delete Account
               </button>
@@ -286,20 +286,20 @@
           <div class="flex min-h-screen items-center justify-center p-4">
             <div class="relative w-full max-w-md bg-white rounded-lg shadow-lg p-6">
               <div class="text-center">
-                <h3 class="mt-4 text-lg font-medium text-gray-900">Confirm Data Deletion</h3>
-                <p class="mt-2 text-sm text-gray-500">
+                <h3 class="mt-4 text-lg font-medium text-primary-brandTextPrimary ">Confirm Data Deletion</h3>
+                <p class="mt-2 text-sm text-gray-500 text-left  text-primary-brandTextSecondary">
                   Are you sure you want to delete all your data? This will permanently delete all your conversations, documents, and API keys. This action cannot be undone and will log you out.
                 </p>
                 <div class="mt-6 flex justify-center space-x-4">
                   <button 
                     @click="cancelDeleteAccount" 
-                    class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    class="px-3 py-1 text-sm border  border-primary-brandBorder text-primary-brandColor text-sm  rounded focus:outline-none"
                   >
                     Cancel
                   </button>
                   <button 
                     @click="executeDeleteAccount" 
-                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    class="inline-flex items-center px-3 py-1 text-sm bg-primary-brandColor text-white rounded focus:outline-none focus:outline-none "
                     :disabled="isDeleting"
                   >
                     <svg v-if="isDeleting" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -692,14 +692,17 @@ const executeDeleteAccount = async () => {
     
     if (response.status === 200) {
       // Clear local storage
-      const keysToRemove = [
-        `sambanova_key_${userId.value}`,
-        `exa_key_${userId.value}`,
-        `serper_key_${userId.value}`,
-        `fireworks_key_${userId.value}`
-      ]
+      // const keysToRemove = [
+      //   `sambanova_key_${userId.value}`,
+      //   `exa_key_${userId.value}`,
+      //   `serper_key_${userId.value}`,
+      //   `fireworks_key_${userId.value}`
+      // ]
       
-      keysToRemove.forEach(key => localStorage.removeItem(key))
+      // keysToRemove.forEach(key => localStorage.removeItem(key))
+
+      localStorage.clear();
+
       
       // Show success message briefly
       successMessage.value = 'Account data deleted successfully. Logging out...'
