@@ -124,7 +124,7 @@ class LeadGenerationAPI:
         self.app = FastAPI(lifespan=lifespan, root_path="/api")
         self.setup_cors()
         self.setup_routes()
-        self.executor = ThreadPoolExecutor(max_workers=2)
+        self.executor = ThreadPoolExecutor(max_workers=15)
 
     def verify_conversation_exists(self, user_id: str, conversation_id: str) -> bool:
         """

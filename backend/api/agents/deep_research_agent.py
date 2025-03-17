@@ -242,10 +242,17 @@ class DeepResearchAgent(RoutedAgent):
                 logger.format_message(session_id, f"DeepResearch flow error: {str(e)}"),
                 exc_info=True,
             )
+
+            error_message = str(e).lower()
+            if "rate limit exceeded" in error_message or "too many requests" in error_message:
+                error_response = "Rate limit exceeded. Please try again later."
+            else:
+                error_response = "Unable to assist with deep research, try again later."
+
             response = AgentStructuredResponse(
                 agent_type=AgentEnum.Error,
                 data=ErrorResponse(
-                    error=f"Unable to assist with deep research, try again later."
+                    error=error_response
                 ),
                 message=f"Error processing deep research request: {str(e)}",
                 message_id=message.message_id

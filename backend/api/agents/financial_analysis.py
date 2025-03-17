@@ -154,9 +154,16 @@ class FinancialAnalysisAgent(RoutedAgent):
                 ctx.topic_id.source,
                 f"Failed to process financial analysis request: {str(e)}"
             ), exc_info=True)
+
+            error_message = str(e).lower()
+            if "rate limit exceeded" in error_message or "too many requests" in error_message:
+                error_response = "Rate limit exceeded. Please try again later."
+            else:
+                error_response = "Unable to assist with financial analysis, try again later."
+
             response = AgentStructuredResponse(
                 agent_type=AgentEnum.Error,
-                data=ErrorResponse(error=f"Unable to assist with financial analysis, try again later."),
+                data=ErrorResponse(error=error_response),
                 message=f"Error processing financial analysis request: {str(e)}",
                 message_id=message.message_id
             )
