@@ -923,14 +923,21 @@ class QueryRouterServiceChat:
         }}
 
         "type": "user_proxy",
-        "description": "Handles questions that require a response from the user. This agent is used for queries that require a response from the user. If the query is vague or unclear, use this agent.",
-        "examples": "What are the best ways to save money?, Write a financial report on my local bank?",
+        "description": "This is NOT an agent but a direct response back to the user. Use this type when:
+        - Handling queries about conversation history (e.g., 'What did I ask before?', 'What was my last query?')
+        - Responding to vague or unclear queries
+        - Addressing content already discussed in the context
+        - Responding to greetings, thanks, or casual conversation
+        - Providing follow-up information
+
+        When using this type, the response goes directly back to the user without invoking a specialized agent. If information is available in the context, provide it directly.",
+        "examples": "Hello, How are you?, Thanks for the information, Can you tell me more about that?, What do you think?",
 
         Query: "Tell me about this company?"
         {{
           "type": "user_proxy",
           "parameters": {{
-            "agent_question": "Please clarify the name of the company?"
+            "agent_question": "Please clarify the name of the company."
           }}
         }}
 

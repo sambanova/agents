@@ -25,6 +25,7 @@ from ..data_types import (
     AgentRequest,
     AgentStructuredResponse,
     APIKeys,
+    AssistantMessage,
     ErrorResponse,
 )
 from utils.logging import logger
@@ -82,17 +83,22 @@ class FinancialAnalysisAgent(RoutedAgent):
             ))
 
             if message.parameters.ticker == "":
-                response = AgentStructuredResponse(
-                    agent_type=AgentEnum.Error,
-                    data=ErrorResponse(
-                        error=f"Could not find a ticker for {message.parameters.company_name}"
+                request_obj = AgentRequest(
+                    agent_type=AgentEnum.Assistant,
+                    parameters=AssistantMessage(
+                        query=f"Provide financial analysis for the company: {message.parameters.company_name}, based on the query: {message.query}"
                     ),
-                    message=f"Could not find a ticker for {message.parameters.company_name}",
+                    provider=message.provider,
+                    query=message.query,
+                    docs=message.docs,
                     message_id=message.message_id,
                 )
                 await self.publish_message(
-                    response,
-                    DefaultTopicId(type="user_proxy", source=ctx.topic_id.source),
+                    request_obj,
+                    DefaultTopicId(
+                        type=request_obj.agent_type.value,
+                        source=ctx.topic_id.source,
+                    ),
                 )
                 return
 

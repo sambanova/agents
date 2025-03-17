@@ -507,7 +507,7 @@ class WebSocketConnectionManager(WebSocketInterface):
             websocket = self.connections.get(session_key)
 
             if not websocket:
-                logger.error(f"No WebSocket connection found for {session_key}")
+                logger.info(f"No WebSocket connection found for {session_key}")
                 return False
 
             if (websocket.client_state != WebSocketState.DISCONNECTED and 
