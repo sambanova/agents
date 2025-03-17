@@ -8,7 +8,7 @@
       <div class="grow text-start space-y-3">
       <!-- Card -->
       <div class="inline-block" >
-     <div class=" p-4 capitalize space-y-3 font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center">{{ provider }} Agent</div>
+     <div class=" p-4 capitalize space-y-3 font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center">{{ provider==="sambanova"?"SambaNova":provider }} Agent</div>
 </div>
 
 </div>
