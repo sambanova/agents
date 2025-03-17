@@ -122,7 +122,7 @@
             <span>Dividend Yield</span>
           </div>
           <div :class="textClasses.value">
-            {{ formatMetric('dividend_yield', parsed.data.fundamental.dividend_yield) }}
+            {{ formatMetric('dividend_yield', parseFloat(parsed.data.fundamental.dividend_yield/100)) }}
           </div>
         </div>
         <div :class="sectionClasses">
