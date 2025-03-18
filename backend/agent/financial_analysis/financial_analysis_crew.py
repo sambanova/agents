@@ -208,6 +208,14 @@ class FinancialAnalysisCrew:
         message_id: str = None,
         verbose: bool = True
     ):
+        competitor_finder_model_info = model_registry.get_model_info(model_key="llama-3.3-70b", provider=provider)
+        self.competitor_finder_llm = CustomLLM(
+            model=competitor_finder_model_info["crewai_prefix"] + "/" + competitor_finder_model_info["model"],
+            temperature=0.0,
+            max_tokens=8192,
+            api_key=llm_api_key,
+            base_url=competitor_finder_model_info["url"],
+        )
         model_info = model_registry.get_model_info(model_key="llama-3.1-8b", provider=provider)
         self.llm = CustomLLM(
             model=model_info["crewai_prefix"] + "/" + model_info["model"],
@@ -240,7 +248,7 @@ class FinancialAnalysisCrew:
             role="Enhanced Competitor Finder",
             goal="Identify 3 closest competitor tickers for the same industry and sector as {ticker}.",
             backstory="Expert in analyzing sector, fallback to LLM guess if yfinance fails. No extraneous calls needed.",
-            llm=self.llm,
+            llm=self.competitor_finder_llm,
             allow_delegation=False,
             verbose=self.verbose,
         )
