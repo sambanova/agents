@@ -8,6 +8,7 @@ from config.model_registry import model_registry
 from services.user_prompt_extractor_service import UserPromptExtractor
 from utils.logging import logger
 from api.services.redis_service import SecureRedisService
+from utils.error_utils import format_api_error_message
 
 @type_subscription(topic_type="sales_leads")
 class SalesLeadsAgent(RoutedAgent):
@@ -73,12 +74,8 @@ class SalesLeadsAgent(RoutedAgent):
                 f"Error processing sales leads request: {str(e)}"
             ), exc_info=True)
 
-            error_message = str(e).lower()
-            if "rate limit exceeded" in error_message or "too many requests" in error_message:
-                error_response = "Rate limit exceeded. Please try again later."
-            else:
-                error_response = "Unable to assist with sales leads, try again later."
-
+            error_response = format_api_error_message(e, "sales leads")
+            
             response = AgentStructuredResponse(
                 agent_type=AgentEnum.Error,
                 data=ErrorResponse(error=error_response),

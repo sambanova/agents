@@ -35,6 +35,7 @@ from api.data_types import (
 from api.registry import AgentRegistry
 from api.session_state import SessionStateManager
 from utils.logging import logger
+from utils.error_utils import format_api_error_message
 
 agent_registry = AgentRegistry()
 
@@ -277,11 +278,7 @@ class SemanticRouterAgent(RoutedAgent):
                 f"Error processing request: {str(e)}"
             ), exc_info=True)
 
-            error_message = str(e).lower()
-            if "rate limit exceeded" in error_message or "too many requests" in error_message:
-                error_response = "Rate limit exceeded. Please try again later."
-            else:
-                error_response = "Unable to route message, try again later."
+            error_response = format_api_error_message(e, "routing message")
 
             # Send response back
             response = AgentStructuredResponse(

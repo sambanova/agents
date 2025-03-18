@@ -19,6 +19,7 @@ from agent.financial_analysis.financial_analysis_crew import (
 from api.services.redis_service import SecureRedisService
 from config.model_registry import model_registry
 from services.financial_user_prompt_extractor_service import FinancialPromptExtractor
+from utils.error_utils import format_api_error_message
 
 from ..data_types import (
     AgentEnum,
@@ -155,11 +156,7 @@ class FinancialAnalysisAgent(RoutedAgent):
                 f"Failed to process financial analysis request: {str(e)}"
             ), exc_info=True)
 
-            error_message = str(e).lower()
-            if "rate limit exceeded" in error_message or "too many requests" in error_message:
-                error_response = "Rate limit exceeded. Please try again later."
-            else:
-                error_response = "Unable to assist with financial analysis, try again later."
+            error_response = format_api_error_message(e, "financial analysis")
 
             response = AgentStructuredResponse(
                 agent_type=AgentEnum.Error,
