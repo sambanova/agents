@@ -208,7 +208,7 @@ class FinancialAnalysisCrew:
         message_id: str = None,
         verbose: bool = True
     ):
-        competitor_finder_model_info = model_registry.get_model_info(model_key="llama-3.3-70b", provider=provider)
+        competitor_finder_model_info = model_registry.get_model_info(model_key="llama-3.1-8b", provider=provider)
         self.competitor_finder_llm = CustomLLM(
             model=competitor_finder_model_info["crewai_prefix"] + "/" + competitor_finder_model_info["model"],
             temperature=0.0,
