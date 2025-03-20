@@ -78,6 +78,7 @@ function onSelectConversation(conversation) {
   console.log('Parent: Selected conversation', conversation)
   preselectedChat.value = conversation.conversation_id
   router.push(`/${conversation.conversation_id}`)
+  
 }
 
 /** 
@@ -250,10 +251,11 @@ watch(
   (newId, oldId) => {
     if ( newId) {
       preselectedChat.value=newId
-
-
-      loadChats()
+    }else{
+      preselectedChat.value=null
+    
     }
+    loadChats()
     })
 
 </script>

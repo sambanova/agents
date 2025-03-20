@@ -344,11 +344,10 @@ import { decryptKey } from '../../utils/encryption'
 import ErrorModal from '../ErrorModal.vue'
 import { uploadDocument } from '../../services/api'
 import Popover from '@/components/Common/UIComponents/CustomPopover.vue'
-import StatusText from '@/components/Common/StatusText.vue'
+
 import { DocumentArrowUpIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import HorizontalScroll from '@/components/Common/UIComponents/HorizontalScroll.vue'
 import emitterMitt from '@/utils/eventBus.js';
-import { data } from 'autoprefixer'
 import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue'
 
 
@@ -361,7 +360,8 @@ function handleButtonClick(data) {
   eventData.value = data.message;
   
   chatName.value=''
-  createNewChat()
+  // createNewChat()
+  router.push(`/`)
 
 }
 
@@ -1098,7 +1098,9 @@ errorMessage.value=''
     currentId.value = route.params.id; // update currentId from router params
   }
 
-  
+  if(messagesData.value.length===0){
+    chatName.value=searchQuery.value
+  }
 
   completionMetaData.value = null
   // plannerText.value = null
@@ -1133,9 +1135,7 @@ errorMessage.value=''
       console.log("Socket not connected. Connecting...")
       connectWebSocket()
       await waitForSocketOpen()
-      if(messagesData.value.length===0){
-    chatName.value=searchQuery.value
-  }
+     
       socket.value.send(JSON.stringify(messagePayload))
       messagesData.value.push(messagePayload)
       isLoading.value = true
@@ -1150,14 +1150,15 @@ errorMessage.value=''
       isLoading.value = true
       socket.value.send(JSON.stringify(messagePayload))
       messagesData.value.push(messagePayload)
-       chatName.value=searchQuery.value
        searchQuery.value = ''
     } catch (e) {
       console.error("ChatView error", e)
     }
+
+    
   }
 
-   searchQuery.value = ''
+   
 }
 
 function addOrUpdateModel(newData, message_id) {
