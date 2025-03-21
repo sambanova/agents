@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import time
 from typing import Dict, List, Any, Optional
@@ -108,7 +108,7 @@ class UserProxyAgent(RoutedAgent):
                 "user_id": user_id,
                 "conversation_id": conversation_id,
                 "message_id": message.message_id,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
             # Create tasks for Redis operation and WebSocket send

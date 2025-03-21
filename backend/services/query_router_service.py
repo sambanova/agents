@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 from typing import Dict, Any, Optional
 import json
@@ -635,7 +635,7 @@ class QueryRouterServiceChat:
             "user_id": self.user_id,
             "conversation_id": self.conversation_id,
             "message_id": self.message_id,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         await self.websocket_manager.send_message(self.user_id, self.conversation_id, planner_event)
 
@@ -683,7 +683,7 @@ class QueryRouterServiceChat:
             "user_id": self.user_id,
             "conversation_id": self.conversation_id,
             "message_id": self.message_id,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         message_key = f"messages:{self.user_id}:{self.conversation_id}"
         self.redis_client.rpush(message_key, json.dumps(final_message_data), self.user_id)

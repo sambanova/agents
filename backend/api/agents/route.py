@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from collections import deque
 import re
@@ -420,7 +420,7 @@ class SemanticRouterAgent(RoutedAgent):
                 "user_id": user_id,
                 "conversation_id": conversation_id,
                 "message_id": message.message_id,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
             await self.websocket.send_text(json.dumps(planner_event))
@@ -450,7 +450,7 @@ class SemanticRouterAgent(RoutedAgent):
                     "user_id": user_id,
                     "conversation_id": conversation_id,
                     "message_id": message.message_id,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
                 self.redis_client.rpush(message_key, json.dumps(final_message_data), user_id)
                 await self.websocket.send_text(json.dumps(final_message_data))
