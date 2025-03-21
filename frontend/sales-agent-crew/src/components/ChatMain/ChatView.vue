@@ -637,7 +637,9 @@ let workData = msgData.messages
 
   let userMessages = messagesData.value
     .filter(message =>  message.event === "user_message")
-    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+    sort((a, b) => {
+  return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+});
 
     console.log("userMessages",userMessages)
 
