@@ -525,7 +525,7 @@ watch(
     messagesData.value = [];
     agentThoughtsData.value = [];
     searchQuery.value = '';
-    if(newId)
+    
     loadPreviousChat(newId);
   }
   currentId.value = newId;
