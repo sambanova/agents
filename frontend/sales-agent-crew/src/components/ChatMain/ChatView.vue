@@ -31,7 +31,7 @@
       >
         <!-- Title -->
         <div v-if="messagesData.length == 0" class="w-full text-center">
-  <h1 v-if="!isLoading" class="text-3xl font-bold sm:text-4xl">
+  <h1 v-if="!initialLoading" class="text-3xl font-bold sm:text-4xl">
     <span class="bg-clip-text text-primary-brandTextSecondary">Agents</span>
   </h1>
 </div>
@@ -510,6 +510,7 @@ const messages = ref([])
 const draftMessage = ref('')
 const assistantThinking = ref(false)
 const isLoading = ref(false)
+const initialLoading = ref(false)
 const messagesContainer = ref(null)
 
 // Conversation change watcher:
@@ -517,9 +518,8 @@ watch(
   () => route.params.id,
   (newId, oldId) => {
     if ( newId !== oldId) {
-
-
-      isLoading.value=true
+      
+      initialLoading.value=true
       errorMessage.value=''
     completionMetaData.value = null;    
     messagesData.value = [];
@@ -578,6 +578,7 @@ async function loadPreviousChat(convId) {
       }
     )
     isLoading.value = false
+    initialLoading.value = false
     console.log(resp)
     filterChat(resp.data)
     AutoScrollToBottom(true)
@@ -585,6 +586,8 @@ async function loadPreviousChat(convId) {
     console.error('Error creating new chat:', err)
     // alert('Failed to create new conversation. Check keys or console.')
     isLoading.value = false
+    initialLoading.value = false
+
   }
 }
 const currentId = ref(route.params.id || '')
