@@ -1085,7 +1085,7 @@ function waitForSocketOpen(timeout = 5000) {
 
 const  currentMsgId=ref('')
 const addMessage = async () => {
-
+  isLoading.value = true
 errorMessage.value=''
 
   workflowData.value=[]
@@ -1130,6 +1130,7 @@ errorMessage.value=''
     messagePayload.document_ids = [];
   }
   
+  
   if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
     try {
       console.log("Socket not connected. Connecting...")
@@ -1138,7 +1139,7 @@ errorMessage.value=''
      
       socket.value.send(JSON.stringify(messagePayload))
       messagesData.value.push(messagePayload)
-      isLoading.value = true
+      
       console.log('Message sent after connecting:', messagePayload)
     } catch (error) {
       errorMessage.value = 'WebSocket connection error occurred.';
@@ -1153,6 +1154,7 @@ errorMessage.value=''
        searchQuery.value = ''
     } catch (e) {
       console.error("ChatView error", e)
+      isLoading.value = false
     }
 
     
