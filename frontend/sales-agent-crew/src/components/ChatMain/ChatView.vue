@@ -434,6 +434,7 @@ function toggleExpand() {
 function handleKeyDown(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
+    if(!isLoading.value)
     addMessage()
   }
 }
@@ -596,7 +597,9 @@ async function filterChat(msgData) {
   
   messagesData.value = msgData.messages
     .filter(message => message.event === "completion" || message.event === "user_message")
-    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+    .sort((a, b) => {
+  return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+});
 
 
     let plannerData = msgData.messages
