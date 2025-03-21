@@ -592,6 +592,8 @@ const completionMetaData = ref(null)
 const agentThoughtsData = ref([])
 
 async function filterChat(msgData) {
+
+  
   messagesData.value = msgData.messages
     .filter(message => message.event === "completion" || message.event === "user_message")
     .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
@@ -630,8 +632,14 @@ let workData = msgData.messages
 
 
 
-  if(messagesData?.value[0]?.data){
-    chatName.value=messagesData.value[0].data
+  let userMessages = messagesData.value
+    .filter(message =>  message.event === "user_message")
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+
+    console.log("userMessages",userMessages)
+
+  if(userMessages[0].data){
+    chatName.value=userMessages[0].data
   }
 
   AutoScrollToBottom()
