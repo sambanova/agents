@@ -518,12 +518,14 @@ watch(
   (newId, oldId) => {
     if ( newId !== oldId) {
 
+
+      isLoading.value=true
       errorMessage.value=''
-    completionMetaData.value = null;
-    isLoading.value = false;
+    completionMetaData.value = null;    
     messagesData.value = [];
     agentThoughtsData.value = [];
     searchQuery.value = '';
+    if(newId)
     loadPreviousChat(newId);
   }
   currentId.value = newId;
@@ -581,7 +583,7 @@ async function loadPreviousChat(convId) {
     AutoScrollToBottom(true)
   } catch (err) {
     console.error('Error creating new chat:', err)
-    alert('Failed to create new conversation. Check keys or console.')
+    // alert('Failed to create new conversation. Check keys or console.')
     isLoading.value = false
   }
 }
@@ -597,9 +599,8 @@ async function filterChat(msgData) {
   
   messagesData.value = msgData.messages
     .filter(message => message.event === "completion" || message.event === "user_message")
-    .sort((a, b) => {
-  return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
-});
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+
 
 
     let plannerData = msgData.messages
@@ -621,7 +622,7 @@ let workData = msgData.messages
 
   agentThoughtsData.value = msgData.messages
     .filter(message => message.event === "think")
-    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     .reduce((acc, message) => {
       try {
         const parsed = JSON.parse(message.data)
@@ -637,9 +638,7 @@ let workData = msgData.messages
 
   let userMessages = messagesData.value
     .filter(message =>  message.event === "user_message")
-    sort((a, b) => {
-  return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
-});
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
 
     console.log("userMessages",userMessages)
 
@@ -1145,6 +1144,8 @@ errorMessage.value=''
   
   
   if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
+
+    
     try {
       console.log("Socket not connected. Connecting...")
       connectWebSocket()
@@ -1253,9 +1254,10 @@ async function connectWebSocket() {
             }
           } catch (error) {
             console.log("completionMetaData.value",error)
+            isLoading.value = false
           }
           messagesData.value.push(receivedData)
-          isLoading.value = false
+          
           
         }
         else if(receivedData.event==="think"){
@@ -1272,6 +1274,7 @@ async function connectWebSocket() {
 
           } catch(e){
             console.log("model error",e)
+            isLoading.value = false
           }
         }
         else if(receivedData.event==="planner_chunk"){
@@ -1300,6 +1303,7 @@ async function connectWebSocket() {
     }
     socket.value.onclose = () => {
       console.log('WebSocket closed, attempting to reconnect...')
+      isLoading.value = false
     }
   } catch (error) {
     console.error('WebSocket connection error:', error)
