@@ -434,7 +434,7 @@ function toggleExpand() {
 function handleKeyDown(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
-    if(!isLoading.value)
+    
     addMessage()
   }
 }
@@ -577,7 +577,7 @@ async function loadPreviousChat(convId) {
         }
       }
     )
-    isLoading.value = false
+    
     initialLoading.value = false
     console.log(resp)
     filterChat(resp.data)
@@ -1260,7 +1260,7 @@ async function connectWebSocket() {
             isLoading.value = false
           }
           messagesData.value.push(receivedData)
-          
+          isLoading.value = false
           
         }
         else if(receivedData.event==="think"){
