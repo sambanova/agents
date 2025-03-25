@@ -5,7 +5,6 @@ metadata:
   name: {{ .Values.ingress.name }}
   namespace: {{ .Values.global.namespace }}
   annotations:
-    kubernetes.io/ingress.class: {{ .Values.ingress.className | quote }}
     {{- range $key, $value := .Values.ingress.annotations }}
     {{ $key }}: {{ $value | quote }}
     {{- end }}
@@ -20,6 +19,7 @@ metadata:
     {{- end }}
     {{- end }}
 spec:
+  ingressClassName: {{ .Values.ingress.className | quote }}
   tls:
   - hosts:
     - {{ .Values.ingress.host }}
