@@ -200,7 +200,7 @@
                     <!-- Attach Button -->
                     <button
                       @click="$refs.fileInput.click()"
-                      :disabled="isLoading"
+                      :disabled="isLoading || isUploading"
                       type="button"
                       class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
                     >
