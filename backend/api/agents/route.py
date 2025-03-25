@@ -233,7 +233,7 @@ class SemanticRouterAgent(RoutedAgent):
                                    - Include the overall summary of the conversation.
                                    """, source="system")]
                     + list(history)
-                    + [UserMessage(content="Summarize the messages so far in a few sentences including your responses. Focus on including the topis", source="user")]
+                    + [UserMessage(content="Summarize the messages so far in a few sentences including your responses. Focus on including the topics", source="user")]
                 )
                 context_summary = model_response.content
                 end_time = time.time()
