@@ -104,7 +104,7 @@ class CompanyIntelligenceService:
                 "funding_stage": funding_stage or ""
             },
             "total_companies": len(companies),
-            "generated_at": datetime.now(datetime.UTC).isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat()
         }
         return output
 
