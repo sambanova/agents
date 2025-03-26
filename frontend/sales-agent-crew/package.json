@@ -1,6 +1,6 @@
 {
-  "name": "sales-agent-crew",
-  "version": "0.0.0",
+  "name": "agents-demo-app",
+  "version": "0.0.36",
   "private": true,
   "type": "module",
   "scripts": {
