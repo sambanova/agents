@@ -1,4 +1,3 @@
-<!-- src/components/chat/ChatView.vue -->
 <template>
   <div class="relative h-full w-full">
     <!-- Content -->
@@ -14,7 +13,7 @@
         <div class="flex items-center justify-between">
           <!-- Left text -->
           <div
-            class="text-[16px] w-80 font-medium text-gray-800 line-clamp-1 overflow-hidden"
+            class="text-[16px] font-medium text-gray-800 line-clamp-1 overflow-hidden"
           >
             {{ chatName }}
           </div>
@@ -419,7 +418,7 @@ import { useAuth } from '@clerk/vue';
 import { decryptKey } from '../../utils/encryption';
 import ErrorModal from '../ErrorModal.vue';
 import { uploadDocument } from '../../services/api';
-import Popover from '@/components/Common/UIComponents/CustomPopover.vue';
+import Popover from '@/components/Common/UIComponents/CustomTooltip.vue';
 
 import { DocumentArrowUpIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 import HorizontalScroll from '@/components/Common/UIComponents/HorizontalScroll.vue';
@@ -1292,8 +1291,6 @@ function addOrUpdateModel(newData, message_id) {
       count: 1,
       message_id: idToUse,
     });
-
-    console.log(workflowData.value);
   }
 }
 
