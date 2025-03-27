@@ -22,6 +22,7 @@
         :is="chatMode ? chatSidebarComp : sideBarComp"
         @selectReport="handleSavedReportSelect"
         @selectConversation="handleSelectConversation"
+        @new-chat="handleNewChat"
         ref="chatSideBarRef"
       />
 
@@ -137,13 +138,22 @@
         :runId="currentRunId"
         :agentData="agentData"
         :metadata="metadata"
+        ref="chatAgentSidebarRef"
       />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch, onBeforeUnmount, provide } from 'vue';
+import {
+  ref,
+  onMounted,
+  onUnmounted,
+  computed,
+  watch,
+  onBeforeUnmount,
+  provide,
+} from 'vue';
 import { useUser } from '@clerk/vue';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -164,6 +174,7 @@ import ErrorModal from '@/components/ErrorModal.vue';
 import FullReportModal from '@/components/FullReportModal.vue';
 import ChatAgentSidebar from '@/components/ChatMain/ChatAgentSidebar.vue';
 import { useReportStore } from '@/stores/reportStore';
+import emitterMitt from '@/utils/eventBus.js';
 
 // Create a reactive property for the selected option.
 const selectedOption = ref({ label: 'SambaNova', value: 'sambanova' });
@@ -171,13 +182,6 @@ const selectedOption = ref({ label: 'SambaNova', value: 'sambanova' });
 // Provide the state so that descendant components can access it.
 provide('selectedOption', selectedOption);
 
-// PROPS
-// const props = defineProps({
-//   agentData: {
-//     type: Array,
-//     default: () => []
-//   }
-// })
 // *** Important *** We'll define local refs for the two components we want:
 const sideBarComp = Sidebar;
 const chatSidebarComp = ChatSidebar;
@@ -225,6 +229,10 @@ const metadataChanged = (metaData) => {
   metadata.value = metaData;
 };
 
+const handleNewChat = () => {
+  agentData.value = [];
+};
+
 const agentThoughtsDataChanged = (agentThoughtsData) => {
   agentData.value = agentThoughtsData;
 
@@ -240,10 +248,18 @@ const currentRunId = ref('');
 // The sessionId that remains consistent for document uploads and searches
 const sessionId = ref('');
 
-// On mount, generate a new session ID
 onMounted(() => {
+  // Generate a new session ID
   sessionId.value = uuidv4();
   reportStore.loadSavedReports();
+
+  // Listen for new chat events
+  emitterMitt.on('new-chat', handleNewChat);
+});
+
+onUnmounted(() => {
+  // Remove the listener
+  emitterMitt.off('new-chat', handleNewChat);
 });
 
 // Called by Header => user updated keys

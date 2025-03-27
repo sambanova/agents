@@ -71,8 +71,7 @@
 </template>
 
 <script setup>
-import { computed, ref, h, defineComponent, watch } from 'vue';
-import CorrectIcon from '@/components/icons/CorrectIcon.vue';
+import { computed, ref } from 'vue';
 import TimelineCollapsibleContent from '@/components/ChatMain/TimelineCollapsibleContent.vue';
 import SearchIcon from '@/components/icons/SearchIcon.vue';
 import TechIcon from '@/components/icons/TechIcon.vue';
@@ -84,10 +83,10 @@ import RiskIcon from '@/components/icons/RiskIcon.vue';
 import TrendsIcon from '@/components/icons/TrendsIcon.vue';
 import DefaultIcon from '@/components/icons/DefaultIcon.vue';
 import FundamentalIcon from '@/components/icons/FundamentalIcon.vue';
+import ResearchIcon from '@/components/icons/ResearchIcon.vue';
 import FinanceIcon from '@/components/icons/FinanceIcon.vue';
 import AggregatorIcon from '@/components/icons/AggregatorIcon.vue';
 import EnhancedCompetitorIcon from '@/components/icons/EnhancedCompetitorIcon.vue';
-import RecursiveDisplay from './RecursiveDisplay.vue';
 import { marked } from 'marked';
 
 const formattedDuration = (duration) => {
@@ -118,70 +117,33 @@ const props = defineProps({
 });
 
 // -------------------------------------------------------------------
-// Timeline UI - Icon Container Classes
-// -------------------------------------------------------------------
-const iconContainerClasses = computed(() => {
-  let base =
-    "relative after:content-[''] after:absolute after:top-8 after:bottom-2 after:start-3 after:w-px after:-translate-x-[0.5px] after:bg-gray-200 ";
-  if (props.isLast) {
-    base += ' after:hidden';
-  }
-  return base;
-});
-
-function isObject(val) {
-  return val !== null && typeof val === 'object';
-}
-// -------------------------------------------------------------------
 // Helper Function: Return a Random Icon Based on Agent Name
 // -------------------------------------------------------------------
 function getAgentIcon(agentName) {
-  console.log('getAgentIcon called for agentName:', agentName);
   const agentIcons = {
-    'Competitor Analysis Agent': CompetitorIcon,
-    'Financial Analysis Agent': FinanceIcon,
-    'Enhanced Competitor Finder Agent': EnhancedCompetitorIcon,
     'Aggregator Agent': AggregatorIcon,
     'Aggregator Search Agent': AggregatorIcon,
-    'Fundamental Agent': FundamentalIcon,
-    'News Agent': NewsIcon,
-    'Technical Agent': TechIcon,
-    'Financial Analysis Agent': SearchIcon,
-    'Research Agent': SearchIcon,
-    'Risk Agent': RiskIcon,
-    'Outreach Specialist': SpecialistIcon,
+    'Competitor Analysis Agent': CompetitorIcon,
     'Data Extraction Agent': DataIcon,
+    'Enhanced Competitor Finder Agent': EnhancedCompetitorIcon,
+    'Financial Analysis Agent': FinanceIcon,
+    'Financial News Agent': SearchIcon, // magnifying glass
+    'Fundamental Analysis Agent': FundamentalIcon,
     'Market Trends Analyst': TrendsIcon,
+    'News Agent': NewsIcon,
+    'Research Agent': ResearchIcon,
+    'Risk Assessment Agent': RiskIcon,
+    'Technical News Agent': TechIcon, // magnifying glass
+    'Outreach Specialist': SpecialistIcon,
   };
   const icon = agentIcons[agentName] || DefaultIcon;
+  console.log('getAgentIcon called for agentName:', agentName, icon);
 
   return icon;
 }
 
 // Compute the icon component for this timeline item based on data.agent_name
 const iconComponent = computed(() => getAgentIcon(props.data.agent_name));
-
-// -------------------------------------------------------------------
-// Text Parsing Helpers
-// -------------------------------------------------------------------
-
-/**
- * Checks if a heading is primary.
- * For this example, only "Thought" and "Final Answer" (case-insensitive) are primary.
- */
-function isPrimaryHeading(title) {
-  if (!title) return false;
-  const lower = title.toLowerCase();
-  return lower === 'thought' || lower === 'final answer';
-}
-
-/**
- * Process section content.
- * Replace newline characters with <br> tags.
- */
-function formatContent(content) {
-  return content.replace(/\n/g, '<br/>');
-}
 
 /**
  * Parse props.data.text into sections.

@@ -257,15 +257,19 @@
                       <svg
                         v-if="!isRecording"
                         class="shrink-0"
-                        width="34"
-                        height="34"
-                        viewBox="0 0 34 34"
+                        width="24"
+                        height="20"
+                        viewBox="0 0 24 24"
                         fill="none"
+                        stroke="#667085"
+                        stroke-width="2"
                         xmlns="http://www.w3.org/2000/svg"
                       >
                         <path
-                          d="M17 8C12.03 8 8 12.03 8 17V24C8 25.1 8.9 26 10 26H14V18H10V17C10 13.13 13.13 10 17 10C20.87 10 24 13.13 24 17V18H20V26H24C25.1 26 26 25.1 26 24V17C26 12.03 21.97 8 17 8ZM12 20V24H10V20H12ZM24 24H22V20H24V24Z"
-                          fill="#667085"
+                          d="M12 2c-1.7 0-3 1.2-3 2.6v6.8c0 1.4 1.3 2.6 3 2.6s3-1.2 3-2.6V4.6C15 3.2 13.7 2 12 2z"
+                        />
+                        <path
+                          d="M19 10v1a7 7 0 0 1-14 0v-1M12 18.4v3.3M8 22h8"
                         />
                       </svg>
 
@@ -407,7 +411,6 @@ import {
 import { marked } from 'marked';
 import hljs from 'highlight.js';
 import { useRoute, useRouter } from 'vue-router';
-import SILogo from '@/components/icons/SILogo.vue';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import ChatBubble from '@/components/ChatMain/ChatBubble.vue';
@@ -416,11 +419,9 @@ const router = useRouter();
 const route = useRoute();
 import { useAuth } from '@clerk/vue';
 import { decryptKey } from '../../utils/encryption';
-import ErrorModal from '../ErrorModal.vue';
-import { uploadDocument } from '../../services/api';
 import Popover from '@/components/Common/UIComponents/CustomTooltip.vue';
 
-import { DocumentArrowUpIcon, XMarkIcon } from '@heroicons/vue/24/outline';
+import { XMarkIcon } from '@heroicons/vue/24/outline';
 import HorizontalScroll from '@/components/Common/UIComponents/HorizontalScroll.vue';
 import emitterMitt from '@/utils/eventBus.js';
 import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue';
@@ -429,11 +430,11 @@ import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.v
 const selectedOption = inject('selectedOption');
 const eventData = ref(null);
 function handleButtonClick(data) {
+  console.log('CREATE3');
   eventData.value = data.message;
 
   chatName.value = '';
-  // createNewChat()
-  router.push(`/`);
+  router.push('/');
 }
 
 async function genPDF() {
@@ -458,6 +459,7 @@ async function genPDF() {
 }
 
 async function createNewChat() {
+  console.log('CREATE2');
   selectedDocuments.value = [];
 
   try {
@@ -679,14 +681,12 @@ async function filterChat(msgData) {
     (message) => message.event === 'planner'
   );
   plannerData.forEach((planner) => {
-    console.log('planner', planner.message_id, JSON.parse(planner.data));
     addOrUpdateModel(JSON.parse(planner.data).metadata, planner.message_id);
   });
   let workData = msgData.messages.filter(
     (message) => message.event === 'think'
   );
   workData.forEach((work) => {
-    console.log('work', work.message_id, JSON.parse(work.data));
     addOrUpdateModel(JSON.parse(work.data).metadata, work.message_id);
   });
 
