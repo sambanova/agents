@@ -8,7 +8,7 @@
   >
     <div class="flex items-center border-b border-primary-brandFrame">
       <button
-        :class="collapsed ? 'w-full h-[36px] mx-auto' : ''"
+        :class="collapsed ? 'w-100 h-[36px] mx-auto' : ''"
         class="p-2 border-primary-brandFrame border flex items-center justify-between text-center hover:bg-primary-brandGray text-primary-bodyText rounded text-sm"
         @click="collapsed = !collapsed"
         :title="collapsed ? 'Expand' : 'Collapse'"
@@ -55,7 +55,7 @@
       <span v-if="!collapsed" class="ml-2">Agent Reasoning</span>
     </div>
 
-    <div class="ml-3 overflow-y-auto overflow-x-hidden">
+    <div class="ml-2 overflow-y-auto">
       <ol class="relative pl-2">
         <TimelineItem
           v-for="(thought, index) in agentThoughtsData"

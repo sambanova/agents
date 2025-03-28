@@ -1,4 +1,3 @@
-<!-- src/views/MainLayout.vue -->
 <template>
   <!-- Outer container uses flex so the sidebar, main area, and agent sidebar appear side-by-side -->
   <div
@@ -18,12 +17,13 @@
       <!-- If chatMode => <ChatSidebar>, else => <Sidebar>. 
          We reference them with JS variables chatSidebarComp, sideBarComp 
          so we do <component :is="chatSidebarComp" />. -->
+      <!-- TODO: Are we keeping this? -->
       <component
+        ref="chatSideBarRef"
         :is="chatMode ? chatSidebarComp : sideBarComp"
         @selectReport="handleSavedReportSelect"
         @selectConversation="handleSelectConversation"
         @new-chat="handleNewChat"
-        ref="chatSideBarRef"
       />
 
       <!-- MAIN CONTENT WRAPPER -->

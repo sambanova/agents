@@ -41,14 +41,13 @@
       >
         <!-- Title -->
         <div v-if="messagesData.length == 0" class="w-full text-center">
-          <h1 v-if="!initialLoading" class="text-3xl font-bold sm:text-4xl">
-            <span class="bg-clip-text text-primary-brandTextSecondary"
-              >Agents</span
-            >
+          <h1 v-if="!initialLoading" class="text-2xl font-bold sm:text-3xl">
+            <span class="bg-clip-text text-primary-brandTextSecondary">
+              What can I help you with?
+            </span>
           </h1>
         </div>
         <!-- End Title -->
-        <!-- <ul class="mt-16  max-w-4xl w-full mx-auto space-y-5"> -->
         <transition-group
           name="chat"
           tag="ul"
@@ -186,7 +185,7 @@
                 type="search"
                 placeholder="Ask me about...companies to target, research topics, or company stocks and financials"
                 :disabled="isLoading"
-                class="p-4 pb-12 block w-full bg-primary-brandFrame border-primary-brandFrame rounded-lg text-sm focus:outline-none active:outline-none border focus:border-primary-brandColor disabled:opacity-50 disabled:pointer-events-none"
+                class="p-4 pb-12 block min-h-[106px] w-full bg-primary-brandFrame border-primary-brandFrame rounded-lg text-sm focus:outline-none active:outline-none border focus:border-primary-brandColor disabled:opacity-50 disabled:pointer-events-none resize-y"
               ></textarea>
 
               <!-- Toolbar -->
@@ -294,7 +293,7 @@
                   <!-- Button Group -->
                   <div class="flex items-center gap-x-1">
                     <!-- Mic Button -->
-                    <Popover
+                    <Tooltip
                       text="Use voice mode"
                       position="top"
                       color="bg-black text-white"
@@ -343,7 +342,7 @@
                           />
                         </svg>
                       </button>
-                    </Popover>
+                    </Tooltip>
                     <!-- End Mic Button -->
                     <!-- Send Button -->
                     <button
@@ -419,7 +418,7 @@ const router = useRouter();
 const route = useRoute();
 import { useAuth } from '@clerk/vue';
 import { decryptKey } from '../../utils/encryption';
-import Popover from '@/components/Common/UIComponents/CustomTooltip.vue';
+import Tooltip from '@/components/Common/UIComponents/CustomTooltip.vue';
 
 import { XMarkIcon } from '@heroicons/vue/24/outline';
 import HorizontalScroll from '@/components/Common/UIComponents/HorizontalScroll.vue';

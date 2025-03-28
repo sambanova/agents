@@ -40,14 +40,14 @@
 
 <script setup>
 import { ref, watch, onMounted, computed } from 'vue';
-
-import { useAuth } from '@clerk/vue';
-import { decryptKey } from '@/utils/encryption'; // adapt path if needed
 import { useRoute, useRouter } from 'vue-router';
-import SILogo from '@/components/icons/SILogo.vue';
+import axios from 'axios';
+import { useAuth } from '@clerk/vue';
+
+import { decryptKey } from '@/utils/encryption'; // adapt path if needed
 import emitterMitt from '@/utils/eventBus.js';
 import ChatList from '@/components/ChatMain/ChatList.vue';
-import axios from 'axios';
+
 const router = useRouter();
 const route = useRoute();
 /**
@@ -127,13 +127,6 @@ async function loadKeys(missingKeysListData) {
   }
 }
 
-const missingKeys = computed(() => {
-  const missing = [];
-  if (!sambanovaKey.value) missing.push('SambaNova');
-  if (!serperKey.value) missing.push('Serper');
-  if (!exaKey.value) missing.push('Exa');
-  return missing;
-});
 defineExpose({ loadChats });
 const missingKeysArray = computed(() => {
   if (!missingKeysList.value || typeof missingKeysList.value !== 'object')
@@ -142,9 +135,9 @@ const missingKeysArray = computed(() => {
     (key) => missingKeysList.value[key]
   );
 });
+
 async function loadChats() {
   try {
-    const uid = userId.value || 'anonymous';
     const resp = await axios.get(`${import.meta.env.VITE_API_URL}/chat/list`, {
       headers: {
         Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
@@ -157,28 +150,6 @@ async function loadChats() {
     console.error('Error creating new chat:', err);
     alert('Failed to create new conversation. Check keys or console.');
   }
-}
-
-function loadConversations() {
-  try {
-    const uid = userId.value || 'anonymous';
-    const dataStr = localStorage.getItem(`my_conversations_${uid}`);
-    if (!dataStr) {
-      conversations.value = [];
-      return;
-    }
-    conversations.value = JSON.parse(dataStr);
-  } catch {
-    conversations.value = [];
-  }
-}
-
-function saveConversations() {
-  const uid = userId.value || 'anonymous';
-  localStorage.setItem(
-    `my_conversations_${uid}`,
-    JSON.stringify(conversations.value)
-  );
 }
 
 /** Start a new conversation => calls /chat/init with decrypted keys */
