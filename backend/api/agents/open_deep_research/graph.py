@@ -55,6 +55,11 @@ from api.data_types import (
     DeepCitation
 )
 
+from langchain.output_parsers import (
+    OutputFixingParser,
+    PydanticOutputParser,
+)
+
 from utils.logging import logger
 
 class UsageCallback(BaseCallbackHandler):
@@ -278,7 +283,7 @@ async def generate_report_plan(writer_model, planner_model, state: ReportState, 
     if isinstance(report_structure, dict):
         report_structure = str(report_structure)
 
-    structured_llm = writer_model.with_structured_output(Queries)
+    structured_llm = writer_model | OutputFixingParser.from_llm(llm=writer_model, parser=PydanticOutputParser(pydantic_object=Queries))
     
     system_instructions_query = report_planner_query_writer_instructions.format(
         topic=topic,
@@ -326,7 +331,8 @@ async def generate_report_plan(writer_model, planner_model, state: ReportState, 
         feedback=feedback
     )
 
-    structured_llm = planner_model.with_structured_output(Sections)
+    structured_llm = planner_model | OutputFixingParser.from_llm(llm=planner_model, parser=PydanticOutputParser(pydantic_object=Sections))
+
     llm_config_sections = RunnableConfig(callbacks=[usage_handler_report_planner], tags=["report_planning"])
     
     report_sections = invoke_llm_with_tracking(
@@ -376,7 +382,8 @@ def generate_queries(writer_model, state: SectionState, config: RunnableConfig):
 
     logger.info(logger.format_message(session_id, f"Generating queries for section: {sec.name}"))
 
-    structured_llm = writer_model.with_structured_output(Queries)
+    structured_llm = writer_model | OutputFixingParser.from_llm(llm=writer_model, parser=PydanticOutputParser(pydantic_object=Queries))
+
     sys_inst = query_writer_instructions.format(
         section_topic=sec.description,
         number_of_queries=configurable.number_of_queries
@@ -553,7 +560,8 @@ def write_section(
         section_topic=sec.description, section=sec.content
     )
     llm_config_section_grading = RunnableConfig(callbacks=[usage_handler_section_grading], tags=["section_grading"])
-    structured_llm = writer_model.with_structured_output(Feedback)
+
+    structured_llm = writer_model | OutputFixingParser.from_llm(llm=writer_model, parser=PydanticOutputParser(pydantic_object=Feedback))
 
     fb = invoke_llm_with_tracking(
         llm=structured_llm,
