@@ -248,6 +248,8 @@ const currentRunId = ref('');
 // The sessionId that remains consistent for document uploads and searches
 const sessionId = ref('');
 
+const mixpanel = inject('mixpanel');
+
 onMounted(() => {
   // Generate a new session ID
   sessionId.value = uuidv4();
@@ -255,6 +257,12 @@ onMounted(() => {
 
   // Listen for new chat events
   emitterMitt.on('new-chat', handleNewChat);
+
+  if (mixpanel) {
+    mixpanel.track('Login');
+  } else {
+    console.log('Mixpanel not available');
+  }
 });
 
 onUnmounted(() => {

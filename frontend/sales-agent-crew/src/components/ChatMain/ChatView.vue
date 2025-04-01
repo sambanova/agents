@@ -429,7 +429,16 @@ import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.v
 // Inject the shared selectedOption from MainLayout.vue.
 const selectedOption = inject('selectedOption');
 const eventData = ref(null);
+const mixpanel = inject('mixpanel');
+
 function handleButtonClick(data) {
+  if (mixpanel) {
+    mixpanel.track('Create new chat', {
+      chatName: data.message,
+    });
+  } else {
+    console.log('Mixpanel not available');
+  }
   eventData.value = data.message;
 
   chatName.value = '';

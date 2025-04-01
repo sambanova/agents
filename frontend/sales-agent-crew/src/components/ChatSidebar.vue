@@ -183,7 +183,6 @@ function saveConversations() {
 
 /** Start a new conversation => calls /chat/init with decrypted keys */
 async function createNewChat() {
-  console.log('CREATE1');
   emitterMitt.emit('new-chat', { message: 'The new chat button was clicked!' });
 }
 
