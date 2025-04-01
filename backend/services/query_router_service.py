@@ -569,7 +569,7 @@ class QueryRouterServiceChat:
         """
         Resolve the model name to the correct model name.
         """
-        if provider == "fireworks" and model_name == "llama-3.1-tulu-3-405b":
+        if provider == "fireworks" and model_name == "llama-3.1-405b":
             return "llama-3.1-405b"
         return model_name
 
@@ -772,6 +772,7 @@ class QueryRouterServiceChat:
         system_message = f"""
         You are a query routing expert that categorizes queries and extracts structured information.
         To decide on the route take into account the user's query and the context summary.
+        Make sure to keep using the language that the user uses (e.g. spanish, german, english, italian, french, portuguese, arabic, japanese).
 
         User query: "{query}"
 
@@ -956,6 +957,7 @@ class QueryRouterServiceChat:
            - Provide 'query' (the user's full query)
         5. For 'user_proxy':
            - Provide 'agent_question' (the question that requires a response from the user)
+           - Always use 'agent_question' as shown in the previous example.
 
         Return ONLY JSON with 'type' and 'parameters'. Your job depends on it. 
         """
