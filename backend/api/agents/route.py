@@ -231,6 +231,7 @@ class SemanticRouterAgent(RoutedAgent):
                                    - Include the summary of the questions asked by the user.
                                    - Include the summary of the responses provided by the assistant.
                                    - Include the overall summary of the conversation.
+                                   - Make sure to keep using the language that the user uses (e.g. spanish, german, english, italian, french, portuguese, arabic, japanese).
                                    """, source="system")]
                     + list(history)
                     + [UserMessage(content="Summarize the messages so far in a few sentences including your responses. Focus on including the topics", source="user")]

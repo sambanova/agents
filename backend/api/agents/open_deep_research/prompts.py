@@ -58,6 +58,8 @@ Here is context to use to plan the sections of the report:
 Here is feedback on the report structure from review (if any):
 {feedback}
 </Feedback>
+
+Make sure to give your answer in the same language as the topic input (e.g. spanish, german, english, italian, french, portuguese, arabic, japanese).
 """
 
 # Query writer instructions
