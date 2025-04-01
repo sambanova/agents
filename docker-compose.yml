@@ -27,6 +27,7 @@ services:
       # The environment below so the backend can find Redis in Docker:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+    command: sh -c "uvicorn api.lead_generation_api:create_app --host 0.0.0.0 --port 8000 --workers 1 --reload"
 
   frontend:
     build:
