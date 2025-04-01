@@ -112,9 +112,9 @@
               <!-- Collapsible header -->
               <button
                 @click="toggleExpand"
-                class="flex items-center justify-between focus:outline-none"
+                class="flex items-center justify-between focus:outline-none mb-2"
               >
-                <h3 class="text-sm font-medium text-gray-700 mb-2">
+                <h3 class="text-sm font-medium text-gray-700">
                   Uploaded Documents ({{ uploadedDocuments.length }})
                 </h3>
                 <svg
@@ -1246,8 +1246,6 @@ const addMessage = async () => {
       socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
 
-      // Unselect documents after response.
-      selectedDocuments.value = [];
       console.log('Message sent after connecting:', messagePayload);
     } catch (error) {
       errorMessage.value = 'WebSocket connection error occurred.';
@@ -1260,9 +1258,6 @@ const addMessage = async () => {
       socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
       searchQuery.value = '';
-
-      // Unselect documents after response.
-      selectedDocuments.value = [];
     } catch (e) {
       console.error('ChatView error', e);
       isLoading.value = false;
