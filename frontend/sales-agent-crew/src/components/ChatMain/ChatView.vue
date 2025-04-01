@@ -112,9 +112,9 @@
               <!-- Collapsible header -->
               <button
                 @click="toggleExpand"
-                class="flex items-center justify-between focus:outline-none"
+                class="flex items-center justify-between focus:outline-none mb-2"
               >
-                <h3 class="text-sm font-medium text-gray-700 mb-2">
+                <h3 class="text-sm font-medium text-gray-700">
                   Uploaded Documents ({{ uploadedDocuments.length }})
                 </h3>
                 <svg
@@ -430,7 +430,6 @@ import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.v
 const selectedOption = inject('selectedOption');
 const eventData = ref(null);
 function handleButtonClick(data) {
-  console.log('CREATE3');
   eventData.value = data.message;
 
   chatName.value = '';
@@ -459,9 +458,6 @@ async function genPDF() {
 }
 
 async function createNewChat() {
-  console.log('CREATE2');
-  selectedDocuments.value = [];
-
   try {
     const resp = await axios.post(
       `${import.meta.env.VITE_API_URL}/chat/init`,
@@ -479,8 +475,6 @@ async function createNewChat() {
     errorMessage.value =
       'Failed to create new conversation. Check keys or console.';
     isLoading.value = false;
-
-    // alert('Failed to create new conversation. Check keys or console.')
   }
 }
 
