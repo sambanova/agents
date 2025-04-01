@@ -430,7 +430,6 @@ import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.v
 const selectedOption = inject('selectedOption');
 const eventData = ref(null);
 function handleButtonClick(data) {
-  console.log('CREATE3');
   eventData.value = data.message;
 
   chatName.value = '';
@@ -459,9 +458,6 @@ async function genPDF() {
 }
 
 async function createNewChat() {
-  console.log('CREATE2');
-  selectedDocuments.value = [];
-
   try {
     const resp = await axios.post(
       `${import.meta.env.VITE_API_URL}/chat/init`,
@@ -479,8 +475,6 @@ async function createNewChat() {
     errorMessage.value =
       'Failed to create new conversation. Check keys or console.';
     isLoading.value = false;
-
-    // alert('Failed to create new conversation. Check keys or console.')
   }
 }
 
@@ -1252,6 +1246,8 @@ const addMessage = async () => {
       socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
 
+      // Unselect documents after response.
+      selectedDocuments.value = [];
       console.log('Message sent after connecting:', messagePayload);
     } catch (error) {
       errorMessage.value = 'WebSocket connection error occurred.';
@@ -1264,6 +1260,9 @@ const addMessage = async () => {
       socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
       searchQuery.value = '';
+
+      // Unselect documents after response.
+      selectedDocuments.value = [];
     } catch (e) {
       console.error('ChatView error', e);
       isLoading.value = false;
