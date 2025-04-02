@@ -1,9 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{vue,js,ts,jsx,tsx}",
-  ],
+  content: ['./index.html', './src/**/*.{vue,js,ts,jsx,tsx}'],
   theme: {
     extend: {
       colors: {
@@ -18,28 +15,25 @@ export default {
           700: '#bd4614',
           800: '#983a15',
           900: '#7c3114',
-          brandGray:"#F2F4F7",
-         brandDarkGray: "#F2F4F7",
-         brandAvatarGray:"#98A2B3",
-         bodyText:"#101828",
-         brandTextSecondary:"#667085",
-         brandTextPrimary:"#101828",
-         brandBorder:"#EE762480",
-         brandColor:"#EE7624",
-         brandPrimaryColor:"#EE7624",
-         bodyBg:"#f9fafb",
-         brandPlaceholder:"#98A2B3",
-         brandFrame:"#EAECF0",
-         timeLine:"#D0D5DD",
-        
-         
-        }
-      }
+          brandGray: '#F2F4F7',
+          brandDarkGray: '#F2F4F7',
+          brandAvatarGray: '#98A2B3',
+          bodyText: '#101828',
+          brandTextSecondary: '#667085',
+          brandTextPrimary: '#101828',
+          brandBorder: '#EE762480',
+          brandColor: '#EE7624',
+          brandPrimaryColor: '#EE7624',
+          bodyBg: '#f9fafb',
+          brandPlaceholder: '#98A2B3',
+          brandFrame: '#EAECF0',
+          timeLine: '#D0D5DD',
+        },
+      },
     },
   },
   plugins: [
     require('tailwind-scrollbar')({ nocompatible: true }),
     require('@tailwindcss/typography'),
-    
   ],
-}
+};

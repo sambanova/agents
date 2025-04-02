@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Literal, List, Optional, Tuple, Any, Callable
 import os
 import re
+import requests
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langgraph.checkpoint.memory import MemorySaver
@@ -21,6 +22,7 @@ from langgraph.graph import START, END, StateGraph
 from langgraph.types import interrupt, Command
 from api.services.redis_service import SecureRedisService
 
+from utils.custom_sambanova import CustomChatSambaNovaCloud
 from config.model_registry import model_registry
 
 # We import our data models from the api module
@@ -51,6 +53,11 @@ from api.data_types import (
     DeepResearchReport,
     DeepResearchSection,
     DeepCitation
+)
+
+from langchain.output_parsers import (
+    OutputFixingParser,
+    PydanticOutputParser,
 )
 
 from utils.logging import logger
@@ -276,7 +283,7 @@ async def generate_report_plan(writer_model, planner_model, state: ReportState, 
     if isinstance(report_structure, dict):
         report_structure = str(report_structure)
 
-    structured_llm = writer_model.with_structured_output(Queries)
+    structured_llm = writer_model | OutputFixingParser.from_llm(llm=writer_model, parser=PydanticOutputParser(pydantic_object=Queries))
     
     system_instructions_query = report_planner_query_writer_instructions.format(
         topic=topic,
@@ -324,7 +331,8 @@ async def generate_report_plan(writer_model, planner_model, state: ReportState, 
         feedback=feedback
     )
 
-    structured_llm = planner_model.with_structured_output(Sections)
+    structured_llm = planner_model | OutputFixingParser.from_llm(llm=planner_model, parser=PydanticOutputParser(pydantic_object=Sections))
+
     llm_config_sections = RunnableConfig(callbacks=[usage_handler_report_planner], tags=["report_planning"])
     
     report_sections = invoke_llm_with_tracking(
@@ -374,14 +382,16 @@ def generate_queries(writer_model, state: SectionState, config: RunnableConfig):
 
     logger.info(logger.format_message(session_id, f"Generating queries for section: {sec.name}"))
 
-    structured_llm = writer_model.with_structured_output(Queries)
+    structured_llm = writer_model | OutputFixingParser.from_llm(llm=writer_model, parser=PydanticOutputParser(pydantic_object=Queries))
+
     sys_inst = query_writer_instructions.format(
         section_topic=sec.description,
         number_of_queries=configurable.number_of_queries
     )
     llm_config = RunnableConfig(
         callbacks=[usage_handler],
-        tags=["query_generation"]
+        tags=["query_generation"],
+        timeout=1,
     )
     
     queries = invoke_llm_with_tracking(
@@ -441,7 +451,6 @@ def invoke_llm_with_tracking(
     usage_handler: UsageCallback,
     configurable: Configuration,
     session_id: Optional[str] = None,
-    timeout_seconds: int = 120 
 ) -> Any:
     """Helper function to invoke LLM with timing and usage tracking.
     
@@ -462,50 +471,19 @@ def invoke_llm_with_tracking(
         LLMTimeoutError: If the LLM request exceeds the timeout duration
     """
     start_time = time.time()
-    
-    # Create an event to signal completion
-    completion_event = threading.Event()
-    response_container = []
-    exception_container = []
-    
-    # Function to run in a separate thread
-    def invoke_llm_thread():
-        try:
-            result = llm.invoke(messages, config=config)
-            response_container.append(result)
-        except Exception as e:
-            exception_container.append(e)
-        finally:
-            completion_event.set()
-    
-    # Start the thread
-    thread = threading.Thread(target=invoke_llm_thread)
-    thread.daemon = True  # Allow the thread to be terminated when the main thread exits
-    thread.start()
-    
-    # Wait for completion or timeout
-    if not completion_event.wait(timeout=timeout_seconds):
-        error_msg = f"LLM {llm_name} request timed out after {timeout_seconds} seconds for task {task}"
-        logger.error(logger.format_message(session_id, error_msg))
-        # Thread will continue running but we'll ignore its result
-        raise LLMTimeoutError(error_msg)
-    
-    # Check if there was an exception
-    if exception_container:
-        raise exception_container[0]
-    
-    # Get the response
-    if not response_container:
-        raise RuntimeError(f"No response received from LLM {llm_name} for task {task}")
-    
-    response = response_container[0]
+    try:
+        response = llm.invoke(messages, config=config)
+    except requests.exceptions.ReadTimeout as e:
+        logger.error(logger.format_message(session_id, f"ReadTimeout error: {str(e)}"))
+        raise LLMTimeoutError(f"Request timed out: {str(e)}") from e
+        
     duration = time.time() - start_time
-    
+        
     if duration > 10:
         logger.warning(logger.format_message(session_id, f"Deep Research - LLM {llm_name} took {duration:.2f} seconds to complete task {task}"))
     else:
         logger.info(logger.format_message(session_id, f"Deep Research - LLM {llm_name} took {duration:.2f} seconds to complete task {task}"))
-
+    
     if usage_handler.usage and len(usage_handler.usage) > 1:
         logger.warning(logger.format_message(session_id, f"Multiple usage objects found in callback. Using the first one."))
 
@@ -582,7 +560,8 @@ def write_section(
         section_topic=sec.description, section=sec.content
     )
     llm_config_section_grading = RunnableConfig(callbacks=[usage_handler_section_grading], tags=["section_grading"])
-    structured_llm = writer_model.with_structured_output(Feedback)
+
+    structured_llm = writer_model | OutputFixingParser.from_llm(llm=writer_model, parser=PydanticOutputParser(pydantic_object=Feedback))
 
     fb = invoke_llm_with_tracking(
         llm=structured_llm,
@@ -622,7 +601,7 @@ def write_final_sections(writer_model, state: SectionState, config: RunnableConf
         section_title=sec.name, section_topic=sec.description, context=rep
     )
     llm_config = RunnableConfig(
-        callbacks=[usage_handler], tags=["final_section_writing"]
+        callbacks=[usage_handler], tags=["final_section_writing"], timeout=1
     )
 
     content = invoke_llm_with_tracking(
@@ -768,7 +747,7 @@ def summarize_documents(summary_model, state: ReportState, config: RunnableConfi
                 if s.research
     ])
 
-def get_graph(api_key: str, provider: str):
+def get_graph(api_key: str, provider: str, request_timeout: int = 120):
     """
     Create and configure the graph for deep research.
     
@@ -787,9 +766,9 @@ def get_graph(api_key: str, provider: str):
         planner_model = ChatFireworks(base_url=planner_model_config["url"], model=planner_model_config["model"], temperature=0, max_tokens=8192, api_key=api_key)
         summary_model = ChatFireworks(base_url=summary_model_config["url"], model=summary_model_config["model"], temperature=0, max_tokens=8192, api_key=api_key)
     elif provider == "sambanova":
-        writer_model = ChatSambaNovaCloud(sambanova_url=writer_model_config["long_url"], model=writer_model_config["model"], temperature=0, max_tokens=8192, sambanova_api_key=api_key)
-        planner_model = ChatSambaNovaCloud(sambanova_url=planner_model_config["long_url"], model=planner_model_config["model"], temperature=0, max_tokens=8192, sambanova_api_key=api_key)
-        summary_model = ChatSambaNovaCloud(sambanova_url=summary_model_config["long_url"], model=summary_model_config["model"], temperature=0, max_tokens=8192, sambanova_api_key=api_key)
+        writer_model = CustomChatSambaNovaCloud(sambanova_url=writer_model_config["long_url"], model=writer_model_config["model"], temperature=0, max_tokens=8192, sambanova_api_key=api_key, timeout=request_timeout)
+        planner_model = CustomChatSambaNovaCloud(sambanova_url=planner_model_config["long_url"], model=planner_model_config["model"], temperature=0, max_tokens=8192, sambanova_api_key=api_key, timeout=request_timeout)
+        summary_model = CustomChatSambaNovaCloud(sambanova_url=summary_model_config["long_url"], model=summary_model_config["model"], temperature=0, max_tokens=8192, sambanova_api_key=api_key, timeout=request_timeout)
     else:
         raise ValueError(f"Unsupported provider: {provider}")
 

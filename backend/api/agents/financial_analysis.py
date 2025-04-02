@@ -19,12 +19,14 @@ from agent.financial_analysis.financial_analysis_crew import (
 from api.services.redis_service import SecureRedisService
 from config.model_registry import model_registry
 from services.financial_user_prompt_extractor_service import FinancialPromptExtractor
+from utils.error_utils import format_api_error_message
 
 from ..data_types import (
     AgentEnum,
     AgentRequest,
     AgentStructuredResponse,
     APIKeys,
+    AssistantMessage,
     ErrorResponse,
 )
 from utils.logging import logger
@@ -82,17 +84,22 @@ class FinancialAnalysisAgent(RoutedAgent):
             ))
 
             if message.parameters.ticker == "":
-                response = AgentStructuredResponse(
-                    agent_type=AgentEnum.Error,
-                    data=ErrorResponse(
-                        error=f"Could not find a ticker for {message.parameters.company_name}"
+                request_obj = AgentRequest(
+                    agent_type=AgentEnum.Assistant,
+                    parameters=AssistantMessage(
+                        query=f"Provide financial analysis for the company: {message.parameters.company_name}, based on the query: {message.query}"
                     ),
-                    message=f"Could not find a ticker for {message.parameters.company_name}",
+                    provider=message.provider,
+                    query=message.query,
+                    docs=message.docs,
                     message_id=message.message_id,
                 )
                 await self.publish_message(
-                    response,
-                    DefaultTopicId(type="user_proxy", source=ctx.topic_id.source),
+                    request_obj,
+                    DefaultTopicId(
+                        type=request_obj.agent_type.value,
+                        source=ctx.topic_id.source,
+                    ),
                 )
                 return
 
@@ -148,9 +155,12 @@ class FinancialAnalysisAgent(RoutedAgent):
                 ctx.topic_id.source,
                 f"Failed to process financial analysis request: {str(e)}"
             ), exc_info=True)
+
+            error_response = format_api_error_message(e, "financial analysis")
+
             response = AgentStructuredResponse(
                 agent_type=AgentEnum.Error,
-                data=ErrorResponse(error=f"Unable to assist with financial analysis, try again later."),
+                data=ErrorResponse(error=error_response),
                 message=f"Error processing financial analysis request: {str(e)}",
                 message_id=message.message_id
             )

@@ -124,7 +124,7 @@ class LeadGenerationAPI:
         self.app = FastAPI(lifespan=lifespan, root_path="/api")
         self.setup_cors()
         self.setup_routes()
-        self.executor = ThreadPoolExecutor(max_workers=2)
+        self.executor = ThreadPoolExecutor(max_workers=15)
 
     def verify_conversation_exists(self, user_id: str, conversation_id: str) -> bool:
         """
@@ -251,7 +251,11 @@ class LeadGenerationAPI:
                         logger.error(f"Error closing WebSocket: {str(close_error)}")
                     return
             except Exception as e:
+                # Log detailed information about the WebSocket state and error
                 logger.error(f"[/chat/websocket] Error in WebSocket connection: {str(e)}")
+                logger.error(f"[/chat/websocket] WebSocket state - client: {websocket.client_state}, application: {websocket.application_state}")
+                logger.error(f"[/chat/websocket] Connection details - conversation_id: {conversation_id}")
+                
                 # Only attempt to close if the connection is still open
                 try:
                     if (websocket.client_state != WebSocketState.DISCONNECTED and 

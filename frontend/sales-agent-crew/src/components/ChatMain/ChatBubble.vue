@@ -25,12 +25,12 @@
     
     
         
-        <UserAvatar :type="fetchProvider()||'Agent'" />   
+        <UserAvatar :type="provider" />   
         <div class="grow relative text-start space-y-3">
         <!-- Card -->
         <div class="inline-block" >
        <div class="relative p-4 flex items-center capitalize space-y-3 font-inter font-semibold 
-       text-[16px] leading-[18px] tracking-[0px] text-center capitalize"> {{ fetchProvider()||'' }} Agent
+       text-[16px] leading-[18px] tracking-[0px] text-center capitalize"> {{ provider==="sambanova"?"SambaNova":provider }} Agent
        <!-- Menu button: visible on hover -->
       
       
@@ -100,7 +100,7 @@
   </template>
   
   <script setup>
-  import { computed, defineProps, ref,watch,nextTick } from 'vue'
+  import { computed, defineProps, ref,watch,nextTick, provide } from 'vue'
   
   import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
   import AssistantComponent from '@/components/ChatMain/ResponseTypes/AssistantComponent.vue'
@@ -118,20 +118,21 @@
   import html2pdf from 'html2pdf.js'
 
 
-  
   function fetchProvider() {
-  // Check if workflowData is an array and has elements
-  if (!props.workflowData || !Array.isArray(props.workflowData)) {
+    // Check if workflowData is an array and has elements
+    if (!props.workflowData || !Array.isArray(props.workflowData)) {
+      return null;
+    }
+    for (let i = 0; i < props.workflowData.length; i++) {
+      if (props.workflowData[i].hasOwnProperty('llm_provider')) {
+        return props.workflowData[i].llm_provider;
+      }
+    }
+    // Return null if no object with 'llm_provider' is found
     return null;
   }
-  for (let i = 0; i < props.workflowData.length; i++) {
-    if (props.workflowData[i].hasOwnProperty('llm_provider')) {
-      return props.workflowData[i].llm_provider;
-    }
-  }
-  // Return null if no object with 'llm_provider' is found
-  return null;
-}
+  
+ 
 
   const formattedDuration=(duration) =>{
       // Format duration to 2 decimal places

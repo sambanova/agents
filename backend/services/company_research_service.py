@@ -3,7 +3,7 @@
 import os
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if parent_dir not in sys.path:
@@ -77,7 +77,7 @@ class CompanyIntelligenceService:
                     "funding_stage": funding_stage or ""
                 },
                 "total_companies": 0,
-                "generated_at": datetime.now().isoformat()
+                "generated_at": datetime.now(timezone.utc).isoformat(),
             }
 
         # Reformat exa_results into the same shape
@@ -104,7 +104,7 @@ class CompanyIntelligenceService:
                 "funding_stage": funding_stage or ""
             },
             "total_companies": len(companies),
-            "generated_at": datetime.now().isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat()
         }
         return output
 

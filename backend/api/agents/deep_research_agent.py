@@ -31,6 +31,7 @@ from api.agents.open_deep_research.utils import APIKeyRotator
 from config.model_registry import model_registry
 from utils.logging import logger
 from api.agents.open_deep_research.graph import LLMTimeoutError, create_publish_callback, get_graph
+from utils.error_utils import format_api_error_message
 
 
 @type_subscription(topic_type="deep_research")
@@ -242,10 +243,13 @@ class DeepResearchAgent(RoutedAgent):
                 logger.format_message(session_id, f"DeepResearch flow error: {str(e)}"),
                 exc_info=True,
             )
+
+            error_response = format_api_error_message(e, "deep research")
+            
             response = AgentStructuredResponse(
                 agent_type=AgentEnum.Error,
                 data=ErrorResponse(
-                    error=f"Unable to assist with deep research, try again later."
+                    error=error_response
                 ),
                 message=f"Error processing deep research request: {str(e)}",
                 message_id=message.message_id

@@ -4,11 +4,11 @@
       <div class="w-full flex items-center ">
       
 
-      <UserAvatar :type="provider" /> 
+        <UserAvatar :type="provider" />  
       <div class="grow text-start space-y-3">
       <!-- Card -->
       <div class="inline-block" >
-     <div class=" p-4 capitalize space-y-3 font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center">{{ provider }} Agent</div>
+     <div class=" p-4 capitalize space-y-3 font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center">{{ provider==="sambanova"?"SambaNova":provider }} Agent</div>
 </div>
 
 </div>
@@ -63,6 +63,21 @@ import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'
  
   })
   
+  
+
+  function fetchProvider() {
+    // Check if workflowData is an array and has elements
+    if (!props.workflowData || !Array.isArray(props.workflowData)) {
+      return null;
+    }
+    for (let i = 0; i < props.workflowData.length; i++) {
+      if (props.workflowData[i].hasOwnProperty('llm_provider')) {
+        return props.workflowData[i].llm_provider;
+      }
+    }
+    // Return null if no object with 'llm_provider' is found
+    return null;
+  }
   
   </script>
   <style>

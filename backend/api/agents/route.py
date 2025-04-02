@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from collections import deque
 import re
@@ -35,6 +35,7 @@ from api.data_types import (
 from api.registry import AgentRegistry
 from api.session_state import SessionStateManager
 from utils.logging import logger
+from utils.error_utils import format_api_error_message
 
 agent_registry = AgentRegistry()
 
@@ -232,7 +233,7 @@ class SemanticRouterAgent(RoutedAgent):
                                    - Include the overall summary of the conversation.
                                    """, source="system")]
                     + list(history)
-                    + [UserMessage(content="Summarize the messages so far in a few sentences including your responses. Focus on including the topis", source="user")]
+                    + [UserMessage(content="Summarize the messages so far in a few sentences including your responses. Focus on including the topics", source="user")]
                 )
                 context_summary = model_response.content
                 end_time = time.time()
@@ -277,10 +278,12 @@ class SemanticRouterAgent(RoutedAgent):
                 f"Error processing request: {str(e)}"
             ), exc_info=True)
 
+            error_response = format_api_error_message(e, "routing message")
+
             # Send response back
             response = AgentStructuredResponse(
                 agent_type=AgentEnum.Error,
-                data=ErrorResponse(error=f"Unable to route message, try again later."),
+                data=ErrorResponse(error=error_response),
                 message=f"Error processing message routing: {str(e)}",
                 message_id=message.message_id
             )
@@ -417,7 +420,7 @@ class SemanticRouterAgent(RoutedAgent):
                 "user_id": user_id,
                 "conversation_id": conversation_id,
                 "message_id": message.message_id,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
             await self.websocket.send_text(json.dumps(planner_event))
@@ -447,7 +450,7 @@ class SemanticRouterAgent(RoutedAgent):
                     "user_id": user_id,
                     "conversation_id": conversation_id,
                     "message_id": message.message_id,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
                 self.redis_client.rpush(message_key, json.dumps(final_message_data), user_id)
                 await self.websocket.send_text(json.dumps(final_message_data))

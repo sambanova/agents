@@ -31,6 +31,7 @@ from tavily import AsyncTavilyClient
 
 from config.model_registry import model_registry
 from utils.logging import logger
+from utils.error_utils import format_api_error_message
 
 from typing import Any, Dict, List, Literal, Optional
 import aiohttp
@@ -303,9 +304,12 @@ class AssistantAgentWrapper(RoutedAgent):
                 ),
                 exc_info=True,
             )
+            
+            error_response = format_api_error_message(e)
+
             response = AgentStructuredResponse(
                 agent_type=AgentEnum.Error,
-                data=ErrorResponse(error=f"Unable to assist with this request, try again later."),
+                data=ErrorResponse(error=error_response),
                 message=f"Error processing assistant request: {str(e)}",
                 message_id=message.message_id
             )

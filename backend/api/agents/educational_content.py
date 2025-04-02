@@ -23,6 +23,7 @@ from api.data_types import (
     ErrorResponse,
 )
 from utils.logging import logger
+from utils.error_utils import format_api_error_message
 
 @type_subscription(topic_type="educational_content")
 class EducationalContentAgent(RoutedAgent):
@@ -105,9 +106,12 @@ class EducationalContentAgent(RoutedAgent):
                 ctx.topic_id.source,
                 f"Failed to process educational content request: {str(e)}"
             ), exc_info=True)
+
+            error_response = format_api_error_message(e, "research content")
+
             response = AgentStructuredResponse(
                 agent_type=AgentEnum.Error,
-                data=ErrorResponse(error=f"Unable to assist with research content, try again later."),
+                data=ErrorResponse(error=error_response),
                 message=f"Error processing research content request: {str(e)}",
                 message_id=message.message_id
             )

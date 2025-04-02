@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 from autogen_core import DefaultTopicId
 from fastapi import WebSocket, WebSocketDisconnect
@@ -260,7 +260,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                 "data": "WebSocket connection established",
                 "user_id": user_id,
                 "conversation_id": conversation_id,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }))
 
             # Handle incoming WebSocket messages
@@ -281,7 +281,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                         "data": "Invalid JSON message format",
                         "user_id": user_id,
                         "conversation_id": conversation_id,
-                        "timestamp": datetime.now().isoformat()
+                        "timestamp": datetime.now(timezone.utc).isoformat()
                     }))
                     continue
 
@@ -451,7 +451,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                                 "data": data_str,
                                 "user_id": user_id,
                                 "conversation_id": conversation_id,
-                                "timestamp": datetime.now().isoformat(),
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
                                 "message_id": data_parsed["message_id"]
                             }
 
