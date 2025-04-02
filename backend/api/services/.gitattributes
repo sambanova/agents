@@ -1,1 +1,3 @@
 helm/** merge=ours
+helm/aiskagents/templates/ingress.yaml merge=ours
+helm/aiskagents/values.yaml merge=ours
