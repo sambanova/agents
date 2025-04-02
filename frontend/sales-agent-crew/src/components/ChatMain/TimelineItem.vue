@@ -1,11 +1,9 @@
 <template>
-  <!-- <div class="absolute left-3 top-0 h-full border-l-2 border-gray-200"></div> -->
-
   <li class="py-2 relative color-primary-brandGray">
     <div
       v-if="!isLast"
       class="absolute left-0 top-0 h-full border-l-2 border-[#EAECF0]"
-    ></div>
+    />
 
     <span
       class="absolute flex items-center justify-center w-6 h-6 bg-white rounded-full -start-3 ring-8 ring-white"
@@ -18,10 +16,8 @@
       class="flex ml-5 font-medium capitalize items-center mb-1 text-primary-brandTextPrimary text-[14px]"
     >
       {{ formatKey(data?.agent_name) }}
-      <!-- <span class="bg-blue-100 text-blue-800 text-sm font-medium me-2 px-2.5 py-0.5 rounded-sm ms-3">Latest</span> -->
     </h3>
 
-    <!-- <time class="block mb-2 text-sm font-normal leading-none text-gray-400">Released on January 13th, 2022</time> -->
     <div class="text-base font-normal text-gray-500">
       <div
         class="mx-2"
@@ -97,8 +93,6 @@ const formattedDuration = (duration) => {
 function formatKey(key) {
   return key.replace(/_/g, ' ');
 }
-// State for accordion toggle (single toggle used for all sections in this example)
-const isOpen = ref(false);
 
 // Define props for TimelineItem
 const props = defineProps({
@@ -117,7 +111,7 @@ const props = defineProps({
 });
 
 // -------------------------------------------------------------------
-// Helper Function: Return a Random Icon Based on Agent Name
+// Helper Function: Return an Icon Based on Agent Name
 // -------------------------------------------------------------------
 function getAgentIcon(agentName) {
   const agentIcons = {

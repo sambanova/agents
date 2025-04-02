@@ -1,64 +1,70 @@
 <template>
-    <!-- Check if event is 'user_message' -->
-    <li
-      v-if="props.event === 'user_message'" 
-      class=" flex  px-4 items-start    gap-x-2 sm:gap-x-4"
-    >
-    
-      <div class="grow text-end space-y-3 ">
-        <!-- Card -->
-        <div class="inline-block flex justify-end ">
-          <p class="text-[16px]  text-left color-primary-brandGray max-w-[80%] w-auto">
-            {{ props.data }}
-            
-          </p>
-        </div>
-        <!-- End Card -->
+  <!-- Check if event is 'user_message' -->
+  <li
+    v-if="props.event === 'user_message'"
+    class="flex px-4 items-start gap-x-2 sm:gap-x-4"
+  >
+    <div class="grow text-end space-y-3">
+      <!-- Card -->
+      <div class="inline-block flex justify-end">
+        <p
+          class="text-[16px] text-left color-primary-brandGray max-w-[80%] w-auto"
+        >
+          {{ props.data }}
+        </p>
       </div>
-      <UserAvatar :type="user" />
-    </li>
-    
-    <!-- For all other cases -->
-    <li v-else class="  relative  px-4 items-start gap-x-2 sm:gap-x-4">
-      
-      <div class="w-full relative flex items-center  ">
-    
-    
-        
-        <UserAvatar :type="provider" />   
-        <div class="grow relative text-start space-y-3">
-        <!-- Card -->
-        <div class="inline-block" >
-       <div class="relative p-4 flex items-center capitalize space-y-3 font-inter font-semibold 
-       text-[16px] leading-[18px] tracking-[0px] text-center capitalize"> {{ provider==="sambanova"?"SambaNova":provider }} Agent
-       <!-- Menu button: visible on hover -->
-      
-      
-       <button
+      <!-- End Card -->
+    </div>
+    <UserAvatar :type="user" />
+  </li>
 
-           v-if="parsedData.agent_type==='sales_leads'||parsedData.agent_type==='financial_analysis'
-           ||parsedData.agent_type==='deep_research'"
-        type="button"
-        class="  group-hover:opacity-100 transition-opacity duration-200"
-        @click.stop="toggleMenu"
-        @mousedown.stop
-        aria-label="Open menu"
-      >
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="5" r="1" />
-          <circle cx="12" cy="12" r="1" />
-          <circle cx="12" cy="19" r="1" />
-        </svg>
-      </button>
-    
-      <!-- Popover menu -->
-      <div
-        v-if="activeMenu"
-        class="absolute right-1 top-8 bg-white border border-gray-200 shadow-lg rounded z-30"
-        @click.stop
-      >
-       
-        <!-- <button
+  <!-- For all other cases -->
+  <li v-else class="relative px-4 items-start gap-x-2 sm:gap-x-4">
+    <div class="w-full relative flex items-center">
+      <UserAvatar :type="provider" />
+      <div class="grow relative text-start space-y-3">
+        <!-- Card -->
+        <div class="inline-block">
+          <div
+            class="relative p-4 flex items-center capitalize space-y-3 font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center capitalize"
+          >
+            {{ provider === 'sambanova' ? 'SambaNova' : provider }} Agent
+            <!-- Menu button: visible on hover -->
+
+            <button
+              v-if="
+                parsedData.agent_type === 'sales_leads' ||
+                parsedData.agent_type === 'financial_analysis' ||
+                parsedData.agent_type === 'deep_research'
+              "
+              type="button"
+              class="group-hover:opacity-100 transition-opacity duration-200"
+              @click.stop="toggleMenu"
+              @mousedown.stop
+              aria-label="Open menu"
+            >
+              <svg
+                class="w-5 h-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#667085"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="5" r="1" />
+                <circle cx="12" cy="12" r="1" />
+                <circle cx="12" cy="19" r="1" />
+              </svg>
+            </button>
+
+            <!-- Popover menu -->
+            <div
+              v-if="activeMenu"
+              class="absolute right-1 top-8 bg-white border border-gray-200 shadow-lg rounded z-30"
+              @click.stop
+            >
+              <!-- <button
           class="flex items-center w-full px-4 py-2 hover:bg-gray-100 text-left"
           
         >
@@ -69,182 +75,174 @@
           </svg>
           View Report
         </button> -->
-        <button
-          class="flex items-center w-full px-4 py-2 hover:bg-gray-100 text-left"
-          @click="generatePDFFromHtml"
-        >
-          <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Download PDF
-        </button>
-      </div></div>
-</div>
-
-</div>
+              <button
+                class="flex items-center w-full px-4 py-2 hover:bg-gray-100 text-left"
+                @click="generatePDFFromHtml"
+              >
+                <svg
+                  class="w-5 h-5 mr-2"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#667085"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Download PDF
+              </button>
+            </div>
+          </div>
         </div>
-        <div class="w-full bg-white  ">          
-          <AnalysisTimeline 
-      :isLoading="isLoading" 
-      :parsedData="parsedData" 
-      :workflowData="workflowData" 
-      :presentMetadata="parsedData.metadata" 
-      :plannerText="plannerText" 
-    />
-        <component :id="'chat-'+messageId" :is="selectedComponent" :parsed="parsedData" />
+      </div>
     </div>
-    
-    </li>
-  </template>
-  
-  <script setup>
-  import { computed, defineProps, ref,watch,nextTick, provide } from 'vue'
-  
-  import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
-  import AssistantComponent from '@/components/ChatMain/ResponseTypes/AssistantComponent.vue'
-  import UserProxyComponent from '@/components/ChatMain/ResponseTypes/UserProxyComponent.vue'
-  import SalesLeadComponent from '@/components/ChatMain/ResponseTypes/SalesLeadsComponent.vue'
-  import EducationalComponent from '@/components/ChatMain/EducationalComponent.vue'
-  import UnknownTypeComponent from '@/components/ChatMain/ResponseTypes/UnknownTypeComponent.vue'
-  import FinancialAnalysisComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisComponent.vue'
-  import DeepResearchComponent from '@/components/ChatMain/ResponseTypes//DeepResearchComponent.vue'
-  import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue'
-  import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'
+    <div class="w-full bg-white">
+      <AnalysisTimeline
+        :isLoading="isLoading"
+        :parsedData="parsedData"
+        :workflowData="workflowData"
+        :presentMetadata="parsedData.metadata"
+        :plannerText="plannerText"
+      />
+      <component
+        :id="'chat-' + messageId"
+        :is="selectedComponent"
+        :parsed="parsedData"
+      />
+    </div>
+  </li>
+</template>
 
-  import html2canvas from "html2canvas";
-  import jsPDF from "jspdf";
-  import html2pdf from 'html2pdf.js'
+<script setup>
+import { computed, defineProps, ref, watch, nextTick, provide } from 'vue';
 
+import UserAvatar from '@/components/Common/UIComponents/UserAvatar.vue';
+import AssistantComponent from '@/components/ChatMain/ResponseTypes/AssistantComponent.vue';
+import UserProxyComponent from '@/components/ChatMain/ResponseTypes/UserProxyComponent.vue';
+import SalesLeadComponent from '@/components/ChatMain/ResponseTypes/SalesLeadsComponent.vue';
+import EducationalComponent from '@/components/ChatMain/EducationalComponent.vue';
+import UnknownTypeComponent from '@/components/ChatMain/ResponseTypes/UnknownTypeComponent.vue';
+import FinancialAnalysisComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisComponent.vue';
+import DeepResearchComponent from '@/components/ChatMain/ResponseTypes//DeepResearchComponent.vue';
+import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue';
+import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue';
 
-  function fetchProvider() {
-    // Check if workflowData is an array and has elements
-    if (!props.workflowData || !Array.isArray(props.workflowData)) {
-      return null;
-    }
-    for (let i = 0; i < props.workflowData.length; i++) {
-      if (props.workflowData[i].hasOwnProperty('llm_provider')) {
-        return props.workflowData[i].llm_provider;
-      }
-    }
-    // Return null if no object with 'llm_provider' is found
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import html2pdf from 'html2pdf.js';
+
+function fetchProvider() {
+  // Check if workflowData is an array and has elements
+  if (!props.workflowData || !Array.isArray(props.workflowData)) {
     return null;
   }
-  
- 
-
-  const formattedDuration=(duration) =>{
-      // Format duration to 2 decimal places
-      return duration?.toFixed(2);
+  for (let i = 0; i < props.workflowData.length; i++) {
+    if (props.workflowData[i].hasOwnProperty('llm_provider')) {
+      return props.workflowData[i].llm_provider;
     }
-  
-  // Define props
-  const props = defineProps({
-    data: {
-      type: String,
-      required: true
-    },
-    event: {
-      type: String,
-      required: true
-    },
-    plannerText: {
-      type: String,
-      required: true
-    },
-    metadata: {
-      type: Object,
-      required: true
-    },
-    provider: {
-      type: String,
-      required: true
-    },
-    messageId: {
-      type: String,
-      required: true
-    },
-    
+  }
+  // Return null if no object with 'llm_provider' is found
+  return null;
+}
+
+const formattedDuration = (duration) => {
+  // Format duration to 2 decimal places
+  return duration?.toFixed(2);
+};
+
+// Define props
+const props = defineProps({
+  data: {
+    type: String,
+    required: true,
+  },
+  event: {
+    type: String,
+    required: true,
+  },
+  plannerText: {
+    type: String,
+    required: true,
+  },
+  metadata: {
+    type: Object,
+    required: true,
+  },
+  provider: {
+    type: String,
+    required: true,
+  },
+  messageId: {
+    type: String,
+    required: true,
+  },
+
   workflowData: {
     type: [],
-    required: false // Ensure it's always provided
+    required: false, // Ensure it's always provided
   },
-  
-  })
-  const presentMetadata = computed(() => {
+});
+const presentMetadata = computed(() => {
+  if (!parsedData.metadata) return null;
 
-
-if (!parsedData.metadata) return null;
-
-return parsedData.metadata;
+  return parsedData.metadata;
 });
 
-  const presentMetadataOld = computed(() => {
-
-
+const presentMetadataOld = computed(() => {
   if (!props.metadata) return null;
 
   return props.metadata;
 });
 
+// Parse the JSON string safely
+const parsedData = computed(() => {
+  try {
+    return JSON.parse(props.data);
+  } catch (error) {
+    console.error('Error parsing data in ChatBubble:', error);
+    return {};
+  }
+});
 
+// Choose which sub-component to display based on agent_type
+const selectedComponent = computed(() => {
+  switch (parsedData.value.agent_type) {
+    case 'assistant':
+      return AssistantComponent;
+    case 'educational_content':
+      return EducationalComponent;
+    case 'user_proxy':
+      return UserProxyComponent;
+    case 'sales_leads':
+      return SalesLeadComponent;
+    case 'financial_analysis':
+      return FinancialAnalysisComponent;
+    case 'deep_research':
+      return DeepResearchComponent;
+    case 'error':
+      return ErrorComponent;
+    default:
+      return UnknownTypeComponent;
+  }
+});
 
-
-
-
-
-  
-  // Parse the JSON string safely
-  const parsedData = computed(() => {
-    try {
-      return JSON.parse(props.data)
-    } catch (error) {
-      console.error('Error parsing data in ChatBubble:', error)
-      return {}
-    }
-  })
-  
-  // Choose which sub-component to display based on agent_type
-  const selectedComponent = computed(() => {
-    switch (parsedData.value.agent_type) {
-      case 'assistant':
-        return AssistantComponent
-      case 'educational_content':
-        return EducationalComponent
-      case 'user_proxy':
-        return UserProxyComponent
-      case 'sales_leads':
-        return SalesLeadComponent
-      case 'financial_analysis':
-        return FinancialAnalysisComponent
-      case 'deep_research':
-        return DeepResearchComponent
-      case 'error':
-        return ErrorComponent
-      default:
-        return UnknownTypeComponent
-    }
-  })
-  
-  // Define isOpen; if not passed as prop, define it as a ref
-  const isOpen = ref(false)  // adjust as needed; for instance, based on statusText or other logic
-  const collapsed = ref(true)
+// Define isOpen; if not passed as prop, define it as a ref
+const isOpen = ref(false); // adjust as needed; for instance, based on statusText or other logic
+const collapsed = ref(true);
 function toggleCollapse() {
-  collapsed.value = !collapsed.value
+  collapsed.value = !collapsed.value;
 }
 
 const activeMenu = ref(false);
 
-
-
-
 function toggleMenu() {
-    activeMenu.value = !activeMenu.value;
-  }
+  activeMenu.value = !activeMenu.value;
+}
 
-
-  const headerConfig = ref({
+const headerConfig = ref({
   // Replace with your actual SVG markup string or generate one dynamically
   SVGMarkup: `
     <svg
@@ -290,9 +288,14 @@ function toggleMenu() {
       />
     </svg>
   `,
-  topHeading: parsedData.agent_type==='sales_leads'?"Sales Lead":parsedData.agent_type==='financial_analysis'?"Financial Report":"Research  Report",
-  subHeading: 'Generated with SambaNova Agents'
-})
+  topHeading:
+    parsedData.agent_type === 'sales_leads'
+      ? 'Sales Lead'
+      : parsedData.agent_type === 'financial_analysis'
+      ? 'Financial Report'
+      : 'Research  Report',
+  subHeading: 'Generated with SambaNova Agents',
+});
 
 async function generatePDFFromHtmOLd() {
   // Close the menu if open
@@ -338,7 +341,7 @@ async function generatePDFFromHtmOLd() {
     pagebreak: { mode: ['css', 'legacy'] },
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
   };
 
   try {
@@ -348,13 +351,12 @@ async function generatePDFFromHtmOLd() {
   }
 }
 
-
 async function generatePDFFromHtml() {
-  toggleMenu()
-  const element = document.getElementById('chat-'+props.messageId)
-  
- // Create a temporary wrapper element
- const wrapper = document.createElement('div');
+  toggleMenu();
+  const element = document.getElementById('chat-' + props.messageId);
+
+  // Create a temporary wrapper element
+  const wrapper = document.createElement('div');
   // Apply padding to match your PDF margins
   wrapper.style.padding = '10mm';
 
@@ -372,14 +374,12 @@ async function generatePDFFromHtml() {
     </div>
   `;
 
-
   // Append header and cloned content to the wrapper
   // wrapper.appendChild(headerContainer);
   // element.prepend(wrapper);
   // Remove any extra top margin to avoid overlap
   // clonedContent.style.marginTop = '0mm';
   // wrapper.appendChild(clonedContent);
-
 
   const pdfOpts = {
     margin: [10, 10],
@@ -389,65 +389,63 @@ async function generatePDFFromHtml() {
     html2canvas: {
       scale: 2,
       useCORS: true,
-      letterRendering: true
+      letterRendering: true,
     },
     jsPDF: {
       unit: 'mm',
       format: 'a4',
-      orientation: 'portrait'
-    }
-  }
+      orientation: 'portrait',
+    },
+  };
 
   try {
-    
-    await html2pdf().set(pdfOpts).from(element).save()
-  } catch(e) {
-    console.error('PDF error:', e)
+    await html2pdf().set(pdfOpts).from(element).save();
+  } catch (e) {
+    console.error('PDF error:', e);
   }
-  
 }
 
 async function generateSelectablePDF() {
   // For testing, we use the static element with id "pdf-content".
-  const contentEl = document.getElementById('chat-'+props.messageId)
+  const contentEl = document.getElementById('chat-' + props.messageId);
   if (!contentEl) {
-    console.error('Content element not found')
-    return
+    console.error('Content element not found');
+    return;
   }
 
   // Create a wrapper element to house the content with explicit styling.
-  const wrapper = document.createElement('div')
+  const wrapper = document.createElement('div');
   // Set a fixed width (in pixels) that approximates your intended PDF layout.
   // You may adjust this value (e.g., 800px) to better match your design.
-  wrapper.style.width = '800px'
-  wrapper.style.padding = '20px'
-  wrapper.style.background = '#fff'
+  wrapper.style.width = '800px';
+  wrapper.style.padding = '20px';
+  wrapper.style.background = '#fff';
   // Inject the inner HTML from our test content.
-  wrapper.innerHTML = contentEl.innerHTML
-  
+  wrapper.innerHTML = contentEl.innerHTML;
+
   // Append the wrapper offscreen so that html2canvas can fully render it.
-  wrapper.style.position = 'absolute'
-  wrapper.style.top = '-10000px'
-  document.body.appendChild(wrapper)
+  wrapper.style.position = 'absolute';
+  wrapper.style.top = '-10000px';
+  document.body.appendChild(wrapper);
 
   // Wait for the DOM to update and a short delay to ensure full rendering.
-  await nextTick()
+  await nextTick();
   setTimeout(() => {
     // Create a new jsPDF instance.
     // Using unit: 'px' here helps to more directly map from CSS pixels.
     const doc = new jsPDF({
       unit: 'px',
       format: 'a4',
-      orientation: 'portrait'
-    })
+      orientation: 'portrait',
+    });
 
     // Render the wrapper using jsPDF's html() method.
     doc.html(wrapper, {
       callback: function (doc) {
-        console.log('PDF rendering complete. Saving PDF...')
-        doc.save('output.pdf')
+        console.log('PDF rendering complete. Saving PDF...');
+        doc.save('output.pdf');
         // Clean up the temporary wrapper.
-        document.body.removeChild(wrapper)
+        document.body.removeChild(wrapper);
       },
       // Set starting coordinates inside the PDF.
       x: 10,
@@ -459,13 +457,10 @@ async function generateSelectablePDF() {
         scale: 1, // lower scale if text is too large; you can try 1 or 1.5
         useCORS: true,
         // This helps html2canvas know the intended width of the element.
-        windowWidth: wrapper.scrollWidth
-      }
-    })
-  }, 500) // A delay of 500ms; adjust if necessary
+        windowWidth: wrapper.scrollWidth,
+      },
+    });
+  }, 500); // A delay of 500ms; adjust if necessary
 }
-
-  </script>
-  <style>
-
-</style>
+</script>
+<style></style>

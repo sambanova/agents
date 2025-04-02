@@ -153,8 +153,9 @@ import {
   watch,
   onBeforeUnmount,
   provide,
+  inject,
 } from 'vue';
-import { useUser } from '@clerk/vue';
+import { useAuth, useUser } from '@clerk/vue';
 import { v4 as uuidv4 } from 'uuid';
 
 /** We import both old + chat sidebars as local variables. */
@@ -216,8 +217,9 @@ const isDev = ref(import.meta.env.DEV);
 // Header ref
 const headerRef = ref(null);
 
-// Clerk user ID
+// Clerk
 const { user } = useUser();
+const { userId } = useAuth();
 const clerkUserId = computed(() => user.value?.id || 'anonymous_user');
 
 const agentData = ref([]);
@@ -225,8 +227,24 @@ const chatSideBarRef = ref(null);
 
 const metadata = ref(null);
 
-const metadataChanged = (metaData) => {
-  metadata.value = metaData;
+const mixpanel = inject('mixpanel');
+
+const metadataChanged = (receivedMetadata) => {
+  metadata.value = receivedMetadata;
+
+  try {
+    if (mixpanel && receivedMetadata) {
+      mixpanel.track('Agent Workflow Completions', {
+        'User email': user?.value.emailAddresses[0].emailAddress,
+        'User ID': userId.value,
+        ...receivedMetadata,
+      });
+    } else {
+      console.warn('Mixpanel not available');
+    }
+  } catch (error) {
+    console.error('Failed to send tracking data to Mixpanel:', error);
+  }
 };
 
 const handleNewChat = () => {

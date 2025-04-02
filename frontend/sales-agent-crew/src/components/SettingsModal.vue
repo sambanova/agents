@@ -640,9 +640,14 @@ const close = () => {
 
 // Save functions for individual keys
 const saveSambanovaKey = async () => {
+  if (!sambanovaKey.value) {
+    errorMessage.value = 'SambaNova API key cannot be empty!';
+    return;
+  }
+
   try {
     if (mixpanel) {
-      mixpanel.track('Save SambaNova API key', {
+      mixpanel.track('User Save API Key', {
         'User email': user?.value.emailAddresses[0].emailAddress,
         'User ID': userId.value,
       });
@@ -654,10 +659,6 @@ const saveSambanovaKey = async () => {
   }
 
   try {
-    if (!sambanovaKey.value) {
-      errorMessage.value = 'SambaNova API key cannot be empty!';
-      return;
-    }
     const encryptedKey = await encryptKey(sambanovaKey.value);
     localStorage.setItem(`sambanova_key_${userId.value}`, encryptedKey);
     successMessage.value = 'SambaNova API key saved successfully!';

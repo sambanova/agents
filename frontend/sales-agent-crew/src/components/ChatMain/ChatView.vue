@@ -1156,7 +1156,7 @@ const currentMsgId = ref('');
 const addMessage = async () => {
   try {
     if (mixpanel) {
-      mixpanel.track('Send query', {
+      mixpanel.track('User Query', {
         'User email': user?.value.emailAddresses[0].emailAddress,
         'User ID': userId.value,
       });
