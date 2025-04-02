@@ -97,7 +97,8 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, computed } from 'vue';
+import { ref, watch, nextTick, computed, inject } from 'vue';
+import { useAuth, useUser } from '@clerk/vue';
 import TimelineItem from '@/components/ChatMain/TimelineItem.vue';
 import MetaData from '@/components/ChatMain/MetaData.vue';
 import Fastest from '@/components/ChatMain/Fastest.vue';
@@ -249,6 +250,13 @@ const props = defineProps({
 const agentThoughtsData = ref([]);
 const metadata = ref(null);
 
+// TODO: Mixpanel settings
+// // Clerk
+// const { userId } = useAuth();
+// const { user } = useUser();
+// // Mixpanel
+// const mixpanel = inject('mixpanel');
+
 watch(
   () => props.metadata,
   (newMetadata, oldMetadata) => {
@@ -263,6 +271,7 @@ watch(
   },
   { deep: true } // If you want to detect nested mutations
 );
+
 watch(
   () => props.agentData,
   (newAgentData, oldAgentData) => {
@@ -274,6 +283,7 @@ watch(
     );
 
     agentThoughtsData.value = newAgentData || [];
+    // TODO: find a way to have the final agent data on a data structure to properly log it to mixpanel
     nextTick(() => {
       setTimeout(() => {
         if (agentContainer.value) {
@@ -326,11 +336,6 @@ watch(messages, () => {
 const presentMetadata = computed(() => {
   return props.metadata;
 });
-
-const formattedDuration = (duration) => {
-  // Format duration to 2 decimal places
-  return duration?.toFixed(2);
-};
 </script>
 
 <style scoped>
