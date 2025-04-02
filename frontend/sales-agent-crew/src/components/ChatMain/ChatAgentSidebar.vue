@@ -253,7 +253,7 @@ watch(
   () => props.metadata,
   (newMetadata, oldMetadata) => {
     console.log(
-      'Child sawold Metadata array change from',
+      'Child saw old Metadata array change from',
       oldMetadata,
       'to',
       newMetadata

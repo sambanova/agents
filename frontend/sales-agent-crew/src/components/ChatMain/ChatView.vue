@@ -104,9 +104,6 @@
             <div v-if="errorMessage" class="m-1 w-full mx-auto space-y-5">
               <ErrorComponent :parsed="{ data: { error: errorMessage } }" />
             </div>
-            <!-- <div class="flex items-start mb-3">
-              <StatusText v-if="isLoading" :text="statusText" />
-            </div> -->
 
             <div v-if="uploadedDocuments.length > 0" class="mt-4">
               <!-- Collapsible header -->
@@ -115,8 +112,10 @@
                 class="flex items-center justify-between focus:outline-none mb-2"
               >
                 <h3 class="text-sm font-medium text-gray-700">
-                  Uploaded Documents ({{ uploadedDocuments.length }})
+                  Uploaded Documents ({{ uploadedDocuments.length }}) | Selected
+                  Documents ({{ selectedDocuments.length }})
                 </h3>
+                <h3 class="text-sm font-medium text-gray-700"></h3>
                 <svg
                   :class="{ 'transform rotate-180': isExpanded }"
                   class="w-5 h-5 text-gray-500 transition-transform duration-200"
@@ -187,112 +186,68 @@
                 placeholder="Ask me about...companies to target, research topics, or company stocks and financials"
                 :disabled="isLoading"
                 class="p-4 pb-12 block w-full bg-primary-brandFrame border-primary-brandFrame rounded-lg text-sm focus:outline-none active:outline-none border focus:border-primary-brandColor disabled:opacity-50 disabled:pointer-events-none"
-              ></textarea>
+              />
 
               <!-- Toolbar -->
               <div
                 class="absolute bottom-px inset-x-px p-2 rounded-b-lg border-primary-brandFrame"
               >
                 <div class="flex justify-between items-center">
-                  <!-- Button Group -->
+                  <!-- Left Button Group -->
                   <div class="flex items-center">
                     <!-- Attach Button -->
-                    <button
-                      @click="$refs.fileInput.click()"
-                      :disabled="isLoading || isUploading"
-                      type="button"
-                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
+                    <Popover
+                      text="Attach"
+                      position="top"
+                      color="bg-black text-white"
                     >
-                      <input
-                        type="file"
-                        ref="fileInput"
-                        @change="handleFileUpload"
-                        class="hidden"
-                        accept=".pdf,.doc,.docx,.csv,.xlsx,.xls"
-                      />
-                      <svg
-                        v-if="!isUploading"
-                        class="shrink-0 w-5 h-5"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
+                      <button
+                        @click="$refs.fileInput.click()"
+                        :disabled="isLoading || isUploading"
+                        type="button"
+                        class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
                       >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                        <input
+                          type="file"
+                          ref="fileInput"
+                          @change="handleFileUpload"
+                          class="hidden"
+                          accept=".pdf,.doc,.docx,.csv,.xlsx,.xls"
                         />
-                      </svg>
+                        <svg
+                          v-if="!isUploading"
+                          class="shrink-0 w-5 h-5"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                          />
+                        </svg>
 
-                      <svg
-                        v-if="isUploading"
-                        class="shrink-0 w-5 h-5 animate-spin"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"
-                        />
-                      </svg>
-                    </button>
+                        <svg
+                          v-if="isUploading"
+                          class="shrink-0 w-5 h-5 animate-spin"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"
+                          />
+                        </svg>
+                      </button>
+                    </Popover>
                     <!-- End Attach Button -->
-                    <!-- Mic Button -->
-                    <button
-                      type="button"
-                      @click="toggleRecording"
-                      :disabled="isLoading"
-                      :class="{
-                        'text-gray-500': !isRecording,
-                        'text-orange-500': isRecording,
-                      }"
-                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
-                    >
-                      <svg
-                        v-if="!isRecording"
-                        class="shrink-0"
-                        width="24"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="#667085"
-                        stroke-width="2"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          d="M12 2c-1.7 0-3 1.2-3 2.6v6.8c0 1.4 1.3 2.6 3 2.6s3-1.2 3-2.6V4.6C15 3.2 13.7 2 12 2z"
-                        />
-                        <path
-                          d="M19 10v1a7 7 0 0 1-14 0v-1M12 18.4v3.3M8 22h8"
-                        />
-                      </svg>
-
-                      <svg
-                        v-else
-                        class="w-6 h-6 text-gray-800"
-                        aria-hidden="true"
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        fill="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          d="M7 5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H7Z"
-                        />
-                      </svg>
-                    </button>
-                    <!-- End Mic Button -->
-                  </div>
-                  <!-- End Button Group -->
-                  <!-- Button Group -->
-                  <div class="flex items-center gap-x-1">
                     <!-- Mic Button -->
                     <Popover
                       text="Use voice mode"
@@ -307,27 +262,27 @@
                           'text-gray-500': !isRecording,
                           'text-orange-500': isRecording,
                         }"
-                        class="inline-flex hidden shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
+                        class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
                       >
                         <svg
                           v-if="!isRecording"
-                          class="w-6 h-6 text-gray-800"
-                          aria-hidden="true"
-                          xmlns="http://www.w3.org/2000/svg"
+                          class="shrink-0"
                           width="24"
-                          height="24"
-                          fill="currentColor"
+                          height="20"
                           viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="#667085"
+                          stroke-width="2"
+                          xmlns="http://www.w3.org/2000/svg"
                         >
                           <path
-                            fill-rule="evenodd"
-                            d="M5 8a1 1 0 0 1 1 1v3a4.006 4.006 0 0 0 4 4h4a4.006 4.006 0 0 0 4-4V9a1 1 0 1 1 2 0v3.001A6.006 6.006 0 0 1 14.001 18H13v2h2a1 1 0 1 1 0 2H9a1 1 0 1 1 0-2h2v-2H9.999A6.006 6.006 0 0 1 4 12.001V9a1 1 0 0 1 1-1Z"
-                            clip-rule="evenodd"
+                            d="M12 2c-1.7 0-3 1.2-3 2.6v6.8c0 1.4 1.3 2.6 3 2.6s3-1.2 3-2.6V4.6C15 3.2 13.7 2 12 2z"
                           />
                           <path
-                            d="M7 6a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v5a4 4 0 0 1-4 4h-2a4 4 0 0 1-4-4V6Z"
+                            d="M19 10v1a7 7 0 0 1-14 0v-1M12 18.4v3.3M8 22h8"
                           />
                         </svg>
+
                         <svg
                           v-else
                           class="w-6 h-6 text-gray-800"
@@ -345,12 +300,17 @@
                       </button>
                     </Popover>
                     <!-- End Mic Button -->
+                  </div>
+                  <!-- End Left Button Group -->
+
+                  <!-- Right Button Group -->
+                  <div class="flex items-center gap-x-1">
                     <!-- Send Button -->
                     <button
                       type="button"
                       @click="addMessage"
                       :disabled="isLoading || !searchQuery.trim()"
-                      class="inline-flex shrink-0 justify-center items-center bg-transparent cursor-pointer"
+                      class="inline-flex shrink-0 justify-center items-center bg-transparent cursor-pointer disabled:cursor-not-allowed"
                     >
                       <svg
                         id="send-button"
@@ -383,7 +343,7 @@
                     </button>
                     <!-- End Send Button -->
                   </div>
-                  <!-- End Button Group -->
+                  <!-- End Right Button Group -->
                 </div>
               </div>
               <!-- End Toolbar -->
@@ -417,7 +377,7 @@ import ChatBubble from '@/components/ChatMain/ChatBubble.vue';
 import ChatLoaderBubble from '@/components/ChatMain/ChatLoaderBubble.vue';
 const router = useRouter();
 const route = useRoute();
-import { useAuth } from '@clerk/vue';
+import { useAuth, useUser } from '@clerk/vue';
 import { decryptKey } from '../../utils/encryption';
 import Popover from '@/components/Common/UIComponents/CustomTooltip.vue';
 
@@ -428,17 +388,10 @@ import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.v
 
 // Inject the shared selectedOption from MainLayout.vue.
 const selectedOption = inject('selectedOption');
-const eventData = ref(null);
 const mixpanel = inject('mixpanel');
+const eventData = ref(null);
 
 function handleButtonClick(data) {
-  if (mixpanel) {
-    mixpanel.track('Create new chat', {
-      chatName: data.message,
-    });
-  } else {
-    console.log('Mixpanel not available');
-  }
   eventData.value = data.message;
 
   chatName.value = '';
@@ -508,9 +461,10 @@ function toggleExpand() {
 }
 
 function handleKeyDown(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && !searchQuery.value.trim()) {
     e.preventDefault();
-
+  } else if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
     addMessage();
   }
 }
@@ -641,7 +595,6 @@ const checkAndOpenSettings = () => {
 
 async function loadPreviousChat(convId) {
   try {
-    // isLoading.value = true
     const resp = await axios.get(
       `${import.meta.env.VITE_API_URL}/chat/history/${convId}`,
       {
@@ -652,12 +605,10 @@ async function loadPreviousChat(convId) {
     );
 
     initialLoading.value = false;
-    console.log(resp);
     filterChat(resp.data);
     AutoScrollToBottom(true);
   } catch (err) {
     console.error('Error creating new chat:', err);
-    // alert('Failed to create new conversation. Check keys or console.')
     isLoading.value = false;
     initialLoading.value = false;
   }
@@ -827,6 +778,7 @@ const manualSocketClose = ref(false);
 
 // Clerk
 const { userId } = useAuth();
+const { user } = useUser();
 
 async function loadKeys() {
   try {
@@ -1200,7 +1152,21 @@ function waitForSocketOpen(timeout = 5000) {
 }
 
 const currentMsgId = ref('');
+
 const addMessage = async () => {
+  try {
+    if (mixpanel) {
+      mixpanel.track('Send query', {
+        'User email': user?.value.emailAddresses[0].emailAddress,
+        'User ID': userId.value,
+      });
+    } else {
+      console.warn('Mixpanel not available');
+    }
+  } catch (error) {
+    console.error('Failed to send tracking data to Mixpanel:', error);
+  }
+
   isLoading.value = true;
   errorMessage.value = '';
 

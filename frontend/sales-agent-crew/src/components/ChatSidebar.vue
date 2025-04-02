@@ -105,11 +105,7 @@ async function deleteChat(conversationId) {
 }
 
 async function loadKeys(missingKeysListData) {
-  if (missingKeysListData) {
-    console.log('missingKeysList', missingKeysListData);
-
-    missingKeysList.value = missingKeysListData;
-  }
+  if (missingKeysListData) missingKeysList.value = missingKeysListData;
 
   try {
     const uid = userId.value || 'anonymous';
@@ -127,14 +123,8 @@ async function loadKeys(missingKeysListData) {
   }
 }
 
-const missingKeys = computed(() => {
-  const missing = [];
-  if (!sambanovaKey.value) missing.push('SambaNova');
-  if (!serperKey.value) missing.push('Serper');
-  if (!exaKey.value) missing.push('Exa');
-  return missing;
-});
 defineExpose({ loadChats });
+
 const missingKeysArray = computed(() => {
   if (!missingKeysList.value || typeof missingKeysList.value !== 'object')
     return [];
@@ -144,14 +134,11 @@ const missingKeysArray = computed(() => {
 });
 async function loadChats() {
   try {
-    const uid = userId.value || 'anonymous';
     const resp = await axios.get(`${import.meta.env.VITE_API_URL}/chat/list`, {
       headers: {
         Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
       },
     });
-
-    console.log(resp);
     conversations.value = resp.data?.chats;
   } catch (err) {
     console.error('Error creating new chat:', err);

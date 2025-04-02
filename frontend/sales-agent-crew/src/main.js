@@ -3,7 +3,7 @@ import { createPinia } from 'pinia';
 import './style.css';
 import App from './App.vue';
 import { clerkPlugin } from '@clerk/vue';
-import mixpanelPlugin from './services/mixpanel';
+import mixpanelPlugin from './services/mixpanelPlugin';
 
 // Import your router
 import router from './router/index.js';

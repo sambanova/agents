@@ -137,7 +137,6 @@ function getAgentIcon(agentName) {
     'Outreach Specialist': SpecialistIcon,
   };
   const icon = agentIcons[agentName] || DefaultIcon;
-  console.log('getAgentIcon called for agentName:', agentName, icon);
 
   return icon;
 }

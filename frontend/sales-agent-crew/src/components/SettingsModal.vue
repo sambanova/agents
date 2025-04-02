@@ -475,7 +475,7 @@ import {
   computed,
   inject,
 } from 'vue';
-import { useAuth } from '@clerk/vue';
+import { useAuth, useUser } from '@clerk/vue';
 import { encryptKey, decryptKey } from '../utils/encryption';
 import axios from 'axios';
 import emitterMitt from '@/utils/eventBus.js';
@@ -494,6 +494,7 @@ const props = defineProps({
 const emit = defineEmits(['keysUpdated']);
 
 const { userId } = useAuth();
+const { user } = useUser();
 
 const isOpen = ref(false);
 const sambanovaKey = ref('');
@@ -509,6 +510,8 @@ const exaKeyVisible = ref(false);
 const serperKeyVisible = ref(false);
 const fireworksKeyVisible = ref(false);
 
+const mixpanel = inject('mixpanel');
+
 // Missing keys state for validation messages
 const missingKeys = ref({
   exaKey: false,
@@ -520,7 +523,7 @@ const missingKeys = ref({
 // Load keys on mount and check if modal should be open
 onMounted(async () => {
   await loadKeys();
-  await checkRequiredKeys(); // Ensure modal opens if needed
+  checkRequiredKeys(); // Ensure modal opens if needed
   emitterMitt.on('check-keys', checkRequiredKeys);
   emitterMitt.emit('keys-updated', missingKeys.value);
 });
@@ -529,13 +532,10 @@ onMounted(async () => {
 watch(
   () => props.provider,
   async () => {
-    await checkRequiredKeys();
+    checkRequiredKeys();
     updateAndCallEvents();
   }
 );
-watch([exaKey, serperKey, sambanovaKey, fireworksKey], () => {
-  // checkRequiredKeys()
-});
 
 // ✅ Function to load saved keys
 const loadKeys = async () => {
@@ -641,6 +641,19 @@ const close = () => {
 // Save functions for individual keys
 const saveSambanovaKey = async () => {
   try {
+    if (mixpanel) {
+      mixpanel.track('Save SambaNova API key', {
+        'User email': user?.value.emailAddresses[0].emailAddress,
+        'User ID': userId.value,
+      });
+    } else {
+      console.warn('Mixpanel not available');
+    }
+  } catch (error) {
+    console.error('Failed to send tracking data to Mixpanel:', error);
+  }
+
+  try {
     if (!sambanovaKey.value) {
       errorMessage.value = 'SambaNova API key cannot be empty!';
       return;
@@ -662,7 +675,7 @@ const clearSambanovaKey = async () => {
   try {
     localStorage.removeItem(`sambanova_key_${userId.value}`);
   } catch (e) {
-    console.log('samabanova clear ', e);
+    console.error('Failed to save SambaNova API key: ', e);
   }
   sambanovaKey.value = '';
   successMessage.value = 'SambaNova API key cleared successfully!';
@@ -791,7 +804,7 @@ const clearSerperKey = async () => {
 };
 
 const updateAndCallEvents = async () => {
-  await checkRequiredKeys();
+  checkRequiredKeys();
 
   emit('keysUpdated');
   emitterMitt.emit('keys-updated', missingKeys.value);
@@ -834,16 +847,6 @@ const executeDeleteAccount = async () => {
     );
 
     if (response.status === 200) {
-      // Clear local storage
-      // const keysToRemove = [
-      //   `sambanova_key_${userId.value}`,
-      //   `exa_key_${userId.value}`,
-      //   `serper_key_${userId.value}`,
-      //   `fireworks_key_${userId.value}`
-      // ]
-
-      // keysToRemove.forEach(key => localStorage.removeItem(key))
-
       localStorage.clear();
 
       // Show success message briefly
