@@ -112,6 +112,13 @@ class QueryRouterService:
                     "deep_research_topic": ""
                 }
             })
+        elif detected_type == "sambanova_knowledge":
+            return json.dumps({
+                "type": "sambanova_knowledge",
+                "parameters": {
+                    "sambanova_question": ""
+                }
+            })
         # else, fallback => sales
         return json.dumps({
             "type": "sales_leads",
@@ -166,6 +173,12 @@ class QueryRouterService:
         return {
             "deep_research_topic": params.get("deep_research_topic", "")
         }
+        
+    def _normalize_sambanova_knowledge_params(self, params: Dict) -> Dict:
+        """Normalize deep research parameters with safe defaults."""
+        return {
+            "sambanova_question": params.get("sambanova_question", "")
+        }
 
     def _detect_query_type(self, query: str) -> str:
         """
@@ -197,6 +210,10 @@ class QueryRouterService:
         # If more than 1 recognized => deep_research
         if count_known_cos > 1:
             return "deep_research"
+        
+        # if user explicitly says "sambanova" or "aisk" => sambanova knowledge agent
+        if "sambanova" in query_lower or "aisk" in query_lower:
+            return "sambanova_knowledge" 
 
         # 1) If user explicitly says "fundamental analysis" or "technical analysis" => finance
         if "fundamental analysis" in query_lower or "technical analysis" in query_lower:
@@ -264,6 +281,8 @@ class QueryRouterService:
             count_known_cos = sum(1 for co in self.known_big_companies + self.known_tickers if co in qlower)
             if count_known_cos > 1:
                 return "deep_research"
+            
+            #TODO add overrides for sambanova_knowledge if needed
 
         return chosen_type
 
@@ -316,7 +335,7 @@ class QueryRouterService:
         You are a query routing expert that categorizes queries and extracts structured information.
         Always return a valid JSON object with 'type' and 'parameters'.
 
-        We have four possible types: 'sales_leads', 'educational_content', 'financial_analysis', or 'deep_research'.
+        We have four possible types: 'sales_leads', 'educational_content', 'financial_analysis', 'deep_research' or 'sambanova_knowledge'.
 
         Rules:
         1. For 'educational_content':
@@ -333,6 +352,8 @@ class QueryRouterService:
              If the query references multiple companies, or a not-yet-public company (S-1), revert to 'deep_research'.
         4. For 'deep_research':
            - Provide 'deep_research_topic' (the user's full query for in-depth or multi-company research)
+        5. For 'sambanova_knowledge':
+            - provide 'sambanova_question' (the user sambanova related question)
 
         Examples:
 
@@ -434,6 +455,14 @@ class QueryRouterService:
           }}
         }}
 
+        Query: "what is the sambanova product sambastudio?"
+        {{
+          "type": "sambanova_knowledge",
+          "parameters": {{
+            "sambanova question": "what is the product sambastudio?",
+          }}
+        }}
+        
         User query: "{query}"
         Initial type detection suggests: {detected_type}
 
@@ -461,6 +490,10 @@ class QueryRouterService:
                 )
             elif parsed_result["type"] == "deep_research":
                 parsed_result["parameters"] = self._normalize_deep_research_params(
+                    parsed_result.get("parameters", {})
+                )
+            elif parsed_result["type"] == "sambanova_knowledge":
+                parsed_result["parameters"] = self._normalize_sambanova_knowledge_params(
                     parsed_result.get("parameters", {})
                 )
             else:
@@ -584,6 +617,8 @@ class QueryRouterServiceChat:
         # If user explicitly says "fundamental analysis" or "technical analysis" => finance
         if "fundamental analysis" in query_lower or "technical analysis" in query_lower:
             return "financial_analysis"
+        
+        # TODO add default rules for sambanova_knowledge
 
         # Tally normal keywords
         edu_score = sum(1 for keyword in self.edu_keywords if keyword in query_lower)
@@ -733,6 +768,12 @@ class QueryRouterServiceChat:
             "deep_research_topic": params.get("deep_research_topic", "")
         }
 
+    def _normalize_sambanova_knowledge_params(self, params: Dict) -> Dict:
+        """Normalize sambanova knowledge parameters with safe defaults."""
+        return {
+            "sambanova_question": params.get("sambanova_question", "")
+        }
+
     def _normalize_user_proxy_params(self, params: Dict) -> Dict:
         """Normalize user proxy parameters with safe defaults."""
         return {
@@ -802,13 +843,6 @@ class QueryRouterServiceChat:
           }}
         }}
 
-        Query: "Who are SambaNova?"
-        {{
-            "type": "assistant",
-            "parameters": {{
-                "query": "Who are SambaNova?"
-            }}
-        }}
 
         "type": "financial_analysis"
         "description": "Handles complex financial analysis queries ONLY, including company reports, company financials, financial statements, and market trends. This is NOT for quick information or factual answers about STOCK PRICES. For this agent to work you need at least one ticker or company name, and it must be a single public company. If the query is a factual answer or quick information about a company person or product, ALWAYS use the assistant agent instead. This is a specialized agent for complex financial analysis and NEVER use this agent for quick info or if the user references multiple companies or IPO/S-1.",
@@ -921,6 +955,26 @@ class QueryRouterServiceChat:
             "deep_research_topic": "Analyze the stock market sell off today and tell me three S&P companies I should not invest in based on their stock price"
           }}
         }}
+        
+        "type": "sambanova_knowledge",
+        "description": "Handles sambanova related queries with a RAG LlamaStack agent. For queries that require specific knowledge about sambanova products and offering.",
+        "examples": "How can I use the sambanova Enterprise Knowlege Retriver AI Starter Kit, what is the performance of sambanova's RDU vs a GPU, how can I use the sambanova cloud API",
+
+        Query: "what is the sambanova product sambastudio?"
+        {{
+          "type": "sambanova_knowledge",
+          "parameters": {{
+            "sambanova_question": "what is the product sambastudio?",
+          }}
+        }}
+        
+        Query: "Who are SambaNova?"
+        {{
+            "type": "sambanova_knowledge",
+            "parameters": {{
+                "sambanova_question": "Who are SambaNova?"
+            }}
+        }}
 
         "type": "user_proxy",
         "description": "This is NOT an agent but a direct response back to the user. Use this type when:
@@ -952,9 +1006,11 @@ class QueryRouterServiceChat:
         3. For 'deep_research':
            - Provide 'deep_research_topic' (the user's full research query)
            - Use if multiple companies or S-1/IPO references or indexes like S&P
-        4. For 'assistant':
+        4. For 'sambanova_knowledge':
+           - Provide 'sambanova_question' (the user sambanova related question)
+        5. For 'assistant':
            - Provide 'query' (the user's full query)
-        5. For 'user_proxy':
+        6. For 'user_proxy':
            - Provide 'agent_question' (the question that requires a response from the user)
 
         Return ONLY JSON with 'type' and 'parameters'. Your job depends on it. 
@@ -975,6 +1031,10 @@ class QueryRouterServiceChat:
             )
         elif parsed_result["type"] == "deep_research":
             parsed_result["parameters"] = self._normalize_deep_research_params(
+                parsed_result.get("parameters", {})
+            )
+        elif parsed_result["type"] == "sambanova_knowledge":
+            parsed_result["parameters"] = self._normalize_sambanova_knowledge_params(
                 parsed_result.get("parameters", {})
             )
         elif parsed_result["type"] == "user_proxy":

@@ -10,6 +10,7 @@ from .data_types import (
     UserQuestion,
     AgentEnum,  # import the extended enum with DeepResearch
     DeepResearch,
+    SambaKnowledge,
 )
 from .otlp_tracing import logger
 from pydantic import BaseModel
@@ -73,6 +74,11 @@ class AgentRegistry:
                 "description": "Handles advanced educational content queries with a multi-step research flow (LangGraph). For queries that require a more in-depth or structured approach.",
                 "examples": "Generate a thorough technical report on quantum entanglement with references, Provide a multi-section explanation with research steps.",
             },
+            "sambanova_knowledge": {
+                "agent_type": "sambanova_knowledge",
+                "description": "Handles sambanova related queries with a RAG LlamaStack agent. For queries that require specific knowledge about sambanova products and offering.",
+                "examples": "How can I use the sambanova Enterprise Knowlege Retriver AI Starter Kit",
+            },
             "user_proxy": {
                 "agent_type": "user_proxy",
                 "description": "Handles questions that require a response from the user. This agent is used for queries that require a response from the user.",
@@ -124,6 +130,13 @@ class AgentRegistry:
             "agent_type": "deep_research",
             "parameters": {generate_type_string(DeepResearch)}
         }}
+    ]
+    
+    [
+        {{
+            "agent_type": "sambanova_knowledge",
+            "parameters": {generate_type_string(SambaKnowledge)}
+        }} 
     ]
 
     [

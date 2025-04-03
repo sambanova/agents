@@ -14,6 +14,7 @@ class AgentEnum(str, Enum):
     Assistant = "assistant"
     UserProxy = "user_proxy"
     DeepResearch = "deep_research"  # For advanced research (LangGraph)
+    SambaKnowledge = "sambanova_knowledge" # llamastack sambanova knowledge agent
     Error = "error"
 class Greeter(BaseModel):
     greeting: str
@@ -72,6 +73,9 @@ class SalesLeads(BaseModel):
 
 class DeepResearch(BaseModel):
     deep_research_topic: str = Field(default="", description="The topic of the research")
+    
+class SambaKnowledge(BaseModel):
+    sambanova_question: str = Field(default="", description="Question about SambaNova")
 
 class EducationalContent(BaseModel):
     topic: str = Field(default="", description="The topic of the research, use a single word")
@@ -96,7 +100,7 @@ class EndUserMessage(BaseAgentMessage):
 class AgentRequest(BaseModel):
     agent_type: AgentEnum
     parameters: Union[
-        FinancialAnalysis, SalesLeads, AssistantMessage, UserQuestion, DeepResearch
+        FinancialAnalysis, SalesLeads, AssistantMessage, UserQuestion, DeepResearch, SambaKnowledge
     ]
     query: str
     docs: Optional[List[str]] = None
@@ -110,6 +114,7 @@ class AgentRequest(BaseModel):
             AgentEnum.Assistant: AssistantMessage,
             AgentEnum.UserProxy: UserQuestion,
             AgentEnum.DeepResearch: DeepResearch,
+            AgentEnum.SambaKnowledge: SambaKnowledge,
         }[self.agent_type]
 
         if isinstance(self.parameters, expected_type):

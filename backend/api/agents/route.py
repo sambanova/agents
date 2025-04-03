@@ -28,6 +28,7 @@ from api.data_types import (
     AgentStructuredResponse,
     AssistantMessage,
     DeepResearch,
+    SambaKnowledge,
     EndUserMessage,
     ErrorResponse,
     AgentEnum,
@@ -147,6 +148,7 @@ class SemanticRouterAgent(RoutedAgent):
 
         agent_type = AgentEnum(request_type)
         # Create AgentRequest using model_validate
+        
         request = AgentRequest.model_validate(
             {
                 "agent_type": agent_type,
@@ -300,6 +302,7 @@ class SemanticRouterAgent(RoutedAgent):
         user_proxy_plans = []
         assistant_plans = []
         deep_research_plans = []
+        sambanova_knowledge_plans = []
         for plan in plans:
             if plan["agent_type"] == AgentEnum.UserProxy:
                 user_proxy_plans.append(plan)
@@ -307,6 +310,8 @@ class SemanticRouterAgent(RoutedAgent):
                 assistant_plans.append(plan)
             elif plan["agent_type"] == AgentEnum.DeepResearch:
                 deep_research_plans.append(plan)
+            elif plan["agent_type"] == AgentEnum.SambaKnowledge:
+                sambanova_knowledge_plans.append(plan)
 
         if len(user_proxy_plans) > 0:
             return [user_proxy_plans[0]]
@@ -314,6 +319,8 @@ class SemanticRouterAgent(RoutedAgent):
             return [assistant_plans[0]]
         elif len(deep_research_plans) > 0:
             return [deep_research_plans[0]]
+        elif len(sambanova_knowledge_plans) > 0:
+            return [sambanova_knowledge_plans][0]
         else:
             return [plans[0]]
 
