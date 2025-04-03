@@ -70,9 +70,9 @@ You will need to create free accounts to access these APIs:
 
 # Using the Application
 
-You can setup and run the application in two ways: Cloud hosted version or locally hosted version.
+You can setup and run the application in two ways: the cloud-hosted version or the locally-hosted version.
 
-## Cloud hosted version
+## Cloud Hosted
 
 This version is hosted on SambaNova Cloud. No need to install dependencies locally.  Just set up an account and use your SambaNova Cloud API Key.
 
@@ -81,7 +81,7 @@ This version is hosted on SambaNova Cloud. No need to install dependencies local
 1. Once you login, go to settings and add the SambaNova Cloud API key.
 1. Start using the application to enhance sales workflows, conduct research, and gain actionable insights.
 
-## Locally hosted version
+## Locally Hosted
 
 ### Frontend setup
 
