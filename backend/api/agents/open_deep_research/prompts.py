@@ -21,7 +21,10 @@ The queries should:
 3. Be specific enough to find high-quality, relevant sources while covering the breadth needed for the report structure. 
 
 Make the queries specific enough to find high-quality, relevant sources while covering the breadth needed for the report structure.
-</Task>"""
+</Task>
+
+Make sure to give your answer in the same language as the topic input (e.g. spanish, german, english, italian, french, portuguese, arabic, japanese).
+"""
 
 # Prompt to generate the report plan
 report_planner_instructions = """I want a plan for a report.
@@ -84,7 +87,10 @@ Your queries should be:
 - Technical enough to capture detailed implementation information
 - Diverse enough to cover all aspects of the section plan
 - Focused on authoritative sources (documentation, technical blogs, academic papers)
-</Task>"""
+</Task>
+
+Make sure to give your answer in the same language as the topic input (e.g. spanish, german, english, italian, french, portuguese, arabic, japanese).
+"""
 
 # Section writer instructions
 section_writer_instructions = """You are an expert technical writer crafting one section of a technical report.
