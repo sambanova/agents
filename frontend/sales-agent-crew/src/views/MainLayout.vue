@@ -234,7 +234,7 @@ const metadataChanged = (receivedMetadata) => {
 
   try {
     if (mixpanel && receivedMetadata) {
-      mixpanel.track('Agent Workflow Completions', {
+      mixpanel.track('Workflow Completions', {
         'User email': user?.value.emailAddresses[0].emailAddress,
         'User ID': userId.value,
         ...receivedMetadata,

@@ -27,27 +27,7 @@
               fill="#26A69A"
             />
           </svg>
-          {{
-            key === 'duration'
-              ? 'Latency:'
-              : key === 'llm_name'
-              ? 'LLM Name:'
-              : key === 'llm_provider'
-              ? 'LLM provider:'
-              : key === 'workflow_name'
-              ? 'Workflow name:'
-              : key === 'agent_name'
-              ? 'Agent name:'
-              : key === 'task'
-              ? 'Task:'
-              : key === 'total_tokens'
-              ? 'Total tokens:'
-              : key === 'prompt_tokens'
-              ? 'Total input tokens:'
-              : key === 'completion_tokens'
-              ? 'Total output tokens:'
-              : formatKey(key)
-          }}
+          {{ formatKey(key) }}:
 
           <span
             class="ml-1 capitalize font-semibold text-primary-brandTextPrimary"
@@ -85,9 +65,29 @@ function formatNumber(value) {
   return `${formatted}k`;
 }
 
-// Format key: Replace underscores with spaces.
 function formatKey(key) {
-  return key.replace(/_/g, ' ');
+  switch (key) {
+    case 'duration':
+      return 'Latency';
+    case 'llm_name':
+      return 'LLM name';
+    case 'llm_provider':
+      return 'LLM provider';
+    case 'workflow_name':
+      return 'Workflow name';
+    case 'agent_name':
+      return 'Agent name';
+    case 'task':
+      return 'Task';
+    case 'total_tokens':
+      return 'Total tokens';
+    case 'prompt_tokens':
+      return 'Total input tokens';
+    case 'completion_tokens':
+      return 'Total output tokens';
+    default:
+      return key.replace(/_/g, ' '); // Replace underscores with spaces.
+  }
 }
 </script>
 

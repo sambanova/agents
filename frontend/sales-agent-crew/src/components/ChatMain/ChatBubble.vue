@@ -26,11 +26,10 @@
         <!-- Card -->
         <div class="inline-block">
           <div
-            class="relative p-4 flex items-center capitalize space-y-3 font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center capitalize"
+            class="relative p-4 flex items-center capitalize space-y-3 font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center"
           >
             {{ provider === 'sambanova' ? 'SambaNova' : provider }} Agent
             <!-- Menu button: visible on hover -->
-
             <button
               v-if="
                 parsedData.agent_type === 'sales_leads' ||
@@ -64,17 +63,6 @@
               class="absolute right-1 top-8 bg-white border border-gray-200 shadow-lg rounded z-30"
               @click.stop
             >
-              <!-- <button
-          class="flex items-center w-full px-4 py-2 hover:bg-gray-100 text-left"
-          
-        >
-          <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" />
-            <polyline points="12 3 12 12" />
-            <polyline points="9 6 12 3 15 6" />
-          </svg>
-          View Report
-        </button> -->
               <button
                 class="flex items-center w-full px-4 py-2 hover:bg-gray-100 text-left"
                 @click="generatePDFFromHtml"

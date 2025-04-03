@@ -663,7 +663,7 @@ async function filterChat(msgData) {
     }, []);
   emit('agentThoughtsDataChanged', agentThoughtsData.value);
 
-  let userMessages = messagesData.value
+  const userMessages = messagesData.value
     .filter((message) => message.event === 'user_message')
     .sort(
       (a, b) =>
@@ -1220,6 +1220,7 @@ const addMessage = async () => {
 
       socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
+      searchQuery.value = '';
 
       console.log('Message sent after connecting:', messagePayload);
     } catch (error) {
@@ -1310,14 +1311,15 @@ async function connectWebSocket() {
         ) {
           try {
             if (receivedData.event == 'completion') {
-              let metaDataComplettion = JSON.parse(receivedData.data);
-              completionMetaData.value = metaDataComplettion.metadata;
+              let metaDataCompletion = JSON.parse(receivedData.data);
+              completionMetaData.value = metaDataCompletion.metadata;
               emit('metadataChanged', completionMetaData.value);
+              emitterMitt.emit('completion-reached');
             } else {
               AutoScrollToBottom();
             }
           } catch (error) {
-            console.log('completionMetaData.value', error);
+            console.error('[completionMetaData]', error);
             isLoading.value = false;
           }
           messagesData.value.push(receivedData);

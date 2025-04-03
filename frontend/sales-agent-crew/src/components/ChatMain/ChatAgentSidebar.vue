@@ -97,133 +97,14 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, computed, inject } from 'vue';
+import { ref, watch, nextTick, computed, inject, onMounted } from 'vue';
 import { useAuth, useUser } from '@clerk/vue';
 import TimelineItem from '@/components/ChatMain/TimelineItem.vue';
 import MetaData from '@/components/ChatMain/MetaData.vue';
 import Fastest from '@/components/ChatMain/Fastest.vue';
 import MaximizeBox from '@/components/ChatMain/MaximizeBox.vue';
+import emitterMitt from '@/utils/eventBus';
 
-const agentContainer = ref(null);
-
-// Reactive variables to store parsed data from the WebSocket.
-const agentName = ref('');
-const timestamp = ref(0);
-const sections = ref([]);
-
-// This ref holds all the log messages concatenated as a single string.
-const logs = ref('No data received yet.\n');
-
-// Variable to store the WebSocket instance.
-let socket = null;
-
-// Function to establish the WebSocket connection.
-function connectWebSocket() {
-  // Construct the base WebSocket URL with /chat endpoint
-  let WEBSOCKET_URL =
-    import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:8000';
-  WEBSOCKET_URL = `${WEBSOCKET_URL}/chat`;
-
-  // Construct the full URL using query parameters.
-  const fullUrl = `${WEBSOCKET_URL}?user_id=${props.userId}&conversation_id=${props.runId}`;
-  console.log('Connecting to:', fullUrl);
-  socket = new WebSocket(fullUrl);
-
-  socket.onopen = () => {
-    console.log('WebSocket connection opened');
-    // Log the connection open event.
-    logs.value += `Connection opened at ${new Date().toLocaleTimeString()}\n`;
-    // Send the initial payload.
-    const payload = {
-      event: 'user_input',
-      data: 'Iphone vs android',
-    };
-    socket.send(JSON.stringify(payload));
-    logs.value += `Sent: ${JSON.stringify(payload)}\n`;
-  };
-
-  socket.onmessage = (event) => {
-    console.log('Received message:', event.data);
-    // Append the received data to the log with a newline.
-    logs.value += `${event.data}\n`;
-
-    try {
-      const outerData = JSON.parse(event.data);
-      // Parse the inner data string.
-      const innerData = JSON.parse(outerData.data);
-      // Set agent name and timestamp.
-      agentName.value = innerData.agent_name;
-      timestamp.value = innerData.timestamp;
-      // Parse the text field into sections.
-      sections.value = parseSections(innerData.text);
-    } catch (error) {
-      console.error('Error parsing message:', error);
-    }
-  };
-
-  socket.onerror = (error) => {
-    console.error('WebSocket error:', error);
-    logs.value += `Error: ${error.message || 'Unknown error'}\n`;
-  };
-
-  socket.onclose = (event) => {
-    console.log('WebSocket connection closed:', event);
-    logs.value += `Connection closed at ${new Date().toLocaleTimeString()}\n`;
-  };
-}
-
-function parseSections(text) {
-  const lines = text.split(/\r?\n/);
-  const result = [];
-  let currentSection = { heading: '', content: '' };
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue; // skip blank lines
-
-    // Check if the line contains a colon in the middle. If the colon is the last character, treat as a heading.
-    if (trimmed.endsWith(':')) {
-      // If there is an active section, push it.
-      if (currentSection.heading || currentSection.content) {
-        result.push({
-          heading: currentSection.heading,
-          content: currentSection.content.trim(),
-        });
-      }
-      // Start new section with heading (remove the colon)
-      currentSection = { heading: trimmed.slice(0, -1), content: '' };
-    } else {
-      // Check if the line contains a colon (e.g. "Thought: I now know the final answer")
-      const colonIndex = trimmed.indexOf(':');
-      if (colonIndex > 0) {
-        // If the part before the colon appears to be a heading (e.g. "Thought"), then treat it as a new section.
-        const potentialHeading = trimmed.slice(0, colonIndex).trim();
-        const potentialContent = trimmed.slice(colonIndex + 1).trim();
-        // If currentSection is not empty, push it.
-        if (currentSection.heading || currentSection.content) {
-          result.push({
-            heading: currentSection.heading,
-            content: currentSection.content.trim(),
-          });
-        }
-        currentSection = {
-          heading: potentialHeading,
-          content: potentialContent + ' ',
-        };
-      } else {
-        // Otherwise, add the line to the current section's content.
-        currentSection.content += trimmed + ' ';
-      }
-    }
-  }
-  if (currentSection.heading || currentSection.content) {
-    result.push({
-      heading: currentSection.heading,
-      content: currentSection.content.trim(),
-    });
-  }
-  return result;
-}
 // PROPS
 const props = defineProps({
   userId: {
@@ -247,15 +128,16 @@ const props = defineProps({
     default: () => ({}), // or [] if you expect an array
   },
 });
+
+const agentContainer = ref(null);
 const agentThoughtsData = ref([]);
 const metadata = ref(null);
 
-// TODO: Mixpanel settings
-// // Clerk
-// const { userId } = useAuth();
-// const { user } = useUser();
-// // Mixpanel
-// const mixpanel = inject('mixpanel');
+// Clerk
+const { userId } = useAuth();
+const { user } = useUser();
+// Mixpanel
+const mixpanel = inject('mixpanel');
 
 watch(
   () => props.metadata,
@@ -281,9 +163,7 @@ watch(
       'to',
       newAgentData
     );
-
     agentThoughtsData.value = newAgentData || [];
-    // TODO: find a way to have the final agent data on a data structure to properly log it to mixpanel
     nextTick(() => {
       setTimeout(() => {
         if (agentContainer.value) {
@@ -298,6 +178,46 @@ watch(
   { deep: true } // If you want to detect nested mutations
 );
 const collapsed = ref(false);
+
+const sendMixpanelMetrics = () => {
+  const agentThoughtsDataArray = Object.values(agentThoughtsData.value);
+  const runId = agentThoughtsDataArray[0].run_id;
+  // TODO: Do we need uniqueness on these?
+  const agentNames = agentThoughtsDataArray.map(
+    (entry) => entry.metadata.agent_name
+  );
+  const llmNames = agentThoughtsDataArray.map(
+    (entry) => entry.metadata.llm_name
+  );
+  const workflowNames = agentThoughtsDataArray.map(
+    (entry) => entry.metadata.workflow_name
+  );
+  const tasks = agentThoughtsDataArray
+    .map((entry) => entry.metadata.task)
+    .filter((task) => task !== ''); // Some agents return with empty task key
+
+  const formattedAgentThoughtsData = {
+    'Run ID': runId,
+    'LLM Name(s)': llmNames,
+    'Agent Name(s)': agentNames,
+    'Workflow Name(s)': workflowNames,
+    'Task(s)': tasks,
+  };
+
+  try {
+    if (mixpanel) {
+      mixpanel.track('Workflow Completions Details', {
+        'User email': user?.value.emailAddresses[0].emailAddress,
+        'User ID': userId.value,
+        ...formattedAgentThoughtsData,
+      });
+    } else {
+      console.warn('Mixpanel not available');
+    }
+  } catch (error) {
+    console.error('Failed to send tracking data to Mixpanel:', error);
+  }
+};
 
 // SSE
 const messages = ref([]);
@@ -335,6 +255,10 @@ watch(messages, () => {
 
 const presentMetadata = computed(() => {
   return props.metadata;
+});
+
+onMounted(() => {
+  emitterMitt.on('completion-reached', sendMixpanelMetrics);
 });
 </script>
 
