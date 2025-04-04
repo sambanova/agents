@@ -152,6 +152,12 @@ class DeepResearchReport(BaseModel):
     sections: List[DeepResearchSection]
     final_report: str
     citations: List[DeepCitation] = Field(default_factory=list)
+    
+class SambaKnowledgeResult(BaseModel):
+    """
+    A structured object that collects the final response of sambanova knowledge,
+    """
+    response: str
 
 class AgentStructuredResponse(BaseModel):
     agent_type: AgentEnum
@@ -164,6 +170,7 @@ class AgentStructuredResponse(BaseModel):
         UserQuestion,
         DeepResearchUserQuestion,
         DeepResearchReport,
+        SambaKnowledgeResult,
         ErrorResponse,
     ]
     metadata: Optional[Dict[str, Any]] = None
