@@ -13,7 +13,7 @@
         <div class="flex items-center justify-between">
           <!-- Left text -->
           <div
-            class="text-[16px] font-medium text-gray-800 line-clamp-1 overflow-hidden"
+            class="text-[16px] font-medium capitalize text-gray-800 line-clamp-1 overflow-hidden"
           >
             {{ chatName }}
           </div>
@@ -480,14 +480,6 @@ function handleKeydownScroll(event) {
   }
 }
 
-// function AutoScrollToBottom() {
-//   nextTick(() => {
-//     if (container.value) {
-//       container.value.scrollTop = container.value.scrollHeight
-//     }
-//   })
-// }
-
 function AutoScrollToBottom(smoothScrollOff = false) {
   nextTick(() => {
     setTimeout(() => {
@@ -563,31 +555,6 @@ watch(
     connectWebSocket();
   }
 );
-
-async function loadFullHistory() {
-  if (!props.conversationId) return;
-  try {
-    const resp = await axios.get(
-      `${import.meta.env.VITE_API_URL}/newsletter_chat/history/${
-        props.conversationId
-      }`,
-      {
-        headers: { 'x-user-id': props.userId },
-      }
-    );
-    const data = resp.data;
-    if (Array.isArray(data.messages)) {
-      messages.value = data.messages.map(parseMessage);
-    } else {
-      messages.value = [];
-    }
-    await nextTick();
-    scrollToBottom();
-  } catch (err) {
-    console.error('[ChatView] Error loading conversation history:', err);
-    messages.value = [];
-  }
-}
 
 const checkAndOpenSettings = () => {
   emitterMitt.emit('check-keys', { message: 'check keys!' });
@@ -845,63 +812,8 @@ watch(
   { immediate: true }
 );
 
-const missingKeys = computed(() => {
-  const missing = [];
-  if (!sambanovaKey.value) missing.push('SambaNova');
-  if (!exaKey.value) missing.push('Exa');
-  if (!serperKey.value) missing.push('Serper');
-  return missing;
-});
-
 const statusText = ref('Loading...');
 const plannerTextData = ref([]);
-async function performSearch() {
-  try {
-    emit('searchStart', 'routing_query');
-    const routeResp = await axios.post(
-      `${import.meta.env.VITE_API_URL}/route`,
-      { query: searchQuery.value },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-sambanova-key': sambanovaKey.value || '',
-          'x-user-id': userId.value || '',
-          'x-run-id': props.runId || '',
-        },
-      }
-    );
-    const detectedType = routeResp.data.type;
-    emit('searchStart', detectedType || 'unknown');
-    const parameters = {
-      ...routeResp.data.parameters,
-      document_ids: selectedDocuments.value,
-    };
-    const executeResp = await axios.post(
-      `${import.meta.env.VITE_API_URL}/execute/${detectedType}`,
-      parameters,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-sambanova-key': sambanovaKey.value || '',
-          'x-serper-key': serperKey.value || '',
-          'x-exa-key': exaKey.value || '',
-          'x-user-id': userId.value || '',
-          'x-run-id': props.runId || '',
-          'x-session-id': props.sessionId || '',
-        },
-      }
-    );
-    emit('searchComplete', {
-      type: detectedType,
-      query: searchQuery.value,
-      results: executeResp.data,
-    });
-    searchQuery.value = '';
-  } catch (error) {
-    console.error('[SearchSection] performSearch error:', error);
-    emit('searchError', error);
-  }
-}
 
 function toggleRecording() {
   if (isRecording.value) {
@@ -1185,11 +1097,9 @@ const addMessage = async () => {
   }
 
   completionMetaData.value = null;
-  // plannerText.value = null
   statusText.value = 'Loading...';
   AutoScrollToBottom();
   agentThoughtsData.value = [];
-  // workflowData.value = []
   emit('agentThoughtsDataChanged', agentThoughtsData.value);
   emit('metadataChanged', completionMetaData.value);
   if (!searchQuery.value.trim()) return;
@@ -1221,8 +1131,6 @@ const addMessage = async () => {
       socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
       searchQuery.value = '';
-
-      console.log('Message sent after connecting:', messagePayload);
     } catch (error) {
       errorMessage.value = 'WebSocket connection error occurred.';
       isLoading.value = false;
@@ -1313,8 +1221,8 @@ async function connectWebSocket() {
             if (receivedData.event == 'completion') {
               let metaDataCompletion = JSON.parse(receivedData.data);
               completionMetaData.value = metaDataCompletion.metadata;
+
               emit('metadataChanged', completionMetaData.value);
-              emitterMitt.emit('completion-reached');
             } else {
               AutoScrollToBottom();
             }
@@ -1330,6 +1238,7 @@ async function connectWebSocket() {
 
           statusText.value = dataParsed.agent_name;
           emit('agentThoughtsDataChanged', agentThoughtsData.value);
+
           try {
             addOrUpdateModel(dataParsed.metadata);
 

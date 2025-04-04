@@ -67,7 +67,6 @@ const workflowData = computed(() => props.workflowData);
 watch(
   () => props.workflowData,
   (newData, oldData) => {
-    console.log('Workflow data updated:', newData);
     if (oldData && newData.length !== oldData.length) {
       console.log('New data has been added or removed.');
       // Add any additional logic here if needed

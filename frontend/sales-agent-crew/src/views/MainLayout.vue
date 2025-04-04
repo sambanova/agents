@@ -211,9 +211,6 @@ const keysUpdateCounter = ref(0);
 
 const reportStore = useReportStore();
 
-// For dev
-const isDev = ref(import.meta.env.DEV);
-
 // Header ref
 const headerRef = ref(null);
 
@@ -231,20 +228,6 @@ const mixpanel = inject('mixpanel');
 
 const metadataChanged = (receivedMetadata) => {
   metadata.value = receivedMetadata;
-
-  try {
-    if (mixpanel && receivedMetadata) {
-      mixpanel.track('Workflow Completions', {
-        'User email': user?.value.emailAddresses[0].emailAddress,
-        'User ID': userId.value,
-        ...receivedMetadata,
-      });
-    } else {
-      console.warn('Mixpanel not available');
-    }
-  } catch (error) {
-    console.error('Failed to send tracking data to Mixpanel:', error);
-  }
 };
 
 const handleNewChat = () => {
@@ -260,7 +243,52 @@ const agentThoughtsDataChanged = (agentThoughtsData) => {
   ) {
     chatSideBarRef.value.loadChats();
   }
+
+  // If the metrics data is empty, we don't need to send anything to Mixpanel
+  if (metadata.value && agentData.value.length > 0) {
+    const runId = agentData.value[0]?.run_id;
+    const agentThoughtsData = {};
+    const fields = [
+      'llm_name',
+      'agent_name',
+      'workflow',
+      'workflow_name',
+      'task',
+    ];
+
+    // TODO: Maybe count and filter
+    fields.forEach((field) => {
+      agentThoughtsData[field] = agentData.value
+        .map((obj) => obj['metadata'][field])
+        .filter(
+          (value) => value !== undefined && value !== null && value !== ''
+        );
+    });
+
+    const completionMetrics = {
+      run_id: runId,
+      user_email: user?.value.emailAddresses[0].emailAddress,
+      user_id: userId.value,
+      ...metadata.value,
+      ...filterEmptyArrays(agentThoughtsData),
+    };
+
+    sendMixpanelMetrics(completionMetrics);
+  }
 };
+
+const sendMixpanelMetrics = (completionMetrics) => {
+  try {
+    if (mixpanel && completionMetrics) {
+      mixpanel.track('Workflow Completions', completionMetrics);
+    } else {
+      console.warn('Mixpanel not available');
+    }
+  } catch (error) {
+    console.error('Failed to send tracking data to Mixpanel:', error);
+  }
+};
+
 // The runId for SSE etc.
 const currentRunId = ref('');
 // The sessionId that remains consistent for document uploads and searches
@@ -308,6 +336,14 @@ function handleSavedReportSelect(savedReport) {
   selectedReport.value = null;
   reportModalOpen.value = false;
 }
+
+const filterEmptyArrays = (obj) => {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([_, value]) => {
+      return !(Array.isArray(value) && value.length === 0);
+    })
+  );
+};
 
 ////////////////////////////////////////////////////////////
 // The below are from your workflow approach (SearchSection)

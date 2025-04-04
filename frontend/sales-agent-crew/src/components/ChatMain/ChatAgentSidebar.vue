@@ -97,13 +97,11 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, computed, inject, onMounted } from 'vue';
-import { useAuth, useUser } from '@clerk/vue';
+import { ref, watch, nextTick, computed } from 'vue';
 import TimelineItem from '@/components/ChatMain/TimelineItem.vue';
 import MetaData from '@/components/ChatMain/MetaData.vue';
 import Fastest from '@/components/ChatMain/Fastest.vue';
 import MaximizeBox from '@/components/ChatMain/MaximizeBox.vue';
-import emitterMitt from '@/utils/eventBus';
 
 // PROPS
 const props = defineProps({
@@ -133,12 +131,6 @@ const agentContainer = ref(null);
 const agentThoughtsData = ref([]);
 const metadata = ref(null);
 
-// Clerk
-const { userId } = useAuth();
-const { user } = useUser();
-// Mixpanel
-const mixpanel = inject('mixpanel');
-
 watch(
   () => props.metadata,
   (newMetadata, oldMetadata) => {
@@ -164,6 +156,7 @@ watch(
       newAgentData
     );
     agentThoughtsData.value = newAgentData || [];
+
     nextTick(() => {
       setTimeout(() => {
         if (agentContainer.value) {
@@ -178,46 +171,6 @@ watch(
   { deep: true } // If you want to detect nested mutations
 );
 const collapsed = ref(false);
-
-const sendMixpanelMetrics = () => {
-  const agentThoughtsDataArray = Object.values(agentThoughtsData.value);
-  const runId = agentThoughtsDataArray[0].run_id;
-  // TODO: Do we need uniqueness on these?
-  const agentNames = agentThoughtsDataArray.map(
-    (entry) => entry.metadata.agent_name
-  );
-  const llmNames = agentThoughtsDataArray.map(
-    (entry) => entry.metadata.llm_name
-  );
-  const workflowNames = agentThoughtsDataArray.map(
-    (entry) => entry.metadata.workflow_name
-  );
-  const tasks = agentThoughtsDataArray
-    .map((entry) => entry.metadata.task)
-    .filter((task) => task !== ''); // Some agents return with empty task key
-
-  const formattedAgentThoughtsData = {
-    'Run ID': runId,
-    'LLM Name(s)': llmNames,
-    'Agent Name(s)': agentNames,
-    'Workflow Name(s)': workflowNames,
-    'Task(s)': tasks,
-  };
-
-  try {
-    if (mixpanel) {
-      mixpanel.track('Workflow Completions Details', {
-        'User email': user?.value.emailAddresses[0].emailAddress,
-        'User ID': userId.value,
-        ...formattedAgentThoughtsData,
-      });
-    } else {
-      console.warn('Mixpanel not available');
-    }
-  } catch (error) {
-    console.error('Failed to send tracking data to Mixpanel:', error);
-  }
-};
 
 // SSE
 const messages = ref([]);
@@ -255,10 +208,6 @@ watch(messages, () => {
 
 const presentMetadata = computed(() => {
   return props.metadata;
-});
-
-onMounted(() => {
-  emitterMitt.on('completion-reached', sendMixpanelMetrics);
 });
 </script>
 
