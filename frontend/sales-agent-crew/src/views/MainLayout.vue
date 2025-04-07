@@ -1,4 +1,3 @@
-<!-- src/views/MainLayout.vue -->
 <template>
   <!-- Outer container uses flex so the sidebar, main area, and agent sidebar appear side-by-side -->
   <div
@@ -223,15 +222,21 @@ const agentData = ref([]);
 const chatSideBarRef = ref(null);
 
 const metadata = ref(null);
+const metricsSent = ref(false);
 
 const mixpanel = inject('mixpanel');
 
-const metadataChanged = (receivedMetadata) => {
-  metadata.value = receivedMetadata;
-};
-
 const handleNewChat = () => {
   agentData.value = [];
+};
+
+const metadataChanged = (receivedMetadata) => {
+  metadata.value = receivedMetadata;
+
+  // If the metrics data is empty, we don't need to send anything to Mixpanel
+  if (!metricsSent.value && metadata.value && agentData.value.length > 0) {
+    sendMixpanelMetrics();
+  }
 };
 
 const agentThoughtsDataChanged = (agentThoughtsData) => {
@@ -245,7 +250,23 @@ const agentThoughtsDataChanged = (agentThoughtsData) => {
   }
 
   // If the metrics data is empty, we don't need to send anything to Mixpanel
-  if (metadata.value && agentData.value.length > 0) {
+  if (!metricsSent.value && metadata.value && agentData.value.length > 0) {
+    sendMixpanelMetrics();
+  } else if (metricsSent.value) {
+    // If the metrics have already been sent, reset the flag for future sends.
+    // This validation is here because the agentThoughtsDataChanged function
+    // can be called after the completion event, on a final think event. So if
+    // the metrics had been sent on the completion event, avoid sending them
+    // again.
+    metricsSent.value = false;
+    console.info('[Mixpanel] No data to send, metrics already sent.');
+  }
+};
+
+const sendMixpanelMetrics = () => {
+  let completionMetrics = null;
+
+  try {
     const runId = agentData.value[0]?.run_id;
     const agentThoughtsData = {};
     const fields = [
@@ -256,36 +277,42 @@ const agentThoughtsDataChanged = (agentThoughtsData) => {
       'task',
     ];
 
-    // TODO: Maybe count and filter
     fields.forEach((field) => {
-      agentThoughtsData[field] = agentData.value
-        .map((obj) => obj['metadata'][field])
-        .filter(
-          (value) => value !== undefined && value !== null && value !== ''
-        );
+      agentThoughtsData[field] = {};
+
+      agentData.value.forEach((obj) => {
+        const value = obj['metadata'][field];
+        // Only process non-empty values
+        if (value !== undefined && value !== null && value !== '') {
+          // Increment the counter for this value
+          agentThoughtsData[field][value] =
+            (agentThoughtsData[field][value] || 0) + 1;
+        }
+      });
     });
 
-    const completionMetrics = {
+    completionMetrics = {
       run_id: runId,
       user_email: user?.value.emailAddresses[0].emailAddress,
       user_id: userId.value,
       ...metadata.value,
-      ...filterEmptyArrays(agentThoughtsData),
+      ...filterEmptyKeys(agentThoughtsData),
     };
-
-    sendMixpanelMetrics(completionMetrics);
+  } catch (error) {
+    console.error('[Mixpanel] Failed to format metrics:', error);
   }
-};
 
-const sendMixpanelMetrics = (completionMetrics) => {
   try {
     if (mixpanel && completionMetrics) {
       mixpanel.track('Workflow Completions', completionMetrics);
+      console.info('[Mixpanel] Workflow Completions metrics sent.');
     } else {
       console.warn('Mixpanel not available');
     }
   } catch (error) {
     console.error('Failed to send tracking data to Mixpanel:', error);
+  } finally {
+    metricsSent.value = true;
   }
 };
 
@@ -337,10 +364,13 @@ function handleSavedReportSelect(savedReport) {
   reportModalOpen.value = false;
 }
 
-const filterEmptyArrays = (obj) => {
+const filterEmptyKeys = (obj) => {
   return Object.fromEntries(
     Object.entries(obj).filter(([_, value]) => {
-      return !(Array.isArray(value) && value.length === 0);
+      if (typeof value === 'object') {
+        return Object.keys(value).length > 0;
+      }
+      return true; // Keep non-empty values
     })
   );
 };

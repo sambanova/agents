@@ -637,9 +637,7 @@ async function filterChat(msgData) {
         new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
 
-  console.log('userMessages', userMessages);
-
-  if (userMessages[0].data) {
+  if (userMessages[0] && userMessages[0].data) {
     chatName.value = userMessages[0].data;
   }
 
