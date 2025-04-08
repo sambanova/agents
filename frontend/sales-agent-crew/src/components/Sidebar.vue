@@ -216,25 +216,6 @@ function selectReport(report) {
 
 }
 
-// Check on component mount
-onMounted(() => {
-  if (route.params.id) {
-    // myFunction(route.params.id)
-    // alert(route.params.id)
-
-    console.log("reportStore",reportStore.savedReports)
-    // let selectedReport=reportStore.savedReports.filter(r => r.id === route.params.id)
-
-    // console.log(selectReport)
-    
-  //   if (selectedReport?.length) {
-  //     return selectedReport[0]
-  // } else {
-  //   return null
-  // }
-  }
-})
-
 // Optionally, watch for changes in the route parameter
 watch(
   () => route.params.id,

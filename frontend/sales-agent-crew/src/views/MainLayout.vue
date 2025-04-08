@@ -1,4 +1,3 @@
-<!-- src/views/MainLayout.vue -->
 <template>
   <!-- Outer container uses flex so the sidebar, main area, and agent sidebar appear side-by-side -->
   <div
@@ -153,8 +152,9 @@ import {
   watch,
   onBeforeUnmount,
   provide,
+  inject,
 } from 'vue';
-import { useUser } from '@clerk/vue';
+import { useAuth, useUser } from '@clerk/vue';
 import { v4 as uuidv4 } from 'uuid';
 
 /** We import both old + chat sidebars as local variables. */
@@ -210,27 +210,33 @@ const keysUpdateCounter = ref(0);
 
 const reportStore = useReportStore();
 
-// For dev
-const isDev = ref(import.meta.env.DEV);
-
 // Header ref
 const headerRef = ref(null);
 
-// Clerk user ID
+// Clerk
 const { user } = useUser();
+const { userId } = useAuth();
 const clerkUserId = computed(() => user.value?.id || 'anonymous_user');
 
 const agentData = ref([]);
 const chatSideBarRef = ref(null);
 
 const metadata = ref(null);
+const metricsSent = ref(false);
 
-const metadataChanged = (metaData) => {
-  metadata.value = metaData;
-};
+const mixpanel = inject('mixpanel');
 
 const handleNewChat = () => {
   agentData.value = [];
+};
+
+const metadataChanged = (receivedMetadata) => {
+  metadata.value = receivedMetadata;
+
+  // If the metrics data is empty, we don't need to send anything to Mixpanel
+  if (!metricsSent.value && metadata.value && agentData.value.length > 0) {
+    sendMixpanelMetrics();
+  }
 };
 
 const agentThoughtsDataChanged = (agentThoughtsData) => {
@@ -242,7 +248,74 @@ const agentThoughtsDataChanged = (agentThoughtsData) => {
   ) {
     chatSideBarRef.value.loadChats();
   }
+
+  // If the metrics data is empty, we don't need to send anything to Mixpanel
+  if (!metricsSent.value && metadata.value && agentData.value.length > 0) {
+    sendMixpanelMetrics();
+  } else if (metricsSent.value) {
+    // If the metrics have already been sent, reset the flag for future sends.
+    // This validation is here because the agentThoughtsDataChanged function
+    // can be called after the completion event, on a final think event. So if
+    // the metrics had been sent on the completion event, avoid sending them
+    // again.
+    metricsSent.value = false;
+    console.info('[Mixpanel] No data to send, metrics already sent.');
+  }
 };
+
+const sendMixpanelMetrics = () => {
+  let completionMetrics = null;
+
+  try {
+    const runId = agentData.value[0]?.run_id;
+    const agentThoughtsData = {};
+    const fields = [
+      'llm_name',
+      'agent_name',
+      'workflow',
+      'workflow_name',
+      'task',
+    ];
+
+    fields.forEach((field) => {
+      agentThoughtsData[field] = {};
+
+      agentData.value.forEach((obj) => {
+        const value = obj['metadata'][field];
+        // Only process non-empty values
+        if (value !== undefined && value !== null && value !== '') {
+          // Increment the counter for this value
+          agentThoughtsData[field][value] =
+            (agentThoughtsData[field][value] || 0) + 1;
+        }
+      });
+    });
+
+    completionMetrics = {
+      run_id: runId,
+      user_email: user?.value.emailAddresses[0].emailAddress,
+      user_id: userId.value,
+      ...metadata.value,
+      ...filterEmptyKeys(agentThoughtsData),
+    };
+  } catch (error) {
+    console.error('[Mixpanel] Failed to format metrics:', error);
+  }
+
+  try {
+    if (mixpanel && completionMetrics) {
+      mixpanel.track('Workflow Completions', completionMetrics);
+      console.info('[Mixpanel] Workflow Completions metrics sent.');
+    } else {
+      console.warn('Mixpanel not available');
+    }
+  } catch (error) {
+    console.error('Failed to send tracking data to Mixpanel:', error);
+  } finally {
+    metricsSent.value = true;
+  }
+};
+
 // The runId for SSE etc.
 const currentRunId = ref('');
 // The sessionId that remains consistent for document uploads and searches
@@ -290,6 +363,17 @@ function handleSavedReportSelect(savedReport) {
   selectedReport.value = null;
   reportModalOpen.value = false;
 }
+
+const filterEmptyKeys = (obj) => {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([_, value]) => {
+      if (typeof value === 'object') {
+        return Object.keys(value).length > 0;
+      }
+      return true; // Keep non-empty values
+    })
+  );
+};
 
 ////////////////////////////////////////////////////////////
 // The below are from your workflow approach (SearchSection)

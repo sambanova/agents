@@ -1,14 +1,15 @@
 <template>
   <div class="assistant-message">
-    
     <!-- Wrap generated HTML in a container so our styles apply -->
-    <div class="markdown-content" v-html="formattedText(parsed?.data?.response||'')"></div>
+    <div
+      class="markdown-content"
+      v-html="formattedText(parsed?.data?.response || '')"
+    ></div>
   </div>
 </template>
 
 <script>
-
-import { formattedText } from '@/utils/formatText'
+import { formattedText } from '@/utils/formatText';
 
 export default {
   props: {
@@ -19,19 +20,19 @@ export default {
     },
   },
   methods: {
-    formattedText,  // Register the imported function here.
+    formattedText, // Register the imported function here.
   },
   computed: {
     formattedTextOld() {
       // Extract the text from parsed.data.response or use an empty string
       const text = this.parsed.data?.response || '';
-      const lines = text.split("\n");
-      let html = "";
+      const lines = text.split('\n');
+      let html = '';
       let inList = false;
       // Match bullet lines starting with *, +, or -
       const bulletRegex = /^([*+-])\s+(.*)/;
-      
-      lines.forEach(line => {
+
+      lines.forEach((line) => {
         const trimmed = line.trim();
         const bulletMatch = trimmed.match(bulletRegex);
         if (bulletMatch) {
@@ -43,12 +44,12 @@ export default {
           html += `<li class="custom-bullet"><span class="bullet-marker">•</span> ${bulletMatch[2]}</li>`;
         } else {
           if (inList) {
-            html += "</ul>";
+            html += '</ul>';
             inList = false;
           }
           if (trimmed.length > 0) {
             // If the line ends with a colon, treat it as a heading
-            if (trimmed.endsWith(":")) {
+            if (trimmed.endsWith(':')) {
               html += `<h2 class="md-heading text-[16px] font-semibold">${trimmed}</h2>`;
             } else {
               html += `<p class="md-paragraph">${trimmed}</p>`;
@@ -56,18 +57,15 @@ export default {
           }
         }
       });
-      
+
       if (inList) {
-        html += "</ul>";
+        html += '</ul>';
       }
-      
+
       return html;
-    }
-  }
+    },
+  },
 };
-
-
-
 </script>
 
 <style scoped>
@@ -130,8 +128,7 @@ export default {
   margin-left: 0.5rem;
 }
 
-p{
+p {
   line-height: 24px;
 }
-
 </style>
