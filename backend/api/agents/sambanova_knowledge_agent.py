@@ -80,12 +80,12 @@ class SambaKnowledgeAgent(RoutedAgent):
         logger.info(
                 logger.format_message(
                     ctx.topic_id.source,
-                    f"Processing request: '{message.parameters.sambanova_question[:100]}...'",
+                    f"Processing request: '{message.parameters.sambaknowledge_query[:100]}...'",
                 )
             )
         
         session_id = ctx.topic_id.source
-        user_text = message.query.strip()
+        user_text = message.parameters.sambaknowledge_query.strip()
         provider = message.provider
         
         #get model id

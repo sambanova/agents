@@ -116,7 +116,7 @@ class QueryRouterService:
             return json.dumps({
                 "type": "sambanova_knowledge",
                 "parameters": {
-                    "sambanova_question": ""
+                    "sambaknowledge_query": ""
                 }
             })
         # else, fallback => sales
@@ -177,7 +177,7 @@ class QueryRouterService:
     def _normalize_sambanova_knowledge_params(self, params: Dict) -> Dict:
         """Normalize deep research parameters with safe defaults."""
         return {
-            "sambanova_question": params.get("sambanova_question", "")
+            "sambaknowledge_query": params.get("query", "")
         }
 
     def _detect_query_type(self, query: str) -> str:
@@ -212,7 +212,7 @@ class QueryRouterService:
             return "deep_research"
         
         # if user explicitly says "sambanova" or "aisk" => sambanova knowledge agent
-        if "sambanova" in query_lower or "aisk" in query_lower:
+        if "code" in query_lower or "image" in query_lower:
             return "sambanova_knowledge" 
 
         # 1) If user explicitly says "fundamental analysis" or "technical analysis" => finance
@@ -353,7 +353,7 @@ class QueryRouterService:
         4. For 'deep_research':
            - Provide 'deep_research_topic' (the user's full query for in-depth or multi-company research)
         5. For 'sambanova_knowledge':
-            - provide 'sambanova_question' (the user sambanova related question)
+            - provide 'sambaknowledge_query' (the user code, data analysis or image related question)
 
         Examples:
 
@@ -455,11 +455,11 @@ class QueryRouterService:
           }}
         }}
 
-        Query: "what is the sambanova product sambastudio?"
+        Query: "does the sentence 'On a clover, if alive, erupts a vast pure evil; a fire volcano' is a palindrome?"
         {{
           "type": "sambanova_knowledge",
           "parameters": {{
-            "sambanova question": "what is the product sambastudio?",
+            "sambaknowledge_query": "does the sentence 'On a clover, if alive, erupts a vast pure evil; a fire volcano' is a palindrome?",
           }}
         }}
         
@@ -771,7 +771,7 @@ class QueryRouterServiceChat:
     def _normalize_sambanova_knowledge_params(self, params: Dict) -> Dict:
         """Normalize sambanova knowledge parameters with safe defaults."""
         return {
-            "sambanova_question": params.get("sambanova_question", "")
+            "sambaknowledge_query": params.get("sambaknowledge_query", "")
         }
 
     def _normalize_user_proxy_params(self, params: Dict) -> Dict:
@@ -843,6 +843,13 @@ class QueryRouterServiceChat:
           }}
         }}
 
+        Query: "Who are SambaNova?"
+        {{
+            "type": "assistant",
+            "parameters": {{
+                "sambaknowledge_query": "Who are SambaNova?"
+            }}
+        }}
 
         "type": "financial_analysis"
         "description": "Handles complex financial analysis queries ONLY, including company reports, company financials, financial statements, and market trends. This is NOT for quick information or factual answers about STOCK PRICES. For this agent to work you need at least one ticker or company name, and it must be a single public company. If the query is a factual answer or quick information about a company person or product, ALWAYS use the assistant agent instead. This is a specialized agent for complex financial analysis and NEVER use this agent for quick info or if the user references multiple companies or IPO/S-1.",
@@ -957,24 +964,17 @@ class QueryRouterServiceChat:
         }}
         
         "type": "sambanova_knowledge",
-        "description": "Handles sambanova related queries with a RAG LlamaStack agent. For queries that require specific knowledge about sambanova products and offering.",
-        "examples": "How can I use the sambanova Enterprise Knowlege Retriver AI Starter Kit, what is the performance of sambanova's RDU vs a GPU, how can I use the sambanova cloud API",
+        "description": "Handles code, data analysis or image analysis queries with a LlamaStack agent. For queries that require code execution or image understanding.",
+        "examples": "does the sentence 'On a clover, if alive, erupts a vast pure evil; a fire volcano' is a palindrome?",
 
-        Query: "what is the sambanova product sambastudio?"
+        Query: "does the sentence 'On a clover, if alive, erupts a vast pure evil; a fire volcano' is a palindrome?"
         {{
           "type": "sambanova_knowledge",
           "parameters": {{
-            "sambanova_question": "what is the product sambastudio?",
+            "sambaknowledge_query": "does the sentence 'On a clover, if alive, erupts a vast pure evil; a fire volcano' is a palindrome?",
           }}
         }}
         
-        Query: "Who are SambaNova?"
-        {{
-            "type": "sambanova_knowledge",
-            "parameters": {{
-                "sambanova_question": "Who are SambaNova?"
-            }}
-        }}
 
         "type": "user_proxy",
         "description": "This is NOT an agent but a direct response back to the user. Use this type when:
@@ -1007,7 +1007,7 @@ class QueryRouterServiceChat:
            - Provide 'deep_research_topic' (the user's full research query)
            - Use if multiple companies or S-1/IPO references or indexes like S&P
         4. For 'sambanova_knowledge':
-           - Provide 'sambanova_question' (the user sambanova related question)
+           - Provide 'query' (the user code, data analysis or image understanding related question)
         5. For 'assistant':
            - Provide 'query' (the user's full query)
         6. For 'user_proxy':

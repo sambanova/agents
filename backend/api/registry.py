@@ -76,8 +76,8 @@ class AgentRegistry:
             },
             "sambanova_knowledge": {
                 "agent_type": "sambanova_knowledge",
-                "description": "Handles sambanova related queries with a RAG LlamaStack agent. For queries that require specific knowledge about sambanova products and offering.",
-                "examples": "How can I use the sambanova Enterprise Knowlege Retriver AI Starter Kit",
+                "description": "Handles code, data analysis or image analysis queries with a LlamaStack agent. For queries that require code execution or image understanding.",
+                "examples": "does the sentence 'On a clover, if alive, erupts a vast pure evil; a fire volcano' is a palindrome?",
             },
             "user_proxy": {
                 "agent_type": "user_proxy",

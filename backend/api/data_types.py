@@ -75,7 +75,7 @@ class DeepResearch(BaseModel):
     deep_research_topic: str = Field(default="", description="The topic of the research")
     
 class SambaKnowledge(BaseModel):
-    sambanova_question: str = Field(default="", description="Question about SambaNova")
+    sambaknowledge_query: str = Field(default="", description="Code, data analysis understanding or image related query")
 
 class EducationalContent(BaseModel):
     topic: str = Field(default="", description="The topic of the research, use a single word")

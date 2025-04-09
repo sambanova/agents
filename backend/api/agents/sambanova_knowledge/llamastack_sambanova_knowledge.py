@@ -11,16 +11,20 @@ from llama_stack_client.types.agents.turn_response_event_payload import  AgentTu
 
 
 # Example tool definition
-def get_sambanova_info(query: str) -> str:
+def code_executor(query: str) -> str:
     """
-    Runs get sambanova_info rag tool.
+    Runs code executor tool.
     
-    :param query: sambanova related query.
+    :param query: code expression to run in sandbox environment.
         
     Returns:
-        str: the response for the sambanova query
+        str: the response of evaluating the expression
     """
-    return "sambanova aisk: AI Starter kit are a series of quickstart open source llm applications provided by sambanova"
+    try:
+        result = eval(query)
+    except Exception as e:
+        result = f"error when evaluating expression {query} - {e}"
+    return result
 
 def create_http_client(api_key=None):
     return LlamaStackClient(
@@ -37,7 +41,7 @@ def create_agent(client, model):
             "strategy": {"type": "top_p", "temperature": 1.0, "top_p": 0.9},
         },
         tools=[
-            get_sambanova_info
+            code_executor
         ],
         enable_session_persistence=False,
     )
