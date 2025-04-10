@@ -12,6 +12,7 @@ FRONTEND_REPO = $(shell grep -A3 "frontend:" $(VALUES_FILE) | grep "repository:"
 # Extract frontend environment variables from values file
 VITE_API_URL = $(shell grep -A20 "frontend:" $(VALUES_FILE) | grep "VITE_API_URL:" | sed 's/.*VITE_API_URL: *//;s/"//g')
 VITE_CLERK_PUBLISHABLE_KEY = $(shell grep -A20 "frontend:" $(VALUES_FILE) | grep "VITE_CLERK_PUBLISHABLE_KEY:" | sed 's/.*VITE_CLERK_PUBLISHABLE_KEY: *//;s/"//g')
+VITE_MIXPANEL_TOKEN = $(shell grep -A20 "frontend:" $(VALUES_FILE) | grep "VITE_MIXPANEL_TOKEN:" | sed 's/.*VITE_MIXPANEL_TOKEN: *//;s/"//g')
 
 # Common variables
 BACKEND_DOCKER_IMAGE = $(BACKEND_REPO)
@@ -35,10 +36,12 @@ build-frontend:
 	@echo "Building frontend Docker image $(FRONTEND_DOCKER_IMAGE):$(TAG) ($(ENV) environment)..."
 	@echo "Using VITE_API_URL: $(VITE_API_URL)"
 	@echo "Using VITE_CLERK_PUBLISHABLE_KEY: $(VITE_CLERK_PUBLISHABLE_KEY)"
+	@echo "Using VITE_MIXPANEL_TOKEN: $(VITE_MIXPANEL_TOKEN)"
 	cd ../frontend/sales-agent-crew && docker build \
 		--platform=linux/amd64 \
 		--build-arg VITE_API_URL=$(VITE_API_URL) \
 		--build-arg VITE_CLERK_PUBLISHABLE_KEY=$(VITE_CLERK_PUBLISHABLE_KEY) \
+		--build-arg VITE_MIXPANEL_TOKEN=$(VITE_MIXPANEL_TOKEN) \
 		-t $(FRONTEND_DOCKER_IMAGE):$(TAG) .
 
 # Push the backend Docker image
@@ -102,6 +105,7 @@ help:
 	@echo "Frontend repository: $(FRONTEND_REPO)"
 	@echo "VITE_API_URL: $(VITE_API_URL)"
 	@echo "VITE_CLERK_PUBLISHABLE_KEY: $(VITE_CLERK_PUBLISHABLE_KEY)"
+	@echo "VITE_MIXPANEL_TOKEN: $(VITE_MIXPANEL_TOKEN)"
 	@echo ""
 	@echo "Targets:"
 	@echo "  build-backend   Build the backend Docker image"

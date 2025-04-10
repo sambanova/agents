@@ -12,18 +12,18 @@ The Agents application routes requests to four different agents: General assista
 The basic process of the Agents application is described below.
 
 1. User query processing
+
    - User submits a query via text or voice input.
    - The application analyzes the query to determine its category (general assistance, sales leads, research, or financial analysis).
 
 1. Agent assignment
    - The query is routed to the appropriate agent based on content and intent.
    - If the query spans multiple domains, agents collaborate to provide a comprehensive response.
-   
 1. Data retrieval and processing
    - The selected agent fetches relevant data from available APIs and knowledge bases.
    - AI models process and structure the information for clarity and accuracy.
-   
 1. Response generation
+
    - The application generates a structured response.
    - The response is formatted based on the query type (e.g., report format for research, tabular format for financial analysis).
 
@@ -36,29 +36,32 @@ The basic process of the Agents application is described below.
 # Prerequisites
 
 Ensure to install the prerequisites.
-   - [Python 3.11](https://www.python.org/downloads/release/python-31111/) (exact version required)
-   - [Node.js 18.17.0 or later](https://nodejs.org/en/download)
-   - [Yarn](https://classic.yarnpkg.com/en/docs/install)
-   - [Redis](https://redis.io/download) (via Docker or Homebrew)
-     
-      ```bash
-      # Install Redis with Docker
-      docker run --name redis -p 6379:6379 -d redis
-      ```
-      ```bash
-      # Install Redis with Homebrew on macOS
-      brew install redis
-      brew services start redis
-      ```
+
+- [Python 3.11](https://www.python.org/downloads/release/python-31111/) (exact version required)
+- [Node.js 18.17.0 or later](https://nodejs.org/en/download)
+- [Yarn](https://classic.yarnpkg.com/en/docs/install)
+- [Redis](https://redis.io/download) (via Docker or Homebrew)
+
+  ```bash
+  # Install Redis with Docker
+  docker run --name redis -p 6379:6379 -d redis
+  ```
+
+  ```bash
+  # Install Redis with Homebrew on macOS
+  brew install redis
+  brew services start redis
+  ```
 
 Get the following API keys to setup the Agents application.
-   - [SambaNova API key](https://cloud.sambanova.ai/)
-   - [Serper API key](https://serper.dev/) for web search
-   - [Exa API key](https://exa.co/) for company data
-   - [Tavily API key](https://tavily.com/) for deep research capabilities
-   - [Clerk](https://clerk.com/) for authentication (you'll need both publishable and secret keys)
 
->**Note**: The DeepSeek-R1-8K model is supported in the application provided you have access to it.
+- [SambaNova API key](https://cloud.sambanova.ai/)
+- [Serper API key](https://serper.dev/) for web search
+- [Exa API key](https://exa.co/) for company data
+- [Tavily API key](https://tavily.com/) for deep research capabilities
+- [Clerk](https://clerk.com/) for authentication (you'll need both publishable and secret keys)
+
+> **Note**: The DeepSeek-R1-8K model is supported in the application provided you have access to it.
 
 # Setup and run the application
 
@@ -130,6 +133,7 @@ Follow the steps below to install the backend for the Agents application.
    VITE_API_URL=/api
    VITE_WEBSOCKET_URL=ws://localhost:8000
    VITE_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+   VITE_MIXPANEL_TOKEN=your_mixpanel_project_token
    ```
 
 #### Backend environment variables
@@ -137,15 +141,16 @@ Follow the steps below to install the backend for the Agents application.
 > **Note**: For the backend environment variables, go to `/backend/`.
 
 1. Create a `.env` file with the following required variables.
+
    ```bash
    # Authentication
    CLERK_SECRET_KEY=your_clerk_secret_key
    CLERK_JWT_ISSUER=https://your-clerk-instance.clerk.accounts.dev/.well-known/jwks.json
-   
+
    # API Keys for Services
    SERPER_API_KEY=your_serper_api_key
    TAVILY_API_KEY=your_tavily_api_key  # Required for Deep Research agent
-   
+
    # Optional: For usage tracking
    LANGTRACE_API_KEY=your_langtrace_api_key  # Optional for usage tracking
    ```
@@ -244,10 +249,9 @@ The stack is designed to offer high-performance and scalability for both fronten
   </tbody>
 </table>
 
-
 # Features
 
-This section describes the agents and feature capabilities of the application. 
+This section describes the agents and feature capabilities of the application.
 
 ## General assistant
 
@@ -355,7 +359,6 @@ Additional features of the application are listed below.
 - 📊 Detailed company insights – In-depth business data at your fingertips
 - 💹 Financial analysis and market trends – Stay ahead with real-time analytics
 - ✍ AI-generated outreach templates – Craft professional messages instantly
-
 
 # Usage
 

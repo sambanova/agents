@@ -15,11 +15,11 @@ services:
           cpus: '2.5'
           memory: 4G
     ports:
-      - "8000:8000"
+      - '8000:8000'
     networks:
       - app-network
     volumes:
-      - ./backend:/app  # Optional: Mount the backend code for development
+      - ./backend:/app # Optional: Mount the backend code for development
     environment:
       - ALLOWED_ORIGINS=*
       # For production, you might specify:
@@ -35,6 +35,7 @@ services:
       args:
         VITE_API_URL: '/api'
         VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
+        VITE_MIXPANEL_TOKEN: ${VITE_MIXPANEL_TOKEN}
     container_name: frontend
     deploy:
       resources:
@@ -45,8 +46,8 @@ services:
           cpus: '0.2'
           memory: 512M
     ports:
-      - "80:80"
-      - "443:443"
+      - '80:80'
+      - '443:443'
     volumes:
       - /etc/sn-certs:/etc/sn-certs
     environment:
@@ -57,7 +58,7 @@ services:
       - backend
 
   redis:
-    image: "redis:7.0-alpine"
+    image: 'redis:7.0-alpine'
     container_name: redis
     deploy:
       resources:
@@ -70,7 +71,7 @@ services:
     networks:
       - app-network
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - redis-data:/data
     command: redis-server --appendonly yes --save 60 1000
