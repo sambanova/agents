@@ -56,7 +56,7 @@ def create_agent(client, model):
     )
     return agent
     
-def call(thread_config, query, api_key):    
+def call(thread_config, query, docs, files_b64, api_key):    
     """
     create llamastack client and agent and call it 
     """
@@ -69,6 +69,7 @@ def call(thread_config, query, api_key):
     client = (create_http_client(api_key))
     agent = create_agent(client, config["model"])
 
+    #agent turn execution
     response = agent.create_turn(
         messages=messages,
         session_id=agent.create_session(f"{config['user_id']}:{config['conversation_id']}"),

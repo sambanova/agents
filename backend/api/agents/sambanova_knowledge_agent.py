@@ -77,9 +77,6 @@ class SambaKnowledgeAgent(RoutedAgent):
         self, message: AgentRequest, ctx: MessageContext
     ) -> None:
         
-        print("\n@@@@@@@@@@@@\n")
-        print(message)
-        
         logger.info(
                 logger.format_message(
                     ctx.topic_id.source,
@@ -89,6 +86,8 @@ class SambaKnowledgeAgent(RoutedAgent):
         
         session_id = ctx.topic_id.source
         user_text = message.parameters.sambaknowledge_query.strip()
+        docs = message.docs
+        files_b64 = message.files_b64
         provider = message.provider
         
         #get model id
@@ -111,6 +110,8 @@ class SambaKnowledgeAgent(RoutedAgent):
             llamastack_sambanova_knowledge.call,
             thread_config,
             user_text,
+            docs,
+            files_b64,
             api_key=getattr(self.api_keys, model_registry.get_api_key_env(provider=message.provider))
         )
         thread_response = await asyncio.gather(thread)
