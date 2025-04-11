@@ -111,20 +111,13 @@ class SambaKnowledgeAgent(RoutedAgent):
             api_key=getattr(self.api_keys, model_registry.get_api_key_env(provider=message.provider))
         )
         thread_response = await asyncio.gather(thread)
-        text_response = thread_response[0]
-        
-        # dummy token usage
-        token_usage = {
-                "total_tokens": 10,
-                "prompt_tokens": 10,
-                "completion_tokens": 10,
-            }
+        text_response, metadata = thread_response[0]
         
         response = AgentStructuredResponse(
             agent_type=AgentEnum.SambaKnowledge,
             data=SambaKnowledgeResult(response=text_response),
             message="Sambanova Knowledge flow completed.",
-            metadata=token_usage,
+            metadata=metadata,
             message_id=message.message_id
         )
         
