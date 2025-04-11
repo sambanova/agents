@@ -150,7 +150,6 @@ function convertStringToJson(val) {
 
 // Checks if a value is an object.
 function isObject(val) {
-  console.log('OBJECT', val);
   return val !== null && typeof val === 'object';
 }
 
