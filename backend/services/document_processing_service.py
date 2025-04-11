@@ -1,5 +1,7 @@
 import os
 import tempfile
+import base64
+import mimetypes
 from typing import List, Dict, Any
 import fitz  # PyMuPDF
 from docx import Document
@@ -29,20 +31,24 @@ class DocumentProcessingService:
             temp_path = temp_file.name
 
         try:
-            # Extract text based on file type
-            if ext == ".pdf":
-                text = self._extract_pdf_text(temp_path)
-            elif ext in [".doc", ".docx"]:
-                text = self._extract_docx_text(temp_path)
-            elif ext in [".csv", ".xlsx", ".xls"]:
-                text = self._extract_spreadsheet_text(temp_path)
+            if ext in [".png", ".jpg", ".jpeg"]:
+                base_64_url = self._base_64_data_url_from_doc(temp_path)   
+                docs = [LangchainDocument(page_content="attached_image",
+                                         metadata={"source": filename, "base_64_url": base_64_url})]
             else:
-                raise ValueError(f"Unsupported file type: {ext}")
-
-            # Split text into chunks
-            docs = self.text_splitter.create_documents(
-                texts=[text], metadatas=[{"source": filename}]
-            )
+            # Extract text based on file type
+                if ext == ".pdf":
+                    text = self._extract_pdf_text(temp_path)
+                elif ext in [".doc", ".docx"]:
+                    text = self._extract_docx_text(temp_path)
+                elif ext in [".csv", ".xlsx", ".xls"]:
+                    text = self._extract_spreadsheet_text(temp_path)
+                else:
+                    raise ValueError(f"Unsupported file type: {ext}")
+                # Split text into chunks
+                docs = self.text_splitter.create_documents(
+                    texts=[text], metadatas=[{"source": filename}]
+                )
 
             return docs
 
@@ -73,3 +79,19 @@ class DocumentProcessingService:
 
         # Convert dataframe to string representation
         return df.to_string()
+        
+    def _base_64_data_url_from_doc(self, file_path: str, add_mimetype: bool=True) -> str:
+        """Convert to to Base64 URL data"""
+        mime_type, _ = mimetypes.guess_type(file_path)
+        if mime_type is None:
+            
+            raise ValueError("Could not determine MIME type of the file")
+
+        with open(file_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
+
+        if add_mimetype:
+            data_url = f"data:{mime_type};base64,{encoded_string}"
+        else:
+            data_url = encoded_string
+        return data_url
