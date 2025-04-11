@@ -127,7 +127,7 @@ def call(thread_config, query, docs, files_b64, api_key):
                     event_message = {
                         "event_object": [
                             {
-                                "name": "Inference with tool calls",
+                                "name": "Llamastack Inference",
                                 "Inference with tool calls": f"\n```json\n{tool_calls}```",
                             }
                         ]
@@ -136,7 +136,7 @@ def call(thread_config, query, docs, files_b64, api_key):
                     event_message = {
                         "event_object": [
                             {
-                                "name": "Inference",
+                                "name": "Llamastack Inference",
                                 "Inference": log.event.payload.step_details.api_model_response.content,
                             }
                         ]
@@ -145,7 +145,7 @@ def call(thread_config, query, docs, files_b64, api_key):
                     event_message = {
                         "event_object": [
                             {
-                                "name": "Event",
+                                "name": "Llamastack Inference",
                                 "Event": str(log.event.payload.step_details),
                             }
                         ]
@@ -159,11 +159,6 @@ def call(thread_config, query, docs, files_b64, api_key):
                 tool_responses = log.event.payload.step_details.tool_responses
                 event_message = {
                     "event_object": [
-                        {
-                            "name": "Code execution step",
-                            "Tool calls": f"```json\n{tool_calls}\n```",
-                            "Tool Execution results": f"```json\n{tool_responses}\n```",
-                        },
                         {
                             "name": "Code execution step",
                             "Tool calls": f"```json\n{tool_calls}\n```",
