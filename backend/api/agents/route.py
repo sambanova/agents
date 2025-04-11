@@ -154,6 +154,7 @@ class SemanticRouterAgent(RoutedAgent):
                 "agent_type": agent_type,
                 "parameters": parameters,
                 "docs": message.docs,
+                "files_b64": message.files_b64,
                 "query": message.content,
                 "provider": message.provider,
                 "message_id": message.message_id,

@@ -77,6 +77,9 @@ class SambaKnowledgeAgent(RoutedAgent):
         self, message: AgentRequest, ctx: MessageContext
     ) -> None:
         
+        print("\n@@@@@@@@@@@@\n")
+        print(message)
+        
         logger.info(
                 logger.format_message(
                     ctx.topic_id.source,

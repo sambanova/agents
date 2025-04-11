@@ -145,7 +145,7 @@ def estimate_tokens_regex(text: str) -> int:
         return len(re.findall(r"\w+|\S", text))
 
 
-def load_documents(user_id: str, document_ids: List[str], redis_client: SecureRedisService, context_length_summariser: int) -> List[str]:
+def load_documents(user_id: str, document_ids: List[str], redis_client: SecureRedisService, context_length_summarizer: int) -> List[str]:
     documents = []
     total_tokens = 0
 
@@ -163,11 +163,17 @@ def load_documents(user_id: str, document_ids: List[str], redis_client: SecureRe
             doc_text = "\n".join([chunk['text'] for chunk in chunks])
             token_count = estimate_tokens_regex(doc_text)
             
+            files_b64 = {
+                chunk["metadata"]["source"]:chunk["metadata"]['base_64_url'] 
+                for chunk in chunks 
+                if chunk["metadata"].get('base_64_url') is not None
+            }
+            
             # Update total token count and check if it would exceed the limit
-            if total_tokens + token_count > context_length_summariser:
-                raise DocumentContextLengthError(total_tokens + token_count, context_length_summariser)
+            if total_tokens + token_count > context_length_summarizer:
+                raise DocumentContextLengthError(total_tokens + token_count, context_length_summarizer)
             
             total_tokens += token_count
             documents.append(doc_text)
 
-    return documents
+    return documents, files_b64

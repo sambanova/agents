@@ -93,6 +93,7 @@ class EndUserMessage(BaseAgentMessage):
     content: str
     use_planner: bool = False
     docs: Optional[List[str]] = None
+    files_b64: Optional[Dict[str, str]] = None
     provider: str
     planner_model: str
     message_id: str
@@ -104,6 +105,7 @@ class AgentRequest(BaseModel):
     ]
     query: str
     docs: Optional[List[str]] = None
+    files_b64: Optional[Dict[str, str]] = None
     provider: str
     message_id: str
     @model_validator(mode="after")

@@ -34,7 +34,7 @@ class DocumentProcessingService:
             if ext in [".png", ".jpg", ".jpeg"]:
                 base_64_url = self._base_64_data_url_from_doc(temp_path)   
                 docs = [LangchainDocument(page_content="attached_image",
-                                         metadata={"source": filename, "base_64_url": base_64_url})]
+                                          metadata={"source": filename, "base_64_url": base_64_url})]
             else:
             # Extract text based on file type
                 if ext == ".pdf":
