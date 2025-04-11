@@ -11,7 +11,7 @@
         <CorrectIcon class="mr-1 flex-shrink-0" />
 
         <span class="line-clamp-1 text-primary-brandTextSecondary text-sm">
-          {{ getHeadingValue() }}:
+          {{ getHeadingValue() }}
         </span>
       </div>
       <!-- Arrow icon toggles direction based on accordion state -->
@@ -129,12 +129,23 @@ const getHeadingValue = () => {
   // If heading is non-numeric, display formatted key.
   if (!isNumeric(props.heading)) {
     return formatKey(props.heading);
-    // If heading is numeric and value has a name property, display that.
-  } else if (isNumeric(props.heading) && props.value.name) {
-    return props.value.name ? props.value.name : props.value.search;
-    // Otherwise if heading is numeric, display fallback (e.g. search_query).
   } else {
-    return props.value?.search_query;
+    // If heading is numeric and value has a name property, display that.
+    if (props.value.name) {
+      return props.value.name ? props.value.name : props.value.search;
+      // If heading is numeric and value has a 'Inference' property, display that.
+    } else if (props.value['Inference']) {
+      return 'Inference';
+      // If heading is numeric and value has a 'Inference with tool calls' property, display that.
+    } else if (
+      isNumeric(props.heading) &&
+      props.value['Inference with tool calls']
+    ) {
+      return 'Inference with tool calls';
+      // Otherwise if heading is numeric, display fallback (e.g. search_query).
+    } else {
+      return props.value?.search_query;
+    }
   }
 };
 </script>

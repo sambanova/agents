@@ -237,6 +237,9 @@ function parseResponseText(text) {
     if (text && typeof text === 'object' && Array.isArray(text.queries)) {
       return text.queries;
     }
+    if (text && typeof text === 'object' && Array.isArray(text.event_object)) {
+      return text.event_object;
+    }
     // Otherwise, convert the text to a string.
     text = JSON.stringify(text);
   }
