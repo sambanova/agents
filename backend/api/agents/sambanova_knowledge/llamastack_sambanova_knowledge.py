@@ -106,28 +106,52 @@ def call(thread_config, query, api_key):
             # inference step
             if log.event.payload.step_details.step_type == "inference":
                 if len(log.event.payload.step_details.api_model_response.tool_calls)>0:
-                    step_type = "Inference with tool calls"
                     tool_calls = log.event.payload.step_details.api_model_response.tool_calls
-                    event_message = f"\n```json\n{tool_calls}```"
+                    event_message = {
+                        "event_object":{
+                            "Code execution step": {
+                                "Inference with tool calls": f"\n```json\n{tool_calls}```"
+                                }
+                            }
+                        }
                 elif len(log.event.payload.step_details.api_model_response.content)>0:
-                    step_type = "Inference"
-                    event_message = log.event.payload.step_details.api_model_response.content
+                    event_message = {
+                        "event_object":{
+                            "Code execution step":{
+                                "Inference":log.event.payload.step_details.api_model_response.content
+                                }
+                            }
+                        }
                 else: 
-                    step_type = "event"
-                    event_message = str(log.event.payload.step_details)
-                assistant_metadata["completion_tokens"]+=estimate_tokens_regex(event_message)
+                    event_message = {
+                        "event_object":{
+                            "Code execution step": {
+                                "Event": str(log.event.payload.step_details)
+                            }
+                        }
+                    }
+                assistant_metadata["completion_tokens"]+=estimate_tokens_regex(str(event_message))
             # tool call step
             elif log.event.payload.step_details.step_type == "tool_execution":
-                step_type = "ToolExecution"
                 tool_calls =  log.event.payload.step_details.tool_calls
                 tool_responses = log.event.payload.step_details.tool_responses
-                event_message = f"\nTool calls:\n```json\n{tool_calls}\n```\n\nTool Execution results\n```json\n{tool_responses}\n```"
-                assistant_metadata["prompt_tokens"]+=estimate_tokens_regex(event_message)
+                event_message = {
+                    "event_object":{
+                        "Code execution step": {
+                            "Tool calls":f"```json\n{tool_calls}\n```",
+                            "Tool Execution results":f"```json\n{tool_responses}\n```"
+                        },
+                        "Code execution step_2": {
+                            "Tool calls":f"```json\n{tool_calls}\n```",
+                            "Tool Execution results":f"```json\n{tool_responses}\n```"
+                        }
+                    }
+                }
+                assistant_metadata["prompt_tokens"]+=estimate_tokens_regex(str(event_message))
             # other step
             else:
-                step_type = "Event"
-                event_message = str(log.event.payload.step_details)
-                assistant_metadata["completion_tokens"]+=estimate_tokens_regex(event_message)
+                event_message = {"Event":str(log.event.payload.step_details)}
+                assistant_metadata["completion_tokens"]+=estimate_tokens_regex(str(event_message))
             
             # update metadata
             assistant_metadata["total_tokens"]+=(assistant_metadata["completion_tokens"]+assistant_metadata["prompt_tokens"])
@@ -139,7 +163,7 @@ def call(thread_config, query, api_key):
                         "run_id": config["conversation_id"],
                         "message_id": config["message_id"],
                         "agent_name": config["agent_name"],
-                        "text": f"{step_type}: {event_message}",
+                        "text": event_message,
                         "timestamp": time.time(),
                         "metadata": assistant_metadata,
                     }
