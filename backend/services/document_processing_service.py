@@ -31,12 +31,19 @@ class DocumentProcessingService:
             temp_path = temp_file.name
 
         try:
+            # save image without extracting text
             if ext in [".png", ".jpg", ".jpeg"]:
                 base_64_url = self._base_64_data_url_from_doc(temp_path)   
-                docs = [LangchainDocument(page_content="attached_image",
-                                          metadata={"source": filename, "base_64_url": base_64_url})]
+                docs = [LangchainDocument(
+                    page_content="attached_image",
+                    metadata={
+                        "source": filename, 
+                        "base_64_url": self._base_64_data_url_from_doc(temp_path)
+                        }
+                    )
+                ]
             else:
-            # Extract text based on file type
+                # Extract text based on file type
                 if ext == ".pdf":
                     text = self._extract_pdf_text(temp_path)
                 elif ext in [".doc", ".docx"]:
@@ -47,7 +54,13 @@ class DocumentProcessingService:
                     raise ValueError(f"Unsupported file type: {ext}")
                 # Split text into chunks
                 docs = self.text_splitter.create_documents(
-                    texts=[text], metadatas=[{"source": filename}]
+                    texts=[text], 
+                    metadatas=[
+                        {
+                            "source": filename, 
+                            "base_64_url": self._base_64_data_url_from_doc(temp_path)
+                        }
+                    ]
                 )
 
             return docs
