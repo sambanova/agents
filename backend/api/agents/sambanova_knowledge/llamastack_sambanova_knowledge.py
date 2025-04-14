@@ -26,7 +26,7 @@ def estimate_tokens_regex(text: str) -> int:
 
 def create_http_client(api_key=None):
     return LlamaStackClient(
-        base_url=f"http://localhost:{os.environ['LLAMA_STACK_PORT']}",
+        base_url=f"http://{os.environ['LLAMA_STACK_HOST']}:{os.environ['LLAMA_STACK_PORT']}",
         provider_data={"sambanova_api_key": api_key},
     )
 
