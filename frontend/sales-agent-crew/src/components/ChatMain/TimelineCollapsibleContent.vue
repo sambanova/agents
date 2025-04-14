@@ -48,19 +48,19 @@
         </svg>
       </div>
     </div>
+
     <div class="m-1 p-1 border rounded-md bg-primary-brandGray" v-show="isOpen">
       <!-- If value is an object (and not an array), render all keys -->
-      <div v-if="isObject(value) && !Array.isArray(value)">
-        <div class="w-full">
-          <div v-for="(val, key) in value" :key="key" class="mb-1">
-            <!-- Key Row: Dark Background -->
-            <div class="px-2 py-1 text-xs text-gray-900 bg-gray-200">
-              {{ formatKey(key) }}
-            </div>
-            <!-- Value Row: Light Background -->
-            <div class="px-2 py-1 text-xs text-gray-900 bg-gray-50">
-              <RecursiveDisplay :value="val" :inline="true" />
-            </div>
+      <div v-if="isObject(value) && !Array.isArray(value)" class="w-full">
+        <div v-for="(val, key) in filterObject(value)" :key="key" class="mb-1">
+          <div v-if="val !== '' || val !== null"></div>
+          <!-- Key Row: Dark Background -->
+          <div class="px-2 py-1 text-xs text-gray-900 bg-gray-200">
+            {{ formatKey(key) }}
+          </div>
+          <!-- Value Row: Light Background -->
+          <div class="px-2 py-1 text-xs text-gray-900 bg-gray-50">
+            <RecursiveDisplay :value="val" :inline="true" />
           </div>
         </div>
       </div>
@@ -77,6 +77,24 @@
       <!-- If heading is numeric and value has a description, display it -->
       <div v-else-if="isNumeric(heading) && value?.description">
         {{ value.description }}
+      </div>
+
+      <!-- If value is a JSON string, convert it and display it as an object -->
+      <div v-else-if="isJsonString(value)" class="w-full">
+        <div
+          v-for="(val, key) in convertStringToJson(value)"
+          :key="key"
+          class="mb-1"
+        >
+          <!-- Key Row: Dark Background -->
+          <div class="px-2 py-1 text-xs text-gray-900 bg-gray-200">
+            {{ formatKey(key) }}
+          </div>
+          <!-- Value Row: Light Background -->
+          <div class="px-2 py-1 text-xs text-gray-900 bg-gray-50">
+            <RecursiveDisplay :value="val" :inline="true" />
+          </div>
+        </div>
       </div>
 
       <!-- Otherwise, render the value as plain text -->
@@ -110,9 +128,52 @@ const props = defineProps({
   },
 });
 
+function isJsonString(val) {
+  try {
+    if (val[0] === '{') {
+      const replacement = val.replaceAll("'", '"');
+      const jsonString = JSON.parse(replacement);
+
+      return typeof jsonString === 'object';
+    }
+  } catch {
+    return false;
+  }
+}
+
+function convertStringToJson(val) {
+  const replacement = val.replaceAll("'", '"');
+  const jsonString = JSON.parse(replacement);
+
+  return filterObject(jsonString);
+}
+
 // Checks if a value is an object.
 function isObject(val) {
   return val !== null && typeof val === 'object';
+}
+
+function filterObject(object) {
+  // Remove empty values
+  const filteredObject = { ...object };
+
+  Object.keys(filteredObject).forEach((key) => {
+    const value = filteredObject[key];
+
+    if (
+      value === null ||
+      value === undefined ||
+      value === '' ||
+      (Array.isArray(value) && value.length === 0) ||
+      (typeof value === 'object' &&
+        !Array.isArray(value) &&
+        Object.keys(value).length === 0)
+    ) {
+      delete filteredObject[key];
+    }
+  });
+
+  return filteredObject;
 }
 
 // Format a key: replace underscores with spaces and capitalize each word.
