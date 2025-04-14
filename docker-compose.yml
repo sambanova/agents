@@ -1,6 +1,12 @@
-version: '3.8'
-
 services:
+  llamastack:
+    build:
+      context: ./llamastack
+      dockerfile: Dockerfile
+    ports:
+      - "8321:8321"
+    networks:
+      - app-network
   backend:
     build:
       context: ./backend
@@ -27,6 +33,9 @@ services:
       # The environment below so the backend can find Redis in Docker:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - LLAMA_STACK_HOST=llamastack
+      - LLAMA_STACK_PORT=8321
+    command: sh -c "uvicorn api.lead_generation_api:create_app --host 0.0.0.0 --port 8000 --workers 1 --reload"
 
   frontend:
     build:
