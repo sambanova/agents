@@ -35,6 +35,8 @@ backend:
     OTEL_SDK_DISABLED: "true"
     LOG_DIR: "/app/logs"
     ENABLE_USER_KEYS: "false"
+    LLAMA_STACK_HOST: "localhost"
+    LLAMA_STACK_PORT: "8321"
   volumes:
     logs:
       hostPath: /data/aiskagents-logs
@@ -61,14 +63,13 @@ backend:
       EXA_KEY: ""
       SERPER_KEY: ""
       FIREWORKS_KEY: ""
-      LLAMA_STACK_PORT: "8321"
 
 # Llama stack server configuration
 llamaStack:
   name: llama-stack
   image:
     repository: us-west2-docker.pkg.dev/acp-starterkits-development-57/oci-us-west2-starerkits/llama-sambanova
-    ttag: "0.0.1-dev"
+    tag: "0.0.1-dev"
     pullPolicy: Always
   replicas: 1
   resources:
@@ -96,6 +97,7 @@ llamaStack:
       periodSeconds: 10
   env:
     LLAMA_STACK_PORT: "8321"
+    LLAMA_STACK_HOST: "localhost"
 
 # Frontend configuration
 frontend:

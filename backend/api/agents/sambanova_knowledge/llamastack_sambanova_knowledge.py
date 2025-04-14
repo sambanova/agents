@@ -57,7 +57,7 @@ def create_agent(client, model):
         model=model,
         instructions="You are a helpful assistant. Use the tools you have access to for providing relevant answers",
         sampling_params={
-            "strategy": {"type": "top_p", "temperature": 1.0, "top_p": 0.9},
+            "strategy": {"type": "top_p", "temperature": 0.1, "top_p": 0.9},
         },
         tools=[code_executor],
         enable_session_persistence=False,

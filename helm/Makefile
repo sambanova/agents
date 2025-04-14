@@ -47,7 +47,7 @@ build-frontend:
 # Build the llama-stack Docker image
 build-llamastack:
 	@echo "Building Llama Stack Docker image $(LLAMASTACK_DOCKER_IMAGE):$(TAG) ($(ENV) environment)..."
-	cd ../llama-stack && docker build --platform linux/amd64 -t $(LLAMASTACK_DOCKER_IMAGE):$(TAG) .
+	cd ../llamaStack && docker build --platform linux/amd64 -t $(LLAMASTACK_DOCKER_IMAGE):$(TAG) .
 
 # Push the backend Docker image
 push-backend: build-backend
@@ -83,7 +83,7 @@ install:
 		--values $(VALUES_FILE) \
 		--set backend.image.tag=$(TAG) \
 		--set frontend.image.tag=$(TAG) \
-		--set llamastack.image.tag=$(TAG)
+		--set llamaStack.image.tag=$(TAG)
 
 # Upgrade the Helm chart
 upgrade:
@@ -92,7 +92,7 @@ upgrade:
 		--values $(VALUES_FILE) \
 		--set backend.image.tag=$(TAG) \
 		--set frontend.image.tag=$(TAG) \
-		--set llamastack.image.tag=$(TAG)
+		--set llamaStack.image.tag=$(TAG)
 
 # Uninstall the Helm chart
 uninstall:
