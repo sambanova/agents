@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.llamaStack.name }}
+  namespace: {{ .Values.global.namespace }}
+spec:
+  selector:
+    app: {{ .Values.llamaStack.name }}
+  type: {{ .Values.llamaStack.service.type }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.llamaStack.service.port }}
+      targetPort: {{ .Values.llamaStack.service.targetPort }}

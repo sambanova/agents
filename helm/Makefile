@@ -8,6 +8,7 @@ VALUES_FILE = ./aiskagents/values.$(ENV).yaml
 # Extract backend repository from values file
 BACKEND_REPO = $(shell grep -A3 "backend:" $(VALUES_FILE) | grep "repository:" | sed 's/.*repository: *//')
 FRONTEND_REPO = $(shell grep -A3 "frontend:" $(VALUES_FILE) | grep "repository:" | sed 's/.*repository: *//')
+LLAMASTACK_REPO = $(shell grep -A3 "llamaStack:" $(VALUES_FILE) | grep "repository:" | sed 's/.*repository: *//')
 
 # Extract frontend environment variables from values file
 VITE_API_URL = $(shell grep -A20 "frontend:" $(VALUES_FILE) | grep "VITE_API_URL:" | sed 's/.*VITE_API_URL: *//;s/"//g')
@@ -16,14 +17,16 @@ VITE_CLERK_PUBLISHABLE_KEY = $(shell grep -A20 "frontend:" $(VALUES_FILE) | grep
 # Common variables
 BACKEND_DOCKER_IMAGE = $(BACKEND_REPO)
 FRONTEND_DOCKER_IMAGE = $(FRONTEND_REPO)
+LLAMASTACK_DOCKER_IMAGE = $(LLAMASTACK_REPO)
 CHART_PATH = ./aiskagents
 
 # Extract base URL for docker login
 BACKEND_BASE_URL = $(shell echo $(BACKEND_REPO) | cut -d/ -f1)
 FRONTEND_BASE_URL = $(shell echo $(FRONTEND_REPO) | cut -d/ -f1)
+LLAMASTACK_BASE_URL = $(shell echo $(LLAMASTACK_REPO) | cut -d/ -f1)
 
 # Phony targets
-.PHONY: build-backend build-frontend push-backend push-frontend build push deploy install upgrade uninstall clean help
+.PHONY: build-backend build-frontend build-llamastack push-backend push-frontend push-llamastack build push deploy install upgrade uninstall clean help
 
 # Build the backend Docker image
 build-backend:
@@ -41,6 +44,11 @@ build-frontend:
 		--build-arg VITE_CLERK_PUBLISHABLE_KEY=$(VITE_CLERK_PUBLISHABLE_KEY) \
 		-t $(FRONTEND_DOCKER_IMAGE):$(TAG) .
 
+# Build the llama-stack Docker image
+build-llamastack:
+	@echo "Building Llama Stack Docker image $(LLAMASTACK_DOCKER_IMAGE):$(TAG) ($(ENV) environment)..."
+	cd ../llama-stack && docker build --platform linux/amd64 -t $(LLAMASTACK_DOCKER_IMAGE):$(TAG) .
+
 # Push the backend Docker image
 push-backend: build-backend
 	@echo "Logging in to Docker registry..."
@@ -55,11 +63,18 @@ push-frontend: build-frontend
 	@echo "Pushing frontend Docker image $(FRONTEND_DOCKER_IMAGE):$(TAG)..."
 	docker push $(FRONTEND_DOCKER_IMAGE):$(TAG)
 
+# Push the llama-stack Docker image
+push-llamastack: build-llamastack
+	@echo "Logging in to Docker registry..."
+	docker login $(LLAMASTACK_BASE_URL)
+	@echo "Pushing Llama Stack Docker image $(LLAMASTACK_DOCKER_IMAGE):$(TAG)..."
+	docker push $(LLAMASTACK_DOCKER_IMAGE):$(TAG)
+
 # Build all Docker images
-build: build-backend build-frontend
+build: build-backend build-frontend build-llamastack
 
 # Push all Docker images
-push: push-backend push-frontend
+push: push-backend push-frontend push-llamastack
 
 # Install the Helm chart
 install:
@@ -67,7 +82,8 @@ install:
 	helm install aiskagents-$(ENV) $(CHART_PATH) \
 		--values $(VALUES_FILE) \
 		--set backend.image.tag=$(TAG) \
-		--set frontend.image.tag=$(TAG)
+		--set frontend.image.tag=$(TAG) \
+		--set llamastack.image.tag=$(TAG)
 
 # Upgrade the Helm chart
 upgrade:
@@ -75,7 +91,8 @@ upgrade:
 	helm upgrade aiskagents-$(ENV) $(CHART_PATH) \
 		--values $(VALUES_FILE) \
 		--set backend.image.tag=$(TAG) \
-		--set frontend.image.tag=$(TAG)
+		--set frontend.image.tag=$(TAG) \
+		--set llamastack.image.tag=$(TAG)
 
 # Uninstall the Helm chart
 uninstall:
@@ -90,6 +107,7 @@ clean:
 	@echo "Cleaning up ($(ENV) environment)..."
 	docker rmi -f $(BACKEND_DOCKER_IMAGE):$(TAG) || true
 	docker rmi -f $(FRONTEND_DOCKER_IMAGE):$(TAG) || true
+	docker rmi -f $(LLAMASTACK_DOCKER_IMAGE):$(TAG) || true
 
 # Help message
 help:
@@ -100,15 +118,18 @@ help:
 	@echo "Using values file: $(VALUES_FILE)"
 	@echo "Backend repository: $(BACKEND_REPO)"
 	@echo "Frontend repository: $(FRONTEND_REPO)"
+	@echo "Llama Stack repository: $(LLAMASTACK_REPO)"
 	@echo "VITE_API_URL: $(VITE_API_URL)"
 	@echo "VITE_CLERK_PUBLISHABLE_KEY: $(VITE_CLERK_PUBLISHABLE_KEY)"
 	@echo ""
 	@echo "Targets:"
 	@echo "  build-backend   Build the backend Docker image"
 	@echo "  build-frontend  Build the frontend Docker image"
+	@echo "  build-llamastack Build the Llama Stack Docker image"
 	@echo "  build           Build all Docker images"
 	@echo "  push-backend    Push the backend Docker image"
 	@echo "  push-frontend   Push the frontend Docker image"
+	@echo "  push-llamastack Push the Llama Stack Docker image"
 	@echo "  push            Push all Docker images"
 	@echo "  install         Install the Helm chart"
 	@echo "  upgrade         Upgrade the Helm chart"
@@ -125,4 +146,4 @@ help:
 	@echo ""
 
 # Default target
-default: help 
+default: help

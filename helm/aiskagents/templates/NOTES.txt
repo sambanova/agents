@@ -8,14 +8,14 @@ To learn more about the release, try:
   $ helm get all {{ .Release.Name }}
 
 {{- if .Values.ingress.enabled }}
-You can access the application at:
+You can access the frontend application at:
   https://{{ .Values.ingress.host }}
 {{- else }}
-To access the application, you need to set up port forwarding:
+To access the frontend application, you need to set up port forwarding:
 
   $ kubectl port-forward svc/{{ .Values.frontend.name }} 8080:{{ .Values.frontend.service.port }} -n {{ .Values.global.namespace }}
 
-Then access the application at:
+Then access the frontend at:
   http://localhost:8080
 {{- end }}
 
@@ -25,4 +25,15 @@ For backend API access:
 {{- else }}
   $ kubectl port-forward svc/{{ .Values.backend.name }} 8081:{{ .Values.backend.service.port }} -n {{ .Values.global.namespace }}
   http://localhost:8081
-{{- end }} 
+{{- end }}
+
+For Llama Stack API access:
+{{- if .Values.ingress.enabled }}
+  https://{{ .Values.ingress.host }}/v1/health
+{{- else }}
+  To check the Llama Stack health endpoint, run:
+
+  $ kubectl port-forward svc/{{ .Values.llamaStack.name }} 8321:{{ .Values.llamaStack.service.targetPort }} -n {{ .Values.global.namespace }}
+  Access the Llama Stack API health at:
+  http://localhost:8321/v1/health
+{{- end }}

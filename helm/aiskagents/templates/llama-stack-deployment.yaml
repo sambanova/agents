@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.llamaStack.name }}
+  namespace: {{ .Values.global.namespace }}
+spec:
+  replicas: {{ .Values.llamaStack.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.llamaStack.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.llamaStack.name }}
+    spec:
+      terminationGracePeriodSeconds: 60
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - {{ .Values.llamaStack.name }}
+              topologyKey: kubernetes.io/hostname
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+      - name: {{ .name }}
+      {{- end }}
+      containers:
+      - name: {{ .Values.llamaStack.name }}-container
+        image: "{{ .Values.llamaStack.image.repository }}:{{ .Values.llamaStack.image.tag }}"
+        imagePullPolicy: {{ .Values.llamaStack.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.llamaStack.service.targetPort }}
+        resources:
+          limits:
+            cpu: {{ .Values.llamaStack.resources.limits.cpu | quote }}
+            memory: {{ .Values.llamaStack.resources.limits.memory | quote }}
+          requests:
+            cpu: {{ .Values.llamaStack.resources.requests.cpu | quote }}
+            memory: {{ .Values.llamaStack.resources.requests.memory | quote }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.llamaStack.probes.liveness.path }}
+            port: {{ .Values.llamaStack.probes.liveness.port }}
+          initialDelaySeconds: {{ .Values.llamaStack.probes.liveness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.llamaStack.probes.liveness.periodSeconds }}
+          timeoutSeconds: {{ .Values.llamaStack.probes.liveness.timeoutSeconds }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.llamaStack.probes.liveness.path }}
+            port: {{ .Values.llamaStack.probes.readiness.port }}
+          initialDelaySeconds: {{ .Values.llamaStack.probes.readiness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.llamaStack.probes.readiness.periodSeconds }}
+        env:
+        {{- range $key, $value := .Values.llamaStack.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
