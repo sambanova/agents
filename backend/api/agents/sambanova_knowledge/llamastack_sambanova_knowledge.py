@@ -55,11 +55,20 @@ def create_agent(client, model):
     agent = Agent(
         client,
         model=model,
-        instructions="You are a helpful assistant. Use the tools you have access to for providing relevant answers",
+        instructions="""
+        You are an expert in composing functions. You are given a question and a set of possible functions.
+        Based on the question, you will need to make one or more function/tool calls to achieve the purpose.
+        If none of the function can be used, point it out. If the given question lacks the parameters required by the function,
+        also point it out. You should only return the function call in tools call sections.
+        If you decide to invoke any of the function(s), you MUST put it in the format of [func_name1(params_name1=params_value1, params_name2=params_value2...), func_name2(params)]
+        You SHOULD NOT include any other text in the response.
+        
+        You are a code agent, use your tool to execute code. Remember, always give the final answer using the tool result, if the results are empty or you receive an error, let the user know.
+        """,
         sampling_params={
             "strategy": {"type": "top_p", "temperature": 0.1, "top_p": 0.9},
         },
-        tools=[code_executor],
+        tools=["builtin::code_interpreter"],
         enable_session_persistence=False,
     )
     return agent
