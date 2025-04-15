@@ -249,7 +249,7 @@
             >
               <option value="llama-3.3-70b">Meta-Llama-3.3-70B-Instruct - 128K</option>
               <option value="deepseek-r1">DeepSeek-R1 - 8K</option>
-              <option value="llama-3.1-tulu-3-405b">Llama-3.1-Tulu-3-405B - 16K</option>
+              <option value="llama-3.1-405b">Meta-Llama-3.1-405B-Instruct - 16K</option>
             </select>
           </div>
 

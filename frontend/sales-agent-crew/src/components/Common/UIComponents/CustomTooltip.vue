@@ -1,17 +1,17 @@
 <template>
-  <!-- The "group" class allows us to use group-hover on the popover -->
+  <!-- The "group" class allows us to use group-hover on the tooltip -->
   <div class="relative inline-block group">
     <!-- Slot for the target element -->
     <slot></slot>
-    <!-- Popover content -->
+    <!-- Tooltip content -->
     <div
-      :class="popoverPosition"
+      :class="tooltipPosition"
       class="absolute z-10 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-300"
     >
       <div class="relative inline-block">
         <!-- Arrow element -->
         <div :class="arrowClasses" :style="arrowStyle"></div>
-        <!-- Popover text container -->
+        <!-- Tooltip text container -->
         <div :class="[color, 'px-2 py-1 rounded text-xs whitespace-nowrap']">
           {{ text }}
         </div>
@@ -24,7 +24,7 @@
 import { computed } from 'vue';
 
 const props = defineProps({
-  // The text that will be displayed in the popover
+  // The text that will be displayed in the tooltip
   text: {
     type: String,
     required: true,
@@ -41,8 +41,8 @@ const props = defineProps({
   },
 });
 
-// Compute the popover container’s position based on the supplied position prop.
-const popoverPosition = computed(() => {
+// Compute the tooltip container’s position based on the supplied position prop.
+const tooltipPosition = computed(() => {
   switch (props.position) {
     case 'top':
       return 'bottom-full mb-2 left-1/2 transform -translate-x-1/2';
@@ -62,7 +62,7 @@ const popoverPosition = computed(() => {
 const arrowClasses = computed(() => {
   switch (props.position) {
     case 'top':
-      // Arrow appears at the bottom of the popover, pointing down.
+      // Arrow appears at the bottom of the tooltip, pointing down.
       return 'absolute top-full left-1/2 transform -translate-x-1/2 border-x-[5px] border-t-[5px] border-x-transparent';
     case 'bottom':
       return 'absolute bottom-full left-1/2 transform -translate-x-1/2 border-x-[5px] border-b-[5px] border-x-transparent';
@@ -75,7 +75,7 @@ const arrowClasses = computed(() => {
   }
 });
 
-// Compute inline styles for the arrow so its border color matches the popover background.
+// Compute inline styles for the arrow so its border color matches the tooltip background.
 // (Here we use a helper function to map common bg classes to hex codes.)
 const arrowStyle = computed(() => {
   switch (props.position) {

@@ -1,4 +1,3 @@
-<!-- src/views/MainLayout.vue -->
 <template>
   <!-- Outer container uses flex so the sidebar, main area, and agent sidebar appear side-by-side -->
   <div

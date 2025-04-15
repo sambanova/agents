@@ -602,6 +602,7 @@ class QueryRouterServiceChat:
         """
         Resolve the model name to the correct model name.
         """
+        # add when mapping required for not supported models
         if provider == "fireworks" and model_name == "llama-3.1-tulu-3-405b":
             return "llama-3.1-405b"
         return model_name
