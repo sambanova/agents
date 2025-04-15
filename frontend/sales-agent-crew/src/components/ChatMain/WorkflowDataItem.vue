@@ -16,23 +16,15 @@
           </h3>
           <p class="text-sm text-gray-500 flex justify-between">
             <span class="capitalize">{{ item.task }}</span>
-            <span v-if="item.duration">{{
-              formattedDuration(item.duration)
-            }}</span>
+            <span v-if="item.duration">{{ formattedDuration(item.duration) }}</span>
           </p>
         </div>
         <!-- Right: Icon  -->
         <div class="absolute top-[5px] right-[5px]">
-          <template v-if="item.llm_name.toLowerCase().includes('meta')">
-            <img
-              class="w-4 h-4"
-              src="/Images/icons/meta.png"
-              alt="Meta model logo"
-            />
+          <template v-if="item.llm_name.toLowerCase().includes('llama')">
+            <img class="w-4 h-4" src="/Images/icons/meta.png" alt="Meta model logo" />
           </template>
-          <template
-            v-else-if="item.llm_name.toLowerCase().includes('deepseek')"
-          >
+          <template v-else-if="item.llm_name.toLowerCase().includes('deepseek')">
             <img
               class="w-4 h-4"
               src="/Images/icons/deepseek.png"
@@ -42,10 +34,7 @@
         </div>
       </div>
     </div>
-    <div
-      v-if="isLoading"
-      class="mt-1 w-full h-1 bg-gray-300 overflow-hidden relative"
-    >
+    <div v-if="isLoading" class="mt-1 w-full h-1 bg-gray-300 overflow-hidden relative">
       <div
         class="absolute top-0 left-0 h-full bg-primary-brandPrimaryColor animate-loader"
       ></div>
@@ -54,8 +43,8 @@
 </template>
 
 <script setup>
-import { defineProps, watch, computed } from 'vue';
-import { formattedDuration } from '@/utils/globalFunctions';
+import { defineProps, watch, computed } from "vue";
+import { formattedDuration } from "@/utils/globalFunctions";
 
 const props = defineProps({
   workflowData: {
@@ -76,7 +65,7 @@ watch(
   () => props.workflowData,
   (newData, oldData) => {
     if (oldData && newData.length !== oldData.length) {
-      console.log('New data has been added or removed.');
+      console.log("New data has been added or removed.");
       // Add any additional logic here if needed
     }
   },
@@ -84,10 +73,10 @@ watch(
 );
 
 function getTextAfterLastSlash(str) {
-  if (!str.includes('/')) {
+  if (!str.includes("/")) {
     // If there is no slash, return the original string
     return str;
   }
-  return str.substring(str.lastIndexOf('/') + 1);
+  return str.substring(str.lastIndexOf("/") + 1);
 }
 </script>
