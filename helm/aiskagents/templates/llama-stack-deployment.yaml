@@ -24,6 +24,8 @@ spec:
       - name: {{ .Values.llamastack.name }}-container
         image: "{{ .Values.llamastack.image.repository }}:{{ .Values.llamastack.image.tag }}"
         imagePullPolicy: {{ .Values.llamastack.image.pullPolicy }}
+        securityContext:
+          privileged: true
         ports:
         - containerPort: {{ .Values.llamastack.service.targetPort }}
         resources:
