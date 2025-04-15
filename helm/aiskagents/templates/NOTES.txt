@@ -26,14 +26,3 @@ For backend API access:
   $ kubectl port-forward svc/{{ .Values.backend.name }} 8081:{{ .Values.backend.service.port }} -n {{ .Values.global.namespace }}
   http://localhost:8081
 {{- end }}
-
-For Llama Stack API access:
-{{- if .Values.ingress.enabled }}
-  https://{{ .Values.ingress.host }}/v1/health
-{{- else }}
-  To check the Llama Stack health endpoint, run:
-
-  $ kubectl port-forward svc/{{ .Values.llamaStack.name }} 8321:{{ .Values.llamaStack.service.targetPort }} -n {{ .Values.global.namespace }}
-  Access the Llama Stack API health at:
-  http://localhost:8321/v1/health
-{{- end }}

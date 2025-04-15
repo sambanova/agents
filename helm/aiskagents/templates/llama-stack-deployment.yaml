@@ -1,4 +1,4 @@
-{{- if .Values.redis.enabled -}}
+{{- if .Values.llamastack.enabled -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,25 +16,12 @@ spec:
       labels:
         app: {{ .Values.llamastack.name }}
     spec:
-      terminationGracePeriodSeconds: 60
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                  - {{ .Values.llamastack.name }}
-              topologyKey: kubernetes.io/hostname
       imagePullSecrets:
       {{- range .Values.global.imagePullSecrets }}
       - name: {{ .name }}
       {{- end }}
       containers:
-      - name: {{ .Values.llamaStack.name }}-container
+      - name: {{ .Values.llamastack.name }}-container
         image: "{{ .Values.llamastack.image.repository }}:{{ .Values.llamastack.image.tag }}"
         imagePullPolicy: {{ .Values.llamastack.image.pullPolicy }}
         ports:
@@ -59,9 +46,4 @@ spec:
             port: {{ .Values.llamastack.probes.readiness.port }}
           initialDelaySeconds: {{ .Values.llamastack.probes.readiness.initialDelaySeconds }}
           periodSeconds: {{ .Values.llamastack.probes.readiness.periodSeconds }}
-        env:
-        {{- range $key, $value := .Values.llamastack.env }}
-        - name: {{ $key }}
-          value: {{ $value | quote }}
-        {{- end }}
 {{- end }} 

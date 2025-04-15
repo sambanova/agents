@@ -35,7 +35,7 @@ backend:
     OTEL_SDK_DISABLED: "true"
     LOG_DIR: "/app/logs"
     ENABLE_USER_KEYS: "false"
-    LLAMA_STACK_HOST: "localhost"
+    LLAMA_STACK_HOST: "llamastack.llamastack.svc.cluster.local"
     LLAMA_STACK_PORT: "8321"
   volumes:
     logs:
@@ -113,13 +113,13 @@ ingress:
 
 # Llama stack server configuration
 llamastack:
-  enabled: true
-  namespace: redis
   name: llama-stack
   image:
     repository: your-docker-repository
     tag: "0.0.1-dev"
     pullPolicy: Always
+  enabled: true
+  namespace: llamastack
   replicas: 1
   resources:
     limits:

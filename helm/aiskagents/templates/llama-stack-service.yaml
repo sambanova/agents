@@ -9,10 +9,8 @@ metadata:
 spec:
   selector:
     app: {{ .Values.llamastack.name }}
-  type: {{ .Values.llamastack.service.type }}
   ports:
-    - protocol: TCP
-      port: {{ .Values.llamastack.service.port }}
+    - port: {{ .Values.llamastack.service.port }}
       targetPort: {{ .Values.llamastack.service.targetPort }}
       name: llamastack
 {{- end }} 
