@@ -1,17 +1,20 @@
+{{- if .Values.redis.enabled -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Values.llamaStack.name }}
-  namespace: {{ .Values.global.namespace }}
+  name: {{ .Values.llamastack.name }}
+  namespace: {{ .Values.llamastack.namespace }}
+  labels:
+    app: llamastack
 spec:
-  replicas: {{ .Values.llamaStack.replicas }}
+  replicas: {{ .Values.llamastack.replicas }}
   selector:
     matchLabels:
-      app: {{ .Values.llamaStack.name }}
+      app: {{ .Values.llamastack.name }}
   template:
     metadata:
       labels:
-        app: {{ .Values.llamaStack.name }}
+        app: {{ .Values.llamastack.name }}
     spec:
       terminationGracePeriodSeconds: 60
       affinity:
@@ -24,7 +27,7 @@ spec:
                 - key: app
                   operator: In
                   values:
-                  - {{ .Values.llamaStack.name }}
+                  - {{ .Values.llamastack.name }}
               topologyKey: kubernetes.io/hostname
       imagePullSecrets:
       {{- range .Values.global.imagePullSecrets }}
@@ -32,32 +35,33 @@ spec:
       {{- end }}
       containers:
       - name: {{ .Values.llamaStack.name }}-container
-        image: "{{ .Values.llamaStack.image.repository }}:{{ .Values.llamaStack.image.tag }}"
-        imagePullPolicy: {{ .Values.llamaStack.image.pullPolicy }}
+        image: "{{ .Values.llamastack.image.repository }}:{{ .Values.llamastack.image.tag }}"
+        imagePullPolicy: {{ .Values.llamastack.image.pullPolicy }}
         ports:
-        - containerPort: {{ .Values.llamaStack.service.targetPort }}
+        - containerPort: {{ .Values.llamastack.service.targetPort }}
         resources:
           limits:
-            cpu: {{ .Values.llamaStack.resources.limits.cpu | quote }}
-            memory: {{ .Values.llamaStack.resources.limits.memory | quote }}
+            cpu: {{ .Values.llamastack.resources.limits.cpu | quote }}
+            memory: {{ .Values.llamastack.resources.limits.memory | quote }}
           requests:
-            cpu: {{ .Values.llamaStack.resources.requests.cpu | quote }}
-            memory: {{ .Values.llamaStack.resources.requests.memory | quote }}
+            cpu: {{ .Values.llamastack.resources.requests.cpu | quote }}
+            memory: {{ .Values.llamastack.resources.requests.memory | quote }}
         livenessProbe:
           httpGet:
-            path: {{ .Values.llamaStack.probes.liveness.path }}
-            port: {{ .Values.llamaStack.probes.liveness.port }}
-          initialDelaySeconds: {{ .Values.llamaStack.probes.liveness.initialDelaySeconds }}
-          periodSeconds: {{ .Values.llamaStack.probes.liveness.periodSeconds }}
-          timeoutSeconds: {{ .Values.llamaStack.probes.liveness.timeoutSeconds }}
+            path: {{ .Values.llamastack.probes.liveness.path }}
+            port: {{ .Values.llamastack.probes.liveness.port }}
+          initialDelaySeconds: {{ .Values.llamastack.probes.liveness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.llamastack.probes.liveness.periodSeconds }}
+          timeoutSeconds: {{ .Values.llamastack.probes.liveness.timeoutSeconds }}
         readinessProbe:
           httpGet:
-            path: {{ .Values.llamaStack.probes.liveness.path }}
-            port: {{ .Values.llamaStack.probes.readiness.port }}
-          initialDelaySeconds: {{ .Values.llamaStack.probes.readiness.initialDelaySeconds }}
-          periodSeconds: {{ .Values.llamaStack.probes.readiness.periodSeconds }}
+            path: {{ .Values.llamastack.probes.liveness.path }}
+            port: {{ .Values.llamastack.probes.readiness.port }}
+          initialDelaySeconds: {{ .Values.llamastack.probes.readiness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.llamastack.probes.readiness.periodSeconds }}
         env:
-        {{- range $key, $value := .Values.llamaStack.env }}
+        {{- range $key, $value := .Values.llamastack.env }}
         - name: {{ $key }}
           value: {{ $value | quote }}
         {{- end }}
+{{- end }} 

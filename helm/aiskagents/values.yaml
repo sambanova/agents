@@ -64,40 +64,6 @@ backend:
       SERPER_KEY: ""
       FIREWORKS_KEY: ""
 
-# Llama stack server configuration
-llamaStack:
-  name: llama-stack
-  image:
-    repository: us-west2-docker.pkg.dev/acp-starterkits-development-57/oci-us-west2-starerkits/llama-sambanova
-    tag: "0.0.1-dev"
-    pullPolicy: Always
-  replicas: 1
-  resources:
-    limits:
-      cpu: "1"
-      memory: "1Gi"
-    requests:
-      cpu: "500m"
-      memory: "1Gi"
-  service:
-    type: ClusterIP
-    port: 8321
-    targetPort: 8321
-  probes:
-    liveness:
-      path: /v1/health
-      port: 8321
-      initialDelaySeconds: 30
-      periodSeconds: 30
-      timeoutSeconds: 3
-    readiness:
-      path: /v1/health
-      port: 8321
-      initialDelaySeconds: 5
-      periodSeconds: 10
-  env:
-    LLAMA_STACK_PORT: "8321"
-    LLAMA_STACK_HOST: "localhost"
 
 # Frontend configuration
 frontend:
@@ -144,6 +110,42 @@ ingress:
       pathType: Prefix
       service: aiskagents-backend
       port: 80
+
+# Llama stack server configuration
+llamastack:
+  enabled: true
+  namespace: redis
+  name: llama-stack
+  image:
+    repository: your-docker-repository
+    tag: "0.0.1-dev"
+    pullPolicy: Always
+  replicas: 1
+  resources:
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+  service:
+    type: ClusterIP
+    port: 8321
+    targetPort: 8321
+  probes:
+    liveness:
+      path: /v1/health
+      port: 8321
+      initialDelaySeconds: 30
+      periodSeconds: 30
+      timeoutSeconds: 3
+    readiness:
+      path: /v1/health
+      port: 8321
+      initialDelaySeconds: 5
+      periodSeconds: 10
+  env:
+    LLAMA_STACK_PORT: "8321"
 
 # Redis configuration
 redis:

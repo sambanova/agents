@@ -8,7 +8,7 @@ VALUES_FILE = ./aiskagents/values.$(ENV).yaml
 # Extract backend repository from values file
 BACKEND_REPO = $(shell grep -A3 "backend:" $(VALUES_FILE) | grep "repository:" | sed 's/.*repository: *//')
 FRONTEND_REPO = $(shell grep -A3 "frontend:" $(VALUES_FILE) | grep "repository:" | sed 's/.*repository: *//')
-LLAMASTACK_REPO = $(shell grep -A3 "llamaStack:" $(VALUES_FILE) | grep "repository:" | sed 's/.*repository: *//')
+LLAMASTACK_REPO = $(shell grep -A3 "llamastack:" $(VALUES_FILE) | grep "repository:" | sed 's/.*repository: *//')
 
 # Extract frontend environment variables from values file
 VITE_API_URL = $(shell grep -A20 "frontend:" $(VALUES_FILE) | grep "VITE_API_URL:" | sed 's/.*VITE_API_URL: *//;s/"//g')
@@ -47,7 +47,7 @@ build-frontend:
 # Build the llama-stack Docker image
 build-llamastack:
 	@echo "Building Llama Stack Docker image $(LLAMASTACK_DOCKER_IMAGE):$(TAG) ($(ENV) environment)..."
-	cd ../llamaStack && docker build --platform linux/amd64 -t $(LLAMASTACK_DOCKER_IMAGE):$(TAG) .
+	cd ../llamastack && docker build --platform linux/amd64 -t $(LLAMASTACK_DOCKER_IMAGE):$(TAG) .
 
 # Push the backend Docker image
 push-backend: build-backend
@@ -83,7 +83,7 @@ install:
 		--values $(VALUES_FILE) \
 		--set backend.image.tag=$(TAG) \
 		--set frontend.image.tag=$(TAG) \
-		--set llamaStack.image.tag=$(TAG)
+		--set llamastack.image.tag=$(TAG)
 
 # Upgrade the Helm chart
 upgrade:
@@ -92,7 +92,7 @@ upgrade:
 		--values $(VALUES_FILE) \
 		--set backend.image.tag=$(TAG) \
 		--set frontend.image.tag=$(TAG) \
-		--set llamaStack.image.tag=$(TAG)
+		--set llamastack.image.tag=$(TAG)
 
 # Uninstall the Helm chart
 uninstall:
