@@ -60,25 +60,26 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
-import { marked } from 'marked';
+import { computed, ref } from "vue";
+import { marked } from "marked";
 
-import TimelineCollapsibleContent from '@/components/ChatMain/TimelineCollapsibleContent.vue';
-import AggregatorAgentIcon from '@/components/icons/AggregatorAgentIcon.vue';
-import CompetitorAnalysisAgentIcon from '@/components/icons/CompetitorAnalysisAgentIcon.vue';
-import DataExtractionIcon from '@/components/icons/DataExtractionAgentIcon.vue';
-import DefaultIcon from '@/components/icons/DefaultIcon.vue';
-import EnhancedCompetitorAgentIcon from '@/components/icons/EnhancedCompetitorAgentIcon.vue';
-import FinancialAnalysisAgentIcon from '@/components/icons/FinancialAnalysisAgentIcon.vue';
-import FinancialNewsAgentIcon from '../icons/FinancialNewsAgentIcon.vue';
-import FundamentalAnalysisAgentIcon from '@/components/icons/FundamentalAnalysisAgentIcon.vue';
-import MarketTrendsAgentIcon from '@/components/icons/MarketTrendsAgentIcon.vue';
-import NewsAgentIcon from '@/components/icons/NewsAgentIcon.vue';
-import ResearchIcon from '@/components/icons/ResearchIcon.vue';
-import RiskAssessmentAgentIcon from '@/components/icons/RiskAssessmentAgentIcon.vue';
-import SpecialistIcon from '@/components/icons/SpecialistIcon.vue';
-import TechIcon from '@/components/icons/TechIcon.vue';
-import TechnicalAnalysisAgentIcon from '../icons/TechnicalAnalysisAgentIcon.vue';
+import TimelineCollapsibleContent from "@/components/ChatMain/TimelineCollapsibleContent.vue";
+import AggregatorAgentIcon from "@/components/icons/AggregatorAgentIcon.vue";
+import CompetitorAnalysisAgentIcon from "@/components/icons/CompetitorAnalysisAgentIcon.vue";
+import DataExtractionIcon from "@/components/icons/DataExtractionAgentIcon.vue";
+import DefaultIcon from "@/components/icons/DefaultIcon.vue";
+import EnhancedCompetitorAgentIcon from "@/components/icons/EnhancedCompetitorAgentIcon.vue";
+import FinancialAnalysisAgentIcon from "@/components/icons/FinancialAnalysisAgentIcon.vue";
+import FinancialNewsAgentIcon from "../icons/FinancialNewsAgentIcon.vue";
+import FundamentalAnalysisAgentIcon from "@/components/icons/FundamentalAnalysisAgentIcon.vue";
+import MarketTrendsAgentIcon from "@/components/icons/MarketTrendsAgentIcon.vue";
+import NewsAgentIcon from "@/components/icons/NewsAgentIcon.vue";
+import ResearchIcon from "@/components/icons/ResearchIcon.vue";
+import RiskAssessmentAgentIcon from "@/components/icons/RiskAssessmentAgentIcon.vue";
+import SpecialistIcon from "@/components/icons/SpecialistIcon.vue";
+import TechIcon from "@/components/icons/TechIcon.vue";
+import TechnicalAnalysisAgentIcon from "../icons/TechnicalAnalysisAgentIcon.vue";
+import SambaNovaKnowledgeAgentIcon from "../icons/SambaNovaKnowledgeAgentIcon.vue";
 
 const formattedDuration = (duration) => {
   // Format duration to 2 decimal places
@@ -110,21 +111,22 @@ const props = defineProps({
 // -------------------------------------------------------------------
 function getAgentIcon(agentName) {
   const agentIcons = {
-    'Aggregator Agent': AggregatorAgentIcon,
-    'Aggregator Search Agent': AggregatorAgentIcon,
-    'Competitor Analysis Agent': CompetitorAnalysisAgentIcon,
-    'Data Extraction Agent': DataExtractionIcon,
-    'Enhanced Competitor Finder Agent': EnhancedCompetitorAgentIcon,
-    'Financial Analysis Agent': FinancialAnalysisAgentIcon,
-    'Financial News Agent': FinancialNewsAgentIcon,
-    'Fundamental Analysis Agent': FundamentalAnalysisAgentIcon,
-    'Market Trends Analyst': MarketTrendsAgentIcon,
-    'News Agent': NewsAgentIcon,
-    'Research Agent': ResearchIcon,
-    'Risk Assessment Agent': RiskAssessmentAgentIcon,
-    'Technical News Agent': TechIcon, // magnifying glass
-    'Technical Analysis Agent': TechnicalAnalysisAgentIcon,
-    'Outreach Specialist': SpecialistIcon,
+    "Aggregator Agent": AggregatorAgentIcon,
+    "Aggregator Search Agent": AggregatorAgentIcon,
+    "Competitor Analysis Agent": CompetitorAnalysisAgentIcon,
+    "Data Extraction Agent": DataExtractionIcon,
+    "Enhanced Competitor Finder Agent": EnhancedCompetitorAgentIcon,
+    "Financial Analysis Agent": FinancialAnalysisAgentIcon,
+    "Financial News Agent": FinancialNewsAgentIcon,
+    "Fundamental Analysis Agent": FundamentalAnalysisAgentIcon,
+    "Market Trends Analyst": MarketTrendsAgentIcon,
+    "News Agent": NewsAgentIcon,
+    "Research Agent": ResearchIcon,
+    "Risk Assessment Agent": RiskAssessmentAgentIcon,
+    "Technical News Agent": TechIcon, // magnifying glass
+    "Technical Analysis Agent": TechnicalAnalysisAgentIcon,
+    "Outreach Specialist": SpecialistIcon,
+    "Sambanova Knowledge": SambaNovaKnowledgeAgentIcon,
   };
   const icon = agentIcons[agentName] || DefaultIcon;
 
