@@ -62,7 +62,7 @@ class SambaKnowledgeAgent(RoutedAgent):
                     "user_id": user_id,
                     "conversation_id": conversation_id,
                     "message_id": message_id,
-                    "agent_name":"sambanova_knowledge",
+                    "agent_name":"Sambanova Knowledge",
                     "workflow_name":"sambanova_knowledge",
                     "model":model,
                     "provider":provider,
