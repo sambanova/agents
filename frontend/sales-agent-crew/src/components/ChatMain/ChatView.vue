@@ -181,7 +181,7 @@
                 type="search"
                 placeholder="Ask me about...companies to target, research topics, or company stocks and financials"
                 :disabled="isLoading"
-                class="p-4 pb-12 block min-h-[106px] w-full bg-primary-brandFrame border-primary-brandFrame rounded-lg text-sm focus:outline-none active:outline-none border focus:border-primary-brandColor disabled:opacity-50 disabled:pointer-events-none resize-y"
+                class="p-4 pb-12 block min-h-[106px] w-full bg-primary-brandFrame border-primary-brandFrame rounded-lg text-sm focus:outline-none active:outline-none border focus:ring-1 focus:ring-primary-brandColor disabled:opacity-50 disabled:pointer-events-none resize-y"
               ></textarea>
 
               <!-- Toolbar -->
@@ -189,14 +189,14 @@
                 class="absolute bottom-px inset-x-px p-2 rounded-b-lg border-primary-brandFrame"
               >
                 <div class="flex justify-between items-center">
-                  <!-- Button Group -->
+                  <!-- Left Button Group -->
                   <div class="flex items-center">
                     <!-- Attach Button -->
                     <button
                       @click="$refs.fileInput.click()"
                       :disabled="isLoading || isUploading"
                       type="button"
-                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
+                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100 focus:ring-1 focus:ring-primary-brandColor"
                     >
                       <input
                         type="file"
@@ -238,6 +238,7 @@
                       </svg>
                     </button>
                     <!-- End Attach Button -->
+
                     <!-- Mic Button -->
                     <button
                       type="button"
@@ -247,7 +248,7 @@
                         'text-gray-500': !isRecording,
                         'text-orange-500': isRecording,
                       }"
-                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
+                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100 focus:ring-1 focus:ring-primary-brandColor"
                     >
                       <svg
                         v-if="!isRecording"
@@ -285,67 +286,16 @@
                     </button>
                     <!-- End Mic Button -->
                   </div>
-                  <!-- End Button Group -->
-                  <!-- Button Group -->
+                  <!-- End Left Button Group -->
+
+                  <!-- Right Button Group -->
                   <div class="flex items-center gap-x-1">
-                    <!-- Mic Button -->
-                    <Tooltip
-                      text="Use voice mode"
-                      position="top"
-                      color="bg-black text-white"
-                    >
-                      <button
-                        type="button"
-                        @click="toggleRecording"
-                        :disabled="isLoading"
-                        :class="{
-                          'text-gray-500': !isRecording,
-                          'text-orange-500': isRecording,
-                        }"
-                        class="inline-flex hidden shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
-                      >
-                        <svg
-                          v-if="!isRecording"
-                          class="w-6 h-6 text-gray-800"
-                          aria-hidden="true"
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          fill="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            fill-rule="evenodd"
-                            d="M5 8a1 1 0 0 1 1 1v3a4.006 4.006 0 0 0 4 4h4a4.006 4.006 0 0 0 4-4V9a1 1 0 1 1 2 0v3.001A6.006 6.006 0 0 1 14.001 18H13v2h2a1 1 0 1 1 0 2H9a1 1 0 1 1 0-2h2v-2H9.999A6.006 6.006 0 0 1 4 12.001V9a1 1 0 0 1 1-1Z"
-                            clip-rule="evenodd"
-                          />
-                          <path
-                            d="M7 6a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v5a4 4 0 0 1-4 4h-2a4 4 0 0 1-4-4V6Z"
-                          />
-                        </svg>
-                        <svg
-                          v-else
-                          class="w-6 h-6 text-gray-800"
-                          aria-hidden="true"
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          fill="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            d="M7 5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H7Z"
-                          />
-                        </svg>
-                      </button>
-                    </Tooltip>
-                    <!-- End Mic Button -->
                     <!-- Send Button -->
                     <button
                       type="button"
                       @click="addMessage"
                       :disabled="isLoading || !searchQuery.trim()"
-                      class="inline-flex shrink-0 justify-center items-center bg-transparent cursor-pointer"
+                      class="inline-flex shrink-0 justify-center items-center bg-transparent cursor-pointer rounded focus:outline-none focus:ring-1 focus:ring-primary-brandColor"
                     >
                       <svg
                         id="send-button"
@@ -378,7 +328,7 @@
                     </button>
                     <!-- End Send Button -->
                   </div>
-                  <!-- End Button Group -->
+                  <!-- End Right Button Group -->
                 </div>
               </div>
               <!-- End Toolbar -->

@@ -9,7 +9,7 @@
     @click.stop
   >
     <button
-      class="flex items-center w-full px-4 py-2 hover:bg-gray-100 text-left"
+      class="flex items-center w-full px-4 py-2 hover:bg-gray-100 text-left focus-visible:outline-primary-500"
       @click="onClick"
     >
       <component :is="svgIcon" />

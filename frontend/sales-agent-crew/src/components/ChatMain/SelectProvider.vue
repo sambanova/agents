@@ -1,9 +1,15 @@
 <template>
-  <div class="relative inline-block text-left" ref="dropdownRef">
+  <div
+    class="relative inline-block text-left focus:outline-primary-500"
+    ref="dropdownRef"
+    @keydown.enter="toggleDropdown"
+    @keydown.space="toggleDropdown"
+    tabindex="0"
+  >
     <!-- Dropdown Button -->
     <button
       @click="toggleDropdown"
-      :disabled="!showOtherProviders"
+      tabindex="-1"
       type="button"
       class="inline-flex justify-between items-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none"
     >
@@ -35,7 +41,7 @@
             <a
               href="#"
               @click.prevent="selectOption(option)"
-              class="block px-4 py-2 text-sm text-gray-700 hover:bg-orange-600 hover:text-white transition-colors focus:outline-none active:outline-none"
+              class="block px-4 py-2 text-sm text-gray-700 hover:bg-orange-600 hover:text-white transition-colors active:outline-none focus:outline-none focus:bg-primary-brandGray"
               role="menuitem"
             >
               {{ option.label }}
@@ -48,65 +54,68 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch } from 'vue';
 
 // Accept the shared value as a prop for v-model binding.
 const props = defineProps({
   selectedOption: {
     type: Object,
-    default: () => ({ label: 'SambaNova', value: 'sambanova' })
-  }
-})
-const emit = defineEmits(['update:selectedOption'])
+    default: () => ({ label: 'SambaNova', value: 'sambanova' }),
+  },
+});
+const emit = defineEmits(['update:selectedOption']);
 
 // Create a local copy that reflects the prop.
-const localSelected = ref(props.selectedOption)
-const open = ref(false)
+const localSelected = ref(props.selectedOption);
+const open = ref(false);
 
 // Check the env variable: Only show other providers if true.
-const showOtherProviders = import.meta.env.VITE_SHOW_OTHER_PROVIDERS === 'true'
+// const showOtherProviders = import.meta.env.VITE_SHOW_OTHER_PROVIDERS === 'true';
+const showOtherProviders = true;
 
 // Updated options: Both providers.
 const options = ref([
   { label: 'SambaNova', value: 'sambanova' },
-  { label: 'Fireworks', value: 'fireworks' }
-])
+  { label: 'Fireworks', value: 'fireworks' },
+]);
 // If not showing other providers, filter options to just the first one.
 if (!showOtherProviders) {
-  options.value = options.value.filter(option => option.value === 'sambanova')
+  options.value = options.value.filter(
+    (option) => option.value === 'sambanova'
+  );
 }
 
-const dropdownRef = ref(null)
+const dropdownRef = ref(null);
 
 function toggleDropdown() {
   // If other providers are disabled, do nothing.
-  if (!showOtherProviders) return
-  open.value = !open.value
+  if (!showOtherProviders) return;
+  open.value = !open.value;
 }
 
 function selectOption(option) {
-  localSelected.value = option
+  localSelected.value = option;
   // Emit the update so that the parent gets updated.
-  emit('update:selectedOption', option)
-  open.value = false
+  emit('update:selectedOption', option);
+  open.value = false;
 }
 
 // Close dropdown if click is outside.
 function handleClickOutside(event) {
   if (dropdownRef.value && !dropdownRef.value.contains(event.target)) {
-    open.value = false
+    open.value = false;
   }
 }
 
-document.addEventListener('click', handleClickOutside)
+document.addEventListener('click', handleClickOutside);
 
 // Keep localSelected in sync if the prop changes.
 watch(
   () => props.selectedOption,
   (newVal) => {
-    localSelected.value = newVal
+    localSelected.value = newVal;
   }
-)
+);
 </script>
 
 <style scoped>

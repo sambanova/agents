@@ -5,7 +5,7 @@
     <!-- Header -->
     <div class="px-4 py-2 flex items-center justify-between">
       <button
-        class="p-2 w-full border border-primary-brandBorder text-primary-brandColor text-sm rounded"
+        class="p-2 w-full border border-primary-brandBorder text-primary-brandColor text-sm rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-brandColor focus-visible:ring-offset-2"
         @click="createNewChat"
         :disabled="missingKeysArray.length > 0"
       >

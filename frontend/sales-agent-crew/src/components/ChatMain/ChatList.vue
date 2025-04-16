@@ -23,8 +23,8 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
-import ChatItem from './ChatItem.vue';
+import { computed } from "vue";
+import ChatItem from "./ChatItem.vue";
 
 // Props passed from the parent component.
 const props = defineProps({
@@ -40,10 +40,10 @@ const props = defineProps({
 
 // Emit events so that parent can listen.
 const emit = defineEmits([
-  'select-conversation',
-  'delete-chat',
-  'share-chat',
-  'download-chat',
+  "select-conversation",
+  "delete-chat",
+  "share-chat",
+  "download-chat",
 ]);
 
 // Helper function to compute group label based on timestamp.
@@ -57,7 +57,7 @@ function getGroupLabel(timestamp) {
     now.getMonth() === convDate.getMonth() &&
     now.getDate() === convDate.getDate()
   ) {
-    return 'Today';
+    return "Today";
   }
 
   // Yesterday
@@ -68,21 +68,21 @@ function getGroupLabel(timestamp) {
     yesterday.getMonth() === convDate.getMonth() &&
     yesterday.getDate() === convDate.getDate()
   ) {
-    return 'Yesterday';
+    return "Yesterday";
   }
   // Difference in days.
   const diffDays = (now - convDate) / (1000 * 60 * 60 * 24);
   if (diffDays <= 7) {
-    return 'Last 7 Days';
+    return "Last 7 Days";
   } else if (diffDays <= 30) {
-    return 'Last 30 Days';
+    return "Last 30 Days";
   } else if (diffDays <= 60) {
-    return 'Previous 30 Days';
+    return "Previous 30 Days";
   } else {
     // Group by month (e.g., "January 2023")
     return convDate.toLocaleDateString(undefined, {
-      month: 'long',
-      year: 'numeric',
+      month: "long",
+      year: "numeric",
     });
   }
 }
@@ -99,13 +99,7 @@ const groupedChats = computed(() => {
   });
 
   // Order for known groups.
-  const order = [
-    'Today',
-    'Yesterday',
-    'Last 7 Days',
-    'Last 30 Days',
-    'Previous 30 Days',
-  ];
+  const order = ["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "Previous 30 Days"];
   const sortedGroups = [];
   order.forEach((label) => {
     if (groups[label]) {
@@ -124,19 +118,19 @@ const groupedChats = computed(() => {
 
 // Re-emit events from ChatItem.
 function handleSelectConversation(conversation) {
-  emit('select-conversation', conversation);
+  emit("select-conversation", conversation);
 }
 
 function handleDeleteChat(conversationId) {
-  emit('delete-chat', conversationId);
+  emit("delete-chat", conversationId);
 }
 
 function handleShareChat(conversationId) {
-  emit('share-chat', conversationId);
+  emit("share-chat", conversationId);
 }
 
 function handleDownloadChat(conversationId) {
-  emit('download-chat', conversationId);
+  emit("download-chat", conversationId);
 }
 </script>
 

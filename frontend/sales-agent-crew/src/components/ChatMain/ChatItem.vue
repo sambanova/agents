@@ -1,16 +1,21 @@
 <template>
   <div
-    class="p-3 m-1 w-full relative cursor-pointer group"
+    class="p-3 m-1 w-50 relative cursor-pointer group rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
     @click="onSelectConversation"
     :class="{
       'bg-primary-brandDarkGray rounded-md border border-primary-brandFrame':
         isActive,
     }"
+    tabindex="0"
+    @keydown.enter="onSelectConversation"
+    @keydown.space="onSelectConversation"
+    role="button"
+    :aria-selected="isActive"
   >
     <!-- Menu button: visible on hover -->
     <button
       type="button"
-      class="absolute right-1 top-1 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+      class="absolute right-1 top-1 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded group-focus:opacity-100 focus:opacity-100 focus:outline-primary-500 focus:outline-offset-2"
       @click.stop="toggleMenu"
       @mousedown.stop
       aria-label="Open menu"

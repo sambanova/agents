@@ -1,8 +1,11 @@
 <template>
   <div class="mx-2 mb-2">
     <div
+      tabindex="0"
+      class="flex justify-between items-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-brandColor"
       @click="isOpen = !isOpen"
-      class="flex justify-between items-center cursor-pointer"
+      @keydown.enter="isOpen = !isOpen"
+      @keydown.space="isOpen = !isOpen"
     >
       <div
         :title="getHeadingValue()"
