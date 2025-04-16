@@ -94,7 +94,7 @@ class SambaKnowledgeAgent(RoutedAgent):
         if provider not in ["sambanova"]:
             raise ValueError(f"Sambanova Knowledge agent doesn't have support for provider {provider}")
         model_info = model_registry.get_model_info(
-            model_key="llama-3.3-70b", 
+            model_key="llama-4-maverick", 
             provider=provider
         )
         if not model_info:
@@ -112,6 +112,7 @@ class SambaKnowledgeAgent(RoutedAgent):
             user_text,
             docs,
             files_b64,
+            provider = provider,
             api_key=getattr(self.api_keys, model_registry.get_api_key_env(provider=message.provider))
         )
         thread_response = await asyncio.gather(thread)

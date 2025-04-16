@@ -17,14 +17,24 @@ from llama_stack_client.types.agents.turn_response_event_payload import (
     InferenceStep,
 )
 
-# TODO add examples to routing
+from config.model_registry import model_registry
 
 class UnstructuredDataTools():
-    def __init__(self, client):
+    def __init__(self, llamastack_client, provider):
         self.files={}
-        self.client = client
-        self.vision_model = "sambanova/Llama-3.2-11B-Vision-Instruct"
-        # TODO set from model registry map 
+        self.client = llamastack_client
+        
+        #get model id
+        if provider not in ["sambanova"]:
+            raise ValueError(f"Sambanova Knowledge agent doesn't have support for provider {provider}")
+        model_info = model_registry.get_model_info(
+            model_key="llama-3.2-11b", 
+            provider=provider
+        )
+        if not model_info:
+            raise ValueError(f"No model configuration found for provider {provider}")
+        
+        self.vision_model = f"{model_info['crewai_prefix']}/{model_info['model']}"
         
     def save_files(self, b64_files: list):
         self.files = b64_files
@@ -106,14 +116,16 @@ def create_agent(client, model, docs_tools):
         Based on the question, you will need to make one or more function/tool calls to achieve the purpose.
         If none of the function can be used, point it out. If the given question lacks the parameters required by the function, also point it out.
         If you decide to invoke any of the function(s), you MUST put it in a valid json format, the format is:
-        [{{"name": func_1, "parameters": dictionary of argument name and its value}}, {{"name": func_2, "parameters": dictionary of argument name and its value}}]<eot_id>
+        [{{"name": func_1, "parameters": dictionary of argument name and its value}}, {{"name": func_2, "parameters": dictionary of argument name and its value}}]
         If you decide to call a function you SHOULD NOT include any other text in the response.
-        Avoid generating extra scape characters when calling a function (like `\\n`, multiple backslashes `\\\\` and other format that could generate problems when parsing the arguments of the function call, ensure you add the '<eot_id>' when calling a tool
+        Avoid generating extra scape characters when calling a function (like `\\n`, multiple backslashes `\\\\` and other format that could generate problems when parsing the arguments of the function call
         
-        You are a general agent, you can use your tools to execute code or analyse and interpret images. Remember, always give the final answer using the tool result, if the results are empty or you receive an error, let the user know.
-        """, #TODO improve prompting to avoid keep executing tool calls
+        You are a general agent, you can use your tools to execute code or analyse and interpret images. Remember, always give the final answer using the tool result, if the results are empty or you receive an error, retry fixing according to error messages and finally if this is not enough let the user know.
+        
+        When doing data analysis and you need to pass some data to convert as dataframe be careful to not omit relevant characters like `\\n`
+        """,
         sampling_params={
-            "strategy": {"type": "top_p", "temperature": 0.1, "top_p" : 0.1},
+            "strategy": {"type": "top_p", "temperature": 0.3, "top_p" : 0.3},
         },
         tools=["builtin::code_interpreter", docs_tools.image_analysis],
         enable_session_persistence=False,
@@ -121,24 +133,23 @@ def create_agent(client, model, docs_tools):
     return agent
 
 
-def call(thread_config, query, docs, files_b64, api_key):
+def call(thread_config, query, docs, files_b64, provider, api_key):
     """
     create llamastack client and agent and call it
     """
 
     config = thread_config["configurable"]
-    messages = [{"role": "user", "content": query}]
+    messages = [{"role": "user", "content": f"attached documents: {docs} \n\n {query}"}]
+    print(docs)
 
     redis_client = config["redis_client"]
 
     client = create_http_client(api_key)
-    docs_tools = UnstructuredDataTools(client)
+    docs_tools = UnstructuredDataTools(client, provider)
     
     if files_b64 is not None:
         docs_tools.save_files(files_b64)
     agent = create_agent(client, config["model"], docs_tools)
-    
-    #TODO add document to messages
 
     # agent turn execution
     response = agent.create_turn(
@@ -155,7 +166,7 @@ def call(thread_config, query, docs, files_b64, api_key):
         "llm_provider": config["provider"],
         "workflow": config["workflow_name"],
         "agent_name": config["agent_name"],
-        "task": "code_execution",  # TODO update dynamically
+        "task": "code_execution",
         "total_tokens": 0,
         "prompt_tokens": 0,
         "completion_tokens": 0,
@@ -170,6 +181,12 @@ def call(thread_config, query, docs, files_b64, api_key):
         assistant_metadata["prompt_tokens"] = assistant_metadata["total_tokens"]
         assistant_metadata["completion_tokens"] = 0
 
+        # if server error event is None return message to the user
+        if log.event is None:
+            del client
+            del agent
+            del docs_tools
+            return f"sambanova knowledge agent can not complete this request: {log.error.get('message', log.error)}", assistant_metadata
         # if event is complete payload final response is ready
         if isinstance(log.event.payload, AgentTurnResponseTurnCompletePayload):
             response = log.event.payload.turn.output_message.content
@@ -219,15 +236,16 @@ def call(thread_config, query, docs, files_b64, api_key):
             elif log.event.payload.step_details.step_type == "tool_execution":
                 tool_calls = log.event.payload.step_details.tool_calls
                 tool_responses = log.event.payload.step_details.tool_responses
+                task = tool_calls[0].tool_name
                 event_message = {
                     "event_object": [
                         {
-                            "name": "Code execution step", # TODO use task here
+                            "name": task,
                             "Tool calls": f"```json\n{tool_calls}\n```",
                             "Tool Execution results": f"```json\n{tool_responses}\n```",
                         },
                     ]
-                }
+                } # TODO update agent name with task to update icons
                 assistant_metadata["prompt_tokens"] += estimate_tokens_regex(
                     str(event_message)
                 )
@@ -260,6 +278,8 @@ def call(thread_config, query, docs, files_b64, api_key):
                 )
                 redis_client.publish(channel, json.dumps(intermediate_message))
                 
-    #TODO delete client, agent, and vault objects
+    del client
+    del agent
+    del docs_tools
 
     return response, assistant_metadata

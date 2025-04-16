@@ -76,7 +76,7 @@ class AgentRegistry:
             },
             "sambanova_knowledge": {
                 "agent_type": "sambanova_knowledge",
-                "description": "Handles code, data analysis or image analysis queries with a LlamaStack agent. For queries that require code execution or image understanding.",
+                "description": "Handles math, code, data analysis or image analysis queries with a LlamaStack agent. For queries that require code execution or image understanding.",
                 "examples": "does the sentence 'On a clover, if alive, erupts a vast pure evil; a fire volcano' is a palindrome?",
             },
             "user_proxy": {

@@ -965,7 +965,7 @@ class QueryRouterServiceChat:
         }}
         
         "type": "sambanova_knowledge",
-        "description": "Handles code, data analysis or image analysis queries with a LlamaStack agent. For queries that require code execution or image understanding.",
+        "description": "Handles math, code, data analysis or image analysis queries with a LlamaStack agent. For queries that require code execution or image understanding.",
         "examples": "does the sentence 'On a clover, if alive, erupts a vast pure evil; a fire volcano' is a palindrome?",
 
         Query: "does the sentence 'On a clover, if alive, erupts a vast pure evil; a fire volcano' is a palindrome?"
@@ -973,6 +973,30 @@ class QueryRouterServiceChat:
           "type": "sambanova_knowledge",
           "parameters": {{
             "sambaknowledge_query": "does the sentence 'On a clover, if alive, erupts a vast pure evil; a fire volcano' is a palindrome?",
+          }}
+        }}
+        
+        Query: "hom much is 7 factorial?"
+        {{
+          "type": "sambanova_knowledge",
+          "parameters": {{
+            "sambaknowledge_query": hom much is 7 factorial?",
+          }}
+        }}
+        
+        Query: "what is the mean of the following list [3.24, 56.2, 45.304]?"
+        {{
+          "type": "sambanova_knowledge",
+          "parameters": {{
+            "sambaknowledge_query": what is the mean of the following list [3.24, 56.2, 45.304]?",
+          }}
+        }}
+        
+        Query: "describe the attached image"
+        {{
+          "type": "sambanova_knowledge",
+          "parameters": {{
+            "sambaknowledge_query": "describe the attached image",
           }}
         }}
         
