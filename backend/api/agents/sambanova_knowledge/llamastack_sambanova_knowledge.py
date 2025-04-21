@@ -28,7 +28,7 @@ class UnstructuredDataTools():
         if provider not in ["sambanova"]:
             raise ValueError(f"Sambanova Knowledge agent doesn't have support for provider {provider}")
         model_info = model_registry.get_model_info(
-            model_key="llama-3.2-11b", 
+            model_key="llama-4-maverick", 
             provider=provider
         )
         if not model_info:
@@ -72,18 +72,20 @@ class UnstructuredDataTools():
                 messages=[
                     {
                         "role": "user",
-                        "content":{
-                            "type": "image",
-                            "image": {
-                                "url": {
-                                    "uri": files[0]
+                        "content":[
+                            {
+                                "type": "text",
+                                "text": "Can you please describe this image in just one sentence?"
+                            },
+                            {
+                                "type": "image",
+                                "image": {
+                                    "url": {
+                                        "uri": files[0]
+                                    }
                                 }
                             }
-                        }
-                    },
-                    {
-                        "role": "user",
-                        "content": query,
+                        ]
                     }
                 ],
             )
