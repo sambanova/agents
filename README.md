@@ -163,6 +163,9 @@ Follow the steps below to install the backend for the Agents application.
 
    # Optional: For usage tracking
    LANGTRACE_API_KEY=your_langtrace_api_key
+
+   #Redis Master Salt Key - User should set to any value they wish
+   REDIS_MASTER_SALT=abc123def456
    ```
 
 
