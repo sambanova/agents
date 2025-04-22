@@ -152,7 +152,7 @@ Follow the steps below to install the backend for the Agents application.
    
    # API Keys for Services
    EXA_API_KEY="<your_exa_api_key>"
-   SERPER_API_KEY="<your_serper_api_key>"
+   SERPER_KEY="<your_serper_api_key>"
    TAVILY_API_KEY="<your_tavily_api_key>"  # Required for Deep Research agent
 
    # Additional Settings
