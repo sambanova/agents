@@ -1,0 +1,51 @@
+{{- if .Values.llamastack.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.llamastack.name }}
+  namespace: {{ .Values.llamastack.namespace }}
+  labels:
+    app: llamastack
+spec:
+  replicas: {{ .Values.llamastack.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.llamastack.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.llamastack.name }}
+    spec:
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+      - name: {{ .name }}
+      {{- end }}
+      containers:
+      - name: {{ .Values.llamastack.name }}-container
+        image: "{{ .Values.llamastack.image.repository }}:{{ .Values.llamastack.image.tag }}"
+        imagePullPolicy: {{ .Values.llamastack.image.pullPolicy }}
+        securityContext:
+          privileged: true
+        ports:
+        - containerPort: {{ .Values.llamastack.service.targetPort }}
+        resources:
+          limits:
+            cpu: {{ .Values.llamastack.resources.limits.cpu | quote }}
+            memory: {{ .Values.llamastack.resources.limits.memory | quote }}
+          requests:
+            cpu: {{ .Values.llamastack.resources.requests.cpu | quote }}
+            memory: {{ .Values.llamastack.resources.requests.memory | quote }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.llamastack.probes.liveness.path }}
+            port: {{ .Values.llamastack.probes.liveness.port }}
+          initialDelaySeconds: {{ .Values.llamastack.probes.liveness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.llamastack.probes.liveness.periodSeconds }}
+          timeoutSeconds: {{ .Values.llamastack.probes.liveness.timeoutSeconds }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.llamastack.probes.liveness.path }}
+            port: {{ .Values.llamastack.probes.readiness.port }}
+          initialDelaySeconds: {{ .Values.llamastack.probes.readiness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.llamastack.probes.readiness.periodSeconds }}
+{{- end }} 

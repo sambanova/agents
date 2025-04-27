@@ -1,0 +1,6 @@
+{{- if .Values.llamastack.enabled -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.llamastack.namespace }}
+{{- end }} 

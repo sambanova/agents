@@ -203,7 +203,7 @@
                         ref="fileInput"
                         @change="handleFileUpload"
                         class="hidden"
-                        accept=".pdf,.doc,.docx,.csv,.xlsx,.xls"
+                        accept=".pdf,.doc,.docx,.csv,.xlsx,.xls,.png,.jpg,.jpeg"
                       />
                       <svg
                         v-if="!isUploading"

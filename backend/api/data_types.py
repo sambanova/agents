@@ -14,6 +14,7 @@ class AgentEnum(str, Enum):
     Assistant = "assistant"
     UserProxy = "user_proxy"
     DeepResearch = "deep_research"  # For advanced research (LangGraph)
+    SambaKnowledge = "sambanova_knowledge" # llamastack sambanova knowledge agent
     Error = "error"
 class Greeter(BaseModel):
     greeting: str
@@ -72,6 +73,9 @@ class SalesLeads(BaseModel):
 
 class DeepResearch(BaseModel):
     deep_research_topic: str = Field(default="", description="The topic of the research")
+    
+class SambaKnowledge(BaseModel):
+    sambaknowledge_query: str = Field(default="", description="Code, data analysis understanding or image related query")
 
 class EducationalContent(BaseModel):
     topic: str = Field(default="", description="The topic of the research, use a single word")
@@ -89,6 +93,7 @@ class EndUserMessage(BaseAgentMessage):
     content: str
     use_planner: bool = False
     docs: Optional[List[str]] = None
+    files_b64: Optional[Dict[str, str]] = None
     provider: str
     planner_model: str
     message_id: str
@@ -96,10 +101,11 @@ class EndUserMessage(BaseAgentMessage):
 class AgentRequest(BaseModel):
     agent_type: AgentEnum
     parameters: Union[
-        FinancialAnalysis, SalesLeads, AssistantMessage, UserQuestion, DeepResearch
+        FinancialAnalysis, SalesLeads, AssistantMessage, UserQuestion, DeepResearch, SambaKnowledge
     ]
     query: str
     docs: Optional[List[str]] = None
+    files_b64: Optional[Dict[str, str]] = None
     provider: str
     message_id: str
     @model_validator(mode="after")
@@ -110,6 +116,7 @@ class AgentRequest(BaseModel):
             AgentEnum.Assistant: AssistantMessage,
             AgentEnum.UserProxy: UserQuestion,
             AgentEnum.DeepResearch: DeepResearch,
+            AgentEnum.SambaKnowledge: SambaKnowledge,
         }[self.agent_type]
 
         if isinstance(self.parameters, expected_type):
@@ -147,6 +154,12 @@ class DeepResearchReport(BaseModel):
     sections: List[DeepResearchSection]
     final_report: str
     citations: List[DeepCitation] = Field(default_factory=list)
+    
+class SambaKnowledgeResult(BaseModel):
+    """
+    A structured object that collects the final response of sambanova knowledge,
+    """
+    response: str
 
 class AgentStructuredResponse(BaseModel):
     agent_type: AgentEnum
@@ -159,6 +172,7 @@ class AgentStructuredResponse(BaseModel):
         UserQuestion,
         DeepResearchUserQuestion,
         DeepResearchReport,
+        SambaKnowledgeResult,
         ErrorResponse,
     ]
     metadata: Optional[Dict[str, Any]] = None

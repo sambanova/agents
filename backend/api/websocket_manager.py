@@ -352,7 +352,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                     continue
 
                 if "document_ids" in user_message_input and user_message_input["document_ids"]:
-                    document_content = results[2]
+                    document_content, files_b64 = results[2]
 
                 logger.info(f"Received message from user: {user_id} in conversation: {conversation_id}")
 
@@ -364,6 +364,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                     use_planner=False,
                     provider=user_message_input["provider"],
                     docs=document_content if "document_ids" in user_message_input and user_message_input["document_ids"] else None,
+                    files_b64 = files_b64 if "document_ids" in user_message_input and user_message_input["document_ids"] else None,
                     planner_model=user_message_input["planner_model"]
                 )
 

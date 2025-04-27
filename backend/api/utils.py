@@ -11,9 +11,12 @@ import redis
 
 from api.agents.financial_analysis import FinancialAnalysisAgent
 from api.agents.educational_content import EducationalContentAgent
+from api.agents.sales_leads import SalesLeadsAgent
+from api.agents.deep_research_agent import DeepResearchAgent
+from api.agents.sambanova_knowledge_agent import SambaKnowledgeAgent
+from api.agents.assistant import AssistantAgentWrapper
 from api.agents.route import SemanticRouterAgent
 
-from api.agents.sales_leads import SalesLeadsAgent
 from autogen_agentchat.agents import AssistantAgent
 
 from api.otlp_tracing import configure_oltp_tracing
@@ -23,11 +26,8 @@ from utils.logging import logger
 from api.session_state import SessionStateManager
 from api.agents.user_proxy import UserProxyAgent
 
-from api.agents.assistant import AssistantAgentWrapper
 from api.data_types import APIKeys
 
-# NEW IMPORT: our new DeepResearchAgent
-from api.agents.deep_research_agent import DeepResearchAgent
 
 session_state_manager = SessionStateManager()
 
@@ -105,11 +105,19 @@ async def initialize_agent_runtime(
         agent_runtime, "assistant", lambda: AssistantAgentWrapper(api_keys=api_keys, redis_client=redis_client)
     )
 
-    # Register the new deep research agent:
     await DeepResearchAgent.register(
         agent_runtime,
         "deep_research",
         lambda: DeepResearchAgent(
+            api_keys=api_keys,
+            redis_client=redis_client,
+        ),
+    )
+    
+    await SambaKnowledgeAgent.register(
+        agent_runtime,
+        "sambanova_knowledge",
+        lambda: SambaKnowledgeAgent(
             api_keys=api_keys,
             redis_client=redis_client,
         ),
@@ -137,7 +145,7 @@ def estimate_tokens_regex(text: str) -> int:
         return len(re.findall(r"\w+|\S", text))
 
 
-def load_documents(user_id: str, document_ids: List[str], redis_client: SecureRedisService, context_length_summariser: int) -> List[str]:
+def load_documents(user_id: str, document_ids: List[str], redis_client: SecureRedisService, context_length_summarizer: int) -> List[str]:
     documents = []
     total_tokens = 0
 
@@ -155,11 +163,17 @@ def load_documents(user_id: str, document_ids: List[str], redis_client: SecureRe
             doc_text = "\n".join([chunk['text'] for chunk in chunks])
             token_count = estimate_tokens_regex(doc_text)
             
+            files_b64 = {
+                chunk["metadata"]["source"]:chunk["metadata"]['base_64_url'] 
+                for chunk in chunks 
+                if chunk["metadata"].get('base_64_url') is not None
+            }
+            
             # Update total token count and check if it would exceed the limit
-            if total_tokens + token_count > context_length_summariser:
-                raise DocumentContextLengthError(total_tokens + token_count, context_length_summariser)
+            if total_tokens + token_count > context_length_summarizer:
+                raise DocumentContextLengthError(total_tokens + token_count, context_length_summarizer)
             
             total_tokens += token_count
             documents.append(doc_text)
 
-    return documents
+    return documents, files_b64

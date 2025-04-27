@@ -35,6 +35,8 @@ backend:
     OTEL_SDK_DISABLED: "true"
     LOG_DIR: "/app/logs"
     ENABLE_USER_KEYS: "false"
+    LLAMA_STACK_HOST: "llamastack.llamastack.svc.cluster.local"
+    LLAMA_STACK_PORT: "8321"
   volumes:
     logs:
       hostPath: /data/aiskagents-logs
@@ -61,6 +63,7 @@ backend:
       EXA_KEY: ""
       SERPER_KEY: ""
       FIREWORKS_KEY: ""
+
 
 # Frontend configuration
 frontend:
@@ -107,6 +110,42 @@ ingress:
       pathType: Prefix
       service: aiskagents-backend
       port: 80
+
+# Llama stack server configuration
+llamastack:
+  name: llama-stack
+  image:
+    repository: your-docker-repository
+    tag: "0.0.1-dev"
+    pullPolicy: Always
+  enabled: true
+  namespace: llamastack
+  replicas: 1
+  resources:
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+  service:
+    type: ClusterIP
+    port: 8321
+    targetPort: 8321
+  probes:
+    liveness:
+      path: /v1/health
+      port: 8321
+      initialDelaySeconds: 30
+      periodSeconds: 30
+      timeoutSeconds: 3
+    readiness:
+      path: /v1/health
+      port: 8321
+      initialDelaySeconds: 5
+      periodSeconds: 10
+  env:
+    LLAMA_STACK_PORT: "8321"
 
 # Redis configuration
 redis:

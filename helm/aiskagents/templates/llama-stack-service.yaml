@@ -1,0 +1,16 @@
+{{- if .Values.llamastack.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.llamastack.name }}
+  namespace: {{ .Values.llamastack.namespace }}
+  labels:
+    app: llamastack
+spec:
+  selector:
+    app: {{ .Values.llamastack.name }}
+  ports:
+    - port: {{ .Values.llamastack.service.port }}
+      targetPort: {{ .Values.llamastack.service.targetPort }}
+      name: llamastack
+{{- end }} 

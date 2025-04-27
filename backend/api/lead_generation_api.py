@@ -303,7 +303,7 @@ class LeadGenerationAPI:
             try:
                 # Load document chunks if document_ids are provided
                 if "document_ids" in parameters:
-                    combined_text = load_documents(user_id, parameters["document_ids"], self.app.state.redis_client, self.app.state.context_length_summariser)
+                    combined_text, files_b64 = load_documents(user_id, parameters["document_ids"], self.app.state.redis_client, self.app.state.context_length_summariser)
                     parameters["docs"] = combined_text
 
                 if query_type == "sales_leads":
