@@ -2,11 +2,12 @@ import yfinance as yf
 from typing import Dict, Any, List
 from crewai.tools import tool
 
-
+from tools.financial_data import get_fundamental_data
 
 ###################### FUNDAMENTAL ANALYSIS TOOL ######################
+
 @tool('Fundamental Analysis Tool')
-def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
+def fundamental_analysis_tool_yfinance(ticker: str) -> Dict[str, Any]:
     """
     Retrieve fundamentals from yfinance: 
     - standard fields
@@ -146,6 +147,75 @@ def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
             div_hist.append({"date": str(dt.date()), "dividend": float(val)})
     except:
         pass
+
+    return {
+        "ticker": ticker,
+        **result,
+        "advanced_fundamentals": adv_data,
+        "dividend_history": div_hist
+    }
+
+@tool('Fundamental Analysis Tool')
+def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
+    """
+    Retrieve fundamentals from yfinance: 
+    - standard fields
+    - advanced_fundamentals
+    - dividend_history
+    - quarterly_fundamentals
+    """
+
+    info = get_fundamental_data(ticker, include_income_statement=True)
+
+    result = {
+        "ticker": ticker,
+        "company_name": info.get("longName",""),
+        "sector": info.get("sector",""),
+        "industry": info.get("industry",""),
+        "market_cap": str(info.get("priceToBook",0.0) * info.get("bookValue",0.0) * info.get("sharesOutstanding", 0.0)),
+        "pe_ratio": str(info.get("forwardPE","")),
+        "forward_pe": str(info.get("forwardPE","")),
+        "peg_ratio": str(info.get("pegRatio","")),
+        "ps_ratio": str(info.get("priceToSalesTrailing12Months","")),
+        "price_to_book": str(info.get("priceToBook","")),
+        "dividend_yield": str(info.get("dividendYield","")),
+        "beta": str(info.get("beta","")),
+        "year_high": str(info.get("fiftyTwoWeekHigh","")),
+        "year_low": str(info.get("fiftyTwoWeekLow","")),
+        "analyst_recommendation": info.get("recommendationKey",""),
+        "target_price": str(info.get("targetMeanPrice","")),
+        "earnings_per_share": str(info.get("trailingEps","")),
+        "profit_margins": str(info.get("profitMargins","")),
+        "operating_margins": str(info.get("operatingMargins","")),
+        "ebitda_margins": str(info.get("ebitdaMargins","")),
+        "short_ratio": str(info.get("shortRatio","")),
+        "current_ratio": str(info.get("currentRatio","")),
+        "debt_to_equity": str(info.get("debtToEquity","")),
+        "return_on_equity": str(info.get("returnOnEquity","")),
+        "return_on_assets": str(info.get("returnOnAssets","")),
+        "revenue_growth": str(info.get("revenueGrowth","")),
+        "free_cash_flow": str(info.get("freeCashflow","")),     
+    }
+
+    quarterly_csv = []
+    if "incomeStatementHistoryQuarterly" in info and "incomeStatementHistory" in info["incomeStatementHistoryQuarterly"]:
+        for quarter in info["incomeStatementHistoryQuarterly"]["incomeStatementHistory"]:
+            quarterly_csv.append({
+                "date": quarter["endDate"]["fmt"],
+                "total_revenue": quarter["totalRevenue"]["raw"],
+                "net_income": quarter["netIncome"]["raw"]
+            })
+
+    result["quarterly_fundamentals"] = quarterly_csv
+
+    adv_data = {}
+    adv_data["shares_outstanding"] = str(info.get("sharesOutstanding", ""))
+    adv_data["float_shares"] = str(info.get("floatShares", ""))
+    adv_data["enterprise_value"] = str(info.get("enterpriseValue", ""))
+    adv_data["book_value"] = str(info.get("bookValue", ""))
+
+    div_hist = []
+    # TODO: add dividend history (not available in current data)
 
     return {
         "ticker": ticker,

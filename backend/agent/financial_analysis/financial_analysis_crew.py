@@ -5,7 +5,6 @@ import json
 from typing import Dict, Any, List, Optional, Tuple, Union
 import numpy as np
 from api.services.redis_service import SecureRedisService
-import yfinance as yf
 
 from agent.crewai_llm import CustomLLM
 from services.structured_output_parser import CustomConverter
@@ -246,8 +245,8 @@ class FinancialAnalysisCrew:
         # 1) competitor finder
         self.enhanced_competitor_agent = Agent(
             role="Enhanced Competitor Finder",
-            goal="Identify 3 closest competitor tickers for the same industry and sector as {ticker}.",
-            backstory="Expert in analyzing sector, fallback to LLM guess if yfinance fails. No extraneous calls needed.",
+            goal="Identify the top 3 competitor tickers for {ticker} within the same industry and sector.",
+            backstory="Expert market analyst focused on direct competitor identification. Uses provided ticker information efficiently.",
             llm=self.competitor_finder_llm,
             allow_delegation=False,
             verbose=self.verbose,
@@ -256,8 +255,8 @@ class FinancialAnalysisCrew:
         # 2) competitor analysis
         self.competitor_analysis_agent = Agent(
             role="Competitor Analysis Agent",
-            goal="Given competitor_tickers, produce competitor_details from yfinance fundamentals.",
-            backstory="Focus on market_cap, margins, growth, short_ratio, etc. Must be quick and direct.",
+            goal="Fetch fundamental details (market cap, margins, growth, short ratio) for the given `competitor_tickers` using the 'Competitor Analysis Tool'.",
+            backstory="Data retrieval specialist. Executes the 'Competitor Analysis Tool' once per ticker and returns structured data.",
             llm=self.llm,
             tools=[competitor_analysis_tool],
             allow_delegation=False,
@@ -267,8 +266,8 @@ class FinancialAnalysisCrew:
         # 3) fundamental
         self.fundamental_agent = Agent(
             role="Fundamental Analysis Agent",
-            goal="Retrieve fundamental data from yfinance including advanced_fundamentals, dividend_history. for {ticker}",
-            backstory="Focus on a single pass to avoid overhead. Return structured data quickly.",
+            goal="Retrieve comprehensive fundamental data (including `advanced_fundamentals` and `dividend_history`) for {ticker} using the 'Fundamental Analysis Tool'.",
+            backstory="Financial data specialist. Executes the `fundamental_analysis_tool` once for {ticker} and returns the complete `FundamentalData` object.",
             llm=self.llm,
             tools=[fundamental_analysis_tool],
             allow_delegation=False,
@@ -278,8 +277,8 @@ class FinancialAnalysisCrew:
         # 4) technical
         self.technical_agent = Agent(
             role="Technical Analysis Agent",
-            goal="Gather 3-month weekly price data plus standard technical fields from yfinance. for {ticker}",
-            backstory="No repeated calls. Provide stock_price_data for front-end charting.",
+            goal="Obtain 3-month weekly technical data (including price data for charting) for {ticker} using the 'Technical Analysis Tool'.",
+            backstory="Technical data specialist. Executes `yf_tech_analysis` once with period='3mo' for {ticker}. Returns `TechnicalData`, ensuring `stock_price_data` is populated.",
             llm=self.llm,
             tools=[yf_tech_analysis],
             allow_delegation=False,
@@ -289,8 +288,8 @@ class FinancialAnalysisCrew:
         # 5) risk
         self.risk_agent = Agent(
             role="Risk Assessment Agent",
-            goal="Compute Beta, Sharpe, VaR, Max Drawdown, Volatility over 1 year for {ticker}.",
-            backstory="Return monthly-averaged daily returns quickly. No extraneous calls.",
+            goal="Calculate key risk metrics (Beta, Sharpe, VaR, Max Drawdown, Volatility) over 1 year for {ticker} using the 'Risk Assessment Tool'.",
+            backstory="Risk analysis specialist. Executes `risk_assessment_tool` once with `period='1y'` for {ticker}. Returns `RiskData`, including monthly-averaged daily returns.",
             llm=self.llm,
             tools=[risk_assessment_tool],
             allow_delegation=False,
@@ -301,8 +300,8 @@ class FinancialAnalysisCrew:
         os.environ["SERPER_API_KEY"] = self.serper_key
         self.news_agent = Agent(
             role="Financial News Agent",
-            goal="Gather recent news for {ticker}, focusing on recent events that could affect stock price. Must be quick.",
-            backstory="Search for top ~10 items, do minimal overhead. Summaries used by aggregator. No re-calls.",
+            goal="Fetch the top ~10 recent news articles relevant to {ticker}'s stock price using the 'SerperDevTool'.",
+            backstory="News retrieval specialist. Executes `SerperDevTool` once for {ticker}. Returns a concise list of news items (title, link, summary, time, entities).",
             llm=self.aggregator_llm,
             tools=[SerperDevTool()],
             allow_delegation=False,
@@ -314,8 +313,8 @@ class FinancialAnalysisCrew:
             # 6.5) document summarizer
             self.document_summarizer_agent = Agent(
                 role="Document Summarization Agent",
-                goal="Analyze and summarize any provided documents related to {ticker}, extracting key financial insights.",
-                backstory="Expert at distilling complex financial documents into actionable insights. Focuses on material information that could impact investment decisions.",
+                goal="Summarize the provided financial documents related to {ticker}, extracting key insights impacting investment decisions.",
+                backstory="Financial document analysis expert. Distills complex information into a concise, actionable summary focusing on material impact.",
                 llm=self.aggregator_llm,
                 allow_delegation=False,
                 verbose=self.verbose,
@@ -326,9 +325,9 @@ class FinancialAnalysisCrew:
         self.aggregator_agent = Agent(
             role="Aggregator Agent",
             goal=(
-                "Combine competitor, fundamental, technical, risk, and news into final JSON. Summaries must be at least 700 words referencing all tasks."
+                "Compile all analysis results (competitor, fundamental, technical, risk, news, optional docs) into the `FinancialAnalysisResult` JSON format. Generate a comprehensive summary (~700 words)."
             ),
-            backstory="One-pass aggregator. Minimizes tokens by being succinct. Output must match FinancialAnalysisResult pydantic exactly.",
+            backstory="Master report compiler. Synthesizes inputs into the precise `FinancialAnalysisResult` Pydantic structure. Writes a detailed, integrated summary referencing all data points, including recent news impact and named entities.",
             llm=self.aggregator_llm,
             allow_delegation=False,
             verbose=self.verbose,
@@ -413,13 +412,13 @@ class FinancialAnalysisCrew:
     def _init_tasks(self):
         # 1) competitor tasks => sequential
         self.enhanced_competitor_task = Task(
-            description="Find competitor tickers for {ticker} with EnhancedCompetitorTool. Return competitor_tickers plus competitor_details=[].",
+            description="Find competitor tickers for {ticker}. Return competitor_tickers plus competitor_details=[].",
             agent=self.enhanced_competitor_agent,
             expected_output="competitor_tickers[] + competitor_details[] (empty).",
             max_iterations=1
         )
         self.competitor_analysis_task = Task(
-            description="Analyze competitor fundamentals for those tickers with competitor_analysis_tool. Return competitor_details array.",
+            description="Extract the list of `competitor_tickers` from the context provided by the enhanced competitor task. Using the `competitor_analysis_tool`, analyze the fundamentals for each ticker in this list. Ensure the `tickers` argument passed to the tool is a `List[str]`. Return the full output dictionary containing `competitor_tickers` and `competitor_details`.",
             agent=self.competitor_analysis_agent,
             context=[self.enhanced_competitor_task],
             expected_output="competitor_tickers plus competitor_details array with fundamentals.",
@@ -428,28 +427,28 @@ class FinancialAnalysisCrew:
 
         # 2) fundamentals + technical + risk + news => parallel
         self.fundamental_task = Task(
-            description="Get fundamental data from fundamental_analysis_tool for {ticker}. Return FundamentalData quickly.",
+            description="Execute the `fundamental_analysis_tool` for {ticker}. Output the structured `FundamentalData` object.",
             agent=self.fundamental_agent,
             expected_output="FundamentalData object including advanced_fundamentals, etc.",
             async_execution=True,
             max_iterations=1
         )
         self.technical_task = Task(
-            description="Use yf_tech_analysis with period='3mo' to get stock_price_data. Return TechnicalData.",
+            description="Execute `yf_tech_analysis` for {ticker} with `period='3mo'`. Output the structured `TechnicalData` object, including `stock_price_data`.",
             agent=self.technical_agent,
             expected_output="TechnicalData with stock_price_data.",
             async_execution=True,
             max_iterations=1
         )
         self.risk_task = Task(
-            description="Compute risk metrics from risk_assessment_tool for {ticker}, period='1y'. Return RiskData.",
+            description="Execute `risk_assessment_tool` for {ticker} with `period='1y'`. Output the structured `RiskData` object, including `daily_returns`.",
             agent=self.risk_agent,
             expected_output="Beta, Sharpe, VaR, Max Drawdown, Volatility, daily_returns array",
             async_execution=True,
             max_iterations=1
         )
         self.news_task = Task(
-            description="Get ~10 recent news items for {ticker} via SerperDevTool. Return them quickly.",
+            description="Use `SerperDevTool` to find ~10 recent news items for {ticker}. Output a list of news items including title, link, published_time, and named_entities.",
             agent=self.news_agent,
             expected_output="List of news items with title, content, link, published_time, named_entities.",
             async_execution=True,
@@ -458,7 +457,7 @@ class FinancialAnalysisCrew:
 
         if self.docs_included:
             self.document_summarizer_task = Task(
-                description="Summarize any provided documents related to {ticker}, extracting key financial insights. \n\nDocuments: \n\n{docs}",
+                description="Analyze the provided {docs} for {ticker}. Output a concise summary of key financial insights.",
                 agent=self.document_summarizer_agent,
                 expected_output="Summary of the document.",
                 async_execution=True,
@@ -468,14 +467,14 @@ class FinancialAnalysisCrew:
         # 3) aggregator => sequential
         self.aggregator_task = Task(
             description=(
-                "Aggregate all previous steps => final JSON with fields: ticker, company_name, competitor, fundamental, risk, stock_price_data, comprehensive_summary. Comprehensive Summary should be ~700 words referencing everything. For the news section, you must include the title, the link and the summary of the news. Must match FinancialAnalysisResult exactly. You MUST focus on recent news and events that may affect the stock price or metrics of {ticker} not just financial data. Name entities that are mentioned in the news."
+                "Aggregate results from all previous tasks into the `FinancialAnalysisResult` format. Ensure `ticker`, `company_name`, `competitor`, `fundamental`, `risk`, `stock_price_data`, and `news` (with title, link, summary) are populated. Write a comprehensive summary (~700 words) integrating all findings, highlighting recent news/events and named entities affecting {ticker}. Output must strictly match the `FinancialAnalysisResult` Pydantic model."
             ),
             agent=self.aggregator_agent,
             context=[
-                self.competitor_analysis_task, 
-                self.fundamental_task, 
-                self.technical_task, 
-                self.risk_task, 
+                self.competitor_analysis_task,
+                self.fundamental_task,
+                self.technical_task,
+                self.risk_task,
                 self.news_task,
             ] + ([self.document_summarizer_task] if self.docs_included else []),
             expected_output="Valid JSON with ticker, company_name, competitor, fundamental, risk, stock_price_data, news, comprehensive_summary",
