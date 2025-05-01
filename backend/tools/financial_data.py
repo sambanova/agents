@@ -5,6 +5,7 @@ import yfinance as yf
 from typing import Dict, Any, List
 from cachetools import cached, TTLCache
 from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from utils.logging import logger
 
@@ -129,7 +130,7 @@ def _fetch_yahoo_module_data(symbol: str, module: str, rapidapi_key: str) -> Dic
 def get_fundamental_data(symbol: str, include_income_statement: bool = False) -> Dict[str, Any]:
     """
     Fetches fundamental data for a given stock symbol by calling the Yahoo Finance API
-    for different modules sequentially.
+    for different modules in parallel.
     """
     logger.info(f"Starting fundamental data fetch for {symbol} (include_income_statement={include_income_statement})")
     modules_to_fetch = ["asset-profile", "statistics", "financial-data"]
@@ -137,21 +138,29 @@ def get_fundamental_data(symbol: str, include_income_statement: bool = False) ->
         modules_to_fetch.append("income-statement")
 
     combined_data = {}
-    # Fetch modules sequentially instead of in parallel
-    for module in modules_to_fetch:
-        try:
-            logger.info(f"Fetching module: {module} for {symbol}...")
-            # Call the fetch function directly
-            module_data = _fetch_yahoo_module_data(symbol, module, rapidapi_key)
-            if module_data: # Check if data was actually returned
-                 combined_data.update(module_data)
-                 logger.info(f"Successfully processed module: {module} for {symbol}.")
-            else:
-                # Log if a module returned no data after processing (incl. retries)
-                logger.warning(f"No data received for module {module} ({symbol}) after processing.")
-        except Exception as exc:
-            # Log exceptions during the fetch/processing of a module
-            logger.error(f'Error processing module {module} for {symbol}: {exc}')
+    futures = {}
+    # Use ThreadPoolExecutor to fetch modules in parallel
+    with ThreadPoolExecutor() as executor:
+        # Submit tasks for each module
+        for module in modules_to_fetch:
+            logger.info(f"Submitting task for module: {module} for {symbol}...")
+            future = executor.submit(_fetch_yahoo_module_data, symbol, module, rapidapi_key)
+            futures[future] = module # Store module name to identify results/errors
+
+        # Process completed futures as they finish
+        for future in as_completed(futures):
+            module = futures[future]
+            try:
+                module_data = future.result() # Get result from the future
+                if module_data: # Check if data was actually returned
+                    combined_data.update(module_data)
+                    logger.info(f"Successfully processed module: {module} for {symbol}.")
+                else:
+                    # Log if a module returned no data after processing (incl. retries)
+                    logger.warning(f"No data received for module {module} ({symbol}) after processing.")
+            except Exception as exc:
+                # Log exceptions raised during the execution of the future
+                logger.error(f'Error processing module {module} for {symbol}: {exc}')
 
     processed_data = {}
     for key, value in combined_data.items():
