@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-import requests
+import httpx
 import yfinance as yf
 from typing import Dict, Any, List
 from cachetools import cached, TTLCache
@@ -12,6 +12,10 @@ rapidapi_key = os.getenv("RAPIDAPI_KEY")
 
 # Create a cache that expires after 12 hours (12 * 60 * 60 seconds)
 cache = TTLCache(maxsize=1024, ttl=12 * 60 * 60)
+
+# Define a shared timeout configuration
+# total cap 15s, connect 5s, read 10s
+timeout_config = httpx.Timeout(15.0, connect=5.0, read=10.0)
 
 def get_date_range(period):
         # Convert period to date range
@@ -52,12 +56,14 @@ def get_price_data(symbol, interval="1wk", period="3mo"):
     }
 
     try:
-        response = requests.get(url, headers=headers, params=querystring, timeout=10)
-        response.raise_for_status()
-        hist = response.json().get("body", [])
-        if not hist:
-            logger.warning(f"No price history data found for {symbol} in the response body.")
-            return pd.DataFrame() # Return empty DataFrame if no data
+        # Use httpx.Client with the defined timeout
+        with httpx.Client(timeout=timeout_config) as client:
+            response = client.get(url, headers=headers, params=querystring)
+            response.raise_for_status() # raise_for_status works similarly in httpx
+            hist = response.json().get("body", [])
+            if not hist:
+                logger.warning(f"No price history data found for {symbol} in the response body.")
+                return pd.DataFrame() # Return empty DataFrame if no data
 
         df = pd.DataFrame(hist.values())
 
@@ -68,7 +74,7 @@ def get_price_data(symbol, interval="1wk", period="3mo"):
         df = df[start_date_str:].rename(columns={"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume"})
         logger.info(f"Successfully fetched and processed price data for {symbol}")
         return df.sort_index()
-    except requests.exceptions.RequestException as e:
+    except httpx.RequestError as e:
         logger.error(f"Error fetching price data for {symbol}: {e}")
         return pd.DataFrame() # Return empty DataFrame on error
     except ValueError as e: # Catch potential errors from get_date_range
@@ -100,9 +106,11 @@ def _fetch_yahoo_module_data_with_retry(symbol: str, module: str, rapidapi_key: 
         "x-rapidapi-key": rapidapi_key,
         "x-rapidapi-host": "yahoo-finance15.p.rapidapi.com"
     }
-    response = requests.get(url, headers=headers, params=querystring, timeout=10)
-    response.raise_for_status() # Raises HTTPError for bad responses (4xx or 5xx)
-    return response.json().get("body", {})
+    # Use httpx.Client with the defined timeout within the retried function
+    with httpx.Client(timeout=timeout_config) as client:
+        response = client.get(url, headers=headers, params=querystring)
+        response.raise_for_status() # Raises HTTPStatusError for bad responses (4xx or 5xx) in httpx
+        return response.json().get("body", {})
 
 def _fetch_yahoo_module_data(symbol: str, module: str, rapidapi_key: str) -> Dict[str, Any]:
     """Wrapper function to handle exceptions from the retrying fetcher and log appropriately."""
