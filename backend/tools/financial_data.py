@@ -67,13 +67,34 @@ def _fetch_yahoo_module_data(symbol: str, module: str, rapidapi_key: str) -> Dic
         "x-rapidapi-key": rapidapi_key,
         "x-rapidapi-host": "yahoo-finance15.p.rapidapi.com"
     }
-    try:
-        response = requests.get(url, headers=headers, params=querystring, timeout=10)
-        response.raise_for_status()
-        return response.json().get("body", {})
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching {module} for {symbol}: {e}")
-        return {}
+    retries = 3
+    backoff_factor = 1.0  # Start with a 1-second delay
+
+    for i in range(retries):
+        try:
+            response = requests.get(url, headers=headers, params=querystring, timeout=10)
+            response.raise_for_status()  # Raises HTTPError for bad responses (4xx or 5xx)
+            return response.json().get("body", {})
+        except requests.exceptions.HTTPError as http_err:
+            if http_err.response.status_code == 429:
+                if i < retries - 1:  # Don't wait on the last attempt
+                    wait_time = backoff_factor * (2 ** i)
+                    print(f"Rate limit hit for {module} ({symbol}). Retrying in {wait_time:.2f} seconds...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"Rate limit hit for {module} ({symbol}). Max retries exceeded.")
+                    return {}  # Return empty dict after max retries for 429
+            else:
+                # Re-raise other HTTP errors immediately
+                print(f"HTTP error fetching {module} for {symbol}: {http_err}")
+                return {}
+        except requests.exceptions.RequestException as e:
+            # Handle other request exceptions (timeout, connection error, etc.)
+            print(f"Error fetching {module} for {symbol}: {e}")
+            return {} # Return empty dict for other request errors
+
+    # Should not be reached if retries exhausted, but as a fallback
+    return {}
 
 @cached(cache)
 def get_fundamental_data(symbol: str, include_income_statement: bool = False) -> Dict[str, Any]:
