@@ -2,7 +2,7 @@ import yfinance as yf
 from typing import Dict, Any, List
 from crewai.tools import tool
 
-from tools.financial_data import get_fundamental_data
+from tools.financial_data import get_fundamental_data, get_ticker_info_yfinance
 
 
 ###################### COMPETITOR TOOL WITH PROMPT ENGINEERING ######################
@@ -30,8 +30,7 @@ def enhanced_competitor_tool(company_name: str, ticker: str) -> Dict[str, Any]:
     }
 
 ###################### COMPETITOR ANALYSIS TOOL ######################
-@tool('Competitor Analysis Tool')
-def competitor_analysis_tool_yfinance(tickers: List[str]) -> Dict[str, Any]:
+def competitor_analysis_tool(tickers: List[str]) -> Dict[str, Any]:
     """
     For each competitor ticker in 'tickers', fetch fundamental info from yfinance.
     Return competitor_tickers plus competitor_details[] with fields:
@@ -39,8 +38,7 @@ def competitor_analysis_tool_yfinance(tickers: List[str]) -> Dict[str, Any]:
     """
     details = []
     for t in tickers:
-        data = yf.Ticker(t)
-        info = data.info
+        info = get_ticker_info_yfinance(t)
         details.append({
             "ticker": t,
             "name": info.get("longName",""),
@@ -61,7 +59,7 @@ def competitor_analysis_tool_yfinance(tickers: List[str]) -> Dict[str, Any]:
     }
 
 @tool('Competitor Analysis Tool')
-def competitor_analysis_tool(tickers: List[str]) -> Dict[str, Any]:
+def competitor_analysis_tool_rapidapi(tickers: List[str]) -> Dict[str, Any]:
     """
     For each competitor ticker in 'tickers', fetch fundamental info from yfinance.
     Return competitor_tickers plus competitor_details[] with fields:

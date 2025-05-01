@@ -40,6 +40,71 @@ def get_date_range(period):
     
     return start_date, today
 
+
+@cached(cache)
+def get_ticker_yfinance(symbol):
+    """
+    Fetches a given stock symbol using yfinance.
+    """
+    logger.info(f"Fetching ticker for {symbol}")
+    return yf.Ticker(symbol)
+
+@cached(cache)
+def get_ticker_info_yfinance(symbol):
+    """
+    Fetches ticker info for a given stock symbol using yfinance.
+    """
+    logger.info(f"Fetching ticker info for {symbol}")
+    return get_ticker_yfinance(symbol).info
+
+@cached(cache)
+def get_ticker_financials_yfinance(symbol):
+    """
+    Fetches financials for a given stock symbol using yfinance.
+    """
+    logger.info(f"Fetching financials for {symbol}")
+    return get_ticker_yfinance(symbol).financials
+
+@cached(cache)
+def get_ticker_balance_sheet_yfinance(symbol):
+    """
+    Fetches balance sheet for a given stock symbol using yfinance.
+    """
+    logger.info(f"Fetching balance sheet for {symbol}")
+    return get_ticker_yfinance(symbol).balance_sheet
+
+@cached(cache)
+def get_ticker_cashflow_yfinance(symbol):
+    """
+    Fetches cash flow for a given stock symbol using yfinance.
+    """
+    logger.info(f"Fetching cash flow for {symbol}")
+    return get_ticker_yfinance(symbol).cashflow
+
+@cached(cache)
+def get_ticker_quarterly_financials_yfinance(symbol):
+    """
+    Fetches quarterly financials for a given stock symbol using yfinance.
+    """
+    logger.info(f"Fetching quarterly financials for {symbol}")
+    return get_ticker_yfinance(symbol).quarterly_financials
+
+@cached(cache)
+def get_ticker_dividends_yfinance(symbol):
+    """
+    Fetches dividends for a given stock symbol using yfinance.
+    """
+    logger.info(f"Fetching dividends for {symbol}")
+    return get_ticker_yfinance(symbol).dividends
+
+@cached(cache)
+def get_price_data_yfinance(symbol, interval, period):
+    """
+    Fetches price data for a given stock symbol using yfinance.
+    """
+    logger.info(f"Fetching price data for {symbol} (interval={interval}, period={period})")
+    return get_ticker_yfinance(symbol).history(interval=interval, period=period)
+
 @cached(cache)
 def get_price_data(symbol, interval="1wk", period="3mo"):
     """

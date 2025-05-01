@@ -10,8 +10,7 @@ from tools.financial_data import get_price_data
 
 
 ###################### TECHNICAL ANALYSIS TOOL (3mo weekly) #####
-@tool('Technical Analysis Tool')
-def yf_tech_analysis_yfinance(ticker: str, period: str = "3mo") -> Dict[str, Any]:
+def yf_tech_analysis(ticker: str, period: str = "3mo") -> Dict[str, Any]:
     """
     Get 3-month weekly intervals from yfinance for the ticker, returning standard fields plus stock_price_data.
     """
@@ -43,13 +42,13 @@ def yf_tech_analysis_yfinance(ticker: str, period: str = "3mo") -> Dict[str, Any
     }
 
 @tool('Technical Analysis Tool')
-def yf_tech_analysis(ticker: str, period: str = "3mo") -> Dict[str, Any]:
+def yf_tech_analysis_rapidapi(ticker: str, period: str = "3mo") -> Dict[str, Any]:
     """
     Get price data from yfinance for the ticker, returning standard fields plus stock_price_data.
     """
 
     interval = "1wk"
-    hist = get_price_data(ticker=ticker, interval=interval, period=period)
+    hist = get_price_data(symbol=ticker, interval=interval, period=period)
 
     stock_price_data = []
     for dt, row in hist.iterrows():

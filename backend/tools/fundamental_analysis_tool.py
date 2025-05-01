@@ -2,12 +2,10 @@ import yfinance as yf
 from typing import Dict, Any, List
 from crewai.tools import tool
 
-from tools.financial_data import get_fundamental_data
+from tools.financial_data import get_fundamental_data, get_ticker_balance_sheet_yfinance, get_ticker_cashflow_yfinance, get_ticker_dividends_yfinance, get_ticker_financials_yfinance, get_ticker_info_yfinance, get_ticker_quarterly_financials_yfinance
 
 ###################### FUNDAMENTAL ANALYSIS TOOL ######################
-
-@tool('Fundamental Analysis Tool')
-def fundamental_analysis_tool_yfinance(ticker: str) -> Dict[str, Any]:
+def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
     """
     Retrieve fundamentals from yfinance: 
     - standard fields
@@ -15,8 +13,7 @@ def fundamental_analysis_tool_yfinance(ticker: str) -> Dict[str, Any]:
     - dividend_history
     - quarterly_fundamentals
     """
-    data = yf.Ticker(ticker)
-    info = data.info
+    info = get_ticker_info_yfinance(ticker)
 
     result = {
         "ticker": ticker,
@@ -43,9 +40,9 @@ def fundamental_analysis_tool_yfinance(ticker: str) -> Dict[str, Any]:
     }
 
     # Attempt advanced statement analysis
-    fin = data.financials
-    bs = data.balance_sheet
-    cf = data.cashflow
+    fin = get_ticker_financials_yfinance(ticker)
+    bs = get_ticker_balance_sheet_yfinance(ticker)
+    cf = get_ticker_cashflow_yfinance(ticker)
 
     current_ratio = None
     debt_to_equity = None
@@ -112,7 +109,7 @@ def fundamental_analysis_tool_yfinance(ticker: str) -> Dict[str, Any]:
 
     quarterly_csv = []
     try:
-        qfin = data.quarterly_financials
+        qfin = get_ticker_quarterly_financials_yfinance(ticker)
         if qfin is not None and not qfin.empty:
             for date_col in qfin.columns:
                 col_str = str(date_col.date()) if hasattr(date_col, "date") else str(date_col)
@@ -142,7 +139,7 @@ def fundamental_analysis_tool_yfinance(ticker: str) -> Dict[str, Any]:
 
     div_hist = []
     try:
-        dividends = data.dividends
+        dividends = get_ticker_dividends_yfinance(ticker)
         for dt, val in dividends.iteritems():
             div_hist.append({"date": str(dt.date()), "dividend": float(val)})
     except:
@@ -154,9 +151,8 @@ def fundamental_analysis_tool_yfinance(ticker: str) -> Dict[str, Any]:
         "advanced_fundamentals": adv_data,
         "dividend_history": div_hist
     }
-
 @tool('Fundamental Analysis Tool')
-def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
+def fundamental_analysis_tool_rapidapi(ticker: str) -> Dict[str, Any]:
     """
     Retrieve fundamentals from yfinance: 
     - standard fields

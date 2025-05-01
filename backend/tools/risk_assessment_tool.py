@@ -3,20 +3,19 @@ import numpy as np
 from typing import Dict, Any
 from crewai.tools import tool
 
-from tools.financial_data import get_price_data
+from tools.financial_data import get_price_data, get_price_data_yfinance
 
 
 ###################### RISK ASSESSMENT TOOL ######################
-@tool('Risk Assessment Tool')
-def risk_assessment_tool_yfinance(ticker: str, benchmark: str = "^GSPC", period: str = "1y") -> Dict[str, Any]:
+def risk_assessment_tool(ticker: str, period: str = "1y") -> Dict[str, Any]:
     """
     Compute Beta, Sharpe, VaR, Max Drawdown, Volatility, plus monthly-averaged daily_returns for plotting.
     """
-    stock = yf.Ticker(ticker)
-    bench = yf.Ticker(benchmark)
 
-    stock_close = stock.history(period=period)['Close']
-    bench_close = bench.history(period=period)['Close']
+    benchmark: str = "^GSPC"
+
+    stock_close = get_price_data_yfinance(ticker, period=period)['Close']
+    bench_close = get_price_data_yfinance(benchmark, period=period)['Close']
 
     if stock_close.empty or bench_close.empty:
         return {"error": "Insufficient data for risk metrics."}
@@ -75,7 +74,7 @@ def risk_assessment_tool_yfinance(ticker: str, benchmark: str = "^GSPC", period:
     }
 
 @tool('Risk Assessment Tool')
-def risk_assessment_tool(ticker: str) -> Dict[str, Any]:
+def risk_assessment_tool_rapidapi(ticker: str) -> Dict[str, Any]:
     """
     Compute Beta, Sharpe, VaR, Max Drawdown, Volatility, plus monthly-averaged daily_returns for plotting.
     """
@@ -83,13 +82,10 @@ def risk_assessment_tool(ticker: str) -> Dict[str, Any]:
     benchmark: str = "^GSPC"
     period: str = "1y"
 
-    stock_close = get_price_data(ticker, period=period)["Close"]
-    bench_close = get_price_data(benchmark, period=period)["Close"]
-
-    if stock_close.empty or bench_close.empty:
-        return {"error": "Insufficient data for risk metrics."}
+    stock = get_price_data(ticker, period=period)
+    bench = get_price_data(benchmark, period=period)
     
-    if stock_close.empty or bench_close.empty:
+    if stock.empty or bench.empty:
         return {
             "beta": "",
             "sharpe_ratio": "",
@@ -98,6 +94,9 @@ def risk_assessment_tool(ticker: str) -> Dict[str, Any]:
             "volatility": "",
             "daily_returns": []
         }
+    
+    stock_close = stock["Close"]
+    bench_close = bench["Close"]
 
     stock_returns = stock_close.pct_change().dropna()
     bench_returns = bench_close.pct_change().dropna()
