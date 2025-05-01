@@ -288,8 +288,8 @@ class FinancialAnalysisCrew:
         # 5) risk
         self.risk_agent = Agent(
             role="Risk Assessment Agent",
-            goal="Calculate key risk metrics (Beta, Sharpe, VaR, Max Drawdown, Volatility) over 1 year for {ticker} using the 'Risk Assessment Tool'.",
-            backstory="Risk analysis specialist. Executes `risk_assessment_tool` once with `period='1y'` for {ticker}. Returns `RiskData`, including monthly-averaged daily returns.",
+            goal="Calculate key risk metrics (Beta, Sharpe, VaR, Max Drawdown, Volatility) for {ticker} using the 'Risk Assessment Tool'.",
+            backstory="Risk analysis specialist. Executes `risk_assessment_tool` once for {ticker}. Returns `RiskData`, including monthly-averaged daily returns.",
             llm=self.llm,
             tools=[risk_assessment_tool],
             allow_delegation=False,
@@ -412,9 +412,9 @@ class FinancialAnalysisCrew:
     def _init_tasks(self):
         # 1) competitor tasks => sequential
         self.enhanced_competitor_task = Task(
-            description="Find competitor tickers for {ticker}. Return competitor_tickers plus competitor_details=[].",
+            description="Find competitor tickers for {ticker}. Return competitor_tickers",
             agent=self.enhanced_competitor_agent,
-            expected_output="competitor_tickers[] + competitor_details[] (empty).",
+            expected_output="competitor_tickers[]",
             max_iterations=1
         )
         self.competitor_analysis_task = Task(
@@ -441,7 +441,7 @@ class FinancialAnalysisCrew:
             max_iterations=1
         )
         self.risk_task = Task(
-            description="Execute `risk_assessment_tool` for {ticker} with `period='1y'`. Output the structured `RiskData` object, including `daily_returns`.",
+            description="Execute `risk_assessment_tool` for {ticker}. Output the structured `RiskData` object, including `daily_returns`.",
             agent=self.risk_agent,
             expected_output="Beta, Sharpe, VaR, Max Drawdown, Volatility, daily_returns array",
             async_execution=True,

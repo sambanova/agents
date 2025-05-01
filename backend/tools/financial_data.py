@@ -3,10 +3,10 @@ import pandas as pd
 import requests
 import yfinance as yf
 from typing import Dict, Any, List
-from crewai.tools import tool
 from cachetools import cached, TTLCache
-import time
-import concurrent.futures
+from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
+
+from utils.logging import logger
 
 rapidapi_key = os.getenv("RAPIDAPI_KEY")
 
@@ -29,6 +29,8 @@ def get_date_range(period):
     elif period == "1y":
         start_date = today - pd.Timedelta(days=365)
     else:
+        # Use logger for errors
+        logger.error(f"Invalid period value provided: {period}")
         raise ValueError(f"Invalid period: {period}")
     
     return start_date, today
@@ -39,6 +41,7 @@ def get_price_data(symbol, interval="1wk", period="3mo"):
     Fetches daily close prices for `symbol` (US stocks only),
     returns a pandas Series indexed by date.
     """
+    logger.info(f"Fetching price data for {symbol} (interval={interval}, period={period})")
     url = "https://yahoo-finance15.p.rapidapi.com/api/v1/markets/stock/history"
 
     querystring = {"symbol":symbol,"interval":interval,"diffandsplits":"false"}
@@ -48,77 +51,99 @@ def get_price_data(symbol, interval="1wk", period="3mo"):
         "x-rapidapi-host": "yahoo-finance15.p.rapidapi.com"
     }
 
-    response = requests.get(url, headers=headers, params=querystring)
-    hist = response.json().get("body", [])
-    df = pd.DataFrame(hist.values())
+    try:
+        response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        response.raise_for_status()
+        hist = response.json().get("body", [])
+        if not hist:
+            logger.warning(f"No price history data found for {symbol} in the response body.")
+            return pd.DataFrame() # Return empty DataFrame if no data
 
-    start_date, _ = get_date_range(period)
-    start_date_str = start_date.strftime("%Y-%m-%d")
-    df['date'] = pd.to_datetime(df['date'])
-    df.set_index('date', inplace=True)
-    df = df[start_date_str:].rename(columns={"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume"})
-    return df.sort_index()
+        df = pd.DataFrame(hist.values())
 
-def _fetch_yahoo_module_data(symbol: str, module: str, rapidapi_key: str) -> Dict[str, Any]:
-    """Helper function to fetch data for a specific module from Yahoo Finance API."""
+        start_date, _ = get_date_range(period)
+        start_date_str = start_date.strftime("%Y-%m-%d")
+        df['date'] = pd.to_datetime(df['date'])
+        df.set_index('date', inplace=True)
+        df = df[start_date_str:].rename(columns={"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume"})
+        logger.info(f"Successfully fetched and processed price data for {symbol}")
+        return df.sort_index()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching price data for {symbol}: {e}")
+        return pd.DataFrame() # Return empty DataFrame on error
+    except ValueError as e: # Catch potential errors from get_date_range
+        logger.error(f"Error processing date range for {symbol}: {e}")
+        return pd.DataFrame()
+    except Exception as e:
+        logger.error(f"Unexpected error processing price data for {symbol}: {e}")
+        return pd.DataFrame()
+
+# Define the logging function for tenacity retries
+def log_retry_attempt(retry_state):
+    """Log the retry attempt information."""
+    logger.warning(
+        f"Retrying request due to {retry_state.outcome.exception()} "
+        f"(Attempt {retry_state.attempt_number}, waiting {retry_state.next_action.sleep:.2f}s)..."
+    )
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    reraise=True,
+    before_sleep=log_retry_attempt # Log before sleeping on retry
+)
+def _fetch_yahoo_module_data_with_retry(symbol: str, module: str, rapidapi_key: str) -> Dict[str, Any]:
+    """Helper function to fetch data for a specific module from Yahoo Finance API with retries."""
     url = "https://yahoo-finance15.p.rapidapi.com/api/v1/markets/stock/modules"
     querystring = {"ticker": symbol, "module": module}
     headers = {
         "x-rapidapi-key": rapidapi_key,
         "x-rapidapi-host": "yahoo-finance15.p.rapidapi.com"
     }
-    retries = 3
-    backoff_factor = 1.0  # Start with a 1-second delay
+    response = requests.get(url, headers=headers, params=querystring, timeout=10)
+    response.raise_for_status() # Raises HTTPError for bad responses (4xx or 5xx)
+    return response.json().get("body", {})
 
-    for i in range(retries):
-        try:
-            response = requests.get(url, headers=headers, params=querystring, timeout=10)
-            response.raise_for_status()  # Raises HTTPError for bad responses (4xx or 5xx)
-            return response.json().get("body", {})
-        except requests.exceptions.HTTPError as http_err:
-            if http_err.response.status_code == 429:
-                if i < retries - 1:  # Don't wait on the last attempt
-                    wait_time = backoff_factor * (2 ** i)
-                    print(f"Rate limit hit for {module} ({symbol}). Retrying in {wait_time:.2f} seconds...")
-                    time.sleep(wait_time)
-                else:
-                    print(f"Rate limit hit for {module} ({symbol}). Max retries exceeded.")
-                    return {}  # Return empty dict after max retries for 429
-            else:
-                # Re-raise other HTTP errors immediately
-                print(f"HTTP error fetching {module} for {symbol}: {http_err}")
-                return {}
-        except requests.exceptions.RequestException as e:
-            # Handle other request exceptions (timeout, connection error, etc.)
-            print(f"Error fetching {module} for {symbol}: {e}")
-            return {} # Return empty dict for other request errors
-
-    # Should not be reached if retries exhausted, but as a fallback
-    return {}
+def _fetch_yahoo_module_data(symbol: str, module: str, rapidapi_key: str) -> Dict[str, Any]:
+    """Wrapper function to handle exceptions from the retrying fetcher and log appropriately."""
+    try:
+        return _fetch_yahoo_module_data_with_retry(symbol, module, rapidapi_key)
+    except RetryError as retry_err:
+        # This catches the error after all retries have failed
+        logger.error(f"Max retries exceeded for {module} ({symbol}). Last exception: {retry_err.last_attempt.exception()}")
+        return {}
+    except Exception as e:
+         # Catch any other unexpected exceptions that weren't retried or occurred outside the retry loop
+        logger.error(f"Unexpected error fetching {module} for {symbol}: {e}")
+        return {}
 
 @cached(cache)
 def get_fundamental_data(symbol: str, include_income_statement: bool = False) -> Dict[str, Any]:
     """
     Fetches fundamental data for a given stock symbol by calling the Yahoo Finance API
-    for different modules in parallel.
+    for different modules sequentially.
     """
+    logger.info(f"Starting fundamental data fetch for {symbol} (include_income_statement={include_income_statement})")
     modules_to_fetch = ["asset-profile", "statistics", "financial-data"]
     if include_income_statement:
         modules_to_fetch.append("income-statement")
 
     combined_data = {}
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_to_module = {
-            executor.submit(_fetch_yahoo_module_data, symbol, module, rapidapi_key): module
-            for module in modules_to_fetch
-        }
-        for future in concurrent.futures.as_completed(future_to_module):
-            module = future_to_module[future]
-            try:
-                module_data = future.result()
-                combined_data.update(module_data)
-            except Exception as exc:
-                print(f'{module} generated an exception: {exc}')
+    # Fetch modules sequentially instead of in parallel
+    for module in modules_to_fetch:
+        try:
+            logger.info(f"Fetching module: {module} for {symbol}...")
+            # Call the fetch function directly
+            module_data = _fetch_yahoo_module_data(symbol, module, rapidapi_key)
+            if module_data: # Check if data was actually returned
+                 combined_data.update(module_data)
+                 logger.info(f"Successfully processed module: {module} for {symbol}.")
+            else:
+                # Log if a module returned no data after processing (incl. retries)
+                logger.warning(f"No data received for module {module} ({symbol}) after processing.")
+        except Exception as exc:
+            # Log exceptions during the fetch/processing of a module
+            logger.error(f'Error processing module {module} for {symbol}: {exc}')
 
     processed_data = {}
     for key, value in combined_data.items():
@@ -132,4 +157,5 @@ def get_fundamental_data(symbol: str, include_income_statement: bool = False) ->
             else:
                 processed_data[key] = value
 
+    logger.info(f"Finished fundamental data fetch for {symbol}.")
     return processed_data

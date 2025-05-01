@@ -75,10 +75,13 @@ def risk_assessment_tool_yfinance(ticker: str, benchmark: str = "^GSPC", period:
     }
 
 @tool('Risk Assessment Tool')
-def risk_assessment_tool(ticker: str, benchmark: str = "^GSPC", period: str = "1y") -> Dict[str, Any]:
+def risk_assessment_tool(ticker: str) -> Dict[str, Any]:
     """
     Compute Beta, Sharpe, VaR, Max Drawdown, Volatility, plus monthly-averaged daily_returns for plotting.
     """
+
+    benchmark: str = "^GSPC"
+    period: str = "1y"
 
     stock_close = get_price_data(ticker, period=period)["Close"]
     bench_close = get_price_data(benchmark, period=period)["Close"]
