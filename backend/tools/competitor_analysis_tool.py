@@ -69,7 +69,7 @@ def competitor_analysis_tool(tickers: List[str]) -> Dict[str, Any]:
     """
     details = []
     for t in tickers:
-        info = get_fundamental_data(t)
+        info = get_fundamental_data(t, include_income_statement=False)
         details.append({
             "ticker": t,
             "name": info.get("longName",""),

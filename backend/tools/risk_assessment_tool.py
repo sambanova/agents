@@ -88,6 +88,16 @@ def risk_assessment_tool(ticker: str) -> Dict[str, Any]:
 
     if stock_close.empty or bench_close.empty:
         return {"error": "Insufficient data for risk metrics."}
+    
+    if stock_close.empty or bench_close.empty:
+        return {
+            "beta": "",
+            "sharpe_ratio": "",
+            "value_at_risk_95": "",
+            "max_drawdown": "",
+            "volatility": "",
+            "daily_returns": []
+        }
 
     stock_returns = stock_close.pct_change().dropna()
     bench_returns = bench_close.pct_change().dropna()
