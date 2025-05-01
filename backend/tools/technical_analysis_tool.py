@@ -13,7 +13,7 @@ from tools.financial_data import get_price_data
 @tool('Technical Analysis Tool')
 def yf_tech_analysis(ticker: str, period: str = "3mo") -> Dict[str, Any]:
     """
-    Get 3-month weekly intervals from yfinance for the ticker, returning standard fields plus stock_price_data.
+    Get price data from yfinance for the ticker, returning standard fields plus stock_price_data.
     """
 
     use_yfinance = False

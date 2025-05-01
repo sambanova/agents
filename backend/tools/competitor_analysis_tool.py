@@ -69,7 +69,6 @@ def competitor_analysis_tool(tickers: List[str]) -> Dict[str, Any]:
     """
     details = []
     for t in tickers:
-        # data = yf.Ticker(t)
         info = get_fundamental_data(t)
         details.append({
             "ticker": t,
