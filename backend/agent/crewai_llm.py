@@ -152,6 +152,13 @@ class CustomLLM(LLM):
 
                 # --- 2) Make the completion call
                 start_time = time.time()
+
+                if "messages" in params:
+                    message_headers = str(params["messages"])[0:100]
+                else:
+                    message_headers = ""
+                
+                logger.info(f"CrewAI LLM {self.model} calling litellm.completion with messages: {message_headers}")
                 response = litellm.completion(**params)
                 duration = time.time() - start_time
                 if duration > 10:

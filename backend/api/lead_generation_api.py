@@ -250,6 +250,10 @@ class LeadGenerationAPI:
                     except Exception as close_error:
                         logger.error(f"Error closing WebSocket: {str(close_error)}")
                     return
+            except WebSocketDisconnect as wsd:
+                # Log normal disconnects at INFO level
+                logger.info(f"[/chat/websocket] WebSocket disconnected: code={wsd.code}, reason='{wsd.reason}' - conversation_id: {conversation_id}")
+                # No need to attempt closing again, it's already disconnected.
             except Exception as e:
                 # Log detailed information about the WebSocket state and error
                 logger.error(f"[/chat/websocket] Error in WebSocket connection: {str(e)}")
