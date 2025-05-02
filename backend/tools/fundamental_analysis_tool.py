@@ -2,7 +2,7 @@ import yfinance as yf
 from typing import Dict, Any, List
 from crewai.tools import tool
 
-from tools.financial_data import get_fundamental_data, get_ticker_balance_sheet_yfinance, get_ticker_cashflow_yfinance, get_ticker_dividends_yfinance, get_ticker_financials_yfinance, get_ticker_info_yfinance, get_ticker_quarterly_financials_yfinance
+from tools.financial_data import get_fundamental_data, get_fundamental_data_insightsentry, get_ticker_balance_sheet_yfinance, get_ticker_cashflow_yfinance, get_ticker_dividends_yfinance, get_ticker_financials_yfinance, get_ticker_info_yfinance, get_ticker_quarterly_financials_yfinance
 
 ###################### FUNDAMENTAL ANALYSIS TOOL ######################
 def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
@@ -151,7 +151,7 @@ def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
         "advanced_fundamentals": adv_data,
         "dividend_history": div_hist
     }
-@tool('Fundamental Analysis Tool')
+
 def fundamental_analysis_tool_rapidapi(ticker: str) -> Dict[str, Any]:
     """
     Retrieve fundamentals from yfinance: 
@@ -212,6 +212,67 @@ def fundamental_analysis_tool_rapidapi(ticker: str) -> Dict[str, Any]:
 
     div_hist = []
     # TODO: add dividend history (not available in current data)
+
+    return {
+        "ticker": ticker,
+        **result,
+        "advanced_fundamentals": adv_data,
+        "dividend_history": div_hist
+    }
+
+
+@tool('Fundamental Analysis Tool')
+def fundamental_analysis_tool_insightsentry(ticker: str) -> Dict[str, Any]:
+    """
+    Retrieve fundamentals from InsightsEntry: 
+    - standard fields
+    - advanced_fundamentals
+    - dividend_history
+    - quarterly_fundamentals
+    """
+
+    info = get_fundamental_data_insightsentry(ticker, extended=True)
+
+    result = {
+        "ticker": ticker,
+        "company_name": info.get("description",""),
+        "sector": info.get("data", {}).get("company_info", {}).get("sector", ""),
+        "industry": info.get("data", {}).get("company_info", {}).get("industry", ""),
+        "market_cap": str(info.get("market_cap", "")),
+        "pe_ratio": str(info.get("data", {}).get("valuation_ratios", {}).get("price_earnings", "")),
+        "forward_pe": str(info.get("data", {}).get("valuation_ratios", {}).get("price_earnings_fy", "")),
+        "peg_ratio": "",
+        "ps_ratio": str(info.get("data", {}).get("valuation_ratios", {}).get("price_sales_current", "")),
+        "price_to_book": str(info.get("data", {}).get("valuation_ratios", {}).get("price_book_current", "")),
+        "dividend_yield": str(info.get("data", {}).get("dividends", {}).get("dividends_yield_current", "")),
+        "beta": "",
+        "year_high": "",
+        "year_low": "",
+        "analyst_recommendation": "",
+        "target_price": str(info.get("data", {}).get("price_targets", {}).get("price_target_average", "")),
+        "earnings_per_share": str(info.get("earnings_per_share_basic_ttm","")),
+        "profit_margins": str(info.get("data", {}).get("profitability", {}).get("net_margin", "")),
+        "operating_margins": str(info.get("data", {}).get("profitability", {}).get("operating_margin", "")),
+        "ebitda_margins": str(info.get("data", {}).get("profitability", {}).get("ebitda_margin_current", "")),
+        "short_ratio": str(info.get("shortRatio","")),
+        "current_ratio": str(info.get("data", {}).get("balance_sheet", {}).get("current_ratio", "")),
+        "debt_to_equity": str(info.get("data", {}).get("balance_sheet", {}).get("debt_to_equity_fy", "")),
+        "return_on_equity": str(info.get("data", {}).get("profitability", {}).get("return_on_equity", "")),
+        "return_on_assets": str(info.get("data", {}).get("profitability", {}).get("return_on_assets", "")),
+        "revenue_growth": "",
+        "free_cash_flow": str(info.get("data", {}).get("cash_flow", {}).get("free_cash_flow_ttm", "")),
+    }
+
+    result["quarterly_fundamentals"] = []
+
+    adv_data = {}
+    adv_data["shares_outstanding"] = str(info.get("data", {}).get("income_statement", {}).get("basic_shares_outstanding_fy", ""))
+    adv_data["float_shares"] = ""
+    adv_data["enterprise_value"] = ""
+    adv_data["book_value"] = str(info.get("data", {}).get("valuation_ratios", {}).get("book_per_share_fy", ""))
+
+    div_hist = []
+    # TODO: add dividend history
 
     return {
         "ticker": ticker,
