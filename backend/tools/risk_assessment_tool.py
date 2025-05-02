@@ -170,7 +170,12 @@ def risk_assessment_tool_insightsentry(ticker: str) -> Dict[str, Any]:
             "value_at_risk_95": "",
             "max_drawdown": "",
             "volatility": "",
-            "daily_returns": []
+            "daily_returns": [
+                {
+                    "date": "",
+                    "daily_return": ""
+                }
+            ]
         }
     
     stock_close = stock["Close"]

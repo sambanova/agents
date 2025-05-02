@@ -264,9 +264,8 @@ def get_fundamental_data(symbol: str, include_income_statement: bool = False) ->
     reraise=True,
     before_sleep=log_retry_attempt
 )
-def _fetch_insightsentry_data_with_retry(symbol: str, key: str, insightsentry_api_key: str, query_string: Dict = {}) -> Dict[str, Any]:
+def _fetch_insightsentry_data_with_retry(url: str, insightsentry_api_key: str, query_string: Dict = {}) -> Dict[str, Any]:
     """Helper function to fetch data from InsightsEntry API with retries, avoiding retries on 4xx errors."""
-    url = f"https://insightsentry.p.rapidapi.com/v2/symbols/{symbol}/{key}"
     headers = {
         "x-rapidapi-key": insightsentry_api_key,
         "x-rapidapi-host": "insightsentry.p.rapidapi.com"
@@ -291,7 +290,8 @@ def get_fundamental_data_insightsentry(symbol: str, extended: bool = False) -> D
 
     try:
         # Fetch base info
-        info_response = _fetch_insightsentry_data_with_retry(symbol, "info", insightsentry_api_key)
+        url = f"https://insightsentry.p.rapidapi.com/v2/symbols/{symbol}/info"
+        info_response = _fetch_insightsentry_data_with_retry(url, insightsentry_api_key)
         if info_response: # Check if response is not empty/None
             response_data.update(info_response)
             logger.info(f"Successfully fetched base info for {symbol}.")
@@ -301,7 +301,8 @@ def get_fundamental_data_insightsentry(symbol: str, extended: bool = False) -> D
         # Fetch extended financials if requested
         if extended:
             try:
-                financials_response = _fetch_insightsentry_data_with_retry(symbol, "financials", insightsentry_api_key)
+                url = f"https://insightsentry.p.rapidapi.com/v2/symbols/{symbol}/financials"
+                financials_response = _fetch_insightsentry_data_with_retry(url, insightsentry_api_key)
                 if financials_response: # Check if response is not empty/None
                     response_data.update(financials_response)
                     logger.info(f"Successfully fetched extended financials for {symbol}.")
@@ -330,7 +331,8 @@ def get_historical_ohlcv_data_insightsentry(symbol: str, period: str = "3mo") ->
     logger.info(f"Fetching historical OHLCV data for {symbol} (period={period})")
     querystring = {"bar_interval": "1", "bar_type": "week", "extended": "false", "badj": "true", "dadj": "false"}
     try:
-        response = _fetch_insightsentry_data_with_retry(symbol, "history", insightsentry_api_key, querystring)
+        url = f"https://insightsentry.p.rapidapi.com/v2/symbols/{symbol}/history"
+        response = _fetch_insightsentry_data_with_retry(url, insightsentry_api_key, querystring)
 
         # Check if 'series' key exists and is not empty
         if not response or 'series' not in response or not response['series']:
@@ -355,3 +357,18 @@ def get_historical_ohlcv_data_insightsentry(symbol: str, period: str = "3mo") ->
     except (RetryError, httpx.HTTPError, ValueError, KeyError, Exception) as e:
         logger.error(f"Error fetching or processing historical OHLCV data for {symbol}: {e}")
         return pd.DataFrame()
+
+
+def search_symbol_insightsentry(query: str) -> Dict[str, Any]:
+    """
+    Searches InsightsEntry API for a given query.
+    """
+    try:
+        logger.info(f"Searching InsightsEntry for {query}")
+        url = f"https://insightsentry.p.rapidapi.com/v2/symbols/search"
+        querystring = {"query": query, "type": "stocks"}
+        search_response = _fetch_insightsentry_data_with_retry(url, insightsentry_api_key, querystring)
+        return search_response[0]["code"]
+    except (RetryError, httpx.HTTPError, ValueError, KeyError, Exception) as e:
+        logger.error(f"Error searching InsightsEntry for {query}: {e}")
+        return None

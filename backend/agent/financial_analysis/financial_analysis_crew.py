@@ -250,6 +250,7 @@ class FinancialAnalysisCrew:
             llm=self.competitor_finder_llm,
             allow_delegation=False,
             verbose=self.verbose,
+            max_iter=1
         )
 
         # 2) competitor analysis
@@ -261,6 +262,7 @@ class FinancialAnalysisCrew:
             tools=[competitor_analysis_tool_insightsentry],
             allow_delegation=False,
             verbose=self.verbose,
+            max_iter=1
         )
 
         # 3) fundamental
@@ -283,6 +285,7 @@ class FinancialAnalysisCrew:
             tools=[tech_analysis_insightsentry],
             allow_delegation=False,
             verbose=self.verbose,
+            max_iter=1
         )
 
         # 5) risk
@@ -294,6 +297,7 @@ class FinancialAnalysisCrew:
             tools=[risk_assessment_tool_insightsentry],
             allow_delegation=False,
             verbose=self.verbose,
+            max_iter=1
         )
 
         # 6) news
