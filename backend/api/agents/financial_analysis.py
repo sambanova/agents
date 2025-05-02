@@ -59,7 +59,7 @@ class FinancialAnalysisAgent(RoutedAgent):
             extracted_company = parameters.get("company_name", "")
 
         if not extracted_ticker:
-            extracted_ticker = "AAPL"
+            extracted_ticker = "NASDAQ:AAPL"
         if not extracted_company:
             extracted_company = "Apple Inc"
 

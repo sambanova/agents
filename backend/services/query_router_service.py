@@ -820,7 +820,7 @@ class QueryRouterServiceChat:
           "type": "financial_analysis",
           "parameters": {{
             "query_text": "Analyze Google",
-            "ticker": "GOOGL",
+            "ticker": "NASDAQ:GOOGL",
             "company_name": "Google"
           }}
         }}
@@ -830,7 +830,7 @@ class QueryRouterServiceChat:
           "type": "financial_analysis",
           "parameters": {{
             "query_text": "Perform a fundamental analysis on Tesla stock",
-            "ticker": "TSLA",
+            "ticker": "NASDAQ:TSLA",
             "company_name": "Tesla"
           }}
         }}
@@ -947,7 +947,7 @@ class QueryRouterServiceChat:
            - Extract specific industry, location, or other business parameters if any
         2. For 'financial_analysis': 
            - Provide 'query_text' (the user's full finance question)
-           - Provide 'ticker' if recognized
+           - Provide 'exchange:ticker' if recognized
            - Provide 'company_name' if recognized
            - Only valid for single public companies
         3. For 'deep_research':

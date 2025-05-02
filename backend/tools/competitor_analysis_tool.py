@@ -2,7 +2,7 @@ import yfinance as yf
 from typing import Dict, Any, List
 from crewai.tools import tool
 
-from tools.financial_data import get_fundamental_data, get_ticker_info_yfinance
+from tools.financial_data import get_fundamental_data, get_fundamental_data_insightsentry, get_ticker_info_yfinance
 
 
 ###################### COMPETITOR TOOL WITH PROMPT ENGINEERING ######################
@@ -58,7 +58,6 @@ def competitor_analysis_tool(tickers: List[str]) -> Dict[str, Any]:
       "competitor_details": details
     }
 
-@tool('Competitor Analysis Tool')
 def competitor_analysis_tool_rapidapi(tickers: List[str]) -> Dict[str, Any]:
     """
     For each competitor ticker in 'tickers', fetch fundamental info from yfinance.
@@ -81,6 +80,36 @@ def competitor_analysis_tool_rapidapi(tickers: List[str]) -> Dict[str, Any]:
             "short_ratio": str(info.get("shortRatio","")),
             "industry": info.get("industry",""),
             "sector": info.get("sector","")
+        })
+    return {
+      "competitor_tickers": tickers,
+      "competitor_details": details
+    }
+
+@tool('Competitor Analysis Tool')
+def competitor_analysis_tool_insightsentry(tickers: List[str]) -> Dict[str, Any]:
+    """
+    For each competitor ticker in 'tickers', fetch fundamental info from InsightsEntry.
+    Return competitor_tickers plus competitor_details[] with fields:
+    {ticker, name, market_cap, pe_ratio, ps_ratio, ebitda_margins, profit_margins, revenue_growth, earnings_growth, short_ratio, industry, sector}.
+    """
+    details = []
+    #TODO: remove this once we have a way to handle the large response from InsightsEntry
+    for t in tickers:
+        info = get_fundamental_data_insightsentry(t, extended=False)
+        details.append({
+            "ticker": t,
+            "name": info.get("description",""),
+            "market_cap": str(info.get("market_cap",0.0)),
+            "pe_ratio": str(info.get("price_earnings_ttm","")),
+            "ps_ratio": "",
+            "ebitda_margins": "",
+            "profit_margins": "",
+            "revenue_growth": "",
+            "earnings_growth": "",
+            "short_ratio": "",
+            "industry": "",
+            "sector": ""
         })
     return {
       "competitor_tickers": tickers,
