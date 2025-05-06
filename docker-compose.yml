@@ -26,6 +26,8 @@ services:
       - app-network
     volumes:
       - ./backend:/app  # Optional: Mount the backend code for development
+    env_file:
+        - ./backend/.env
     environment:
       - ALLOWED_ORIGINS=*
       # For production, you might specify:
