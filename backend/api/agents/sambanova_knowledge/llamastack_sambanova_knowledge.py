@@ -18,6 +18,7 @@ from llama_stack_client.types.agents.turn_response_event_payload import (
 )
 
 from config.model_registry import model_registry
+from api.agents.sambanova_knowledge.tools import sandbox_code
 
 class UnstructuredDataTools():
     def __init__(self, llamastack_client, provider):
@@ -129,7 +130,7 @@ def create_agent(client, model, docs_tools):
         sampling_params={
             "strategy": {"type": "top_p", "temperature": 0.3, "top_p" : 0.3},
         },
-        tools=["builtin::code_interpreter", docs_tools.image_analysis],
+        tools=[sandbox_code, docs_tools.image_analysis],
         enable_session_persistence=False,
     )
     return agent
