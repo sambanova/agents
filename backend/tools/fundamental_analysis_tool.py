@@ -1,3 +1,4 @@
+from datetime import datetime
 import yfinance as yf
 from typing import Dict, Any, List
 from crewai.tools import tool
@@ -5,6 +6,49 @@ from crewai.tools import tool
 from tools.financial_data import get_fundamental_data, get_fundamental_data_insightsentry, get_ticker_balance_sheet_yfinance, get_ticker_cashflow_yfinance, get_ticker_dividends_yfinance, get_ticker_financials_yfinance, get_ticker_info_yfinance, get_ticker_quarterly_financials_yfinance
 
 ###################### FUNDAMENTAL ANALYSIS TOOL ######################
+
+def _generate_quarterly_data_with_labels(total_revenue_values: List[Any], net_income_values: List[Any]) -> List[Dict[str, Any]]:
+    """
+    Generates a list of quarterly financial data with date labels starting
+    from the previous quarter and going backwards.
+    """
+    quarterly_csv = []
+    num_quarters_to_generate = len(total_revenue_values)
+
+    if num_quarters_to_generate > 0:
+        now = datetime.now()
+        current_label_year = now.year
+        
+        if now.month <= 3:
+            pq_label_num = 4
+            current_label_year -= 1
+        elif now.month <= 6:
+            pq_label_num = 1
+        elif now.month <= 9:
+            pq_label_num = 2
+        else:
+            pq_label_num = 3
+        
+        for i in range(num_quarters_to_generate):
+            quarter_label = f"Q{pq_label_num} {current_label_year}"
+            
+            current_total_rev = total_revenue_values[i] if i < len(total_revenue_values) else None
+            current_net_inc = net_income_values[i] if i < len(net_income_values) else None
+
+            quarterly_csv.append({
+                "date": quarter_label,
+                "total_revenue": str(current_total_rev) if current_total_rev is not None else None,
+                "net_income": str(current_net_inc) if current_net_inc is not None else None
+            })
+
+            pq_label_num -= 1
+            if pq_label_num == 0:
+                pq_label_num = 4
+                current_label_year -= 1
+                
+    quarterly_csv.reverse()
+    return quarterly_csv
+
 def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
     """
     Retrieve fundamentals from yfinance: 
@@ -232,7 +276,9 @@ def fundamental_analysis_tool_insightsentry(ticker: str) -> Dict[str, Any]:
     """
 
     info = get_fundamental_data_insightsentry(ticker, extended=True)
-
+    ebitda_margin = info.get("data", {}).get("profitability", {}).get("ebitda_margin_current", "")
+    if ebitda_margin != "":
+        ebitda_margin = str(ebitda_margin / 100)
     result = {
         "ticker": ticker,
         "company_name": info.get("description",""),
@@ -253,8 +299,8 @@ def fundamental_analysis_tool_insightsentry(ticker: str) -> Dict[str, Any]:
         "earnings_per_share": str(info.get("earnings_per_share_basic_ttm","")),
         "profit_margins": str(info.get("data", {}).get("profitability", {}).get("net_margin", "")),
         "operating_margins": str(info.get("data", {}).get("profitability", {}).get("operating_margin", "")),
-        "ebitda_margins": str(info.get("data", {}).get("profitability", {}).get("ebitda_margin_current", "")),
-        "short_ratio": str(info.get("shortRatio","")),
+        "ebitda_margins": ebitda_margin,
+        "short_ratio": "",
         "current_ratio": str(info.get("data", {}).get("balance_sheet", {}).get("current_ratio", "")),
         "debt_to_equity": str(info.get("data", {}).get("balance_sheet", {}).get("debt_to_equity_fy", "")),
         "return_on_equity": str(info.get("data", {}).get("profitability", {}).get("return_on_equity", "")),
@@ -263,7 +309,13 @@ def fundamental_analysis_tool_insightsentry(ticker: str) -> Dict[str, Any]:
         "free_cash_flow": str(info.get("data", {}).get("cash_flow", {}).get("free_cash_flow_ttm", "")),
     }
 
-    result["quarterly_fundamentals"] = []
+
+    total_revenue_values = info.get("data", {}).get("income_statement", {}).get("total_revenue_fq_h", [])
+    net_income_values = info.get("data", {}).get("income_statement", {}).get("net_income_fq_h", [])
+    
+    quarterly_csv = _generate_quarterly_data_with_labels(total_revenue_values, net_income_values)
+                
+    result["quarterly_fundamentals"] = quarterly_csv
 
     adv_data = {}
     adv_data["shares_outstanding"] = str(info.get("data", {}).get("income_statement", {}).get("basic_shares_outstanding_fy", ""))
@@ -272,7 +324,11 @@ def fundamental_analysis_tool_insightsentry(ticker: str) -> Dict[str, Any]:
     adv_data["book_value"] = str(info.get("data", {}).get("valuation_ratios", {}).get("book_per_share_fy", ""))
 
     div_hist = []
-    # TODO: add dividend history
+    dividend_ex_date_h = info.get("data", {}).get("dividends", {}).get("dividend_ex_date_h", [])
+    dividend_amount_h = info.get("data", {}).get("dividends", {}).get("dividend_amount_h", [])
+    for dt, val in zip(dividend_ex_date_h, dividend_amount_h):
+        dt = datetime.fromtimestamp(dt)
+        div_hist.append({"date": str(dt.date()), "dividend": float(val)})
 
     return {
         "ticker": ticker,

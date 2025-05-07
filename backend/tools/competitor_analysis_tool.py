@@ -96,20 +96,23 @@ def competitor_analysis_tool_insightsentry(tickers: List[str]) -> Dict[str, Any]
     details = []
     #TODO: remove this once we have a way to handle the large response from InsightsEntry
     for t in tickers:
-        info = get_fundamental_data_insightsentry(t, extended=False)
+        info = get_fundamental_data_insightsentry(t, extended=True)
+        ebitda_margin = info.get("data", {}).get("profitability", {}).get("ebitda_margin_current", "")
+        if ebitda_margin != "":
+            ebitda_margin = str(ebitda_margin / 100)
         details.append({
             "ticker": t,
             "name": info.get("description",""),
             "market_cap": str(info.get("market_cap",0.0)),
             "pe_ratio": str(info.get("price_earnings_ttm","")),
-            "ps_ratio": "",
-            "ebitda_margins": "",
-            "profit_margins": "",
+            "ps_ratio": str(info.get("data", {}).get("valuation_ratios", {}).get("price_sales_ratio", "")),
+            "ebitda_margins": ebitda_margin,
+            "profit_margins": str(info.get("data", {}).get("profitability", {}).get("net_margin", "")),
             "revenue_growth": "",
             "earnings_growth": "",
-            "short_ratio": "",
-            "industry": "",
-            "sector": ""
+            "short_ratio": str(info.get("shortRatio","")),
+            "industry": info.get("data", {}).get("company_info", {}).get("industry", ""),
+            "sector": info.get("data", {}).get("company_info", {}).get("sector", ""),
         })
     return {
       "competitor_tickers": tickers,
