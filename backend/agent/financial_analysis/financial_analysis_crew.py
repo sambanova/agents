@@ -416,7 +416,7 @@ class FinancialAnalysisCrew:
     def _init_tasks(self):
         # 1) competitor tasks => sequential
         self.enhanced_competitor_task = Task(
-            description="Find competitor tickers for {ticker}. Return competitor_tickers",
+            description="Find 3 competitor tickers for {ticker}. Return competitor_tickers",
             agent=self.enhanced_competitor_agent,
             expected_output="competitor_tickers[] used the format 'EXCHANGE:TICKER' for example 'NASDAQ:NVDA' or 'NYSE:GM'",
             max_iterations=1
