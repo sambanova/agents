@@ -438,7 +438,7 @@ class FinancialAnalysisCrew:
             max_iterations=1
         )
         self.technical_task = Task(
-            description="Execute `yf_tech_analysis` for {ticker} with `period='3mo'`. Output the structured `TechnicalData` object, including `stock_price_data`.",
+            description="Execute `tech_analysis_insightsentry` for {ticker}. Output the structured `TechnicalData` object, including `stock_price_data`.",
             agent=self.technical_agent,
             expected_output="TechnicalData with stock_price_data.",
             async_execution=True,

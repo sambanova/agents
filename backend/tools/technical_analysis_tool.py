@@ -78,7 +78,7 @@ def yf_tech_analysis_rapidapi(ticker: str, period: str = "3mo") -> Dict[str, Any
 @tool('Technical Analysis Tool')
 def tech_analysis_insightsentry(ticker: str) -> Dict[str, Any]:
     """
-    Get price data from InsightsEntry for the ticker, returning standard fields plus stock_price_data.
+    Get price data from InsightsEntry for the ticker, returning standard fields plus stock_price_data. Use the format 'EXCHANGE:TICKER'.
     """
 
     hist = get_historical_ohlcv_data_insightsentry(ticker, period="3mo")

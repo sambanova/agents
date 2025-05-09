@@ -70,9 +70,16 @@ class FinancialAnalysisAgent(RoutedAgent):
                 f"Processing financial analysis request for company: '{message.parameters.company_name}'"
             ))
 
-            search_response = search_symbol_insightsentry(message.parameters.company_name)
+            fextractor = FinancialPromptExtractor(llm_api_key=getattr(self.api_keys, model_registry.get_api_key_env(provider=message.provider)), 
+                                                  provider=message.provider)
+            extracted_ticker, extracted_company = fextractor.extract_info(message.parameters.query_text)
 
-            if search_response is None:
+            if not extracted_ticker:
+                extracted_ticker = message.parameters.ticker
+            if not extracted_company:
+                extracted_company = message.parameters.company_name
+
+            if extracted_ticker is None or extracted_ticker == "":
                 request_obj = AgentRequest(
                     agent_type=AgentEnum.Assistant,
                     parameters=AssistantMessage(
@@ -92,7 +99,8 @@ class FinancialAnalysisAgent(RoutedAgent):
                 )
                 return
             else:
-                message.parameters.ticker = search_response
+                message.parameters.ticker = extracted_ticker
+                message.parameters.company_name = extracted_company
 
             # Initialize crew
             crew = FinancialAnalysisCrew(
