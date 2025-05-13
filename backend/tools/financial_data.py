@@ -1,9 +1,9 @@
 import os
 import pandas as pd
 import httpx
+import requests_cache
 import yfinance as yf
 from typing import Dict, Any, List
-from cachetools import cached, TTLCache
 from tenacity import retry, stop_after_attempt, wait_exponential, RetryError, retry_if_exception
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -11,9 +11,6 @@ from utils.logging import logger
 
 rapidapi_key = os.getenv("RAPIDAPI_KEY")
 insightsentry_api_key = os.getenv("INSIGHTSENTRY_API_KEY")
-
-# Create a cache that expires after 12 hours (12 * 60 * 60 seconds)
-cache = TTLCache(maxsize=1024, ttl=12 * 60 * 60)
 
 # Define a shared timeout configuration
 # total cap 15s, connect 5s, read 10s
@@ -41,72 +38,69 @@ def get_date_range(period):
     
     return start_date, today
 
-
-@cached(cache)
 def get_ticker_yfinance(symbol):
-    """
-    Fetches a given stock symbol using yfinance.
-    """
-    logger.info(f"Fetching ticker for {symbol}")
-    return yf.Ticker(symbol)
-
-@cached(cache)
-def get_ticker_info_yfinance(symbol):
     """
     Fetches ticker info for a given stock symbol using yfinance.
     """
     logger.info(f"Fetching ticker info for {symbol}")
-    return get_ticker_yfinance(symbol).info
+    return yf.Ticker(symbol)
 
-@cached(cache)
-def get_ticker_financials_yfinance(symbol):
+def get_ticker_info_yfinance(ticker: yf.Ticker):
+    """
+    Fetches ticker info for a given stock symbol using yfinance.
+    """
+    with requests_cache.enabled(backend='memory', expire_after=3600):
+        logger.info(f"Fetching ticker info for {ticker}")
+        return ticker.info
+
+def get_ticker_financials_yfinance(ticker: yf.Ticker):
     """
     Fetches financials for a given stock symbol using yfinance.
     """
-    logger.info(f"Fetching financials for {symbol}")
-    return get_ticker_yfinance(symbol).financials
+    with requests_cache.enabled(backend='memory', expire_after=3600):
+        logger.info(f"Fetching financials for {ticker}")
+        return ticker.financials
 
-@cached(cache)
-def get_ticker_balance_sheet_yfinance(symbol):
+def get_ticker_balance_sheet_yfinance(ticker: yf.Ticker):
     """
     Fetches balance sheet for a given stock symbol using yfinance.
     """
-    logger.info(f"Fetching balance sheet for {symbol}")
-    return get_ticker_yfinance(symbol).balance_sheet
+    with requests_cache.enabled(backend='memory', expire_after=3600):
+        logger.info(f"Fetching balance sheet for {ticker}")
+        return ticker.balance_sheet
 
-@cached(cache)
-def get_ticker_cashflow_yfinance(symbol):
+def get_ticker_cashflow_yfinance(ticker: yf.Ticker):
     """
     Fetches cash flow for a given stock symbol using yfinance.
     """
-    logger.info(f"Fetching cash flow for {symbol}")
-    return get_ticker_yfinance(symbol).cashflow
+    with requests_cache.enabled(backend='memory', expire_after=3600):
+        logger.info(f"Fetching cash flow for {ticker}")
+        return ticker.cashflow
 
-@cached(cache)
-def get_ticker_quarterly_financials_yfinance(symbol):
+def get_ticker_quarterly_financials_yfinance(ticker: yf.Ticker):
     """
     Fetches quarterly financials for a given stock symbol using yfinance.
     """
-    logger.info(f"Fetching quarterly financials for {symbol}")
-    return get_ticker_yfinance(symbol).quarterly_financials
+    with requests_cache.enabled(backend='memory', expire_after=3600):
+        logger.info(f"Fetching quarterly financials for {ticker}")
+        return ticker.quarterly_financials
 
-@cached(cache)
-def get_ticker_dividends_yfinance(symbol):
+def get_ticker_dividends_yfinance(ticker: yf.Ticker):
     """
     Fetches dividends for a given stock symbol using yfinance.
     """
-    logger.info(f"Fetching dividends for {symbol}")
-    return get_ticker_yfinance(symbol).dividends
+    with requests_cache.enabled(backend='memory', expire_after=3600):
+        logger.info(f"Fetching dividends for {ticker}")
+        return ticker.dividends
 
-@cached(cache)
-def get_price_data_yfinance(symbol, interval, period):
+def get_price_data_yfinance(ticker: yf.Ticker, interval, period):
     """
     Fetches price data for a given stock symbol using yfinance.
     """
-    logger.info(f"Fetching price data for {symbol} (interval={interval}, period={period})")
-    return get_ticker_yfinance(symbol).history(interval=interval, period=period)
+    with requests_cache.enabled(backend='memory', expire_after=3600):
+        logger.info(f"Fetching price data for {ticker} (interval={interval}, period={period})")
+        return ticker.history(interval=interval, period=period)
 
-@cached(cache)
 def get_price_data(symbol, interval="1wk", period="3mo"):
     """
     Fetches daily close prices for `symbol` (US stocks only),
@@ -203,7 +197,6 @@ def _fetch_yahoo_module_data(symbol: str, module: str, rapidapi_key: str) -> Dic
         logger.error(f"Unexpected error fetching {module} for {symbol}: {e}")
         return {}
 
-@cached(cache)
 def get_fundamental_data(symbol: str, include_income_statement: bool = False) -> Dict[str, Any]:
     """
     Fetches fundamental data for a given stock symbol by calling the Yahoo Finance API
@@ -279,7 +272,6 @@ def _fetch_insightsentry_data_with_retry(url: str, insightsentry_api_key: str, q
         response.raise_for_status() # Raises HTTPStatusError for bad responses (4xx or 5xx) in httpx
         return response.json()
 
-@cached(cache)
 def get_fundamental_data_insightsentry(symbol: str, extended: bool = False) -> Dict[str, Any]:
     """
     Fetches fundamental data for a given stock symbol by calling the InsightsEntry API.
@@ -322,7 +314,6 @@ def get_fundamental_data_insightsentry(symbol: str, extended: bool = False) -> D
     logger.info(f"Finished fundamental data fetch for {symbol}. Returning {'partial' if extended and 'financials' not in response_data else 'complete'} data.")
     return response_data
 
-@cached(cache)
 def get_historical_ohlcv_data_insightsentry(symbol: str, period: str = "3mo") -> pd.DataFrame:
     """
     Fetches historical OHLCV data for a given stock symbol using InsightsEntry API.

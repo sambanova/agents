@@ -61,15 +61,15 @@ class FinancialPromptExtractor:
         """
         system_msg = (
             "You are an information extraction system. "
-            "Extract exactly two keys: 'company_name' and 'ticker' (in the format 'EXCHANGE:TICKER')."
+            "Extract exactly two keys: 'company_name' and 'ticker'."
             "For example: "
             "{{"
             "  'company_name': 'Apple',"
-            "  'ticker': 'NASDAQ:AAPL'"
+            "  'ticker': 'AAPL'"
             "}}"
             "{{"
             "  'company_name': 'General Motors',"
-            "  'ticker': 'NYSE:GM'"
+            "  'ticker': 'GM'"
             "}}"
         )
         user_msg = f"""

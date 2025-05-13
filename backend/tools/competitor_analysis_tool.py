@@ -2,7 +2,8 @@ import yfinance as yf
 from typing import Dict, Any, List
 from crewai.tools import tool
 
-from tools.financial_data import get_fundamental_data, get_fundamental_data_insightsentry, get_ticker_info_yfinance
+from tools.financial_data import get_fundamental_data, get_fundamental_data_insightsentry, get_ticker_info_yfinance, get_ticker_yfinance
+from utils.logging import logger
 
 
 ###################### COMPETITOR TOOL WITH PROMPT ENGINEERING ######################
@@ -30,6 +31,7 @@ def enhanced_competitor_tool(company_name: str, ticker: str) -> Dict[str, Any]:
     }
 
 ###################### COMPETITOR ANALYSIS TOOL ######################
+@tool('Competitor Analysis Tool')
 def competitor_analysis_tool(tickers: List[str]) -> Dict[str, Any]:
     """
     For each competitor ticker in 'tickers', fetch fundamental info from yfinance.
@@ -37,25 +39,29 @@ def competitor_analysis_tool(tickers: List[str]) -> Dict[str, Any]:
     {ticker, name, market_cap, pe_ratio, ps_ratio, ebitda_margins, profit_margins, revenue_growth, earnings_growth, short_ratio, industry, sector}.
     """
     details = []
-    for t in tickers:
-        info = get_ticker_info_yfinance(t)
-        details.append({
-            "ticker": t,
-            "name": info.get("longName",""),
-            "market_cap": str(info.get("marketCap","")),
-            "pe_ratio": str(info.get("trailingPE","")),
-            "ps_ratio": str(info.get("priceToSalesTrailing12Months","")),
-            "ebitda_margins": str(info.get("ebitdaMargins","")),
-            "profit_margins": str(info.get("profitMargins","")),
-            "revenue_growth": str(info.get("revenueGrowth","")),
-            "earnings_growth": str(info.get("earningsGrowth","")),
-            "short_ratio": str(info.get("shortRatio","")),
-            "industry": info.get("industry",""),
-            "sector": info.get("sector","")
-        })
+    try:
+        for t in tickers:
+            ticker_yfinance = get_ticker_yfinance(t)
+            info = get_ticker_info_yfinance(ticker_yfinance)
+            details.append({
+                "ticker": t,
+                "name": info.get("longName",""),
+                "market_cap": str(info.get("marketCap","")),
+                "pe_ratio": str(info.get("trailingPE","")),
+                "ps_ratio": str(info.get("priceToSalesTrailing12Months","")),
+                "ebitda_margins": str(info.get("ebitdaMargins","")),
+                "profit_margins": str(info.get("profitMargins","")),
+                "revenue_growth": str(info.get("revenueGrowth","")),
+                "earnings_growth": str(info.get("earningsGrowth","")),
+                "short_ratio": str(info.get("shortRatio","")),
+                "industry": info.get("industry",""),
+                "sector": info.get("sector","")
+            })
+    except Exception as e:
+        logger.error(f"Error fetching competitor analysis data for {tickers}: {e}")
     return {
-      "competitor_tickers": tickers,
-      "competitor_details": details
+    "competitor_tickers": tickers,
+    "competitor_details": details
     }
 
 def competitor_analysis_tool_rapidapi(tickers: List[str]) -> Dict[str, Any]:
@@ -86,7 +92,6 @@ def competitor_analysis_tool_rapidapi(tickers: List[str]) -> Dict[str, Any]:
       "competitor_details": details
     }
 
-@tool('Competitor Analysis Tool')
 def competitor_analysis_tool_insightsentry(tickers: List[str]) -> Dict[str, Any]:
     """
     For each competitor ticker in 'tickers', fetch fundamental info from InsightsEntry.

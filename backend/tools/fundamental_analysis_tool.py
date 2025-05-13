@@ -3,8 +3,8 @@ import yfinance as yf
 from typing import Dict, Any, List
 from crewai.tools import tool
 
-from tools.financial_data import get_fundamental_data, get_fundamental_data_insightsentry, get_ticker_balance_sheet_yfinance, get_ticker_cashflow_yfinance, get_ticker_dividends_yfinance, get_ticker_financials_yfinance, get_ticker_info_yfinance, get_ticker_quarterly_financials_yfinance
-
+from tools.financial_data import get_fundamental_data, get_fundamental_data_insightsentry, get_ticker_balance_sheet_yfinance, get_ticker_cashflow_yfinance, get_ticker_dividends_yfinance, get_ticker_financials_yfinance, get_ticker_info_yfinance, get_ticker_quarterly_financials_yfinance, get_ticker_yfinance
+from utils.logging import logger
 ###################### FUNDAMENTAL ANALYSIS TOOL ######################
 
 def _generate_quarterly_data_with_labels(total_revenue_values: List[Any], net_income_values: List[Any]) -> List[Dict[str, Any]]:
@@ -49,6 +49,7 @@ def _generate_quarterly_data_with_labels(total_revenue_values: List[Any], net_in
     quarterly_csv.reverse()
     return quarterly_csv
 
+@tool('Fundamental Analysis Tool')
 def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
     """
     Retrieve fundamentals from yfinance: 
@@ -57,36 +58,42 @@ def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
     - dividend_history
     - quarterly_fundamentals
     """
-    info = get_ticker_info_yfinance(ticker)
 
-    result = {
-        "ticker": ticker,
-        "company_name": info.get("longName",""),
-        "sector": info.get("sector",""),
-        "industry": info.get("industry",""),
-        "market_cap": str(info.get("marketCap","")),
-        "pe_ratio": str(info.get("trailingPE","")),
-        "forward_pe": str(info.get("forwardPE","")),
-        "peg_ratio": str(info.get("pegRatio","")),
-        "ps_ratio": str(info.get("priceToSalesTrailing12Months","")),
-        "price_to_book": str(info.get("priceToBook","")),
-        "dividend_yield": str(info.get("dividendYield","")),
-        "beta": str(info.get("beta","")),
-        "year_high": str(info.get("fiftyTwoWeekHigh","")),
-        "year_low": str(info.get("fiftyTwoWeekLow","")),
-        "analyst_recommendation": info.get("recommendationKey",""),
-        "target_price": str(info.get("targetMeanPrice","")),
-        "earnings_per_share": str(info.get("trailingEps","")),
-        "profit_margins": str(info.get("profitMargins","")),
-        "operating_margins": str(info.get("operatingMargins","")),
-        "ebitda_margins": str(info.get("ebitdaMargins","")),
-        "short_ratio": str(info.get("shortRatio","")),
-    }
+    try:
+        ticker_yfinance = get_ticker_yfinance(ticker)
+        info = get_ticker_info_yfinance(ticker_yfinance)
+
+        result = {
+            "ticker": ticker,
+            "company_name": info.get("longName",""),
+            "sector": info.get("sector",""),
+            "industry": info.get("industry",""),
+            "market_cap": str(info.get("marketCap","")),
+            "pe_ratio": str(info.get("trailingPE","")),
+            "forward_pe": str(info.get("forwardPE","")),
+            "peg_ratio": str(info.get("pegRatio","")),
+            "ps_ratio": str(info.get("priceToSalesTrailing12Months","")),
+            "price_to_book": str(info.get("priceToBook","")),
+            "dividend_yield": str(info.get("dividendYield","")),
+            "beta": str(info.get("beta","")),
+            "year_high": str(info.get("fiftyTwoWeekHigh","")),
+            "year_low": str(info.get("fiftyTwoWeekLow","")),
+            "analyst_recommendation": info.get("recommendationKey",""),
+            "target_price": str(info.get("targetMeanPrice","")),
+            "earnings_per_share": str(info.get("trailingEps","")),
+            "profit_margins": str(info.get("profitMargins","")),
+            "operating_margins": str(info.get("operatingMargins","")),
+            "ebitda_margins": str(info.get("ebitdaMargins","")),
+            "short_ratio": str(info.get("shortRatio","")),
+        }
+    except Exception as e:
+        logger.error(f"Error fetching fundamental analysis data for {ticker}: {e}")
+        results = {}
 
     # Attempt advanced statement analysis
-    fin = get_ticker_financials_yfinance(ticker)
-    bs = get_ticker_balance_sheet_yfinance(ticker)
-    cf = get_ticker_cashflow_yfinance(ticker)
+    fin = get_ticker_financials_yfinance(ticker_yfinance)
+    bs = get_ticker_balance_sheet_yfinance(ticker_yfinance)
+    cf = get_ticker_cashflow_yfinance(ticker_yfinance)
 
     current_ratio = None
     debt_to_equity = None
@@ -140,8 +147,8 @@ def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
                 ocf = cf.loc["Operating Cash Flow"].iloc[0]
                 capex = cf.loc["Capital Expenditures"].iloc[0]
                 free_cash_flow = float(ocf) - float(capex)
-    except:
-        pass
+    except Exception as e:
+        logger.error(f"Error fetching advanced statement analysis data for {ticker}: {e}")
 
     result["current_ratio"] = str(current_ratio if current_ratio else "")
     result["debt_to_equity"] = str(debt_to_equity if debt_to_equity else "")
@@ -153,7 +160,7 @@ def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
 
     quarterly_csv = []
     try:
-        qfin = get_ticker_quarterly_financials_yfinance(ticker)
+        qfin = get_ticker_quarterly_financials_yfinance(ticker_yfinance)
         if qfin is not None and not qfin.empty:
             for date_col in qfin.columns:
                 col_str = str(date_col.date()) if hasattr(date_col, "date") else str(date_col)
@@ -170,8 +177,8 @@ def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
                 })
             # Sort the quarterly data by date (oldest to newest)
             quarterly_csv.sort(key=lambda x: x["date"])
-    except:
-        pass
+    except Exception as e:
+        logger.error(f"Error fetching quarterly fundamentals data for {ticker}: {e}")
 
     result["quarterly_fundamentals"] = quarterly_csv
 
@@ -183,11 +190,15 @@ def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
 
     div_hist = []
     try:
-        dividends = get_ticker_dividends_yfinance(ticker)
-        for dt, val in dividends.iteritems():
-            div_hist.append({"date": str(dt.date()), "dividend": float(val)})
-    except:
-        pass
+        dividends = get_ticker_dividends_yfinance(ticker_yfinance)
+        # Check if dividends Series is valid and non-empty before processing
+        if dividends is not None and not dividends.empty:
+            div_hist = [
+                {"date": str(dt.date()), "dividend": float(val)}
+                for dt, val in dividends.items()
+            ]
+    except Exception as e:
+        logger.error(f"Error fetching dividend history data for {ticker}: {e}")
 
     return {
         "ticker": ticker,
@@ -265,7 +276,6 @@ def fundamental_analysis_tool_rapidapi(ticker: str) -> Dict[str, Any]:
     }
 
 
-@tool('Fundamental Analysis Tool')
 def fundamental_analysis_tool_insightsentry(ticker: str) -> Dict[str, Any]:
     """
     Retrieve fundamentals from InsightsEntry: 

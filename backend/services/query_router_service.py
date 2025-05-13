@@ -373,7 +373,7 @@ class QueryRouterService:
           "type": "financial_analysis",
           "parameters": {{
             "query_text": "Analyze Google",
-            "ticker": "NASDAQ:GOOGL",
+            "ticker": "GOOGL",
             "company_name": "Alphabet Inc."
           }}
         }}
@@ -383,7 +383,7 @@ class QueryRouterService:
           "type": "financial_analysis",
           "parameters": {{
             "query_text": "Perform a fundamental analysis on Tesla stock",
-            "ticker": "NASDAQ:TSLA",
+            "ticker": "TSLA",
             "company_name": "Tesla"
           }}
         }}
@@ -820,7 +820,7 @@ class QueryRouterServiceChat:
           "type": "financial_analysis",
           "parameters": {{
             "query_text": "Analyze Google",
-            "ticker": "NASDAQ:GOOGL",
+            "ticker": "GOOGL",
             "company_name": "Alphabet Inc."
           }}
         }}
@@ -830,7 +830,7 @@ class QueryRouterServiceChat:
           "type": "financial_analysis",
           "parameters": {{
             "query_text": "Perform a fundamental analysis on Tesla stock",
-            "ticker": "NASDAQ:TSLA",
+            "ticker": "TSLA",
             "company_name": "Tesla"
           }}
         }}
@@ -947,7 +947,7 @@ class QueryRouterServiceChat:
            - Extract specific industry, location, or other business parameters if any
         2. For 'financial_analysis': 
            - Provide 'query_text' (the user's full finance question)
-           - Provide 'exchange:ticker' if recognized
+           - Provide 'ticker' if recognized
            - Provide 'company_name' if recognized. If the recognized company is a subsidiary, provide the parent company's official name (e.g., for Google or YouTube, use 'Alphabet Inc.'; for Instagram or Facebook, use 'Meta Platforms, Inc.').
            - Only valid for single public companies
         3. For 'deep_research':
