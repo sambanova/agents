@@ -17,6 +17,7 @@ from agent.financial_analysis.financial_analysis_crew import (
     FinancialAnalysisResult,
 )
 from api.services.redis_service import SecureRedisService
+from tools.financial_data import search_symbol_insightsentry
 from config.model_registry import model_registry
 from services.financial_user_prompt_extractor_service import FinancialPromptExtractor
 from utils.error_utils import format_api_error_message
@@ -48,23 +49,9 @@ class FinancialAnalysisAgent(RoutedAgent):
         self, crew: FinancialAnalysisCrew, parameters: Dict[str, Any], provider: str
     ) -> Tuple[str, Dict[str,Any]]:
         logger.info(logger.format_message(None, f"Extracting financial information from query: '{parameters.get('query_text', '')[:100]}...'"))
-        api_key = getattr(self.api_keys, model_registry.get_api_key_env(provider=provider))
-        fextractor = FinancialPromptExtractor(api_key, provider)
-        query_text = parameters.get("query_text", "")
-        extracted_ticker, extracted_company = fextractor.extract_info(query_text)
 
-        if not extracted_ticker:
-            extracted_ticker = parameters.get("ticker", "")
-        if not extracted_company:
-            extracted_company = parameters.get("company_name", "")
-
-        if not extracted_ticker:
-            extracted_ticker = "AAPL"
-        if not extracted_company:
-            extracted_company = "Apple Inc"
-
-        logger.info(logger.format_message(None, f"Analyzing company: {extracted_company} (ticker: {extracted_ticker})"))
-        inputs = {"ticker": extracted_ticker, "company_name": extracted_company}
+        logger.info(logger.format_message(None, f"Analyzing company: {parameters.get('company_name', '')} (ticker: {parameters.get('ticker', '')})"))
+        inputs = {"ticker": parameters.get("ticker", ""), "company_name": parameters.get("company_name", "")}
 
         if "docs" in parameters:
             inputs["docs"] = parameters["docs"]
@@ -83,7 +70,16 @@ class FinancialAnalysisAgent(RoutedAgent):
                 f"Processing financial analysis request for company: '{message.parameters.company_name}'"
             ))
 
-            if message.parameters.ticker == "":
+            fextractor = FinancialPromptExtractor(llm_api_key=getattr(self.api_keys, model_registry.get_api_key_env(provider=message.provider)), 
+                                                  provider=message.provider)
+            extracted_ticker, extracted_company = fextractor.extract_info(message.parameters.query_text)
+
+            if not extracted_ticker:
+                extracted_ticker = message.parameters.ticker
+            if not extracted_company:
+                extracted_company = message.parameters.company_name
+
+            if extracted_ticker is None or extracted_ticker == "":
                 request_obj = AgentRequest(
                     agent_type=AgentEnum.Assistant,
                     parameters=AssistantMessage(
@@ -102,6 +98,9 @@ class FinancialAnalysisAgent(RoutedAgent):
                     ),
                 )
                 return
+            else:
+                message.parameters.ticker = extracted_ticker
+                message.parameters.company_name = extracted_company
 
             # Initialize crew
             crew = FinancialAnalysisCrew(
