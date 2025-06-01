@@ -1,0 +1,4 @@
+# Don’t copy local deps or build artefacts into the image
+node_modules
+dist
+.git
