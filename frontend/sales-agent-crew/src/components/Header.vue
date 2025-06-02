@@ -12,9 +12,9 @@
         </div>
 
         <h1
-          class="text-[16px] font-bold text-primary-brandTextPrimary tracking-tight text-center"
+          class="text-xl font-bold text-primary-brandTextPrimary tracking-tight text-center"
         >
-          Agents (Demo)
+          Agentic
         </h1>
       </div>
 

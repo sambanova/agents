@@ -174,7 +174,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                 self.active_sessions[session_key]['is_active'] = True
 
             # Update session activity time
-            self.session_last_active[session_key] = datetime.now()
+            self.session_last_active[session_key] = datetime.now(timezone.utc)
 
             # Check if we have an existing session state to restore
             session = self.active_sessions[session_key]
@@ -271,7 +271,7 @@ class WebSocketConnectionManager(WebSocketInterface):
 
                 user_message_text = await websocket.receive_text()
                 # Update session activity time on each message
-                self.session_last_active[session_key] = datetime.now()
+                self.session_last_active[session_key] = datetime.now(timezone.utc)
 
                 try:
                     user_message_input = json.loads(user_message_text)
@@ -396,7 +396,7 @@ class WebSocketConnectionManager(WebSocketInterface):
 
             # Update last active time on disconnect
             if session_key in self.session_last_active:
-                self.session_last_active[session_key] = datetime.now()
+                self.session_last_active[session_key] = datetime.now(timezone.utc)
 
     async def _update_metadata(self, meta_key: str, message_data: str, user_id: str):
         """Helper method to update metadata asynchronously"""
@@ -477,7 +477,7 @@ class WebSocketConnectionManager(WebSocketInterface):
             logger.error(f"Error in Redis message handler: {str(e)}")
         finally:
             # Update session activity time before exiting
-            self.session_last_active[session_key] = datetime.now()
+            self.session_last_active[session_key] = datetime.now(timezone.utc)
 
     async def _safe_send(self, websocket: WebSocket, data: dict) -> bool:
         """
