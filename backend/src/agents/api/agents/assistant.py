@@ -18,7 +18,7 @@ from autogen_agentchat.base import Response
 from fastapi import WebSocket
 import redis
 import requests
-from api.data_types import (
+from agents.api.data_types import (
     APIKeys,
     AgentEnum,
     AgentRequest,
@@ -29,9 +29,9 @@ from api.data_types import (
 from exa_py import Exa
 from tavily import AsyncTavilyClient
 
-from config.model_registry import model_registry
-from utils.logging import logger
-from utils.error_utils import format_api_error_message
+from agents.registry.model_registry import model_registry
+from agents.utils.logging import logger
+from agents.utils.error_utils import format_api_error_message
 
 from typing import Any, Dict, List, Literal, Optional
 import aiohttp

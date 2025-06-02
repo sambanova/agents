@@ -1,8 +1,11 @@
 import json
+import os
 from typing import Dict, Any, Tuple
 
 class ModelRegistry:
-    def __init__(self, config_path: str = "config/model_config.json"):
+    def __init__(self, config_path: str = None):
+        if config_path is None:
+            config_path = os.path.join(os.path.dirname(__file__), "model_config.json")
         self.config_path = config_path
         self._config = self._load_config()
 

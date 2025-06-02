@@ -11,10 +11,10 @@ import requests
 from fastapi.websockets import WebSocketState
 import re  # Added for quick pattern matching to detect multiple companies
 
-from api.websocket_interface import WebSocketInterface
-from utils.json_utils import extract_json_from_string
-from config.model_registry import model_registry
-from utils.logging import logger
+from agents.api.websocket_interface import WebSocketInterface
+from agents.utils.json_utils import extract_json_from_string
+from agents.registry.model_registry import model_registry
+from agents.utils.logging import logger
 
 class QueryType(BaseModel):
     # Possible types: "sales_leads", "educational_content", "financial_analysis", or "deep_research"

@@ -17,7 +17,7 @@ from crewai.utilities.exceptions.context_window_exceeding_exception import (
 )
 from crewai import LLM
 
-from utils.logging import logger
+from agents.utils.logging import logger
 
 class CustomLLM(LLM):
     def __init__(

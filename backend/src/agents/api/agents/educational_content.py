@@ -10,11 +10,11 @@ from autogen_core import (
     type_subscription,
 )
 
-from agent.samba_research_flow.crews.edu_research.edu_research_crew import EducationalPlan
-from agent.samba_research_flow.samba_research_flow import SambaResearchFlow
-from config.model_registry import model_registry
+from agents.agent.samba_research_flow.crews.edu_research.edu_research_crew import EducationalPlan
+from agents.agent.samba_research_flow.samba_research_flow import SambaResearchFlow
+from agents.registry.model_registry import model_registry
 
-from api.data_types import (
+from agents.api.data_types import (
     AgentEnum,
     AgentRequest,
     AgentStructuredResponse,
@@ -22,8 +22,8 @@ from api.data_types import (
     APIKeys,
     ErrorResponse,
 )
-from utils.logging import logger
-from utils.error_utils import format_api_error_message
+from agents.utils.logging import logger
+from agents.utils.error_utils import format_api_error_message
 
 @type_subscription(topic_type="educational_content")
 class EducationalContentAgent(RoutedAgent):

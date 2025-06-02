@@ -12,17 +12,17 @@ from autogen_core import (
 from autogen_core.models import LLMMessage, SystemMessage, UserMessage
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 
-from agent.financial_analysis.financial_analysis_crew import (
+from agents.agent.financial_analysis.financial_analysis_crew import (
     FinancialAnalysisCrew,
     FinancialAnalysisResult,
 )
-from api.services.redis_service import SecureRedisService
-from tools.financial_data import search_symbol_insightsentry
-from config.model_registry import model_registry
-from services.financial_user_prompt_extractor_service import FinancialPromptExtractor
-from utils.error_utils import format_api_error_message
+from agents.api.services.redis_service import SecureRedisService
+from agents.tools.financial_data import search_symbol_insightsentry
+from agents.registry.model_registry import model_registry
+from agents.services.financial_user_prompt_extractor_service import FinancialPromptExtractor
+from agents.utils.error_utils import format_api_error_message
 
-from ..data_types import (
+from agents.api.data_types import (
     AgentEnum,
     AgentRequest,
     AgentStructuredResponse,
@@ -30,7 +30,7 @@ from ..data_types import (
     AssistantMessage,
     ErrorResponse,
 )
-from utils.logging import logger
+from agents.utils.logging import logger
 
 
 @type_subscription(topic_type="financial_analysis")

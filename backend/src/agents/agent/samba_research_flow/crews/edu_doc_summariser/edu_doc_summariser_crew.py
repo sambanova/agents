@@ -6,9 +6,9 @@ from crewai import Agent, Crew, Process, Task, LLM
 from crewai.project import CrewBase, agent, crew, task
 from crewai_tools import SerperDevTool
 from pydantic import BaseModel
-from agent.crewai_llm import CustomLLM
-from config.model_registry import model_registry
-from utils.agent_thought import RedisConversationLogger
+from agents.agent.crewai_llm import CustomLLM
+from agents.registry.model_registry import model_registry
+from agents.utils.agent_thought import RedisConversationLogger
 
 current_dir = os.getcwd()
 repo_dir = os.path.abspath(os.path.join(current_dir, "../.."))

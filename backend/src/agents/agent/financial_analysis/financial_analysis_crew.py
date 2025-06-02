@@ -26,14 +26,14 @@ if os.getenv("LANGTRACE_API_KEY"):
 
 # crewai imports
 from crewai import Agent, Task, Crew, LLM, Process
-from utils.agent_thought import RedisConversationLogger
+from agents.utils.agent_thought import RedisConversationLogger
 from crewai.tools import tool
 from crewai_tools import SerperDevTool
-from tools.competitor_analysis_tool import competitor_analysis_tool
-from tools.fundamental_analysis_tool import fundamental_analysis_tool
-from tools.technical_analysis_tool import yf_tech_analysis
-from tools.risk_assessment_tool import risk_assessment_tool
-from config.model_registry import model_registry
+from agents.tools.competitor_analysis_tool import competitor_analysis_tool
+from agents.tools.fundamental_analysis_tool import fundamental_analysis_tool
+from agents.tools.technical_analysis_tool import yf_tech_analysis
+from agents.tools.risk_assessment_tool import risk_assessment_tool
+from agents.registry.model_registry import model_registry
 
 
 ###################### NEWS MODELS & (SERPER) WRAPPER ######################

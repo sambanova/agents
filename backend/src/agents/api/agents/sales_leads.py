@@ -2,13 +2,13 @@ import asyncio
 from typing import Any, Dict
 from autogen_core import DefaultTopicId, RoutedAgent, message_handler, type_subscription
 from autogen_core import MessageContext
-from api.data_types import AgentEnum, AgentRequest, AgentStructuredResponse, ErrorResponse, SalesLeads, APIKeys
-from agent.lead_generation_crew import OutreachList, ResearchCrew
-from config.model_registry import model_registry
-from services.user_prompt_extractor_service import UserPromptExtractor
-from utils.logging import logger
-from api.services.redis_service import SecureRedisService
-from utils.error_utils import format_api_error_message
+from agents.api.data_types import AgentEnum, AgentRequest, AgentStructuredResponse, ErrorResponse, SalesLeads, APIKeys
+from agents.agent.lead_generation_crew import OutreachList, ResearchCrew
+from agents.registry.model_registry import model_registry
+from agents.services.user_prompt_extractor_service import UserPromptExtractor
+from agents.utils.logging import logger
+from agents.api.services.redis_service import SecureRedisService
+from agents.utils.error_utils import format_api_error_message
 
 @type_subscription(topic_type="sales_leads")
 class SalesLeadsAgent(RoutedAgent):

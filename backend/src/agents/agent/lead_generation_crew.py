@@ -19,12 +19,12 @@ if os.getenv("LANGTRACE_API_KEY"):
     langtrace.init(api_key=os.getenv("LANGTRACE_API_KEY"))
 
 from crewai import Agent, Task, Crew, LLM, Process
-from tools.company_intelligence_tool import CompanyIntelligenceTool
-from tools.market_research_tool import MarketResearchTool
+from agents.tools.company_intelligence_tool import CompanyIntelligenceTool
+from agents.tools.market_research_tool import MarketResearchTool
 from typing import List, Dict, Any, Tuple
 from pydantic import BaseModel
-from utils.agent_thought import RedisConversationLogger
-from config.model_registry import model_registry
+from agents.utils.agent_thought import RedisConversationLogger
+from agents.registry.model_registry import model_registry
 
 class Outreach(BaseModel):
     company_name: str
