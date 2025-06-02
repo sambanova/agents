@@ -328,7 +328,7 @@ class QueryRouterService:
         3. For 'financial_analysis': 
            - Provide 'query_text' (the user's full finance question)
            - Provide 'ticker' if recognized
-           - Provide 'company_name' if recognized
+           - Provide 'company_name' if recognized. If the recognized company is a subsidiary, provide the parent company's official name (e.g., for Google or YouTube, use 'Alphabet Inc.'; for Instagram or Facebook, use 'Meta Platforms, Inc.').
            - This route is only for single public companies. 
              If the query references multiple companies, or a not-yet-public company (S-1), revert to 'deep_research'.
         4. For 'deep_research':
@@ -374,7 +374,7 @@ class QueryRouterService:
           "parameters": {{
             "query_text": "Analyze Google",
             "ticker": "GOOGL",
-            "company_name": "Google"
+            "company_name": "Alphabet Inc."
           }}
         }}
 
@@ -811,7 +811,7 @@ class QueryRouterServiceChat:
             }}
         }}
 
-        "type": "financial_analysis"
+        "type": "financial_analysis",
         "description": "Handles complex financial analysis queries ONLY, including company reports, company financials, financial statements, and market trends. This is NOT for quick information or factual answers about STOCK PRICES. For this agent to work you need at least one ticker or company name, and it must be a single public company. If the query is a factual answer or quick information about a company person or product, ALWAYS use the assistant agent instead. This is a specialized agent for complex financial analysis and NEVER use this agent for quick info or if the user references multiple companies or IPO/S-1.",
         "examples": "Tell me about Apple's financials, What's the financial statement of Tesla?, Market trends in the tech sector for a single company?"
 
@@ -821,7 +821,7 @@ class QueryRouterServiceChat:
           "parameters": {{
             "query_text": "Analyze Google",
             "ticker": "GOOGL",
-            "company_name": "Google"
+            "company_name": "Alphabet Inc."
           }}
         }}
 
@@ -948,7 +948,7 @@ class QueryRouterServiceChat:
         2. For 'financial_analysis': 
            - Provide 'query_text' (the user's full finance question)
            - Provide 'ticker' if recognized
-           - Provide 'company_name' if recognized
+           - Provide 'company_name' if recognized. If the recognized company is a subsidiary, provide the parent company's official name (e.g., for Google or YouTube, use 'Alphabet Inc.'; for Instagram or Facebook, use 'Meta Platforms, Inc.').
            - Only valid for single public companies
         3. For 'deep_research':
            - Provide 'deep_research_topic' (the user's full research query)
