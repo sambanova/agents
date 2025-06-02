@@ -1,0 +1,52 @@
+[project]
+name = "agents"
+version = "0.1.0"
+description = ""
+requires-python = ">=3.10.0,<3.13"
+dependencies = [
+  "crewai==0.100.0",
+  "patronus==0.0.18",
+  "langchain-community==0.3.14",
+  "langgraph>=0.2.55",
+  "fastapi==0.115.7",
+  "uvicorn==0.34.0",
+  "python-dotenv",
+  "pydantic==2.10.5",
+  "requests==2.32.3",
+  "crewai-tools==0.32.1",
+  "redis==5.2.1",
+  "sse-starlette==2.2.1",
+  "yfinance==0.2.61",
+  "scipy==1.15.1",
+  "langtrace-python-sdk==3.6.2",
+  "tavily-python>=0.5.0",
+  "langchain-sambanova",
+
+# Document processing
+  "PyMuPDF==1.23.8",
+  "python-docx==1.1.0",
+  "pandas==2.2.0",
+  "openpyxl==3.1.5",
+  "langchain==0.3.17",
+  "python-multipart==0.0.9",  # For FastAPI file uploads
+
+  "autogen-core==0.4.5",
+  "autogen-ext==0.4.5",
+  "autogen-agentchat==0.4.5",
+  "exa_py==1.8.8",
+  "langgraph==0.2.73",
+  "langchain-sambanova==0.1.1",
+  "langchain-fireworks==0.2.7",
+  "tavily-python==0.5.1",
+  "langchain-core==0.3.34",
+  "fastapi-clerk-auth==0.0.3",
+  "requests-cache==1.2.1",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["agents"]

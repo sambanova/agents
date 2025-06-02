@@ -3,9 +3,9 @@ from pydantic import BaseModel, model_validator, Field
 from enum import Enum
 from typing import Any, List, Optional, Union, Dict
 from datetime import date
-from agent.financial_analysis.financial_analysis_crew import FinancialAnalysisResult
-from agent.samba_research_flow.crews.edu_research.edu_research_crew import Section
-from agent.lead_generation_crew import OutreachList
+from agents.agent.financial_analysis.financial_analysis_crew import FinancialAnalysisResult
+from agents.agent.samba_research_flow.crews.edu_research.edu_research_crew import Section
+from agents.agent.lead_generation_crew import OutreachList
 
 # Enum to Define Agent Types
 class AgentEnum(str, Enum):

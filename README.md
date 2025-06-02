@@ -108,15 +108,21 @@ Follow the steps below to install the backend for the Agents application.
 1. Install Python dependencies: Create and activate a virtual environment (for example with venv) and install the project dependencies inside it. Make sure to use Python 3.11.
 
    ```bash
-   python3.11 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
+   # Install uv first
+   pip install uv
+
+   cd backend
+   uv sync
+   uv pip install -e .
+   # activate the virtual environment
+   uv pip install -e .
+   source .venv/bin/activate
    ```
 
 1. Run the application.
 
    ```bash
-   uvicorn api.lead_generation_api:create_app --reload --host 127.0.0.1 --port 8000
+   uvicorn agents.api.main:create_app --reload --host 127.0.0.1 --port 8000
    ```
 
 ### Environment variables setup

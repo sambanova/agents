@@ -4,10 +4,10 @@ import uuid
 import json
 from typing import Dict, Any, List, Optional, Tuple, Union
 import numpy as np
-from api.services.redis_service import SecureRedisService
+from agents.api.services.redis_service import SecureRedisService
 
-from agent.crewai_llm import CustomLLM
-from services.structured_output_parser import CustomConverter
+from agents.agent.crewai_llm import CustomLLM
+from agents.services.structured_output_parser import CustomConverter
 
 # Ensure our parent directories are in sys.path
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

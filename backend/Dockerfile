@@ -63,4 +63,4 @@ ENV HOST=0.0.0.0
 EXPOSE ${PORT}
 
 # Command to run the application
-CMD ["sh", "-c", "uvicorn api.lead_generation_api:create_app --host ${HOST} --port ${PORT} --workers ${WORKERS}"] 
+CMD ["sh", "-c", "uvicorn api.main:create_app --host ${HOST} --port ${PORT} --workers ${WORKERS}"] 

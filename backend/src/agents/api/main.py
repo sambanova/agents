@@ -13,11 +13,11 @@ from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
 from fastapi.websockets import WebSocketState, WebSocketDisconnect
 
-from api.agents.user_proxy import UserProxyAgent
-from api.websocket_manager import WebSocketConnectionManager
+from agents.api.agents.user_proxy import UserProxyAgent
+from agents.api.websocket_manager import WebSocketConnectionManager
 
-from api.utils import load_documents
-from api.data_types import APIKeys
+from agents.api.utils import load_documents
+from agents.api.data_types import APIKeys
 from utils.logging import logger
 import os
 import sys
