@@ -9,7 +9,6 @@ from autogen_core import (
     DefaultTopicId,
     RoutedAgent,
     message_handler,
-    type_subscription,
 )
 from autogen_core.models import AssistantMessage
 import redis
@@ -21,7 +20,7 @@ from agents.api.data_types import (
     AgentStructuredResponse,
     EndUserMessage,
 )
-from utils.logging import logger
+from agents.utils.logging import logger
 
 
 # User Proxy Agent

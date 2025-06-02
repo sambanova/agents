@@ -15,9 +15,7 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_agentchat.messages import TextMessage
 from autogen_agentchat.base import Response
 
-from fastapi import WebSocket
 import redis
-import requests
 from agents.api.data_types import (
     APIKeys,
     AgentEnum,

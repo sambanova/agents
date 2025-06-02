@@ -20,10 +20,10 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langgraph.constants import Send
 from langgraph.graph import START, END, StateGraph
 from langgraph.types import interrupt, Command
-from api.services.redis_service import SecureRedisService
+from agents.api.services.redis_service import SecureRedisService
 
-from utils.custom_sambanova import CustomChatSambaNovaCloud
-from config.model_registry import model_registry
+from agents.utils.custom_sambanova import CustomChatSambaNovaCloud
+from agents.registry.model_registry import model_registry
 
 # We import our data models from the api module
 

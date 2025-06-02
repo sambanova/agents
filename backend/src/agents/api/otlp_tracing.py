@@ -1,4 +1,4 @@
-from utils.logging import logger
+from agents.utils.logging import logger
 
 def configure_oltp_tracing(
     service_name: str = "aiskagents",

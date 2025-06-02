@@ -1,4 +1,3 @@
-########## prompts.py (NEW FILE) ##########
 # Prompt to generate search queries to help with planning the report
 
 report_planner_query_writer_instructions = """You are an expert technical writer, helping to plan a report.

@@ -8,8 +8,8 @@ from langchain_core.runnables import RunnableConfig
 from typing_extensions import Annotated
 from dataclasses import dataclass
 
-from api.agents.open_deep_research.utils import APIKeyRotator
-from config.model_registry import model_registry
+from agents.api.agents.open_deep_research.utils import APIKeyRotator
+from agents.registry.model_registry import model_registry
 
 
 DEFAULT_REPORT_STRUCTURE = """The report structure should focus on breaking-down the user-provided topic:

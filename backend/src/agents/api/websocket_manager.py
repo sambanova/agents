@@ -8,10 +8,10 @@ from typing import Optional, Dict
 import redis
 from starlette.websockets import WebSocketState
 
-from api.data_types import APIKeys, EndUserMessage, AgentEnum, AgentStructuredResponse, ErrorResponse
-from api.utils import initialize_agent_runtime, load_documents, DocumentContextLengthError
-from api.websocket_interface import WebSocketInterface
-from api.services.redis_service import SecureRedisService
+from agents.api.data_types import APIKeys, EndUserMessage, AgentEnum, AgentStructuredResponse, ErrorResponse
+from agents.api.utils import initialize_agent_runtime, load_documents, DocumentContextLengthError
+from agents.api.websocket_interface import WebSocketInterface
+from agents.api.services.redis_service import SecureRedisService
 
 from .otlp_tracing import logger
 

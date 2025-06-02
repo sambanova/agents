@@ -17,7 +17,7 @@ from fastapi import WebSocket
 from langgraph.types import Command
 from langgraph.checkpoint.memory import MemorySaver
 
-from api.data_types import (
+from agents.api.data_types import (
     AgentRequest,
     AgentStructuredResponse,
     APIKeys,
@@ -26,12 +26,12 @@ from api.data_types import (
     DeepResearchReport,
     ErrorResponse,
 )
-from api.agents.open_deep_research.configuration import SearchAPI
-from api.agents.open_deep_research.utils import APIKeyRotator
-from config.model_registry import model_registry
-from utils.logging import logger
-from api.agents.open_deep_research.graph import LLMTimeoutError, create_publish_callback, get_graph
-from utils.error_utils import format_api_error_message
+from agents.api.agents.open_deep_research.configuration import SearchAPI
+from agents.api.agents.open_deep_research.utils import APIKeyRotator
+from agents.registry.model_registry import model_registry
+from agents.utils.logging import logger
+from agents.api.agents.open_deep_research.graph import LLMTimeoutError, create_publish_callback, get_graph
+from agents.utils.error_utils import format_api_error_message
 
 
 @type_subscription(topic_type="deep_research")
