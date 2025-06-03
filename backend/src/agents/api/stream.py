@@ -18,10 +18,7 @@ async def astream_state_websocket(
     conversation_id: str,
     message_id: str,
 ) -> None:
-    """Stream messages from the runnable directly to WebSocket.
-
-    Automatically converts message input to dict format for ReWOO agent based on config.
-    """
+    """Stream messages from the runnable directly to WebSocket."""
     root_run_id: Optional[str] = None
     messages: dict[str, BaseMessage] = {}
 

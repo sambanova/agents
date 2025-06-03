@@ -14,17 +14,16 @@ from typing import List, Dict, Any, Tuple
 from crewai.flow.flow import Flow, listen, start
 from dotenv import load_dotenv
 
-load_dotenv()
-
-# Only import and initialize langtrace if API key is set
-if os.getenv("LANGTRACE_API_KEY"):
-    from langtrace_python_sdk import langtrace
-    langtrace.init(api_key=os.getenv("LANGTRACE_API_KEY"))
-
-
-from .crews.edu_content_writer.edu_content_writer_crew import EduContentWriterCrew
-from .crews.edu_research.edu_research_crew import EducationalPlan, EduResearchCrew
-from .crews.edu_doc_summariser.edu_doc_summariser_crew import EduDocSummariserCrew
+from agents.components.samba_research_flow.crews.edu_content_writer.edu_content_writer_crew import (
+    EduContentWriterCrew,
+)
+from agents.components.samba_research_flow.crews.edu_research.edu_research_crew import (
+    EducationalPlan,
+    EduResearchCrew,
+)
+from agents.components.samba_research_flow.crews.edu_doc_summariser.edu_doc_summariser_crew import (
+    EduDocSummariserCrew,
+)
 import json
 
 
@@ -51,7 +50,7 @@ class SambaResearchFlow(Flow):
         user_id: str = None,
         run_id: str = None,
         docs_included: bool = False,
-        verbose: bool = True
+        verbose: bool = True,
     ) -> None:
         """Initialize the educational flow with research and content creation crews."""
         super().__init__()
@@ -60,7 +59,7 @@ class SambaResearchFlow(Flow):
             provider=provider,
             user_id=user_id,
             run_id=run_id,
-            verbose=verbose
+            verbose=verbose,
         ).crew()
         self.research_crew = EduResearchCrew(
             llm_api_key=llm_api_key,
@@ -68,20 +67,19 @@ class SambaResearchFlow(Flow):
             serper_key=serper_key,
             user_id=user_id,
             run_id=run_id,
-            verbose=verbose
+            verbose=verbose,
         ).crew()
         self.content_crew = EduContentWriterCrew(
             llm_api_key=llm_api_key,
             provider=provider,
             user_id=user_id,
             run_id=run_id,
-            verbose=verbose
+            verbose=verbose,
         ).crew()
         self.docs_included = docs_included
         self.summariser_usage = None
         self.research_usage = None
         self.content_usage = None
-
 
     async def run_research_and_summarize(self) -> Tuple[EducationalPlan, Any]:
         """
@@ -92,19 +90,15 @@ class SambaResearchFlow(Flow):
         """
         # Create tasks for parallel execution
         research_task = asyncio.create_task(
-            asyncio.to_thread(
-                lambda: self.research_crew.kickoff(self.input_variables)
-            )
+            asyncio.to_thread(lambda: self.research_crew.kickoff(self.input_variables))
         )
-        
+
         summary_task = None
         if self.docs_included:
             summary_task = asyncio.create_task(
-                asyncio.to_thread(
-                    lambda: self.summariser.kickoff(self.input_variables)
-                )
+                asyncio.to_thread(lambda: self.summariser.kickoff(self.input_variables))
             )
-        
+
         # Wait for research task and optionally summary task
         research_result = await research_task
         self.research_usage = dict(research_result.token_usage)
@@ -115,7 +109,7 @@ class SambaResearchFlow(Flow):
             summary_result = summary_result.raw
         else:
             self.summariser_usage = None
-            
+
         return research_result.pydantic, summary_result
 
     @start()
@@ -129,7 +123,9 @@ class SambaResearchFlow(Flow):
         return await self.run_research_and_summarize()
 
     @listen(generate_reseached_content)
-    def generate_educational_content(self, results: Tuple[EducationalPlan, Any]) -> List[Dict]:
+    def generate_educational_content(
+        self, results: Tuple[EducationalPlan, Any]
+    ) -> List[Dict]:
         """
         Generate educational content based on the research plan and summaries.
 
@@ -149,18 +145,18 @@ class SambaResearchFlow(Flow):
 
             # Generate content for this section
             writer_inputs = self.input_variables.copy()
-            writer_inputs['section'] = section.model_dump_json()
+            writer_inputs["section"] = section.model_dump_json()
 
             if summaries:
-                writer_inputs['docs'] = summaries
+                writer_inputs["docs"] = summaries
             else:
-                writer_inputs['docs'] = "None"
+                writer_inputs["docs"] = "None"
 
             # Add generated content to the section dict
 
             content_result = self.content_crew.kickoff(writer_inputs)
             self.content_usage.append(dict(content_result.token_usage))
-            section_dict['generated_content'] = content_result.raw
+            section_dict["generated_content"] = content_result.raw
 
             sections_with_content.append(section_dict)
 
@@ -184,27 +180,22 @@ def test_flow() -> List[Dict]:
     Helper function to test the educational flow with predefined inputs.
     Returns the generated content sections.
     """
-    edu_flow = SambaResearchFlow(
-        sambanova_key="fake",
-        serper_key="fake"
-    )
-    
+    edu_flow = SambaResearchFlow(sambanova_key="fake", serper_key="fake")
+
     # Convert focus_areas list to comma-separated string
-    focus_areas = ", ".join([
-        "technical comparison",
-        "performance characteristics",
-        "use cases"
-    ])
-    
+    focus_areas = ", ".join(
+        ["technical comparison", "performance characteristics", "use cases"]
+    )
+
     edu_flow.input_variables = {
         "topic": "SRAM and High Bandwidth Memory",
         "audience_level": "intermediate",
-        "additional_context": focus_areas  # Now a string instead of a dict
+        "additional_context": focus_areas,  # Now a string instead of a dict
     }
-    
+
     return edu_flow.kickoff()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     result = test_flow()
     print(result)

@@ -3,11 +3,17 @@ import numpy as np
 from typing import Dict, Any
 from crewai.tools import tool
 
-from tools.financial_data import get_historical_ohlcv_data_insightsentry, get_price_data, get_price_data_yfinance, get_ticker_yfinance
-from utils.logging import logger
+from agents.tools.financial_data import (
+    get_historical_ohlcv_data_insightsentry,
+    get_price_data,
+    get_price_data_yfinance,
+    get_ticker_yfinance,
+)
+from agents.utils.logging import logger
+
 
 ###################### RISK ASSESSMENT TOOL ######################
-@tool('Risk Assessment Tool')
+@tool("Risk Assessment Tool")
 def risk_assessment_tool(ticker: str) -> Dict[str, Any]:
     """
     Compute Beta, Sharpe, VaR, Max Drawdown, Volatility, plus monthly-averaged daily_returns for plotting.
@@ -20,8 +26,12 @@ def risk_assessment_tool(ticker: str) -> Dict[str, Any]:
 
         ticker_yfinance = get_ticker_yfinance(ticker)
         benchmark_yfinance = get_ticker_yfinance(benchmark)
-        stock_close = get_price_data_yfinance(ticker_yfinance, period=period, interval=interval)['Close']
-        bench_close = get_price_data_yfinance(benchmark_yfinance, period=period, interval=interval)['Close']
+        stock_close = get_price_data_yfinance(
+            ticker_yfinance, period=period, interval=interval
+        )["Close"]
+        bench_close = get_price_data_yfinance(
+            benchmark_yfinance, period=period, interval=interval
+        )["Close"]
 
         if stock_close.empty or bench_close.empty:
             return {"error": "Insufficient data for risk metrics."}
@@ -61,14 +71,13 @@ def risk_assessment_tool(ticker: str) -> Dict[str, Any]:
         vol = float(stock_returns.std() * np.sqrt(252))
 
         # monthly average
-        monthly_group = stock_returns.groupby([stock_returns.index.year, stock_returns.index.month]).mean()
+        monthly_group = stock_returns.groupby(
+            [stock_returns.index.year, stock_returns.index.month]
+        ).mean()
         returns_csv = []
         for (year, month), ret in monthly_group.items():
             date_str = f"{year}-{month:02d}"
-            returns_csv.append({
-                "date": date_str,
-                "daily_return": str(ret)
-            })
+            returns_csv.append({"date": date_str, "daily_return": str(ret)})
 
         return {
             "beta": f"{beta:.4f}",
@@ -76,11 +85,12 @@ def risk_assessment_tool(ticker: str) -> Dict[str, Any]:
             "value_at_risk_95": f"{var_95:.4f}",
             "max_drawdown": f"{max_dd:.4f}",
             "volatility": f"{vol:.4f}",
-            "daily_returns": returns_csv
+            "daily_returns": returns_csv,
         }
     except Exception as e:
         logger.error(f"Error fetching risk assessment data for {ticker}: {e}")
         return {}
+
 
 def risk_assessment_tool_rapidapi(ticker: str) -> Dict[str, Any]:
     """
@@ -92,7 +102,7 @@ def risk_assessment_tool_rapidapi(ticker: str) -> Dict[str, Any]:
 
     stock = get_price_data(ticker, period=period)
     bench = get_price_data(benchmark, period=period)
-    
+
     if stock.empty or bench.empty:
         return {
             "beta": "",
@@ -100,9 +110,9 @@ def risk_assessment_tool_rapidapi(ticker: str) -> Dict[str, Any]:
             "value_at_risk_95": "",
             "max_drawdown": "",
             "volatility": "",
-            "daily_returns": []
+            "daily_returns": [],
         }
-    
+
     stock_close = stock["Close"]
     bench_close = bench["Close"]
 
@@ -141,14 +151,13 @@ def risk_assessment_tool_rapidapi(ticker: str) -> Dict[str, Any]:
     vol = float(stock_returns.std() * np.sqrt(252))
 
     # monthly average
-    monthly_group = stock_returns.groupby([stock_returns.index.year, stock_returns.index.month]).mean()
+    monthly_group = stock_returns.groupby(
+        [stock_returns.index.year, stock_returns.index.month]
+    ).mean()
     returns_csv = []
     for (year, month), ret in monthly_group.items():
         date_str = f"{year}-{month:02d}"
-        returns_csv.append({
-            "date": date_str,
-            "daily_return": str(ret)
-        })
+        returns_csv.append({"date": date_str, "daily_return": str(ret)})
 
     return {
         "beta": f"{beta:.4f}",
@@ -156,7 +165,7 @@ def risk_assessment_tool_rapidapi(ticker: str) -> Dict[str, Any]:
         "value_at_risk_95": f"{var_95:.4f}",
         "max_drawdown": f"{max_dd:.4f}",
         "volatility": f"{vol:.4f}",
-        "daily_returns": returns_csv
+        "daily_returns": returns_csv,
     }
 
 
@@ -170,7 +179,7 @@ def risk_assessment_tool_insightsentry(ticker: str) -> Dict[str, Any]:
 
     stock = get_historical_ohlcv_data_insightsentry(ticker, period=period)
     bench = get_historical_ohlcv_data_insightsentry(benchmark, period=period)
-    
+
     if stock.empty or bench.empty:
         return {
             "beta": "",
@@ -178,14 +187,9 @@ def risk_assessment_tool_insightsentry(ticker: str) -> Dict[str, Any]:
             "value_at_risk_95": "",
             "max_drawdown": "",
             "volatility": "",
-            "daily_returns": [
-                {
-                    "date": "",
-                    "daily_return": ""
-                }
-            ]
+            "daily_returns": [{"date": "", "daily_return": ""}],
         }
-    
+
     stock_close = stock["Close"]
     bench_close = bench["Close"]
 
@@ -224,14 +228,13 @@ def risk_assessment_tool_insightsentry(ticker: str) -> Dict[str, Any]:
     vol = float(stock_returns.std() * np.sqrt(252))
 
     # monthly average
-    monthly_group = stock_returns.groupby([stock_returns.index.year, stock_returns.index.month]).mean()
+    monthly_group = stock_returns.groupby(
+        [stock_returns.index.year, stock_returns.index.month]
+    ).mean()
     returns_csv = []
     for (year, month), ret in monthly_group.items():
         date_str = f"{year}-{month:02d}"
-        returns_csv.append({
-            "date": date_str,
-            "daily_return": str(ret)
-        })
+        returns_csv.append({"date": date_str, "daily_return": str(ret)})
 
     return {
         "beta": f"{beta:.4f}",
@@ -239,5 +242,5 @@ def risk_assessment_tool_insightsentry(ticker: str) -> Dict[str, Any]:
         "value_at_risk_95": f"{var_95:.4f}",
         "max_drawdown": f"{max_dd:.4f}",
         "volatility": f"{vol:.4f}",
-        "daily_returns": returns_csv
+        "daily_returns": returns_csv,
     }

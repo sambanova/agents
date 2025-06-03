@@ -14,6 +14,11 @@ from langgraph.graph.message import MessageGraph
 from agents.components.compound.prompts import xml_template
 from agents.components.compound.message_types import LiberalFunctionMessage
 from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.redis import RedisSaver
+
+
+from langgraph.checkpoint.memory import InMemorySaver
+memory = InMemorySaver()
 
 
 class ToolInvocation:
@@ -43,7 +48,6 @@ def get_xml_agent_executor(
     llm: LanguageModelLike,
     system_message: str,
     interrupt_before_action: bool,
-    checkpoint: BaseCheckpointSaver,
 ):
     formatted_system_message = xml_template.format(
         system_message=system_message,
@@ -139,12 +143,19 @@ def get_xml_agent_executor(
     # This means that after `tools` is called, `agent` node is called next.
     workflow.add_edge("action", "agent")
 
+    # Set up Redis connection
+    # REDIS_URI = "redis://localhost:6379"
+    # memory = None
+    # with RedisSaver.from_conn_string(REDIS_URI) as cp:
+    #     cp.setup()
+    #     memory = cp
+
     # Finally, we compile it!
     # This compiles it into a LangChain Runnable,
     # meaning you can use it as you would any other runnable
     return workflow.compile(
-        # checkpointer=checkpoint,
         interrupt_before=["action"] if interrupt_before_action else None,
+        checkpointer=memory,
     )
 
 

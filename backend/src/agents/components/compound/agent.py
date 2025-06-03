@@ -15,7 +15,7 @@ from langgraph.pregel import Pregel
 from langchain.tools import BaseTool
 
 from langchain_core.language_models.base import LanguageModelLike
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.redis import RedisSaver
 from langchain_core.runnables import RunnableConfig
 
 from agents.utils.llms import (
@@ -73,8 +73,6 @@ class LLMType(str, Enum):
 DEFAULT_SYSTEM_MESSAGE = "You are a helpful assistant."
 
 DEFAULT_API_KEY = "unknown"
-
-CHECKPOINTER = InMemorySaver
 
 
 def get_llm(
@@ -137,7 +135,6 @@ class ConfigurableAgent(RunnableBinding):
             llm=llm,
             system_message=system_message,
             interrupt_before_action=interrupt_before_action,
-            checkpoint=CHECKPOINTER,
         )
 
         agent_executor = _agent.with_config({"recursion_limit": 50})
@@ -159,16 +156,23 @@ class ConfigurableAgent(RunnableBinding):
         conversation_id: str,
         message_id: str,
     ):
-        """Stream agent responses directly to WebSocket"""
-        await astream_state_websocket(
-            app=self.bound,  # The compiled agent executor
-            input=input,
-            config=config,
-            websocket_manager=websocket_manager,
-            user_id=user_id,
-            conversation_id=conversation_id,
-            message_id=message_id,
-        )
+        try:
+            """Stream agent responses directly to WebSocket"""
+            await astream_state_websocket(
+                app=self.bound,  # The compiled agent executor
+                input=input,
+                config=config,
+                websocket_manager=websocket_manager,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                message_id=message_id,
+            )
+        except Exception as e:
+            import traceback
+            print(f"Error: {str(e)}")
+            print("Stacktrace:")
+            traceback.print_exc()
+            raise e
 
 
 agent: Pregel = (

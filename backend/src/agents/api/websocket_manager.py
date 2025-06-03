@@ -17,7 +17,6 @@ from agents.api.data_types import (
     ErrorResponse,
 )
 from agents.api.utils import (
-    initialize_agent_runtime,
     load_documents,
     DocumentContextLengthError,
 )
@@ -425,6 +424,7 @@ class WebSocketConnectionManager(WebSocketInterface):
 
                 config = await _run_input_and_config(
                     user_id=user_id,
+                    thread_id=conversation_id,
                     api_keys=api_keys,
                     provider=user_message_input["provider"],
                 )
@@ -609,7 +609,9 @@ from langchain_core.runnables import RunnableConfig
 
 
 # TODO: move this
-async def _run_input_and_config(user_id: str, api_keys: APIKeys, provider: str):
+async def _run_input_and_config(
+    user_id: str, thread_id: str, api_keys: APIKeys, provider: str
+):
     # thread = await get_thread(user_id, payload.thread_id)
     # if not thread:
     #     raise HTTPException(status_code=404, detail="Thread not found")
@@ -621,7 +623,7 @@ async def _run_input_and_config(user_id: str, api_keys: APIKeys, provider: str):
     assistant = get_assistant(
         user_id=user_id,
         agent_type="",
-        llm_type="Llama Maverick",
+        llm_type="DeepSeek V3",
     )
 
     if provider == "sambanova":
@@ -633,7 +635,7 @@ async def _run_input_and_config(user_id: str, api_keys: APIKeys, provider: str):
         **assistant.config,
         "configurable": {
             **assistant.config["configurable"],
-            "thread_id": "thread1",
+            "thread_id": thread_id,
             "user_id": user_id,
             "api_key": api_key,
         },
