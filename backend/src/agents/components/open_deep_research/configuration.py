@@ -8,8 +8,7 @@ from langchain_core.runnables import RunnableConfig
 from typing_extensions import Annotated
 from dataclasses import dataclass
 
-from agents.api.agents.open_deep_research.utils import APIKeyRotator
-from agents.registry.model_registry import model_registry
+from agents.components.open_deep_research.utils import APIKeyRotator
 
 
 DEFAULT_REPORT_STRUCTURE = """The report structure should focus on breaking-down the user-provided topic:
@@ -38,14 +37,15 @@ class Configuration:
         DEFAULT_REPORT_STRUCTURE  # Defaults to the default report structure
     )
     number_of_queries: int = 1  # Number of search queries to generate per iteration
-    max_search_depth: int = 1 # Maximum number of reflection + search iterations
+    max_search_depth: int = 1  # Maximum number of reflection + search iterations
     search_api: SearchAPI = SearchAPI.TAVILY  # Default to TAVILY
-    api_key_rotator: Optional[APIKeyRotator] = APIKeyRotator(env_var_prefix="TAVILY_API_KEY")
+    api_key_rotator: Optional[APIKeyRotator] = APIKeyRotator(
+        env_var_prefix="TAVILY_API_KEY"
+    )
     callback: Optional[Callable] = None  # Callback function for publishing messages
     user_id: Optional[str] = None  # User ID
-    conversation_id: Optional[str] = None  # Conversation ID    
+    conversation_id: Optional[str] = None  # Conversation ID
     provider: Optional[str] = None  # Provider
-    
 
     @classmethod
     def from_runnable_config(

@@ -9,7 +9,7 @@ from agents.api.data_types import (
 )
 from .otlp_tracing import logger
 from pydantic import BaseModel
-from typing import get_origin, get_args, get_type_hints
+from typing import Optional, get_origin, get_args, get_type_hints
 
 
 def generate_type_string(model: BaseModel) -> str:

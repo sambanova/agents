@@ -26,11 +26,15 @@ from agents.api.data_types import (
     DeepResearchReport,
     ErrorResponse,
 )
-from agents.api.agents.open_deep_research.configuration import SearchAPI
-from agents.api.agents.open_deep_research.utils import APIKeyRotator
+from agents.components.open_deep_research.configuration import SearchAPI
+from agents.components.open_deep_research.utils import APIKeyRotator
 from agents.registry.model_registry import model_registry
 from agents.utils.logging import logger
-from agents.api.agents.open_deep_research.graph import LLMTimeoutError, create_publish_callback, get_graph
+from agents.components.open_deep_research.graph import (
+    LLMTimeoutError,
+    create_publish_callback,
+    get_graph,
+)
 from agents.utils.error_utils import format_api_error_message
 
 
@@ -40,9 +44,7 @@ class DeepResearchAgent(RoutedAgent):
     Handles advanced multi-section research with user feedback (interrupt).
     """
 
-    def __init__(
-        self, api_keys: APIKeys, redis_client: SecureRedisService = None
-    ):
+    def __init__(self, api_keys: APIKeys, redis_client: SecureRedisService = None):
         super().__init__("DeepResearchAgent")
         self.api_keys = api_keys
         self.redis_client = redis_client
@@ -61,10 +63,7 @@ class DeepResearchAgent(RoutedAgent):
         return self.memory_stores[session_id]
 
     def _get_or_create_thread_config(
-        self,
-        session_id: str,
-        llm_provider: str,
-        message_id: str
+        self, session_id: str, llm_provider: str, message_id: str
     ) -> dict:
         if session_id not in self._session_threads:
             user_id, conversation_id = session_id.split(":")
@@ -138,7 +137,10 @@ class DeepResearchAgent(RoutedAgent):
         else:
             # brand-new request with the entire user query in topic
             if message.docs:
-                graph_input = {"topic": message.parameters.deep_research_topic, "document": "\n\n".join(message.docs)}
+                graph_input = {
+                    "topic": message.parameters.deep_research_topic,
+                    "document": "\n\n".join(message.docs),
+                }
             else:
                 graph_input = {"topic": message.parameters.deep_research_topic}
 
@@ -151,7 +153,9 @@ class DeepResearchAgent(RoutedAgent):
         )
 
         graph = builder.compile(checkpointer=memory)
-        thread_config = self._get_or_create_thread_config(session_id, message.provider, message.message_id)
+        thread_config = self._get_or_create_thread_config(
+            session_id, message.provider, message.message_id
+        )
 
         try:
             async for event in graph.astream(
@@ -181,7 +185,7 @@ class DeepResearchAgent(RoutedAgent):
                             ),
                             message=user_question_str,
                             metadata=token_usage,
-                            message_id=message.message_id
+                            message_id=message.message_id,
                         )
                         await self.publish_message(
                             response,
@@ -215,7 +219,7 @@ class DeepResearchAgent(RoutedAgent):
                 data=structured_report,
                 message="Deep research flow completed.",
                 metadata=token_usage,
-                message_id=message.message_id
+                message_id=message.message_id,
             )
 
             await self.publish_message(
@@ -224,20 +228,22 @@ class DeepResearchAgent(RoutedAgent):
             )
 
         except LLMTimeoutError as e:
-            logger.error(logger.format_message(session_id, f"DeepResearch flow error timeout"))
+            logger.error(
+                logger.format_message(session_id, f"DeepResearch flow error timeout")
+            )
             response = AgentStructuredResponse(
                 agent_type=AgentEnum.Error,
                 data=ErrorResponse(
                     error=f"Deep research flow timed out, please try again later."
                 ),
                 message=f"Error processing deep research request: {str(e)}",
-                message_id=message.message_id
+                message_id=message.message_id,
             )
             await self.publish_message(
                 response,
                 DefaultTopicId(type="user_proxy", source=ctx.topic_id.source),
             )
-        
+
         except Exception as e:
             logger.error(
                 logger.format_message(session_id, f"DeepResearch flow error: {str(e)}"),
@@ -245,14 +251,12 @@ class DeepResearchAgent(RoutedAgent):
             )
 
             error_response = format_api_error_message(e, "deep research")
-            
+
             response = AgentStructuredResponse(
                 agent_type=AgentEnum.Error,
-                data=ErrorResponse(
-                    error=error_response
-                ),
+                data=ErrorResponse(error=error_response),
                 message=f"Error processing deep research request: {str(e)}",
-                message_id=message.message_id
+                message_id=message.message_id,
             )
             await self.publish_message(
                 response,

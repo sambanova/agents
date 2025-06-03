@@ -1,17 +1,15 @@
 import os
-import sys
-import warnings
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
-from crewai import Agent, Crew, Process, Task, LLM
+from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 
 # Tools
 from crewai_tools import SerperDevTool
 
 # For logging user <-> agent conversation in Redis (optional but recommended)
-from agent.crewai_llm import CustomLLM
-from utils.agent_thought import RedisConversationLogger
+from agents.components.crewai_llm import CustomLLM
+from agents.utils.agent_thought import RedisConversationLogger
 
 
 @CrewBase
@@ -23,14 +21,14 @@ class ConvoNewsletterCrew:
     """
 
     agents_config: Dict[str, Any]  # e.g. loaded from your config/agents.yaml
-    tasks_config: Dict[str, Any]   # e.g. loaded from your config/tasks.yaml
+    tasks_config: Dict[str, Any]  # e.g. loaded from your config/tasks.yaml
 
     def __init__(
         self,
         sambanova_key: str = None,
         serper_key: str = None,
         user_id: str = None,
-        conversation_id: str = None
+        conversation_id: str = None,
     ) -> None:
         """
         Initialize the ConvoNewsletterCrew with API keys and user metadata.
@@ -46,7 +44,7 @@ class ConvoNewsletterCrew:
             model="sambanova/Meta-Llama-3.1-70B-Instruct",
             temperature=0.0,
             max_tokens=8192,
-            api_key=sambanova_key
+            api_key=sambanova_key,
         )
 
         # Optionally set the SERPER key in environment so the tool can read it
@@ -131,8 +129,7 @@ class ConvoNewsletterCrew:
     @task
     def generate_outline_task(self) -> Task:
         return Task(
-            config=self.tasks_config.get("generate_outline_task", {}),
-            llm=self.llm
+            config=self.tasks_config.get("generate_outline_task", {}), llm=self.llm
         )
 
     @task
@@ -141,7 +138,7 @@ class ConvoNewsletterCrew:
             config=self.tasks_config.get("write_newsletter_task", {}),
             output_file="newsletter_draft.md",
             llm=self.llm,
-            context=[self.generate_outline_task()]
+            context=[self.generate_outline_task()],
         )
 
     @task
@@ -150,7 +147,7 @@ class ConvoNewsletterCrew:
             config=self.tasks_config.get("review_newsletter_task", {}),
             output_file="final_newsletter.md",
             llm=self.llm,
-            context=[self.write_newsletter_task()]
+            context=[self.write_newsletter_task()],
         )
 
     @crew
@@ -164,5 +161,5 @@ class ConvoNewsletterCrew:
             tasks=self.tasks,
             process=Process.sequential,
             verbose=True,
-            chat_llm=self.llm  # <--- This is critical for "chat" use
+            chat_llm=self.llm,  # <--- This is critical for "chat" use
         )

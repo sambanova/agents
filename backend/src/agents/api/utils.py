@@ -13,7 +13,7 @@ from agents.components.routing.financial_analysis import FinancialAnalysisAgent
 from agents.components.routing.educational_content import EducationalContentAgent
 from agents.components.routing.route import SemanticRouterAgent
 
-from agents.components.lead_generation_crew import SalesLeadsAgent
+from agents.components.routing.sales_leads import SalesLeadsAgent
 
 from agents.api.otlp_tracing import configure_oltp_tracing
 from agents.api.websocket_interface import WebSocketInterface
