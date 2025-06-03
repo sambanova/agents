@@ -1,19 +1,16 @@
-########## NEW CODE ##########
-from typing import Optional, List, Dict, Any
 from enum import Enum
 from agents.api.data_types import (
     AssistantMessage,
     EducationalContent,
-    EndUserMessage,
     FinancialAnalysis,
     SalesLeads,
     UserQuestion,
-    AgentEnum,  # import the extended enum with DeepResearch
     DeepResearch,
 )
 from .otlp_tracing import logger
 from pydantic import BaseModel
 from typing import get_origin, get_args, get_type_hints
+
 
 def generate_type_string(model: BaseModel) -> str:
     """Generates a string representation of the type structure of a Pydantic model, recursively."""
@@ -44,6 +41,7 @@ def generate_type_string(model: BaseModel) -> str:
         for field, field_type in fields.items()
     )
     return "{ " + fields_string + " }"
+
 
 class AgentRegistry:
     def __init__(self):
@@ -83,7 +81,7 @@ class AgentRegistry:
     async def get_agent(self, intent: str) -> Optional[dict]:
         logger.info(f"AgentRegistry: Getting agent for intent: {intent}")
         return self.agents.get(intent)
-    
+
     def get_context_summary_prompt(self) -> str:
         return f"""
         You are a context summary expert that summarizes the conversation history.

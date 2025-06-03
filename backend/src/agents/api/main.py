@@ -17,10 +17,9 @@ from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
 from fastapi.websockets import WebSocketState, WebSocketDisconnect
 
-from agents.api.agents.user_proxy import UserProxyAgent
+from agents.components.routing.user_proxy import UserProxyAgent
 from agents.api.websocket_manager import WebSocketConnectionManager
 
-from agents.api.utils import load_documents
 from agents.api.data_types import APIKeys
 from agents.utils.logging import logger
 import os
@@ -29,29 +28,26 @@ import sys
 import redis
 import uuid
 
-# SSE support
-from sse_starlette.sse import EventSourceResponse
-
-from agents.api.agents.route import SemanticRouterAgent
+from agents.components.routing.route import SemanticRouterAgent
 
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 # Import the new chat logic
-from agents.agent.convo_newsletter_crew import crew_chat
+from agents.components.convo_newsletter_crew import crew_chat
 
 # Original Services
 from agents.services.query_router_service import QueryRouterService
 from agents.services.user_prompt_extractor_service import UserPromptExtractor
-from agents.agent.lead_generation_crew import ResearchCrew
-from agents.agent.samba_research_flow.samba_research_flow import SambaResearchFlow
+from agents.components.lead_generation_crew import ResearchCrew
+from agents.components.samba_research_flow.samba_research_flow import SambaResearchFlow
 
 # For financial analysis
 from agents.services.financial_user_prompt_extractor_service import (
     FinancialPromptExtractor,
 )
-from agents.agent.financial_analysis.financial_analysis_crew import (
+from agents.components.financial_analysis.financial_analysis_crew import (
     FinancialAnalysisCrew,
 )
 

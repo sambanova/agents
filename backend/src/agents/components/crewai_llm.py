@@ -11,13 +11,19 @@ with warnings.catch_warnings():
     from litellm import Choices, get_supported_openai_params
     from litellm.types.utils import ModelResponse
 
-from crewai.llm import suppress_warnings, DEFAULT_CONTEXT_WINDOW_SIZE, LLM_CONTEXT_WINDOW_SIZES, CONTEXT_WINDOW_USAGE_RATIO
+from crewai.llm import (
+    suppress_warnings,
+    DEFAULT_CONTEXT_WINDOW_SIZE,
+    LLM_CONTEXT_WINDOW_SIZES,
+    CONTEXT_WINDOW_USAGE_RATIO,
+)
 from crewai.utilities.exceptions.context_window_exceeding_exception import (
     LLMContextLengthExceededException,
 )
 from crewai import LLM
 
 from agents.utils.logging import logger
+
 
 class CustomLLM(LLM):
     def __init__(
@@ -63,7 +69,7 @@ class CustomLLM(LLM):
         self.callbacks = callbacks
         self.context_window_size = 0
         self.extra_headers = extra_headers
-        
+
         litellm.drop_params = True
 
         # Normalize self.stop to always be a List[str]
@@ -157,8 +163,10 @@ class CustomLLM(LLM):
                     message_headers = str(params["messages"])[0:100]
                 else:
                     message_headers = ""
-                
-                logger.info(f"CrewAI LLM {self.model} calling litellm.completion with messages: {message_headers}")
+
+                logger.info(
+                    f"CrewAI LLM {self.model} calling litellm.completion with messages: {message_headers}"
+                )
                 try:
                     response = litellm.completion(**params)
                 except litellm.APIError as e:
@@ -176,9 +184,13 @@ class CustomLLM(LLM):
                         raise
                 duration = time.time() - start_time
                 if duration > 10:
-                    logger.warning(f"CrewAI LLM {self.model} took {duration:.2f} seconds to complete task")
+                    logger.warning(
+                        f"CrewAI LLM {self.model} took {duration:.2f} seconds to complete task"
+                    )
                 else:
-                    logger.info(f"CrewAI LLM {self.model} took {duration:.2f} seconds to complete task")
+                    logger.info(
+                        f"CrewAI LLM {self.model} took {duration:.2f} seconds to complete task"
+                    )
 
                 response_message = cast(Choices, cast(ModelResponse, response).choices)[
                     0

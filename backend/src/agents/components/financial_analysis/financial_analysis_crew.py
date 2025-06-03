@@ -6,7 +6,7 @@ from typing import Dict, Any, List, Optional, Tuple, Union
 import numpy as np
 from agents.api.services.redis_service import SecureRedisService
 
-from agents.agent.crewai_llm import CustomLLM
+from agents.components.crewai_llm import CustomLLM
 from agents.services.structured_output_parser import CustomConverter
 
 # Ensure our parent directories are in sys.path

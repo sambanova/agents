@@ -2,8 +2,8 @@ import sys
 import os
 import uuid
 
-from api.services.redis_service import SecureRedisService
-from agent.crewai_llm import CustomLLM
+from agents.api.services.redis_service import SecureRedisService
+from agents.components.crewai_llm import CustomLLM
 
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if parent_dir not in sys.path:
@@ -11,11 +11,13 @@ if parent_dir not in sys.path:
 
 # load dotenv
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # Only import and initialize langtrace if API key is set
 if os.getenv("LANGTRACE_API_KEY"):
     from langtrace_python_sdk import langtrace
+
     langtrace.init(api_key=os.getenv("LANGTRACE_API_KEY"))
 
 from crewai import Agent, Task, Crew, LLM, Process
@@ -25,6 +27,7 @@ from typing import List, Dict, Any, Tuple
 from pydantic import BaseModel
 from agents.utils.agent_thought import RedisConversationLogger
 from agents.registry.model_registry import model_registry
+
 
 class Outreach(BaseModel):
     company_name: str
@@ -84,13 +87,15 @@ class ResearchCrew:
         verbose: bool = True,
     ):
 
-        model_info = model_registry.get_model_info(model_key="llama-3.3-70b", provider=provider)
+        model_info = model_registry.get_model_info(
+            model_key="llama-3.3-70b", provider=provider
+        )
         self.llm = CustomLLM(
             model=model_info["crewai_prefix"] + "/" + model_info["model"],
             temperature=0.00,
             max_tokens=8192,
             api_key=llm_api_key,
-            base_url=model_info["url"]
+            base_url=model_info["url"],
         )
         self.exa_key = exa_key
         self.user_id = user_id
@@ -113,7 +118,7 @@ class ResearchCrew:
             llm=self.llm,
             allow_delegation=False,
             verbose=self.verbose,
-            tools=[CompanyIntelligenceTool(api_key=self.exa_key)]
+            tools=[CompanyIntelligenceTool(api_key=self.exa_key)],
         )
 
         # 2) data_extraction_agent
@@ -123,7 +128,7 @@ class ResearchCrew:
             backstory="You parse aggregator text with the LLM to produce structured data.",
             llm=self.llm,
             allow_delegation=False,
-            verbose=self.verbose
+            verbose=self.verbose,
         )
 
         # 3) market_trends_agent
@@ -134,7 +139,7 @@ class ResearchCrew:
             llm=self.llm,
             allow_delegation=False,
             verbose=self.verbose,
-            tools=[MarketResearchTool(api_key=self.exa_key)]
+            tools=[MarketResearchTool(api_key=self.exa_key)],
         )
 
         # 4) outreach_agent
@@ -144,7 +149,7 @@ class ResearchCrew:
             backstory="You craft personalized outreach messages ...",
             llm=self.llm,
             allow_delegation=False,
-            verbose=self.verbose
+            verbose=self.verbose,
         )
 
         # Hook them in
@@ -155,7 +160,7 @@ class ResearchCrew:
             workflow_name="Lead Generation",
             llm_name=self.llm.model,
             message_id=self.message_id,
-            redis_client=self.redis_client
+            redis_client=self.redis_client,
         )
         self.data_extraction_agent.step_callback = RedisConversationLogger(
             user_id=self.user_id,
@@ -164,7 +169,7 @@ class ResearchCrew:
             workflow_name="Lead Generation",
             llm_name=self.llm.model,
             message_id=self.message_id,
-            redis_client=self.redis_client
+            redis_client=self.redis_client,
         )
         self.market_trends_agent.step_callback = RedisConversationLogger(
             user_id=self.user_id,
@@ -173,7 +178,7 @@ class ResearchCrew:
             workflow_name="Lead Generation",
             llm_name=self.llm.model,
             message_id=self.message_id,
-            redis_client=self.redis_client
+            redis_client=self.redis_client,
         )
         self.outreach_agent.step_callback = RedisConversationLogger(
             user_id=self.user_id,
@@ -182,7 +187,7 @@ class ResearchCrew:
             workflow_name="Lead Generation",
             llm_name=self.llm.model,
             message_id=self.message_id,
-            redis_client=self.redis_client
+            redis_client=self.redis_client,
         )
 
     def _initialize_tasks(self) -> None:
@@ -209,7 +214,7 @@ class ResearchCrew:
             expected_output=(
                 "A JSON with 'companies', each having fields like name, website, description."
             ),
-            agent=self.aggregator_agent
+            agent=self.aggregator_agent,
         )
 
         # 2) data_extraction_task
@@ -236,7 +241,7 @@ class ResearchCrew:
             ),
             agent=self.data_extraction_agent,
             context=[self.aggregator_search_task],
-            output_pydantic=ExtractedCompanyList
+            output_pydantic=ExtractedCompanyList,
         )
 
         # 3) data_enrichment_task
@@ -261,7 +266,7 @@ class ResearchCrew:
             ),
             agent=self.data_extraction_agent,
             context=[self.data_extraction_task],
-            output_pydantic=ExtractedCompanyList
+            output_pydantic=ExtractedCompanyList,
         )
 
         # 4) market_trends_task
@@ -282,7 +287,7 @@ class ResearchCrew:
             ),
             agent=self.market_trends_agent,
             context=[self.data_enrichment_task],
-            output_pydantic=ExtractedMarketTrendList
+            output_pydantic=ExtractedMarketTrendList,
         )
 
         # 5) outreach_task
@@ -315,10 +320,10 @@ class ResearchCrew:
             ),
             agent=self.outreach_agent,
             context=[self.market_trends_task, self.data_enrichment_task],
-            output_pydantic=OutreachList
+            output_pydantic=OutreachList,
         )
 
-    def execute_research(self, inputs: dict) -> Tuple[str, Dict[str,Any]]:
+    def execute_research(self, inputs: dict) -> Tuple[str, Dict[str, Any]]:
         """
         Run the 5-step pipeline with 4 agents in sequential order.
         """
@@ -327,18 +332,18 @@ class ResearchCrew:
                 self.aggregator_agent,
                 self.data_extraction_agent,
                 self.market_trends_agent,
-                self.outreach_agent
+                self.outreach_agent,
             ],
             tasks=[
                 self.aggregator_search_task,
                 self.data_extraction_task,
                 self.data_enrichment_task,
                 self.market_trends_task,
-                self.outreach_task
+                self.outreach_task,
             ],
             process=Process.sequential,
             verbose=self.verbose,
-            memory=False
+            memory=False,
         )
         results = crew.kickoff(inputs=inputs)
         return results.pydantic.model_dump_json(), dict(results.token_usage)
@@ -358,14 +363,14 @@ def main():
         sambanova_key=example_samba_key,
         exa_key=example_exa_key,
         user_id=example_user_id,
-        run_id=example_run_id
+        run_id=example_run_id,
     )
     example_inputs = {
         "industry": "ai hardware chip",
         "geography": "silicon valley",
         "funding_stage": "series d",
         "company_stage": "",
-        "product": ""
+        "product": "",
     }
 
     final_output, _ = crew.execute_research(example_inputs)

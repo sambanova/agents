@@ -6,7 +6,7 @@ from crewai import Agent, Crew, Process, Task, LLM
 from crewai.project import CrewBase, agent, crew, task
 from crewai_tools import SerperDevTool
 from pydantic import BaseModel
-from agents.agent.crewai_llm import CustomLLM
+from agents.components.crewai_llm import CustomLLM
 from agents.registry.model_registry import model_registry
 from agents.utils.agent_thought import RedisConversationLogger
 

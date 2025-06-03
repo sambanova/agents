@@ -4,8 +4,6 @@ import json
 from autogen_core.models import UserMessage, AssistantMessage
 import redis
 
-from agents.api.data_types import EndUserMessage
-
 
 class SessionStateManager:
     def __init__(self, history_length: int = 10):

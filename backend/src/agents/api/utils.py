@@ -9,24 +9,23 @@ from fastapi import WebSocket
 from fastapi.responses import JSONResponse
 import redis
 
-from agents.api.agents.financial_analysis import FinancialAnalysisAgent
-from agents.api.agents.educational_content import EducationalContentAgent
-from agents.api.agents.route import SemanticRouterAgent
+from agents.components.routing.financial_analysis import FinancialAnalysisAgent
+from agents.components.routing.educational_content import EducationalContentAgent
+from agents.components.routing.route import SemanticRouterAgent
 
-from agents.api.agents.sales_leads import SalesLeadsAgent
-from autogen_agentchat.agents import AssistantAgent
+from agents.components.lead_generation_crew import SalesLeadsAgent
 
 from agents.api.otlp_tracing import configure_oltp_tracing
 from agents.api.websocket_interface import WebSocketInterface
 from agents.api.services.redis_service import SecureRedisService
 from agents.utils.logging import logger
 from agents.api.session_state import SessionStateManager
-from agents.api.agents.user_proxy import UserProxyAgent
+from agents.components.routing.user_proxy import UserProxyAgent
 
-from agents.api.agents.assistant import AssistantAgentWrapper
+from agents.components.routing.assistant import AssistantAgentWrapper
 from agents.api.data_types import APIKeys
 
-from agents.api.agents.deep_research_agent import DeepResearchAgent
+from agents.components.routing.deep_research_agent import DeepResearchAgent
 
 session_state_manager = SessionStateManager()
 

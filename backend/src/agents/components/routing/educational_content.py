@@ -10,8 +10,8 @@ from autogen_core import (
     type_subscription,
 )
 
-from agents.agent.samba_research_flow.crews.edu_research.edu_research_crew import EducationalPlan
-from agents.agent.samba_research_flow.samba_research_flow import SambaResearchFlow
+from agents.components.samba_research_flow.crews.edu_research.edu_research_crew import EducationalPlan
+from agents.components.samba_research_flow.samba_research_flow import SambaResearchFlow
 from agents.registry.model_registry import model_registry
 
 from agents.api.data_types import (

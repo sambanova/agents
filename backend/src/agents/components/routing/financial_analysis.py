@@ -12,7 +12,7 @@ from autogen_core import (
 from autogen_core.models import LLMMessage, SystemMessage, UserMessage
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 
-from agents.agent.financial_analysis.financial_analysis_crew import (
+from agents.components.financial_analysis.financial_analysis_crew import (
     FinancialAnalysisCrew,
     FinancialAnalysisResult,
 )

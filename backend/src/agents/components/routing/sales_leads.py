@@ -3,7 +3,7 @@ from typing import Any, Dict
 from autogen_core import DefaultTopicId, RoutedAgent, message_handler, type_subscription
 from autogen_core import MessageContext
 from agents.api.data_types import AgentEnum, AgentRequest, AgentStructuredResponse, ErrorResponse, SalesLeads, APIKeys
-from agents.agent.lead_generation_crew import OutreachList, ResearchCrew
+from agents.components.lead_generation_crew import OutreachList, ResearchCrew
 from agents.registry.model_registry import model_registry
 from agents.services.user_prompt_extractor_service import UserPromptExtractor
 from agents.utils.logging import logger
