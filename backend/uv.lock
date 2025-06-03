@@ -18,6 +18,7 @@ dependencies = [
     { name = "autogen-ext" },
     { name = "crewai" },
     { name = "crewai-tools" },
+    { name = "daytona-sdk" },
     { name = "exa-py" },
     { name = "fastapi" },
     { name = "fastapi-clerk-auth" },
@@ -30,7 +31,6 @@ dependencies = [
     { name = "langtrace-python-sdk" },
     { name = "openpyxl" },
     { name = "pandas" },
-    { name = "patronus" },
     { name = "pydantic" },
     { name = "pymupdf" },
     { name = "python-docx" },
@@ -53,6 +53,7 @@ requires-dist = [
     { name = "autogen-ext", specifier = "==0.4.5" },
     { name = "crewai", specifier = "==0.121.1" },
     { name = "crewai-tools", specifier = "==0.46.0" },
+    { name = "daytona-sdk", specifier = "==0.17.0" },
     { name = "exa-py", specifier = "==1.8.8" },
     { name = "fastapi", specifier = "==0.115.7" },
     { name = "fastapi-clerk-auth", specifier = "==0.0.3" },
@@ -60,14 +61,12 @@ requires-dist = [
     { name = "langchain", specifier = "==0.3.25" },
     { name = "langchain-community", specifier = "==0.3.14" },
     { name = "langchain-fireworks", specifier = "==0.3.0" },
-    { name = "langchain-sambanova" },
     { name = "langchain-sambanova", specifier = "==0.1.5" },
     { name = "langgraph", specifier = "==0.4.5" },
     { name = "langgraph", specifier = ">=0.2.55" },
     { name = "langtrace-python-sdk", specifier = "==3.8.18" },
     { name = "openpyxl", specifier = "==3.1.5" },
     { name = "pandas", specifier = "==2.2.0" },
-    { name = "patronus", specifier = "==0.0.18" },
     { name = "pydantic", specifier = "==2.10.5" },
     { name = "pymupdf", specifier = "==1.23.8" },
     { name = "python-docx", specifier = "==1.1.0" },
@@ -847,6 +846,40 @@ wheels = [
 ]
 
 [[package]]
+name = "daytona-api-client"
+version = "0.19.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "python-dateutil" },
+    { name = "typing-extensions" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/88/f9/f8bc5d08af61a4c8d17f95a942abcda285e4cd8d0ba2674a7779b6e3f3e3/daytona_api_client-0.19.1.tar.gz", hash = "sha256:855fb6e569021c5d1d13ea6236837a4c780a1efec9d06dec085520cce790c0a9", size = 72529, upload-time = "2025-05-22T10:48:28.763Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/41/7a/5c083c799b5cef7da47fc23570b596783ca7de323e3fab1e265b44fd3d2f/daytona_api_client-0.19.1-py3-none-any.whl", hash = "sha256:7c16be29a2bcc21109e14fc314b348063390cec018823c6ff77d5c464b6b3484", size = 195578, upload-time = "2025-05-22T10:48:27.528Z" },
+]
+
+[[package]]
+name = "daytona-sdk"
+version = "0.17.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "daytona-api-client" },
+    { name = "deprecated" },
+    { name = "environs" },
+    { name = "httpx" },
+    { name = "marshmallow" },
+    { name = "pydantic" },
+    { name = "python-dateutil" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/89/99/5bd9abed8bed2362f0095979a1eecf7ccfb2301f38f0890a27cf0662ff0b/daytona_sdk-0.17.0.tar.gz", hash = "sha256:6e8810bb58f6781cb707e2078dbd97d07f28e129af69281cebd884df70c24d13", size = 43608, upload-time = "2025-05-07T15:04:06.71Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/79/f9/70ab2a6a179e4f511fa71b5b1a0690cd9f1f8e05eec6a0a0563e3f740f0b/daytona_sdk-0.17.0-py3-none-any.whl", hash = "sha256:a516aa296063fd7ac0ad7f45bd1017eb2a1d580f17111efb8329bcee6c57f84f", size = 48893, upload-time = "2025-05-07T15:04:05.58Z" },
+]
+
+[[package]]
 name = "decorator"
 version = "5.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -950,6 +983,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/03/19/032a6c03869a5b23f5d1ceaab6967217dfb99d19c39c530f933351510d08/embedchain-0.1.127.tar.gz", hash = "sha256:dea2d4954870418d45016e2cc6d5f68f112f8a7c2ee012db07d5db63e4c0713b", size = 125201, upload-time = "2025-02-21T12:22:34.517Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/12/4a/e1152a9d0e729cda78add47eee52643d0c73d5575b8ebfa1ea7df9518e6e/embedchain-0.1.127-py3-none-any.whl", hash = "sha256:d03b5d96098f07c9cb831dca25c19402356df77830aab271db872aa02d6ccc84", size = 211376, upload-time = "2025-02-21T12:22:31.73Z" },
+]
+
+[[package]]
+name = "environs"
+version = "9.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "marshmallow" },
+    { name = "python-dotenv" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d4/e3/c3c6c76f3dbe3e019e9a451b35bf9f44690026a5bb1232f7b77097b72ff5/environs-9.5.0.tar.gz", hash = "sha256:a76307b36fbe856bdca7ee9161e6c466fd7fcffc297109a118c59b54e27e30c9", size = 20795, upload-time = "2022-01-30T18:07:56.251Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ca/5e/f0f217dc393372681bfe05c50f06a212e78d0a3fee907a74ab451ec1dcdb/environs-9.5.0-py2.py3-none-any.whl", hash = "sha256:1e549569a3de49c05f856f40bce86979e7d5ffbbc4398e7f338574c220189124", size = 12548, upload-time = "2022-01-30T18:07:54.874Z" },
 ]
 
 [[package]]
@@ -1590,18 +1636,17 @@ wheels = [
 
 [[package]]
 name = "httpx"
-version = "0.27.2"
+version = "0.28.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
     { name = "certifi" },
     { name = "httpcore" },
     { name = "idna" },
-    { name = "sniffio" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/78/82/08f8c936781f67d9e6b9eeb8a0c8b4e406136ea4c3d1f89a5db71d42e0e6/httpx-0.27.2.tar.gz", hash = "sha256:f7c2be1d2f3c3c3160d441802406b206c2b76f5947b11115e6df10c6c65e66c2", size = 144189, upload-time = "2024-08-27T12:54:01.334Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b1/df/48c586a5fe32a0f01324ee087459e112ebb7224f646c0b5023f5e79e9956/httpx-0.28.1.tar.gz", hash = "sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc", size = 141406, upload-time = "2024-12-06T15:37:23.222Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/56/95/9377bcb415797e44274b51d46e3249eba641711cf3348050f76ee7b15ffc/httpx-0.27.2-py3-none-any.whl", hash = "sha256:7bb2708e112d8fdd7829cd4243970f0c223274051cb35ee80c03301ee29a3df0", size = 76395, upload-time = "2024-08-27T12:53:59.653Z" },
+    { url = "https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad", size = 73517, upload-time = "2024-12-06T15:37:21.509Z" },
 ]
 
 [package.optional-dependencies]
@@ -3053,24 +3098,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/66/94/68e2e17afaa9169cf6412ab0f28623903be73d1b32e208d9e8e541bb086d/parso-0.8.4.tar.gz", hash = "sha256:eb3a7b58240fb99099a345571deecc0f9540ea5f4dd2fe14c2a99d6b281ab92d", size = 400609, upload-time = "2024-04-05T09:43:55.897Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c6/ac/dac4a63f978e4dcb3c6d3a78c4d8e0192a113d288502a1216950c41b1027/parso-0.8.4-py2.py3-none-any.whl", hash = "sha256:a418670a20291dacd2dddc80c377c5c3791378ee1e8d12bffc35420643d43f18", size = 103650, upload-time = "2024-04-05T09:43:53.299Z" },
-]
-
-[[package]]
-name = "patronus"
-version = "0.0.18"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "httpx" },
-    { name = "pandas" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "pyyaml" },
-    { name = "tqdm" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f6/2d/a1f173b6ca19c948126ca4a872acb772252afaeaa2fa5bfcb4164f3c2762/patronus-0.0.18.tar.gz", hash = "sha256:4dac5fe69330f4faf44a2e7d1814dbb0fb4368e4f57cc2e6c2498ee0835e91d2", size = 26766, upload-time = "2025-01-27T15:29:38.01Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/39/85/499a7c44c2e89443c85590c7845fbca8d3266ebd8752bb76d08533d303fa/patronus-0.0.18-py3-none-any.whl", hash = "sha256:bf8eaa9b07ceba5310b14e45df8198ffe1dd845e2ccb5b2aa50881be2079426f", size = 30936, upload-time = "2025-01-27T15:29:36.448Z" },
 ]
 
 [[package]]
