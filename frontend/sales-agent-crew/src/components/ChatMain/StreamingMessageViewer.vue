@@ -68,9 +68,50 @@
             <div class="text-sm font-medium text-gray-700 mb-1">Content:</div>
             <div class="bg-gray-50 rounded p-2 text-sm">
               <!-- Handle different data types -->
-              <div v-if="message.event === 'stream_start' || message.event === 'stream_complete'">
+              <div v-if="message.event === 'stream_start'">
                 <span class="text-gray-600">Run ID:</span>
                 <span class="font-mono text-blue-600 ml-1">{{ message.data.run_id }}</span>
+              </div>
+              
+              <div v-else-if="message.event === 'stream_complete'" class="space-y-2">
+                <div>
+                  <span class="text-gray-600">Run ID:</span>
+                  <span class="font-mono text-blue-600 ml-1">{{ message.data.run_id }}</span>
+                </div>
+                <!-- Display all additional agent data -->
+                <div v-for="(value, key) in getAdditionalStreamCompleteData(message.data)" :key="key" class="space-y-1">
+                  <div class="flex items-start space-x-2">
+                    <span class="text-gray-600 font-medium capitalize min-w-0 flex-shrink-0">{{ formatDataKey(key) }}:</span>
+                    <div class="flex-1 min-w-0">
+                      <!-- Handle different value types -->
+                      <div v-if="typeof value === 'string'" class="break-words">
+                        <span v-if="isUrl(value)">
+                          <a :href="value" target="_blank" class="text-blue-600 hover:text-blue-800 underline">{{ value }}</a>
+                        </span>
+                        <span v-else class="text-gray-800">{{ value }}</span>
+                      </div>
+                      <div v-else-if="typeof value === 'number'" class="text-purple-600 font-mono">{{ value }}</div>
+                      <div v-else-if="typeof value === 'boolean'" class="text-green-600 font-mono">{{ value }}</div>
+                      <div v-else-if="Array.isArray(value)" class="space-y-1">
+                        <div class="text-gray-600 text-xs">Array ({{ value.length }} items):</div>
+                        <div class="bg-white rounded border-l-4 border-purple-400 p-2 max-h-32 overflow-y-auto">
+                          <div v-for="(item, index) in value" :key="index" class="text-sm">
+                            <span class="text-gray-500">[{{ index }}]:</span>
+                            <span v-if="typeof item === 'string'" class="ml-1">{{ item }}</span>
+                            <pre v-else class="text-xs text-gray-600 whitespace-pre-wrap">{{ JSON.stringify(item, null, 2) }}</pre>
+                          </div>
+                        </div>
+                      </div>
+                      <div v-else-if="typeof value === 'object' && value !== null" class="space-y-1">
+                        <div class="text-gray-600 text-xs">Object:</div>
+                        <div class="bg-white rounded border-l-4 border-orange-400 p-2 max-h-32 overflow-y-auto">
+                          <pre class="text-xs text-gray-600 whitespace-pre-wrap">{{ JSON.stringify(value, null, 2) }}</pre>
+                        </div>
+                      </div>
+                      <div v-else class="text-gray-500 italic">{{ value }}</div>
+                    </div>
+                  </div>
+                </div>
               </div>
               
               <div v-else-if="message.event === 'agent_message_stream'" class="space-y-1">
@@ -299,6 +340,28 @@ function getEventDotClass(event) {
 
 function formatTimestamp(timestamp) {
   return new Date(timestamp).toLocaleTimeString()
+}
+
+function getAdditionalStreamCompleteData(data) {
+  // Extract all data except run_id to show additional agent output
+  const { run_id, ...additionalData } = data
+  return additionalData
+}
+
+function formatDataKey(key) {
+  // Convert snake_case to Title Case
+  return key.split('_').map(word => 
+    word.charAt(0).toUpperCase() + word.slice(1)
+  ).join(' ')
+}
+
+function isUrl(str) {
+  try {
+    new URL(str)
+    return true
+  } catch {
+    return false
+  }
 }
 
 onMounted(() => {

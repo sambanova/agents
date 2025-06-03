@@ -26,7 +26,7 @@ async def astream_state_websocket(
         input,
         config,
         version="v1",
-        stream_mode="values",
+        stream_mode="updates",
         exclude_tags=["nostream"],
     ):
         if event["event"] == "on_chain_start" and not root_run_id:
@@ -146,7 +146,14 @@ async def astream_state_websocket(
         conversation_id,
         {
             "event": "stream_complete",
-            "data": {"run_id": root_run_id},
+            "data": {
+                "run_id": root_run_id,
+                **dict(
+                    event["data"]["output"]["agent"]
+                    if "agent" in event["data"]["output"]
+                    else {}
+                ),
+            },
             "user_id": user_id,
             "conversation_id": conversation_id,
             "message_id": message_id,

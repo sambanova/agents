@@ -18,6 +18,7 @@ from langgraph.checkpoint.redis import RedisSaver
 
 
 from langgraph.checkpoint.memory import InMemorySaver
+
 memory = InMemorySaver()
 
 
@@ -48,11 +49,39 @@ def get_xml_agent_executor(
     llm: LanguageModelLike,
     system_message: str,
     interrupt_before_action: bool,
+    subgraphs: dict = None,
 ):
+    """
+    Get XML agent executor that can call either tools or subgraphs with tight integration.
+
+    Args:
+        tools: List of tools available to the agent
+        llm: Language model to use
+        system_message: System message for the agent
+        interrupt_before_action: Whether to interrupt before action execution
+        subgraphs: Dictionary of subgraphs {name: compiled_graph}
+    """
+    subgraphs = subgraphs or {}
+
+    # Create subgraph section for the template
+    if subgraphs:
+        subgraph_names = ", ".join(subgraphs.keys())
+        subgraph_section = f"""
+You also have access to the following subgraphs: {subgraph_names}
+
+In order to use a subgraph, you can use <subgraph></subgraph> and <subgraph_input></subgraph_input> tags. You will then get back a response in the form <observation></observation>
+For example, if you have a subgraph called 'research_agent' that could conduct research, in order to research a topic you would respond:
+
+<subgraph>research_agent</subgraph><subgraph_input>Tell me about artificial intelligence</subgraph_input>
+<observation>Artificial intelligence (AI) is a field of computer science...</observation>"""
+    else:
+        subgraph_section = ""
+
     formatted_system_message = xml_template.format(
         system_message=system_message,
         tools=render_text_description(tools),
         tool_names=", ".join([t.name for t in tools]),
+        subgraph_section=subgraph_section,
     )
 
     async def _get_messages(messages):
@@ -69,7 +98,9 @@ def get_xml_agent_executor(
         # Call your LLM partial with api_key
         initialised_llm = llm(api_key=api_key)
 
-        llm_with_stop = initialised_llm.bind(stop=["</tool_input>", "<observation>"])
+        llm_with_stop = initialised_llm.bind(
+            stop=["</tool_input>", "</subgraph_input>", "<observation>"]
+        )
 
         # Process messages
         processed_messages = await _get_messages(messages)
@@ -78,17 +109,21 @@ def get_xml_agent_executor(
     # Define the function that determines whether to continue or not
     def should_continue(messages):
         last_message = messages[-1]
-        if "</tool>" in last_message.content:
-            return "continue"
+        content = last_message.content
+
+        if "</tool>" in content:
+            return "tool_action"
+        elif "</subgraph>" in content:
+            # Extract subgraph name to determine which subgraph node to route to
+            subgraph_name = content.split("<subgraph>")[1].split("</subgraph>")[0]
+            return f"subgraph_{subgraph_name}"
         else:
             return "end"
 
     # Define the function to execute tools
     async def call_tool(messages):
-        # Based on the continue condition
-        # we know the last message involves a function call
         last_message = messages[-1]
-        # We construct an ToolInvocation from the function_call
+        # Parse tool call
         tool, tool_input = last_message.content.split("</tool>")
         _tool = tool.split("<tool>")[1]
         if "<tool_input>" not in tool_input:
@@ -101,60 +136,93 @@ def get_xml_agent_executor(
             tool=_tool,
             tool_input=_tool_input,
         )
-        # We call the tool_executor and get back a response
+        # Execute tool
         response = await tool_executor.ainvoke(action)
-        # We use the response to create a FunctionMessage
+        # Create function message
         function_message = LiberalFunctionMessage(content=response, name=action.tool)
-        # We return a list, because this will get added to the existing list
         return function_message
 
+    # Create subgraph entry nodes
+    def create_subgraph_entry_node(subgraph_name: str, subgraph):
+        async def subgraph_entry_node(messages, *, config: RunnableConfig = None):
+            last_message = messages[-1]
+            # Parse subgraph input
+            content = last_message.content
+            if "<subgraph_input>" not in content:
+                subgraph_input = ""
+            else:
+                subgraph_input_part = content.split("<subgraph_input>")[1]
+                if "</subgraph_input>" in subgraph_input_part:
+                    subgraph_input = subgraph_input_part.split("</subgraph_input>")[0]
+                else:
+                    subgraph_input = subgraph_input_part
+
+            # Prepare input for subgraph
+            subgraph_messages = [HumanMessage(content=subgraph_input)]
+
+            # Execute subgraph with the same config (for proper state management)
+            result = await subgraph.ainvoke({"messages": subgraph_messages}, config)
+
+            # Extract response and create function message
+            if hasattr(result, "messages") and result.messages:
+                response_content = result.messages[-1].content
+            elif hasattr(result, "content"):
+                response_content = result.content
+            else:
+                response_content = str(result)
+
+            function_message = LiberalFunctionMessage(
+                content=response_content, name=f"subgraph_{subgraph_name}"
+            )
+            return function_message
+
+        return subgraph_entry_node
+
+    # Build the workflow
     workflow = MessageGraph()
 
-    # Define the two nodes we will cycle between
+    # Add main agent node
     workflow.add_node("agent", agent_node)
-    workflow.add_node("action", call_tool)
+
+    # Add tool action node
+    workflow.add_node("tool_action", call_tool)
+
+    # Add subgraph nodes dynamically
+    subgraph_routing = {}
+    for subgraph_name, subgraph in subgraphs.items():
+        node_name = f"subgraph_{subgraph_name}"
+        workflow.add_node(
+            node_name, create_subgraph_entry_node(subgraph_name, subgraph)
+        )
+        subgraph_routing[node_name] = node_name
 
     # Set the entrypoint as `agent`
-    # This means that this node is the first one called
     workflow.set_entry_point("agent")
 
-    # We now add a conditional edge
+    # Add conditional edges from agent
+    routing_dict = {"tool_action": "tool_action", "end": END, **subgraph_routing}
+
     workflow.add_conditional_edges(
-        # First, we define the start node. We use `agent`.
-        # This means these are the edges taken after the `agent` node is called.
         "agent",
-        # Next, we pass in the function that will determine which node is called next.
         should_continue,
-        # Finally we pass in a mapping.
-        # The keys are strings, and the values are other nodes.
-        # END is a special node marking that the graph should finish.
-        # What will happen is we will call `should_continue`, and then the output of that
-        # will be matched against the keys in this mapping.
-        # Based on which one it matches, that node will then be called.
-        {
-            # If `tools`, then we call the tool node.
-            "continue": "action",
-            # Otherwise we finish.
-            "end": END,
-        },
+        routing_dict,
     )
 
-    # We now add a normal edge from `tools` to `agent`.
-    # This means that after `tools` is called, `agent` node is called next.
-    workflow.add_edge("action", "agent")
+    # Add edges back to agent from all action nodes
+    workflow.add_edge("tool_action", "agent")
+    for subgraph_name in subgraphs.keys():
+        workflow.add_edge(f"subgraph_{subgraph_name}", "agent")
 
-    # Set up Redis connection
-    # REDIS_URI = "redis://localhost:6379"
-    # memory = None
-    # with RedisSaver.from_conn_string(REDIS_URI) as cp:
-    #     cp.setup()
-    #     memory = cp
+    # Configure interrupts
+    interrupt_nodes = []
+    if interrupt_before_action:
+        interrupt_nodes.append("tool_action")
+        # Also interrupt before subgraph execution
+        interrupt_nodes.extend([f"subgraph_{name}" for name in subgraphs.keys()])
 
-    # Finally, we compile it!
-    # This compiles it into a LangChain Runnable,
-    # meaning you can use it as you would any other runnable
+    # Finally, compile it!
     return workflow.compile(
-        interrupt_before=["action"] if interrupt_before_action else None,
+        interrupt_before=interrupt_nodes if interrupt_nodes else None,
         checkpointer=memory,
     )
 

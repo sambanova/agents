@@ -6,7 +6,6 @@ def get_assistant(user_id: str, agent_type: str, llm_type: str):
     assistant = Assistant(
         config={
             "configurable": {
-                f"type==default/agent_type": agent_type,
                 f"type==default/interrupt_before_action": False,
                 f"type==default/system_message": "You are a helpful assistant.",
                 f"type==default/tools": [

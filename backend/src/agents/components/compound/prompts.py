@@ -62,15 +62,17 @@ For example, if you have a tool called 'search' that could run a google search, 
 <tool>search</tool><tool_input>weather in SF</tool_input>
 <observation>64 degrees</observation>
 
+{subgraph_section}
+
 When you are done, you can respond as normal to the user.
 
 Example 1:
 
 Human: Hi!
 
-Assistant: Hi! How are you?
+A: Hi! How are you?
 
-Human: What is the weather in SF?
+H: What is the weather in SF?
 Assistant: <tool>search</tool><tool_input>weather in SF</tool_input>
 <observation>64 degrees</observation>
 It is 64 degrees in SF

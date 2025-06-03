@@ -104,7 +104,7 @@ class ConfigurableAgent(RunnableBinding):
     llm_type: LLMType = LLMType.SN_DEEPSEEK_V3
     system_message: str = DEFAULT_SYSTEM_MESSAGE
     interrupt_before_action: bool = False
-    agent_type: Literal["react", "rewoo", "react_xml"] = "react"
+    subgraphs: Optional[dict] = None
 
     def __init__(
         self,
@@ -113,7 +113,7 @@ class ConfigurableAgent(RunnableBinding):
         llm_type: LLMType = LLMType.SN_DEEPSEEK_V3,
         system_message: str = DEFAULT_SYSTEM_MESSAGE,
         interrupt_before_action: bool = False,
-        agent_type: Literal["react", "rewoo", "react_xml"] = "react",
+        subgraphs: Optional[dict] = None,
         kwargs: Optional[Mapping[str, Any]] = None,
         config: Optional[Mapping[str, Any]] = None,
         **others: Any,
@@ -135,6 +135,7 @@ class ConfigurableAgent(RunnableBinding):
             llm=llm,
             system_message=system_message,
             interrupt_before_action=interrupt_before_action,
+            subgraphs=subgraphs,
         )
 
         agent_executor = _agent.with_config({"recursion_limit": 50})
@@ -142,6 +143,7 @@ class ConfigurableAgent(RunnableBinding):
             tools=tools,
             llm_type=llm_type,
             system_message=system_message,
+            subgraphs=subgraphs,
             bound=agent_executor,
             kwargs=kwargs or {},
             config=config or {},
@@ -169,6 +171,7 @@ class ConfigurableAgent(RunnableBinding):
             )
         except Exception as e:
             import traceback
+
             print(f"Error: {str(e)}")
             print("Stacktrace:")
             traceback.print_exc()
@@ -185,7 +188,6 @@ agent: Pregel = (
     .configurable_fields(
         llm_type=ConfigurableField(id="llm_type", name="LLM Type"),
         system_message=ConfigurableField(id="system_message", name="Instructions"),
-        agent_type=ConfigurableField(id="agent_type", name="Agent Type"),
         interrupt_before_action=ConfigurableField(
             id="interrupt_before_action",
             name="Tool Confirmation",
