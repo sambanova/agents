@@ -1,6 +1,10 @@
 from datetime import datetime, timedelta, timezone
 import os
 from agents.components.compound.assistant import get_assistant
+from agents.components.compound.simple_subgraph_example import (
+    create_simple_analyzer_subgraph,
+    create_simple_greeter_subgraph,
+)
 from autogen_core import DefaultTopicId
 from fastapi import WebSocket, WebSocketDisconnect
 import json
@@ -431,6 +435,11 @@ class WebSocketConnectionManager(WebSocketInterface):
 
                 input_ = HumanMessage(content=user_message_input["data"])
 
+                config["configurable"]["type==default/subgraphs"] = {
+                    "greeter": create_simple_greeter_subgraph(),
+                    "analyzer": create_simple_analyzer_subgraph(),
+                }
+
                 # Stream the response directly via WebSocket
                 await agent.astream_websocket(
                     input=input_,
@@ -622,7 +631,6 @@ async def _run_input_and_config(
 
     assistant = get_assistant(
         user_id=user_id,
-        agent_type="",
         llm_type="DeepSeek V3",
     )
 

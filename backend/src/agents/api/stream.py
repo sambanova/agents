@@ -26,7 +26,7 @@ async def astream_state_websocket(
         input,
         config,
         version="v1",
-        stream_mode="updates",
+        stream_mode="values",
         exclude_tags=["nostream"],
     ):
         if event["event"] == "on_chain_start" and not root_run_id:
@@ -37,7 +37,7 @@ async def astream_state_websocket(
                 conversation_id,
                 {
                     "event": "stream_start",
-                    "data": {"run_id": root_run_id},
+                    "run_id": root_run_id,
                     "user_id": user_id,
                     "conversation_id": conversation_id,
                     "message_id": message_id,
@@ -92,6 +92,7 @@ async def astream_state_websocket(
                         conversation_id,
                         {
                             "event": "agent_message_stream",
+                            "run_id": root_run_id,
                             "data": {
                                 "content": (
                                     msg.content if hasattr(msg, "content") else str(msg)
@@ -124,12 +125,14 @@ async def astream_state_websocket(
                 conversation_id,
                 {
                     "event": "llm_stream_chunk",
+                    "run_id": root_run_id,
                     "data": {
                         "content": (
                             message.content
                             if hasattr(message, "content")
                             else str(message)
                         ),
+                        "node": event["metadata"]["langgraph_node"],
                         "id": message.id,
                         "is_delta": True,  # Indicates this is a streaming chunk
                     },
@@ -146,12 +149,12 @@ async def astream_state_websocket(
         conversation_id,
         {
             "event": "stream_complete",
+            "run_id": root_run_id,
             "data": {
-                "run_id": root_run_id,
-                **dict(
-                    event["data"]["output"]["agent"]
-                    if "agent" in event["data"]["output"]
-                    else {}
+                "output": convert_messages_to_dict(
+                    event["data"]["output"]
+                    if isinstance(event["data"]["output"], list)
+                    else [event["data"]["output"]]
                 ),
             },
             "user_id": user_id,
@@ -160,3 +163,62 @@ async def astream_state_websocket(
             "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
+
+
+def convert_messages_to_dict(output_list):
+    """Convert message objects to dictionaries in the output data."""
+    result = []
+    seen_ids = set()
+
+    for item in output_list:
+        if isinstance(item, dict):
+            # Convert each value (message object) to dict
+            converted_item = {}
+            for key, value in item.items():
+                # Check for duplicate message ID
+                msg_id = (
+                    getattr(value, "id", None)
+                    if hasattr(value, "id")
+                    else value.get("id") if isinstance(value, dict) else None
+                )
+                if msg_id and msg_id in seen_ids:
+                    continue
+                if msg_id:
+                    seen_ids.add(msg_id)
+
+                if hasattr(value, "model_dump"):
+                    # Pydantic v2 style
+                    msg_dict = value.model_dump()
+                    msg_dict["type"] = value.__class__.__name__
+                    converted_item[key] = msg_dict
+                elif hasattr(value, "dict"):
+                    # Pydantic v1 style
+                    msg_dict = value.dict()
+                    msg_dict["type"] = value.__class__.__name__
+                    converted_item[key] = msg_dict
+                else:
+                    converted_item[key] = value
+            if converted_item:  # Only add if not empty after deduplication
+                result.append(converted_item)
+        elif hasattr(item, "model_dump") or hasattr(item, "dict"):
+            # Handle message objects directly in the list
+            msg_id = getattr(item, "id", None)
+            if msg_id and msg_id in seen_ids:
+                continue
+            if msg_id:
+                seen_ids.add(msg_id)
+
+            if hasattr(item, "model_dump"):
+                # Pydantic v2 style
+                msg_dict = item.model_dump()
+            else:
+                # Pydantic v1 style
+                msg_dict = item.dict()
+
+            # Add the message type
+            msg_dict["type"] = item.__class__.__name__
+            result.append(msg_dict)
+        else:
+            # Handle other types as-is (no ID to check for duplicates)
+            result.append(item)
+    return result

@@ -48,7 +48,6 @@ def get_xml_agent_executor(
     tools: list[BaseTool],
     llm: LanguageModelLike,
     system_message: str,
-    interrupt_before_action: bool,
     subgraphs: dict = None,
 ):
     """
@@ -157,24 +156,49 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
                 else:
                     subgraph_input = subgraph_input_part
 
-            # Prepare input for subgraph
+            # Prepare input for subgraph - MessageGraph expects messages directly
             subgraph_messages = [HumanMessage(content=subgraph_input)]
 
             # Execute subgraph with the same config (for proper state management)
-            result = await subgraph.ainvoke({"messages": subgraph_messages}, config)
+            # For MessageGraph, pass messages directly, not wrapped in a dict
+            result = await subgraph.ainvoke(subgraph_messages, config)
 
             # Extract response and create function message
+            response_content = None
+            response_metadata = {}
+            usage_metadata = None
+
             if hasattr(result, "messages") and result.messages:
-                response_content = result.messages[-1].content
+                last_msg = result.messages[-1]
+                response_content = last_msg.content
+                if hasattr(last_msg, "response_metadata"):
+                    response_metadata = last_msg.response_metadata
+                if hasattr(last_msg, "usage_metadata"):
+                    usage_metadata = last_msg.usage_metadata
             elif hasattr(result, "content"):
                 response_content = result.content
+                if hasattr(result, "response_metadata"):
+                    response_metadata = result.response_metadata
+                if hasattr(result, "usage_metadata"):
+                    usage_metadata = result.usage_metadata
+            elif isinstance(result, list) and len(result) > 0:
+                # Sometimes MessageGraph returns a list of messages
+                last_msg = result[-1]
+                response_content = last_msg.content
+                if hasattr(last_msg, "response_metadata"):
+                    response_metadata = last_msg.response_metadata
+                if hasattr(last_msg, "usage_metadata"):
+                    usage_metadata = last_msg.usage_metadata
             else:
                 response_content = str(result)
 
-            function_message = LiberalFunctionMessage(
-                content=response_content, name=f"subgraph_{subgraph_name}"
+            # Return AIMessage that will be added to the message history and streamed
+            # Preserve metadata from the subgraph LLM response
+            return AIMessage(
+                content=response_content,
+                response_metadata=response_metadata,
+                usage_metadata=usage_metadata,
             )
-            return function_message
 
         return subgraph_entry_node
 
@@ -211,18 +235,9 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
     # Add edges back to agent from all action nodes
     workflow.add_edge("tool_action", "agent")
     for subgraph_name in subgraphs.keys():
-        workflow.add_edge(f"subgraph_{subgraph_name}", "agent")
+        workflow.add_edge(f"subgraph_{subgraph_name}", END)
 
-    # Configure interrupts
-    interrupt_nodes = []
-    if interrupt_before_action:
-        interrupt_nodes.append("tool_action")
-        # Also interrupt before subgraph execution
-        interrupt_nodes.extend([f"subgraph_{name}" for name in subgraphs.keys()])
-
-    # Finally, compile it!
     return workflow.compile(
-        interrupt_before=interrupt_nodes if interrupt_nodes else None,
         checkpointer=memory,
     )
 

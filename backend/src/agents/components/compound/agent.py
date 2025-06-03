@@ -103,7 +103,6 @@ class ConfigurableAgent(RunnableBinding):
     tools: Sequence[Tool]
     llm_type: LLMType = LLMType.SN_DEEPSEEK_V3
     system_message: str = DEFAULT_SYSTEM_MESSAGE
-    interrupt_before_action: bool = False
     subgraphs: Optional[dict] = None
 
     def __init__(
@@ -112,7 +111,6 @@ class ConfigurableAgent(RunnableBinding):
         tools: Sequence[Tool],
         llm_type: LLMType = LLMType.SN_DEEPSEEK_V3,
         system_message: str = DEFAULT_SYSTEM_MESSAGE,
-        interrupt_before_action: bool = False,
         subgraphs: Optional[dict] = None,
         kwargs: Optional[Mapping[str, Any]] = None,
         config: Optional[Mapping[str, Any]] = None,
@@ -134,7 +132,6 @@ class ConfigurableAgent(RunnableBinding):
             tools=_tools,
             llm=llm,
             system_message=system_message,
-            interrupt_before_action=interrupt_before_action,
             subgraphs=subgraphs,
         )
 
@@ -183,16 +180,11 @@ agent: Pregel = (
         llm_type=LLMType.SN_DEEPSEEK_V3,
         tools=[],
         system_message=DEFAULT_SYSTEM_MESSAGE,
-        interrupt_before_action=False,
     )
     .configurable_fields(
         llm_type=ConfigurableField(id="llm_type", name="LLM Type"),
         system_message=ConfigurableField(id="system_message", name="Instructions"),
-        interrupt_before_action=ConfigurableField(
-            id="interrupt_before_action",
-            name="Tool Confirmation",
-            description="If Yes, you'll be prompted to continue before each tool is executed.\nIf No, tools will be executed automatically by the agent.",
-        ),
+        subgraphs=ConfigurableField(id="subgraphs", name="Subgraphs"),
         tools=ConfigurableField(id="tools", name="Tools"),
     )
     .configurable_alternatives(
