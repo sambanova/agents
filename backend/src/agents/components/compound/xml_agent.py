@@ -143,7 +143,7 @@ def get_xml_agent_executor(
     # This compiles it into a LangChain Runnable,
     # meaning you can use it as you would any other runnable
     return workflow.compile(
-        checkpointer=checkpoint,
+        # checkpointer=checkpoint,
         interrupt_before=["action"] if interrupt_before_action else None,
     )
 

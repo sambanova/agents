@@ -31,7 +31,6 @@ from daytona_sdk import (
     Daytona as DaytonaClient,
     DaytonaConfig as DaytonaSDKConfig,
 )
-from compoundagents.core.code_patcher import patch_plot_code_str
 
 
 class DDGInput(BaseModel):

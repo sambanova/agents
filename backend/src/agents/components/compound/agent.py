@@ -2,6 +2,8 @@ from enum import Enum
 import functools
 from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Union
 
+from agents.api.stream import astream_state_websocket
+from agents.api.websocket_interface import WebSocketInterface
 from agents.components.compound.xml_agent import get_xml_agent_executor
 from langchain_core.messages import AnyMessage
 from langchain_core.runnables import (
@@ -14,7 +16,7 @@ from langchain.tools import BaseTool
 
 from langchain_core.language_models.base import LanguageModelLike
 from langgraph.checkpoint.memory import InMemorySaver
-
+from langchain_core.runnables import RunnableConfig
 
 from agents.utils.llms import (
     get_fireworks_llm,
@@ -138,7 +140,6 @@ class ConfigurableAgent(RunnableBinding):
             checkpoint=CHECKPOINTER,
         )
 
-
         agent_executor = _agent.with_config({"recursion_limit": 50})
         super().__init__(
             tools=tools,
@@ -147,6 +148,26 @@ class ConfigurableAgent(RunnableBinding):
             bound=agent_executor,
             kwargs=kwargs or {},
             config=config or {},
+        )
+
+    async def astream_websocket(
+        self,
+        input: Union[list, Dict[str, Any]],
+        config: RunnableConfig,
+        websocket_manager: WebSocketInterface,
+        user_id: str,
+        conversation_id: str,
+        message_id: str,
+    ):
+        """Stream agent responses directly to WebSocket"""
+        await astream_state_websocket(
+            app=self.bound,  # The compiled agent executor
+            input=input,
+            config=config,
+            websocket_manager=websocket_manager,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            message_id=message_id,
         )
 
 

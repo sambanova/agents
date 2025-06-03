@@ -39,8 +39,11 @@ dependencies = [
   "tavily-python==0.5.1",
   "fastapi-clerk-auth==0.0.3",
   "requests-cache==1.2.1",
-  "daytona_sdk==0.17.0",
 
+  # Tools
+  "daytona_sdk==0.17.0",
+  "arxiv==2.2.0",
+  "wikipedia==1.4.0",
 ]
 
 [build-system]

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import os
+from agents.components.compound.assistant import get_assistant
 from autogen_core import DefaultTopicId
 from fastapi import WebSocket, WebSocketDisconnect
 import json
@@ -20,10 +21,13 @@ from agents.api.utils import (
     load_documents,
     DocumentContextLengthError,
 )
+
+from agents.components.compound.agent import agent
 from agents.api.websocket_interface import WebSocketInterface
 from agents.api.services.redis_service import SecureRedisService
 
-from .otlp_tracing import logger
+
+from agents.utils.logging import logger
 
 
 class WebSocketConnectionManager(WebSocketInterface):
@@ -160,6 +164,9 @@ class WebSocketConnectionManager(WebSocketInterface):
         # Start the cleanup task when the first connection is established
         await self.start_cleanup_task()
 
+        from agents.components.compound.agent import agent
+        from langchain_core.messages import HumanMessage
+
         agent_runtime = None
         background_task = None
         session_key = f"{user_id}:{conversation_id}"
@@ -242,23 +249,6 @@ class WebSocketConnectionManager(WebSocketInterface):
                     serper_key=os.getenv("SERPER_KEY", ""),
                     exa_key=os.getenv("EXA_KEY", ""),
                 )
-
-            # Initialize agent runtime if not restored from session
-            if not agent_runtime:
-                try:
-                    agent_runtime = await initialize_agent_runtime(
-                        redis_client=self.redis_client,
-                        api_keys=api_keys,
-                        user_id=user_id,
-                        conversation_id=conversation_id,
-                        websocket_manager=self,
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to initialize agent runtime: {str(e)}")
-                    await websocket.close(
-                        code=4005, reason="Failed to initialize agent runtime"
-                    )
-                    return
 
             # Start background task for Redis messages if not restored
             if not background_task or background_task.done():
@@ -425,12 +415,30 @@ class WebSocketConnectionManager(WebSocketInterface):
                     planner_model=user_message_input["planner_model"],
                 )
 
-                # This must be awaited as it affects the conversation flow
-                await agent_runtime.publish_message(
-                    user_message,
-                    DefaultTopicId(
-                        type="user_proxy", source=f"{user_id}:{conversation_id}"
-                    ),
+                # # This must be awaited as it affects the conversation flow
+                # await agent_runtime.publish_message(
+                #     user_message,
+                #     DefaultTopicId(
+                #         type="user_proxy", source=f"{user_id}:{conversation_id}"
+                #     ),
+                # )
+
+                config = await _run_input_and_config(
+                    user_id=user_id,
+                    api_keys=api_keys,
+                    provider=user_message_input["provider"],
+                )
+
+                input_ = HumanMessage(content=user_message_input["data"])
+
+                # Stream the response directly via WebSocket
+                await agent.astream_websocket(
+                    input=input_,
+                    config=config,
+                    websocket_manager=self,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    message_id=user_message_input["message_id"],
                 )
 
         except WebSocketDisconnect:
@@ -595,3 +603,40 @@ class WebSocketConnectionManager(WebSocketInterface):
         except Exception as e:
             logger.error(f"Error sending WebSocket message: {str(e)}")
             return False
+
+
+from langchain_core.runnables import RunnableConfig
+
+
+# TODO: move this
+async def _run_input_and_config(user_id: str, api_keys: APIKeys, provider: str):
+    # thread = await get_thread(user_id, payload.thread_id)
+    # if not thread:
+    #     raise HTTPException(status_code=404, detail="Thread not found")
+
+    # assistant = await get_assistant(user_id, str(thread.assistant_id))
+    # if not assistant:
+    #     raise HTTPException(status_code=404, detail="Assistant not found")
+
+    assistant = get_assistant(
+        user_id=user_id,
+        agent_type="",
+        llm_type="Llama Maverick",
+    )
+
+    if provider == "sambanova":
+        api_key = api_keys.sambanova_key
+    else:
+        raise ValueError("Unsupported provider")
+
+    config: RunnableConfig = {
+        **assistant.config,
+        "configurable": {
+            **assistant.config["configurable"],
+            "thread_id": "thread1",
+            "user_id": user_id,
+            "api_key": api_key,
+        },
+    }
+
+    return config

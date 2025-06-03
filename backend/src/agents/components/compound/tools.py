@@ -5,7 +5,6 @@ from functools import lru_cache
 from typing import Annotated, Literal
 import uuid
 
-from compoundagents.core.file_utils import put_file
 from langchain.tools.retriever import create_retriever_tool
 from langchain_community.agent_toolkits.connery import ConneryToolkit
 from langchain_community.retrievers.kay import KayAiRetriever
@@ -32,7 +31,6 @@ from daytona_sdk import (
     Daytona as DaytonaClient,
     DaytonaConfig as DaytonaSDKConfig,
 )
-from compoundagents.core.code_patcher import patch_plot_code_str
 
 
 class DDGInput(BaseModel):
