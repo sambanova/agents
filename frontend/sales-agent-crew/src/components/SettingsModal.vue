@@ -33,7 +33,7 @@
               <a 
                 href="https://cloud.sambanova.ai/"
                 target="_blank"
-                class="text-primary-600 hover:text-primary-700 ml-2 text-sm"
+                class="text-primary-link hover:text-primary-800 ml-2 text-sm"
               >
                 Get Key →
               </a>
@@ -260,7 +260,7 @@
             </label>
             <SelectProvider  v-model:selectedOption="selectedOption" />
           </div>
-          <div class="mt-6 flex flex-row items-center pt-4">
+          <div class="mt-6 flex flex-row items-center pt-4 text-primary-link">
             <a class="text-sm underline" href="https://community.sambanova.ai/c/agents/87" target="_blank">FAQ (SN Community)</a>
             </div>
           </div>
@@ -270,10 +270,10 @@
             <div class="relative">
               <!-- Empty div to match the structure of other sections -->
             </div>
-            <div class="flex justify-end space-x-2 mt-2">
+            <div class="flex justify-start space-x-2 mt-2">
               <button 
                 @click="confirmDeleteAccount" 
-                class="inline-flex items-center px-3 py-1 text-sm bg-primary-brandColor text-white rounded focus:outline-none focus:outline-none "
+                class="text-red-600 underline text-sm hover:text-red-700 focus:outline-none"
               >
                 Delete Account
               </button>

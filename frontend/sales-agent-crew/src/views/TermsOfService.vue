@@ -3,9 +3,9 @@
       <!-- Header -->
       <div class="flex flex-col items-center mb-12">
         <img
-          src="https://sambanova.ai/hubfs/sambanova-logo-black.png"
+          src="/Images/SambaNova-dark-logo.png"
           alt="SambaNova Logo"
-          class="h-10 mb-4"
+          class="h-20 mb-4"
         />
         <h1 class="text-4xl font-bold text-primary-brandTextPrimary">SAMBANOVA SYSTEMS, INC.</h1>
         <p class="text-lg  text-primary-brandTextPrimary">SAMBANOVA AGENTS &ndash; TERMS OF SERVICE</p>

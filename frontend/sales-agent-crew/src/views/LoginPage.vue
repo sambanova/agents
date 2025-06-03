@@ -22,7 +22,7 @@
         <div class="w-auto">
         <div class="text-center mb-2">
           <img 
-            src="https://sambanova.ai/hubfs/sambanova-logo-black.png" 
+            src="/Images/SambaNova-dark-logo.png" 
             alt="SambaNova Logo" 
             class="h-[25px] mx-auto mb-2"
           />
@@ -36,22 +36,28 @@
             afterSignUpUrl="/"
             :appearance="{ 
               elements: {
-                formButtonPrimary: 'bg-primary-600 hover:bg-primary-700',
+                formButtonPrimary: 'bg-primary-950 hover:bg-primary-800',
                 footerActionLink: 'text-primary-600 hover:text-primary-700'
               }
             }"
           />
+          <div class="text-center mt-4 flex flex-col justify-between w-full">
+          <p class="text-sm text-gray-600">
+            By signing up you agree to our
+          </p>
+          <p class="text-sm text-gray-600">
+            <a class="underline text-primary-link text-[12px]" href="/terms-of-service">Terms Of Service</a>
+            and
+            <a class="underline text-primary-link text-[12px]" target="_blank" href="https://sambanova.ai/privacy-policy">Privacy Policy</a>
+          </p>
+          </div>
           <div class="text-center mt-4">
             <p class="text-sm text-gray-600">
               Already have an account? 
-              <button @click="showSignUp = false" class="text-primary-600 font-medium hover:underline">
+              <button @click="showSignUp = false" class="text-primary-link font-medium hover:underline">
                 Sign in
               </button>
             </p>
-          </div>
-          <div class="text-center mt-4 flex flex-row justify-between w-full">
-            <a class="underline text-[12px]" href="/terms-of-service">Terms Of Service</a>
-            <a class="underline text-[12px]" target="_blank" href="https://sambanova.ai/privacy-policy">Privacy Policy</a>
           </div>
         </div>
         
@@ -61,15 +67,25 @@
             afterSignInUrl="/"
             :appearance="{ 
               elements: {
-                formButtonPrimary: 'bg-primary-600 hover:bg-primary-700',
+                formButtonPrimary: 'bg-primary-950 hover:bg-primary-800',
                 footerActionLink: 'text-primary-600 hover:text-primary-700'
               }
             }"
           />
+          <div class="text-center mt-4 flex flex-col justify-between w-full">
+          <p class="text-sm text-gray-600">
+            By signing in you agree to our
+          </p>
+          <p class="text-sm text-gray-600">
+            <a class="underline text-primary-link text-[12px]" href="/terms-of-service">Terms Of Service</a>
+            and
+            <a class="underline text-primary-link text-[12px]" target="_blank" href="https://sambanova.ai/privacy-policy">Privacy Policy</a>
+          </p>
+          </div>
           <div class="text-center mt-4">
             <p class="text-sm text-gray-600">
               Don't have an account? 
-              <button @click="showSignUp = true" class="text-primary-600 font-medium hover:underline">
+              <button @click="showSignUp = true" class="text-primary-link font-medium hover:underline">
                 Sign up
               </button>
             </p>
@@ -77,7 +93,6 @@
         </div>
       </div>
       </div>
-
     </div>
   </div>
 </template>

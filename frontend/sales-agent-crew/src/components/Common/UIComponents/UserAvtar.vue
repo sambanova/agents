@@ -1,8 +1,15 @@
 <template>
-  <span :class="avatarClass">
+  <span v-if="props.type === 'user'" :class="avatarClass">
     <span class="text-sm font-medium text-white leading-none">
       {{ displayedInitials }}
     </span>
+  </span>
+  <span v-else>
+    <img 
+      src="/Images/logo-sai.png" 
+      alt="Agents Icon" 
+      class="h-8 w-8" 
+    />
   </span>
 </template>
 
