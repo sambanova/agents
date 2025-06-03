@@ -94,14 +94,6 @@
         </transition-group>
       </div>
 
-      <!-- Streaming Messages Viewer -->
-      <div v-if="showStreamingViewer" class="mt-4 max-w-4xl w-full mx-auto">
-        <StreamingMessageViewer
-          ref="streamingMessageViewer"
-          :conversation-id="currentId"
-        />
-      </div>
-
       <!-- Documents Section -->
       <div class="sticky z-1000 bottom-0 left-0 right-0 bg-white p-2">
         <div class="sticky bottom-0 z-10">
@@ -428,7 +420,6 @@ import { XMarkIcon } from '@heroicons/vue/24/outline';
 import HorizontalScroll from '@/components/Common/UIComponents/HorizontalScroll.vue';
 import emitterMitt from '@/utils/eventBus.js';
 import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue';
-import StreamingMessageViewer from '@/components/ChatMain/StreamingMessageViewer.vue';
 
 // Inject the shared selectedOption from MainLayout.vue.
 const selectedOption = inject('selectedOption');
@@ -1333,46 +1324,6 @@ async function connectWebSocket() {
     socket.value.onmessage = (event) => {
       try {
         const receivedData = JSON.parse(event.data);
-        
-        // Handle new streaming message types
-        if (receivedData.event === 'stream_start' || 
-            receivedData.event === 'stream_complete' ||
-            receivedData.event === 'agent_message_stream' ||
-            receivedData.event === 'llm_stream_chunk') {
-          
-          // Send to streaming message viewer
-          if (streamingMessageViewer.value) {
-            streamingMessageViewer.value.handleStreamingMessage(receivedData);
-          }
-          
-          // Show streaming viewer if not already shown
-          if (!showStreamingViewer.value) {
-            showStreamingViewer.value = true;
-          }
-          
-          // Collect streaming messages for later processing
-          if (receivedData.event === 'stream_start') {
-            currentStreamMessages.value = []; // Reset for new stream
-          }
-          currentStreamMessages.value.push(receivedData);
-          
-          // Handle stream completion - convert streaming messages to regular chat messages
-          if (receivedData.event === 'stream_complete') {
-            // Process the collected streaming messages
-            processStreamingMessagesToChat();
-            
-            // Don't hide streaming viewer automatically - let user decide
-            // Just re-enable user input
-            isLoading.value = false; // Enable user input again
-            
-            // Clear the search query to prepare for next input
-            searchQuery.value = '';
-          }
-          
-          return; // Don't process these with the old message handling
-        }
-        
-        // Handle existing message types
         if (
           receivedData.event == 'user_message' ||
           receivedData.event == 'completion'
@@ -1522,39 +1473,6 @@ watch(
     scrollNewMessageToMiddle();
   }
 );
-
-// Add streaming message viewer ref
-const streamingMessageViewer = ref(null);
-const showStreamingViewer = ref(false);
-const currentStreamMessages = ref([]); // Store current stream messages
-
-function processStreamingMessagesToChat() {
-  // Extract meaningful content from streaming messages
-  const agentMessages = currentStreamMessages.value.filter(msg => 
-    msg.event === 'agent_message_stream'
-  );
-  
-  // Convert agent messages to regular chat format
-  agentMessages.forEach(msg => {
-    const chatMessage = {
-      event: msg.data.type === 'HumanMessage' ? 'user_message' : 'completion',
-      data: msg.data.content,
-      message_id: msg.message_id,
-      conversation_id: msg.conversation_id,
-      timestamp: msg.timestamp,
-      formattedContent: renderMarkdown(msg.data.content)
-    };
-    
-    // Add to regular chat messages
-    messagesData.value.push(chatMessage);
-  });
-  
-  // Don't clear current stream messages - keep them visible in the streaming viewer
-  // currentStreamMessages.value = [];
-  
-  // Scroll to show new messages
-  AutoScrollToBottom();
-}
 </script>
 
 <style scoped>
