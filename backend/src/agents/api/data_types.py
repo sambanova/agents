@@ -56,15 +56,6 @@ class TestMessage(BaseAgentMessage):
     content: str
 
 
-# SubTask Model
-class CoPilotSubTask(BaseModel):
-    task_details: str
-    assigned_agent: AgentEnum
-
-    class Config:
-        use_enum_values = True  # To serialize enums as their values
-
-
 class HandoffMessage(BaseAgentMessage):
     content: str
 
