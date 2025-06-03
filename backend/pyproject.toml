@@ -13,14 +13,13 @@ dependencies = [
   "python-dotenv",
   "pydantic==2.10.5",
   "requests==2.32.3",
-  "crewai-tools==0.32.1",
+  "crewai-tools==0.46.0",
   "redis==5.2.1",
   "sse-starlette==2.2.1",
   "yfinance==0.2.61",
   "scipy==1.15.1",
-  "langtrace-python-sdk==3.6.2",
+  "langtrace-python-sdk==3.8.18",
   "tavily-python>=0.5.0",
-  "langchain-sambanova",
 
 # Document processing
   "PyMuPDF==1.23.8",
