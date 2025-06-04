@@ -10,10 +10,6 @@ from langgraph.graph.message import Messages, add_messages
 from pydantic import Field
 
 
-class LiberalFunctionMessage(FunctionMessage):
-    content: Any = Field(default="")
-
-
 class LiberalToolMessage(ToolMessage):
     content: Any = Field(default="")
 

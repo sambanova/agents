@@ -180,7 +180,10 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
         function_message = LiberalFunctionMessage(
             content=response,
             name=action.tool,
-            additional_kwargs={"timestamp": datetime.now(timezone.utc).isoformat()},
+            additional_kwargs={
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "agent_type": "tool_response",
+            },
         )
         return function_message
 
