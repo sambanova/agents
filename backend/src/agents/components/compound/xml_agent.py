@@ -104,27 +104,10 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
 
         # Process messages
         processed_messages = await _get_messages(messages)
-        result = await llm_with_stop.ainvoke(processed_messages, config)
+        result: AIMessage = await llm_with_stop.ainvoke(processed_messages, config)
+        result.additional_kwargs["timestamp"] = datetime.now(timezone.utc).isoformat()
 
-        # Extract and preserve metadata from the LLM response
-        response_metadata = {}
-        usage_metadata = None
-        additional_kwargs = {"timestamp": datetime.now(timezone.utc).isoformat()}
-
-        if hasattr(result, "response_metadata"):
-            response_metadata = result.response_metadata
-        if hasattr(result, "usage_metadata"):
-            usage_metadata = result.usage_metadata
-        if hasattr(result, "additional_kwargs"):
-            additional_kwargs.update(result.additional_kwargs)
-
-        # Return AIMessage with preserved and enhanced metadata
-        return AIMessage(
-            content=result.content,
-            response_metadata=response_metadata,
-            usage_metadata=usage_metadata,
-            additional_kwargs=additional_kwargs,
-        )
+        return result
 
     # Define the function that determines whether to continue or not
     def should_continue(messages):
@@ -209,42 +192,7 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
             # For MessageGraph, pass messages directly, not wrapped in a dict
             result = await subgraph.ainvoke(subgraph_messages, config)
 
-            # Extract response and create function message
-            response_content = None
-            response_metadata = {}
-            usage_metadata = None
-
-            if hasattr(result, "messages") and result.messages:
-                last_msg = result.messages[-1]
-                response_content = last_msg.content
-                if hasattr(last_msg, "response_metadata"):
-                    response_metadata = last_msg.response_metadata
-                if hasattr(last_msg, "usage_metadata"):
-                    usage_metadata = last_msg.usage_metadata
-            elif hasattr(result, "content"):
-                response_content = result.content
-                if hasattr(result, "response_metadata"):
-                    response_metadata = result.response_metadata
-                if hasattr(result, "usage_metadata"):
-                    usage_metadata = result.usage_metadata
-            elif isinstance(result, list) and len(result) > 0:
-                # Sometimes MessageGraph returns a list of messages
-                last_msg = result[-1]
-                response_content = last_msg.content
-                if hasattr(last_msg, "response_metadata"):
-                    response_metadata = last_msg.response_metadata
-                if hasattr(last_msg, "usage_metadata"):
-                    usage_metadata = last_msg.usage_metadata
-            else:
-                response_content = str(result)
-
-            # Return AIMessage that will be added to the message history and streamed
-            # Preserve metadata from the subgraph LLM response
-            return AIMessage(
-                content=response_content,
-                response_metadata=response_metadata,
-                usage_metadata=usage_metadata,
-            )
+            return result[-1]
 
         return subgraph_entry_node
 

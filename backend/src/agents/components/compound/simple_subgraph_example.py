@@ -3,6 +3,7 @@ Simple example demonstrating a subgraph with just one node integrated with XML a
 """
 
 import asyncio
+from datetime import datetime, timezone
 from langchain.tools import Tool
 from langchain_core.messages import HumanMessage, AIMessage
 from agents.components.compound.xml_agent import get_xml_agent_executor
@@ -44,7 +45,10 @@ def create_simple_greeter_subgraph():
 
         llm = get_sambanova_llm(model="DeepSeek-V3-0324", api_key=api_key)
         prompt = f"Create a friendly greeting for: {user_input}"
-        return await llm.ainvoke(prompt)
+        result = await llm.ainvoke(prompt)
+        result.additional_kwargs["timestamp"] = datetime.now(timezone.utc).isoformat()
+        result.additional_kwargs["agent_type"] = "greeter_end"
+        return result
 
     # Create the workflow with just one node
     workflow = MessageGraph()
