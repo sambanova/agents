@@ -2,7 +2,7 @@ import sys
 import os
 import uuid
 
-from agents.api.services.redis_service import SecureRedisService
+from agents.storage.redis_service import SecureRedisService
 from agents.components.crewai_llm import CustomLLM
 
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

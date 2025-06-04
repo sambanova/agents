@@ -1,5 +1,5 @@
 <template>
-    <!-- Handle new streaming events -->
+    <!-- Handle streaming and agent_completion events -->
     <li v-if="isStreamingEvent" class="px-4 items-start gap-x-2 sm:gap-x-4">
       <div class="w-full flex">
         <UserAvatar :type="provider" />
@@ -8,12 +8,44 @@
             <span class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
               {{ props.event }}
             </span>
-            <span class="text-xs text-gray-500">{{ formatTimestamp(props.data.timestamp) }}</span>
+            <span class="text-xs text-gray-500">{{ formatTimestamp(props.data.timestamp || props.data.additional_kwargs?.timestamp) }}</span>
           </div>
           
-          <!-- Simple display of ALL data -->
-          <div class="bg-white p-3 rounded border text-sm">
-            <pre class="whitespace-pre-wrap text-xs">{{ JSON.stringify(props.data, null, 2) }}</pre>
+          <!-- Main message content -->
+          <div class="bg-white p-3 rounded border">
+            <!-- Message content -->
+            <div class="text-sm whitespace-pre-wrap mb-2">{{ props.data.content }}</div>
+            
+            <!-- Message metadata -->
+            <div class="text-xs text-gray-500">
+              <div v-if="props.data.type">Type: {{ props.data.type }}</div>
+              <div v-if="props.data.additional_kwargs?.agent_type">Agent Type: {{ props.data.additional_kwargs.agent_type }}</div>
+            </div>
+
+            <!-- Dropdown for full message details -->
+            <div class="mt-2">
+              <button 
+                @click="toggleDetails"
+                class="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+              >
+                {{ showDetails ? 'Hide' : 'Show' }} full details
+                <svg 
+                  :class="{'rotate-180': showDetails}"
+                  class="w-4 h-4 transition-transform"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              
+              <!-- Full message details -->
+              <div v-if="showDetails" class="mt-2 p-2 bg-gray-50 rounded text-xs font-mono whitespace-pre-wrap">
+                {{ JSON.stringify(props.data, null, 2) }}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -22,15 +54,13 @@
     <!-- Check if event is 'user_message' -->
     <li
       v-else-if="props.event === 'user_message'" 
-      class=" flex  px-4 items-start    gap-x-2 sm:gap-x-4"
+      class="flex px-4 items-start gap-x-2 sm:gap-x-4"
     >
-    
-      <div class="grow text-end space-y-3 ">
+      <div class="grow text-end space-y-3">
         <!-- Card -->
-        <div class="inline-block flex justify-end ">
-          <p class="text-[16px]  text-left color-primary-brandGray max-w-[80%] w-auto">
+        <div class="inline-block flex justify-end">
+          <p class="text-[16px] text-left color-primary-brandGray max-w-[80%] w-auto">
             {{ props.data }}
-            
           </p>
         </div>
         <!-- End Card -->
@@ -39,83 +69,62 @@
     </li>
     
     <!-- For all other cases -->
-    <li v-else class="  relative  px-4 items-start gap-x-2 sm:gap-x-4">
-      
-      <div class="w-full relative flex items-center  ">
-    
-    
-        
+    <li v-else class="relative px-4 items-start gap-x-2 sm:gap-x-4">
+      <div class="w-full relative flex items-center">
         <UserAvatar :type="provider" />   
         <div class="grow relative text-start space-y-3">
-        <!-- Card -->
-        <div class="inline-block" >
-       <div class="relative p-4 flex items-center capitalize space-y-3 font-inter font-semibold 
-       text-[16px] leading-[18px] tracking-[0px] text-center capitalize"> {{ provider==="sambanova"?"SambaNova":provider }} Agent
-       <!-- Menu button: visible on hover -->
-      
-      
-       <button
-
-           v-if="parsedData.agent_type==='sales_leads'||parsedData.agent_type==='financial_analysis'
-           ||parsedData.agent_type==='deep_research'"
-        type="button"
-        class="  group-hover:opacity-100 transition-opacity duration-200"
-        @click.stop="toggleMenu"
-        @mousedown.stop
-        aria-label="Open menu"
-      >
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="5" r="1" />
-          <circle cx="12" cy="12" r="1" />
-          <circle cx="12" cy="19" r="1" />
-        </svg>
-      </button>
-    
-      <!-- Popover menu -->
-      <div
-        v-if="activeMenu"
-        class="absolute right-1 top-8 bg-white border border-gray-200 shadow-lg rounded z-30"
-        @click.stop
-      >
-       
-        <!-- <button
-          class="flex items-center w-full px-4 py-2 hover:bg-gray-100 text-left"
-          
-        >
-          <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" />
-            <polyline points="12 3 12 12" />
-            <polyline points="9 6 12 3 15 6" />
-          </svg>
-          View Report
-        </button> -->
-        <button
-          class="flex items-center w-full px-4 py-2 hover:bg-gray-100 text-left"
-          @click="generatePDFFromHtml"
-        >
-          <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Download PDF
-        </button>
-      </div></div>
-</div>
-
-</div>
+          <!-- Card -->
+          <div class="inline-block">
+            <div class="relative p-4 flex items-center capitalize space-y-3 font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center capitalize">
+              {{ provider==="sambanova"?"SambaNova":provider }} Agent
+              <!-- Menu button: visible on hover -->
+              <button
+                v-if="parsedData.agent_type==='sales_leads'||parsedData.agent_type==='financial_analysis'||parsedData.agent_type==='deep_research'"
+                type="button"
+                class="group-hover:opacity-100 transition-opacity duration-200"
+                @click.stop="toggleMenu"
+                @mousedown.stop
+                aria-label="Open menu"
+              >
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="5" r="1" />
+                  <circle cx="12" cy="12" r="1" />
+                  <circle cx="12" cy="19" r="1" />
+                </svg>
+              </button>
+              
+              <!-- Popover menu -->
+              <div
+                v-if="activeMenu"
+                class="absolute right-1 top-8 bg-white border border-gray-200 shadow-lg rounded z-30"
+                @click.stop
+              >
+                <button
+                  class="flex items-center w-full px-4 py-2 hover:bg-gray-100 text-left"
+                  @click="generatePDFFromHtml"
+                >
+                  <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Download PDF
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="w-full bg-white  ">          
-          <AnalysisTimeline 
-      :isLoading="isLoading" 
-      :parsedData="parsedData" 
-      :workflowData="workflowData" 
-      :presentMetadata="parsedData.metadata" 
-      :plannerText="plannerText" 
-    />
+      </div>
+      <div class="w-full bg-white">          
+        <AnalysisTimeline 
+          :isLoading="isLoading" 
+          :parsedData="parsedData" 
+          :workflowData="workflowData" 
+          :presentMetadata="parsedData.metadata" 
+          :plannerText="plannerText" 
+        />
         <component :id="'chat-'+messageId" :is="selectedComponent" :parsed="parsedData" />
-    </div>
-    
+      </div>
     </li>
   </template>
   
@@ -254,14 +263,18 @@ function toggleCollapse() {
   collapsed.value = !collapsed.value
 }
 
-const activeMenu = ref(false);
+// Add refs for UI state
+const showDetails = ref(false)
+const activeMenu = ref(false)
 
-
-
+// Toggle functions
+function toggleDetails() {
+  showDetails.value = !showDetails.value
+}
 
 function toggleMenu() {
-    activeMenu.value = !activeMenu.value;
-  }
+  activeMenu.value = !activeMenu.value
+}
 
 
   const headerConfig = ref({
@@ -487,7 +500,7 @@ async function generateSelectablePDF() {
 
 // Add streaming event support
 const isStreamingEvent = computed(() => {
-  return ['stream_start', 'agent_completion', 'llm_stream_chunk', 'stream_complete'].includes(props.event)
+  return props.event === 'agent_completion' || ['stream_start', 'llm_stream_chunk', 'stream_complete'].includes(props.event)
 })
 
 function getEventBadgeClass(event) {

@@ -3,7 +3,7 @@ import asyncio
 import json
 from typing import Any, Union
 import uuid
-from api.services.redis_service import SecureRedisService
+from agents.storage.redis_service import SecureRedisService
 
 from autogen_core import MessageContext
 from autogen_core import (

@@ -20,7 +20,7 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langgraph.constants import Send
 from langgraph.graph import START, END, StateGraph
 from langgraph.types import interrupt, Command
-from agents.api.services.redis_service import SecureRedisService
+from agents.storage.redis_service import SecureRedisService
 
 from agents.utils.custom_sambanova import CustomChatSambaNovaCloud
 from agents.registry.model_registry import model_registry

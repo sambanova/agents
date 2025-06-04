@@ -16,7 +16,7 @@ from agents.components.financial_analysis.financial_analysis_crew import (
     FinancialAnalysisCrew,
     FinancialAnalysisResult,
 )
-from agents.api.services.redis_service import SecureRedisService
+from agents.storage.redis_service import SecureRedisService
 from agents.tools.financial_data import search_symbol_insightsentry
 from agents.registry.model_registry import model_registry
 from agents.services.financial_user_prompt_extractor_service import FinancialPromptExtractor

@@ -17,7 +17,7 @@ from agents.components.routing.sales_leads import SalesLeadsAgent
 
 from agents.api.otlp_tracing import configure_oltp_tracing
 from agents.api.websocket_interface import WebSocketInterface
-from agents.api.services.redis_service import SecureRedisService
+from agents.storage.redis_service import SecureRedisService
 from agents.utils.logging import logger
 from agents.api.session_state import SessionStateManager
 from agents.components.routing.user_proxy import UserProxyAgent

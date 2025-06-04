@@ -27,8 +27,8 @@ from agents.api.utils import (
 
 from agents.components.compound.agent import agent
 from agents.api.websocket_interface import WebSocketInterface
-from agents.api.services.redis_service import SecureRedisService
-
+from agents.storage.redis_service import SecureRedisService
+from agents.storage.redis_storage import RedisStorage
 
 from agents.utils.logging import logger
 
@@ -44,6 +44,7 @@ class WebSocketConnectionManager(WebSocketInterface):
         # Use user_id:conversation_id as the key
         self.connections: Dict[str, WebSocket] = {}
         self.redis_client = redis_client
+        self.message_storage = RedisStorage(redis_client)
         self.context_length_summariser = context_length_summariser
         # Add state storage for active connections
         self.active_sessions: Dict[str, dict] = {}
@@ -562,28 +563,12 @@ class WebSocketConnectionManager(WebSocketInterface):
             websocket = self.connections.get(session_key)
 
             if "event" in data and data["event"] == "agent_completion":
-                message_key = f"messages:{user_id}:{conversation_id}"
-
-                # Simple atomic duplicate check using Redis hash
-                if "id" in data:
-                    dedup_key = f"message_ids:{user_id}:{conversation_id}"
-                    # hsetnx returns True if newly set, False if already existed
-                    is_new = await asyncio.to_thread(
-                        self.redis_client.hsetnx, dedup_key, data["id"], "1", user_id
-                    )
-
-                    if not is_new:
-                        logger.info(
-                            f"Message with ID {data['id']} already exists, skipping save"
-                        )
-                        return True  # Still successful, just skipped
-
-                await asyncio.to_thread(
-                    self.redis_client.rpush,
-                    message_key,
-                    json.dumps(data),
-                    user_id,
+                was_saved = await self.message_storage.save_message_if_new(
+                    user_id, conversation_id, data
                 )
+
+                if not was_saved:
+                    return True  # Still successful, just skipped duplicate
 
             if not websocket:
                 logger.info(f"No WebSocket connection found for {session_key}")

@@ -30,6 +30,9 @@ import uuid
 
 from agents.components.routing.route import SemanticRouterAgent
 
+from agents.storage.redis_service import SecureRedisService
+from agents.storage.redis_storage import RedisStorage
+
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
@@ -53,7 +56,7 @@ from agents.components.financial_analysis.financial_analysis_crew import (
 
 # For document processing
 from agents.services.document_processing_service import DocumentProcessingService
-from agents.api.services.redis_service import SecureRedisService
+from agents.storage.redis_service import SecureRedisService
 
 CLERK_JWT_ISSUER = os.environ.get("CLERK_JWT_ISSUER")
 clerk_config = ClerkConfig(jwks_url=CLERK_JWT_ISSUER)
@@ -88,6 +91,7 @@ async def lifespan(app: FastAPI):
     app.state.redis_client = SecureRedisService(
         connection_pool=pool, decode_responses=True
     )
+    app.state.redis_storage_service = RedisStorage(redis_client=app.state.redis_client)
 
     print(
         f"[LeadGenerationAPI] Using Redis at {redis_host}:{redis_port} with connection pool"
@@ -127,20 +131,6 @@ class LeadGenerationAPI:
         self.setup_cors()
         self.setup_routes()
         self.executor = ThreadPoolExecutor(max_workers=15)
-
-    def verify_conversation_exists(self, user_id: str, conversation_id: str) -> bool:
-        """
-        Verify if a conversation exists for the given user.
-
-        Args:
-            user_id (str): The ID of the user
-            conversation_id (str): The ID of the conversation
-
-        Returns:
-            bool: True if conversation exists, False otherwise
-        """
-        meta_key = f"chat_metadata:{user_id}:{conversation_id}"
-        return bool(self.app.state.redis_client.exists(meta_key))
 
     def setup_cors(self):
         allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
@@ -244,8 +234,9 @@ class LeadGenerationAPI:
                         return
 
                     # Verify conversation exists and belongs to user
-                    meta_key = f"chat_metadata:{user_id}:{conversation_id}"
-                    if not self.app.state.redis_client.exists(meta_key):
+                    if not await self.app.state.redis_storage_service.verify_conversation_exists(
+                        user_id, conversation_id
+                    ):
                         try:
                             await websocket.close(
                                 code=4004, reason="Conversation not found"
@@ -377,33 +368,31 @@ class LeadGenerationAPI:
                 )
 
             try:
-                # Verify conversation exists and belongs to user
-                meta_key = f"chat_metadata:{user_id}:{conversation_id}"
-                if not self.app.state.redis_client.exists(meta_key):
+                # Verify chat exists and belongs to user
+                if not await self.app.state.redis_storage_service.verify_conversation_exists(
+                    user_id, conversation_id
+                ):
                     return JSONResponse(
-                        status_code=404, content={"error": "Conversation not found"}
+                        status_code=404,
+                        content={"error": "Chat not found or access denied"},
                     )
 
-                message_key = f"messages:{user_id}:{conversation_id}"
-                messages = self.app.state.redis_client.lrange(
-                    message_key, 0, -1, user_id
+                messages = await self.app.state.redis_storage_service.get_messages(
+                    user_id, conversation_id
                 )
 
                 if not messages:
                     return JSONResponse(status_code=200, content={"messages": []})
 
-                # Parse JSON strings back into objects
-                parsed_messages = [json.loads(msg) for msg in messages]
-
                 # Sort messages by timestamp
-                parsed_messages.sort(key=lambda x: x.get("timestamp", ""))
+                messages.sort(key=lambda x: x.get("timestamp", ""))
 
-                return JSONResponse(
-                    status_code=200, content={"messages": parsed_messages}
-                )
+                return JSONResponse(status_code=200, content={"messages": messages})
 
             except Exception as e:
-                print(f"[/messages] Error retrieving messages: {str(e)}")
+                print(
+                    f"[/chat/history/{conversation_id}] Error retrieving messages: {str(e)}"
+                )
                 return JSONResponse(
                     status_code=500,
                     content={"error": f"Failed to retrieve messages: {str(e)}"},
@@ -479,8 +468,9 @@ class LeadGenerationAPI:
                     )
 
                 # Verify chat exists and belongs to user
-                meta_key = f"chat_metadata:{user_id}:{conversation_id}"
-                if not self.app.state.redis_client.exists(meta_key):
+                if not await self.app.state.redis_storage_service.verify_conversation_exists(
+                    user_id, conversation_id
+                ):
                     return JSONResponse(
                         status_code=404,
                         content={"error": "Chat not found or access denied"},
@@ -495,15 +485,9 @@ class LeadGenerationAPI:
                     self.app.state.manager.remove_connection(user_id, conversation_id)
 
                 # Delete chat metadata
-                self.app.state.redis_client.delete(meta_key)
-
-                # Delete chat messages
-                message_key = f"messages:{user_id}:{conversation_id}"
-                self.app.state.redis_client.delete(message_key)
-
-                # Remove from user's chat list
-                user_chats_key = f"user_chats:{user_id}"
-                self.app.state.redis_client.zrem(user_chats_key, conversation_id)
+                await self.app.state.redis_storage_service.delete_all_user_data(
+                    user_id, conversation_id
+                )
 
                 return JSONResponse(
                     status_code=200, content={"message": "Chat deleted successfully"}

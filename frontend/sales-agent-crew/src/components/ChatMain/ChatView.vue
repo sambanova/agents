@@ -658,14 +658,23 @@ const agentThoughtsData = ref([]);
 
 async function filterChat(msgData) {
   messagesData.value = msgData.messages
-    .filter(
-      (message) =>
-        message.event === 'completion' || message.event === 'user_message'
-    )
-    .sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
+    .map(message => {
+      // For agent_completion events, preserve the full data structure
+      if (message.event === 'agent_completion') {
+        return {
+          event: 'agent_completion',
+          data: message,  // Pass the entire message object as data
+          timestamp: message.timestamp || message.additional_kwargs?.timestamp || new Date().toISOString()
+        };
+      }
+      // For user_message events, keep existing behavior
+      else if (message.event === 'user_message') {
+        return message;
+      }
+      return null;
+    })
+    .filter(Boolean)  // Remove null values
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
   let plannerData = msgData.messages.filter(
     (message) => message.event === 'planner'
@@ -708,7 +717,7 @@ async function filterChat(msgData) {
 
   console.log('userMessages', userMessages);
 
-  if (userMessages[0].data) {
+  if (userMessages[0]?.data) {
     chatName.value = userMessages[0].data;
   }
 

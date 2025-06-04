@@ -1,6 +1,6 @@
 import redis
 from typing import Any, Dict, List
-from .encryption_service import EncryptionService
+from agents.storage.encryption_service import EncryptionService
 
 
 class SecureRedisService(redis.Redis):

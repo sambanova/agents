@@ -1,6 +1,6 @@
 import os
 from typing import Dict, Any, List, Optional, Tuple, Union
-from agents.api.services.redis_service import SecureRedisService
+from agents.storage.redis_service import SecureRedisService
 
 from agents.components.crewai_llm import CustomLLM
 from agents.services.structured_output_parser import CustomConverter
