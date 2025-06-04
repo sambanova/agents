@@ -2,7 +2,7 @@
 
 <h1 style="font-size: 3em;">Agents</h1>
 
-The Agents application routes requests to four different agents: General assistant agent, Sales leads agent, Deep research agent, and a Finance analysis agent. The agents process tens of thousands of tokens that generates lightning fast and accurate results. The Agents application helps sales teams and researchers by:
+This kit is an example of how a local application can be created, configured and launched to leverage SambaNova's Agents Cloud.  The Agents application routes requests to four different agents: General assistant agent, Sales leads agent, Deep research agent, and a Finance analysis agent. The agents process tens of thousands of tokens that generates lightning fast and accurate results. The Agents application helps sales teams and researchers by:
 
 - Generating qualified sales information with company insights.
 - Creating detailed research reports and educational content.
@@ -35,7 +35,7 @@ The basic process of the Agents application is described below.
 
 # Prerequisites
 
-Ensure to install the prerequisites.
+## Required software packages
    - [Python 3.11](https://www.python.org/downloads/release/python-31111/) (exact version required)
    - [Node.js 18.17.0 or later](https://nodejs.org/en/download)
    - [Yarn](https://classic.yarnpkg.com/en/docs/install)
@@ -51,29 +51,37 @@ Ensure to install the prerequisites.
       brew services start redis
       ```
 
-Get the following API keys to setup the Agents application.
-   - [SambaNova API key](https://cloud.sambanova.ai/)
+## Required APIs
+You will need to create free accounts to access these APIs:
+   - [SambaNova API key](https://cloud.sambanova.ai/) for agent models
    - [Serper API key](https://serper.dev/) for web search
    - [Exa API key](https://exa.co/) for company data
    - [Tavily API key](https://tavily.com/) for deep research capabilities
-   - [Clerk](https://clerk.com/) for authentication (you'll need both publishable and secret keys)
 
 >**Note**: The DeepSeek-R1-8K model is supported in the application provided you have access to it.
 
-# Setup and run the application
+## Clerk authentication setup
 
-You can setup and run the application in two ways: Cloud hosted version or locally hosted version.
+1. Sign up for a free Clerk account at [clerk.com](https://clerk.com/).
+1. Create a new application in the Clerk dashboard.
+1. Get your publishable key and secret key.
+1. Configure your JWT issuer URL.
+1. Add these values to your environment variables as shown above.
 
-## Cloud hosted version
+# Using the Application
 
-This version is hosted on SambaNova Cloud. No need to install dependencies locally.
+You can setup and run the application in two ways: the cloud-hosted version or the locally-hosted version.
+
+## Cloud Hosted
+
+This version is hosted on SambaNova Cloud. No need to install dependencies locally.  Just set up an account and use your SambaNova Cloud API Key.
 
 1. Go to the [Agents application](https://aiskagents.cloud.snova.ai/) login page.
 1. Sign in using Clerk authentication (you will receive an email with login instructions).
-1. Once you login, go to settings and add the API keys.
+1. Once you login, go to settings and add the SambaNova Cloud API key.
 1. Start using the application to enhance sales workflows, conduct research, and gain actionable insights.
 
-## Locally hosted version
+## Locally Hosted
 
 ### Frontend setup
 
@@ -87,13 +95,14 @@ Follow the steps below to install the frontend for the Agents application.
    yarn install
    ```
 
-1. Run a local development environment.
+1. When you have completed the backend setup, you can either:
+   + Run a local development environment.
 
    ```bash
    yarn dev
    ```
 
-1. Create a production build.
+   + Or, create a production build.
 
    ```bash
    yarn build
@@ -113,12 +122,6 @@ Follow the steps below to install the backend for the Agents application.
    pip install -r requirements.txt
    ```
 
-1. Run the application.
-
-   ```bash
-   uvicorn api.lead_generation_api:create_app --reload --host 127.0.0.1 --port 8000
-   ```
-
 ### Environment variables setup
 
 #### Frontend environment variables
@@ -127,9 +130,15 @@ Follow the steps below to install the backend for the Agents application.
 
 1. Create a `.env` file with the following variables.
    ```bash
+   # Clerk Keys
+   CLERK_SECRET_KEY="<your_clerk_secret_key>"
+   VITE_CLERK_PUBLISHABLE_KEY="<your_clerk_publishable_key>"
+
+   # Vite Settings
    VITE_API_URL=/api
    VITE_WEBSOCKET_URL=ws://localhost:8000
-   VITE_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+   VITE_ENABLE_WORKFLOW_TOGGLE=false
+   VITE_ENABLE_USER_KEYS=false
    ```
 
 #### Backend environment variables
@@ -139,50 +148,60 @@ Follow the steps below to install the backend for the Agents application.
 1. Create a `.env` file with the following required variables.
    ```bash
    # Authentication
-   CLERK_SECRET_KEY=your_clerk_secret_key
-   CLERK_JWT_ISSUER=https://your-clerk-instance.clerk.accounts.dev/.well-known/jwks.json
+   CLERK_JWT_ISSUER="https://your-clerk-instance.clerk.accounts.dev/.well-known/jwks.json"
    
    # API Keys for Services
-   SERPER_API_KEY=your_serper_api_key
-   TAVILY_API_KEY=your_tavily_api_key  # Required for Deep Research agent
-   
+   EXA_API_KEY="<your_exa_api_key>"
+   SERPER_KEY="<your_serper_api_key>"
+   TAVILY_API_KEY="<your_tavily_api_key>"  # Required for Deep Research agent
+
+   # Additional Settings
+   ENABLE_TRACING="false"
+   OTEL_SDK_DISABLED="true"
+   LOG_DIR="/app/logs"
+   ENABLE_USER_KEYS="false"
+
    # Optional: For usage tracking
-   LANGTRACE_API_KEY=your_langtrace_api_key  # Optional for usage tracking
+   LANGTRACE_API_KEY=your_langtrace_api_key
+
+   #Redis Master Salt Key - User should set to any value they wish
+   REDIS_MASTER_SALT=abc123def456
    ```
 
-1. Start the FastAPI backend server.
+
+### Starting the Application
+
+1. Start the FastAPI backend server:
 
    ```bash
    # From the project root
    cd backend
-   uvicorn api.main:app --reload
+   uvicorn api.lead_generation_api:create_app --reload --host 127.0.0.1 --port 8000
    ```
 
-1. Start the Vue.js frontend development server.
+1. Start the `Vue.js` frontend development server:
 
    ```bash
    # From the project root
    cd frontend/sales-agent-crew/
+
+   # For a development deployment
    yarn dev
+
+   # For a production deployment
+   yarn build
    ```
 
-1. Open your browser and navigate to:
+1. When you launch the front end, Vite will give you the localhost URL.  Open your browser and navigate to:
 
    ```bash
-   http://localhost:5174/
+   http://localhost:<port_from_vite>/
    ```
+
 
 ### API keys setup
 
 You can access the settings modal to configure the API keys mentioned in the [prerequisites](#prerequisites) section.
-
-### Clerk authentication setup
-
-1. Sign up for a Clerk account at [clerk.com](https://clerk.com/).
-1. Create a new application in the Clerk dashboard.
-1. Get your publishable key and secret key.
-1. Configure your JWT issuer URL.
-1. Add these values to your environment variables as shown above.
 
 ### (Optional) LangTrace integration
 
