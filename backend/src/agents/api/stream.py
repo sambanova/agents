@@ -1,12 +1,14 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Sequence, Union
 
+from agents.api.data_types import AgentEnum, AgentStructuredResponse
 from agents.api.websocket_interface import WebSocketInterface
 from langchain_core.messages import (
     AnyMessage,
     BaseMessage,
 )
 from langchain_core.runnables import Runnable, RunnableConfig
+from langchain.schema.messages import HumanMessage, AIMessage
 
 
 async def astream_state_websocket(
@@ -91,23 +93,13 @@ async def astream_state_websocket(
                         user_id,
                         conversation_id,
                         {
-                            "event": "agent_message_stream",
+                            "event": "agent_completion",
                             "run_id": root_run_id,
-                            "data": {
-                                "content": (
-                                    msg.content if hasattr(msg, "content") else str(msg)
-                                ),
-                                "type": (
-                                    msg.__class__.__name__
-                                    if hasattr(msg, "__class__")
-                                    else "unknown"
-                                ),
-                                "id": getattr(msg, "id", None),
-                            },
+                            **convert_messages_to_dict([msg])[0],
                             "user_id": user_id,
                             "conversation_id": conversation_id,
                             "message_id": message_id,
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "timestamp": msg.additional_kwargs.get("timestamp"),
                         },
                     )
 

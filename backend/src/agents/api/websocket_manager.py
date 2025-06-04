@@ -331,26 +331,10 @@ class WebSocketConnectionManager(WebSocketInterface):
                     )
                     return
 
-                # Create message data once
-                message_data = {
-                    "event": "user_message",
-                    "data": user_message_input["data"],
-                    "user_id": user_id,
-                    "conversation_id": conversation_id,
-                    "message_id": user_message_input["message_id"],
-                    "timestamp": user_message_input["timestamp"],
-                }
-
                 # Prepare tasks for parallel execution
                 tasks = [
                     self._update_metadata(
                         meta_key, user_message_input["data"], user_id
-                    ),
-                    asyncio.to_thread(
-                        self.redis_client.rpush,
-                        message_key,
-                        json.dumps(message_data),
-                        user_id,
                     ),
                 ]
 
@@ -401,30 +385,6 @@ class WebSocketConnectionManager(WebSocketInterface):
                 logger.info(
                     f"Received message from user: {user_id} in conversation: {conversation_id}"
                 )
-
-                # Create and publish user message
-                user_message = EndUserMessage(
-                    message_id=user_message_input["message_id"],
-                    source="User",
-                    content=user_message_input["data"],
-                    use_planner=False,
-                    provider=user_message_input["provider"],
-                    docs=(
-                        document_content
-                        if "document_ids" in user_message_input
-                        and user_message_input["document_ids"]
-                        else None
-                    ),
-                    planner_model=user_message_input["planner_model"],
-                )
-
-                # # This must be awaited as it affects the conversation flow
-                # await agent_runtime.publish_message(
-                #     user_message,
-                #     DefaultTopicId(
-                #         type="user_proxy", source=f"{user_id}:{conversation_id}"
-                #     ),
-                # )
 
                 config = await _run_input_and_config(
                     user_id=user_id,
@@ -600,6 +560,30 @@ class WebSocketConnectionManager(WebSocketInterface):
         try:
             session_key = f"{user_id}:{conversation_id}"
             websocket = self.connections.get(session_key)
+
+            if "event" in data and data["event"] == "agent_completion":
+                message_key = f"messages:{user_id}:{conversation_id}"
+
+                # Simple atomic duplicate check using Redis hash
+                if "id" in data:
+                    dedup_key = f"message_ids:{user_id}:{conversation_id}"
+                    # hsetnx returns True if newly set, False if already existed
+                    is_new = await asyncio.to_thread(
+                        self.redis_client.hsetnx, dedup_key, data["id"], "1", user_id
+                    )
+
+                    if not is_new:
+                        logger.info(
+                            f"Message with ID {data['id']} already exists, skipping save"
+                        )
+                        return True  # Still successful, just skipped
+
+                await asyncio.to_thread(
+                    self.redis_client.rpush,
+                    message_key,
+                    json.dumps(data),
+                    user_id,
+                )
 
             if not websocket:
                 logger.info(f"No WebSocket connection found for {session_key}")

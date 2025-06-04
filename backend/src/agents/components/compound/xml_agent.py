@@ -104,20 +104,58 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
 
         # Process messages
         processed_messages = await _get_messages(messages)
-        return await llm_with_stop.ainvoke(processed_messages, config)
+        result = await llm_with_stop.ainvoke(processed_messages, config)
+
+        # Extract and preserve metadata from the LLM response
+        response_metadata = {}
+        usage_metadata = None
+        additional_kwargs = {"timestamp": datetime.now(timezone.utc).isoformat()}
+
+        if hasattr(result, "response_metadata"):
+            response_metadata = result.response_metadata
+        if hasattr(result, "usage_metadata"):
+            usage_metadata = result.usage_metadata
+        if hasattr(result, "additional_kwargs"):
+            additional_kwargs.update(result.additional_kwargs)
+
+        # Return AIMessage with preserved and enhanced metadata
+        return AIMessage(
+            content=result.content,
+            response_metadata=response_metadata,
+            usage_metadata=usage_metadata,
+            additional_kwargs=additional_kwargs,
+        )
 
     # Define the function that determines whether to continue or not
     def should_continue(messages):
         last_message = messages[-1]
         content = last_message.content
 
+        # Add action metadata to the last message
+        if (
+            hasattr(last_message, "additional_kwargs")
+            and last_message.additional_kwargs
+        ):
+            additional_kwargs = last_message.additional_kwargs.copy()
+        else:
+            additional_kwargs = {}
+
         if "</tool>" in content:
+            additional_kwargs["agent_type"] = "react_tool"
+            # Update the message with action metadata
+            last_message.additional_kwargs = additional_kwargs
             return "tool_action"
         elif "</subgraph>" in content:
+            additional_kwargs["agent_type"] = "react_subgraph"
+            # Update the message with action metadata
+            last_message.additional_kwargs = additional_kwargs
             # Extract subgraph name to determine which subgraph node to route to
             subgraph_name = content.split("<subgraph>")[1].split("</subgraph>")[0]
             return f"subgraph_{subgraph_name}"
         else:
+            additional_kwargs["agent_type"] = "react_end"
+            # Update the message with action metadata
+            last_message.additional_kwargs = additional_kwargs
             return "end"
 
     # Define the function to execute tools

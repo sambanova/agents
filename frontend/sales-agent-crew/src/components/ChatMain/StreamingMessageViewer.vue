@@ -114,7 +114,7 @@
                 </div>
               </div>
               
-              <div v-else-if="message.event === 'agent_message_stream'" class="space-y-1">
+              <div v-else-if="message.event === 'agent_completion'" class="space-y-1">
                 <div>
                   <span class="text-gray-600">Type:</span>
                   <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs ml-1">{{ message.data.type }}</span>
@@ -205,114 +205,11 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 
-function connectStreamingWebSocket() {
-  if (!props.conversationId) return
-
-  // For now, we'll simulate receiving the messages you provided
-  // In a real implementation, this would connect to your actual WebSocket
-  simulateStreamingMessages()
-}
-
-function simulateStreamingMessages() {
-  // Add the sample messages you provided
-  const sampleMessages = [
-    {
-      "event": "stream_start",
-      "data": {"run_id": "fc04b190-cd87-49f9-9794-623d6af24576"},
-      "user_id": "user_2sFoeZuo9ksgGes5x2T2j7hIxNM",
-      "conversation_id": "0b8a677b-aa5a-4c47-8023-67a73648b3a2",
-      "message_id": "e1972baa-496e-4924-bd03-44c8fe9b92df",
-      "timestamp": "2025-06-03T14:26:36.632883+00:00"
-    },
-    {
-      "event": "agent_message_stream",
-      "data": {"content": "hello", "type": "HumanMessage", "id": "57b24218-e609-48d8-be0c-e15abd34d6cc"},
-      "user_id": "user_2sFoeZuo9ksgGes5x2T2j7hIxNM",
-      "conversation_id": "0b8a677b-aa5a-4c47-8023-67a73648b3a2",
-      "message_id": "e1972baa-496e-4924-bd03-44c8fe9b92df",
-      "timestamp": "2025-06-03T14:26:38.089911+00:00"
-    },
-    {
-      "event": "llm_stream_chunk",
-      "data": {"content": "Hello", "id": "50595d5a-2ab9-48df-9782-be16469d9941", "is_delta": true},
-      "user_id": "user_2sFoeZuo9ksgGes5x2T2j7hIxNM",
-      "conversation_id": "0b8a677b-aa5a-4c47-8023-67a73648b3a2",
-      "message_id": "e1972baa-496e-4924-bd03-44c8fe9b92df",
-      "timestamp": "2025-06-03T14:26:40.339393+00:00"
-    },
-    {
-      "event": "llm_stream_chunk",
-      "data": {"content": "! How are you?", "id": "50595d5a-2ab9-48df-9782-be16469d9941", "is_delta": true},
-      "user_id": "user_2sFoeZuo9ksgGes5x2T2j7hIxNM",
-      "conversation_id": "0b8a677b-aa5a-4c47-8023-67a73648b3a2",
-      "message_id": "e1972baa-496e-4924-bd03-44c8fe9b92df",
-      "timestamp": "2025-06-03T14:26:50.520768+00:00"
-    },
-    {
-      "event": "llm_stream_chunk",
-      "data": {"content": "", "id": "50595d5a-2ab9-48df-9782-be16469d9941", "is_delta": true},
-      "user_id": "user_2sFoeZuo9ksgGes5x2T2j7hIxNM",
-      "conversation_id": "0b8a677b-aa5a-4c47-8023-67a73648b3a2",
-      "message_id": "e1972baa-496e-4924-bd03-44c8fe9b92df",
-      "timestamp": "2025-06-03T14:26:51.422070+00:00"
-    },
-    {
-      "event": "llm_stream_chunk",
-      "data": {"content": "", "id": "50595d5a-2ab9-48df-9782-be16469d9941", "is_delta": true},
-      "user_id": "user_2sFoeZuo9ksgGes5x2T2j7hIxNM",
-      "conversation_id": "0b8a677b-aa5a-4c47-8023-67a73648b3a2",
-      "message_id": "e1972baa-496e-4924-bd03-44c8fe9b92df",
-      "timestamp": "2025-06-03T14:26:52.154990+00:00"
-    },
-    {
-      "event": "agent_message_stream",
-      "data": {"content": "Hello! How are you?", "type": "AIMessage", "id": "50595d5a-2ab9-48df-9782-be16469d9941"},
-      "user_id": "user_2sFoeZuo9ksgGes5x2T2j7hIxNM",
-      "conversation_id": "0b8a677b-aa5a-4c47-8023-67a73648b3a2",
-      "message_id": "e1972baa-496e-4924-bd03-44c8fe9b92df",
-      "timestamp": "2025-06-03T14:26:52.934669+00:00"
-    },
-    {
-      "event": "stream_complete",
-      "data": {"run_id": "fc04b190-cd87-49f9-9794-623d6af24576"},
-      "user_id": "user_2sFoeZuo9ksgGes5x2T2j7hIxNM",
-      "conversation_id": "0b8a677b-aa5a-4c47-8023-67a73648b3a2",
-      "message_id": "e1972baa-496e-4924-bd03-44c8fe9b92df",
-      "timestamp": "2025-06-03T14:26:53.655305+00:00"
-    }
-  ]
-
-  // Add messages with a delay to simulate real-time streaming
-  sampleMessages.forEach((message, index) => {
-    setTimeout(() => {
-      streamingMessages.value.push(message)
-    }, index * 1000) // 1 second delay between messages
-  })
-}
-
-function handleStreamingMessage(message) {
-  streamingMessages.value.push(message)
-}
-
-function clearMessages() {
-  streamingMessages.value = []
-  expandedMessages.value = []
-}
-
-function toggleMessageExpansion(index) {
-  const expandedIndex = expandedMessages.value.indexOf(index)
-  if (expandedIndex > -1) {
-    expandedMessages.value.splice(expandedIndex, 1)
-  } else {
-    expandedMessages.value.push(index)
-  }
-}
-
 function getEventTypeClass(event) {
   const classes = {
     'stream_start': 'border-blue-200 bg-blue-50',
     'stream_complete': 'border-purple-200 bg-purple-50',
-    'agent_message_stream': 'border-green-200 bg-green-50',
+    'agent_completion': 'border-green-200 bg-green-50',
     'llm_stream_chunk': 'border-orange-200 bg-orange-50'
   }
   return classes[event] || 'border-gray-200 bg-gray-50'
@@ -322,7 +219,7 @@ function getEventBadgeClass(event) {
   const classes = {
     'stream_start': 'bg-blue-100 text-blue-800',
     'stream_complete': 'bg-purple-100 text-purple-800',
-    'agent_message_stream': 'bg-green-100 text-green-800',
+    'agent_completion': 'bg-green-100 text-green-800',
     'llm_stream_chunk': 'bg-orange-100 text-orange-800'
   }
   return classes[event] || 'bg-gray-100 text-gray-800'
@@ -332,7 +229,7 @@ function getEventDotClass(event) {
   const classes = {
     'stream_start': 'bg-blue-500',
     'stream_complete': 'bg-purple-500',
-    'agent_message_stream': 'bg-green-500',
+    'agent_completion': 'bg-green-500',
     'llm_stream_chunk': 'bg-orange-500'
   }
   return classes[event] || 'bg-gray-500'

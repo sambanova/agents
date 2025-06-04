@@ -2,6 +2,7 @@ import redis
 from typing import Any, Dict, List
 from .encryption_service import EncryptionService
 
+
 class SecureRedisService(redis.Redis):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -41,4 +42,9 @@ class SecureRedisService(redis.Redis):
 
     def rpush(self, name: str, value: Any, user_id: str) -> int:
         encrypted_value = self.encryption.encrypt(value, user_id)
-        return super().rpush(name, encrypted_value) 
+        return super().rpush(name, encrypted_value)
+
+    def hsetnx(self, name: str, key: str, value: Any, user_id: str) -> bool:
+        """Set hash field only if it doesn't exist. Returns True if set, False if already existed."""
+        encrypted_value = self.encryption.encrypt(value, user_id)
+        return bool(super().hsetnx(name, key, encrypted_value))

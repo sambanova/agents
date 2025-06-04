@@ -185,7 +185,7 @@
       type: String,
       required: true
     },
-    
+  
   workflowData: {
     type: [],
     required: false // Ensure it's always provided
@@ -487,14 +487,14 @@ async function generateSelectablePDF() {
 
 // Add streaming event support
 const isStreamingEvent = computed(() => {
-  return ['stream_start', 'agent_message_stream', 'llm_stream_chunk', 'stream_complete'].includes(props.event)
+  return ['stream_start', 'agent_completion', 'llm_stream_chunk', 'stream_complete'].includes(props.event)
 })
 
 function getEventBadgeClass(event) {
   const classes = {
     'stream_start': 'bg-blue-100 text-blue-800',
     'stream_complete': 'bg-purple-100 text-purple-800',
-    'agent_message_stream': 'bg-green-100 text-green-800',
+    'agent_completion': 'bg-green-100 text-green-800',
     'llm_stream_chunk': 'bg-orange-100 text-orange-800'
   }
   return classes[event] || 'bg-gray-100 text-gray-800'
@@ -504,7 +504,7 @@ function getEventDotClass(event) {
   const classes = {
     'stream_start': 'bg-blue-500',
     'stream_complete': 'bg-purple-500',
-    'agent_message_stream': 'bg-green-500',
+    'agent_completion': 'bg-green-500',
     'llm_stream_chunk': 'bg-orange-500'
   }
   return classes[event] || 'bg-gray-500'

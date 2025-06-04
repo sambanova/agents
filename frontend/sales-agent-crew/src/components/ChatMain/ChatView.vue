@@ -1336,12 +1336,12 @@ async function connectWebSocket() {
             data: receivedData,
             timestamp: new Date().toISOString()
           });
-        } else if (receivedData.event === 'agent_message_stream') {
+        } else if (receivedData.event === 'agent_completion') {
           console.log('Agent message stream:', receivedData);
           messagesData.value.push({
-            event: 'agent_message_stream', 
+            event: 'agent_completion', 
             data: receivedData,
-            timestamp: new Date().toISOString()
+            timestamp: receivedData.timestamp || new Date().toISOString()
           });
         } else if (receivedData.event === 'llm_stream_chunk') {
           console.log('LLM stream chunk:', receivedData);
