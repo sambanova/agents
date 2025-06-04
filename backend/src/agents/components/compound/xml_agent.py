@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from agents.components.compound.util import extract_api_key
 from langchain.tools import BaseTool
 from langchain.tools.render import render_text_description
@@ -138,7 +139,11 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
         # Execute tool
         response = await tool_executor.ainvoke(action)
         # Create function message
-        function_message = LiberalFunctionMessage(content=response, name=action.tool)
+        function_message = LiberalFunctionMessage(
+            content=response,
+            name=action.tool,
+            additional_kwargs={"timestamp": datetime.now(timezone.utc).isoformat()},
+        )
         return function_message
 
     # Create subgraph entry nodes
@@ -147,7 +152,7 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
             last_message = messages[-1]
             # Parse subgraph input
             content = last_message.content
-            if "<subgraph_input>" not in content:
+            if "<   >" not in content:
                 subgraph_input = ""
             else:
                 subgraph_input_part = content.split("<subgraph_input>")[1]

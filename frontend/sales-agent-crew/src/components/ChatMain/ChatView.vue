@@ -48,6 +48,7 @@
           </h1>
         </div>
         <!-- End Title -->
+        
         <transition-group
           name="chat"
           tag="ul"
@@ -55,7 +56,7 @@
         >
           <!-- Chat Bubble -->
           <ChatBubble
-            v-for="msgItem in messagesData"
+            v-for="msgItem in filteredMessages"
             :metadata="completionMetaData"
             :workflowData="
               workflowData.filter(
@@ -810,6 +811,7 @@ const isUploading = ref(false);
 const uploadedDocuments = ref([]);
 const selectedDocuments = ref([]);
 const manualSocketClose = ref(false);
+const showStreamingDetails = ref(true); // Toggle for showing streaming messages
 
 // Clerk
 const { userId } = useAuth();
@@ -1324,7 +1326,41 @@ async function connectWebSocket() {
     socket.value.onmessage = (event) => {
       try {
         const receivedData = JSON.parse(event.data);
-        if (
+        
+        // Handle new streaming events
+        if (receivedData.event === 'stream_start') {
+          console.log('Stream started:', receivedData);
+          // Add to messages for display
+          messagesData.value.push({
+            event: 'stream_start',
+            data: receivedData,
+            timestamp: new Date().toISOString()
+          });
+        } else if (receivedData.event === 'agent_message_stream') {
+          console.log('Agent message stream:', receivedData);
+          messagesData.value.push({
+            event: 'agent_message_stream', 
+            data: receivedData,
+            timestamp: new Date().toISOString()
+          });
+        } else if (receivedData.event === 'llm_stream_chunk') {
+          console.log('LLM stream chunk:', receivedData);
+          messagesData.value.push({
+            event: 'llm_stream_chunk',
+            data: receivedData, 
+            timestamp: new Date().toISOString()
+          });
+        } else if (receivedData.event === 'stream_complete') {
+          console.log('Stream complete:', receivedData);
+          messagesData.value.push({
+            event: 'stream_complete',
+            data: receivedData,
+            timestamp: new Date().toISOString()
+          });
+          isLoading.value = false;
+        }
+        // Handle legacy events
+        else if (
           receivedData.event == 'user_message' ||
           receivedData.event == 'completion'
         ) {
@@ -1369,6 +1405,9 @@ async function connectWebSocket() {
         } else {
           console.log('ping event fired: ', receivedData.event);
         }
+        
+        // Auto scroll after any message
+        AutoScrollToBottom();
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
         isLoading.value = false;
@@ -1473,6 +1512,11 @@ watch(
     scrollNewMessageToMiddle();
   }
 );
+
+const filteredMessages = computed(() => {
+  // Show all messages by default
+  return messagesData.value;
+});
 </script>
 
 <style scoped>

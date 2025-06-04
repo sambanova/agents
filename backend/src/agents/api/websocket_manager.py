@@ -433,7 +433,10 @@ class WebSocketConnectionManager(WebSocketInterface):
                     provider=user_message_input["provider"],
                 )
 
-                input_ = HumanMessage(content=user_message_input["data"])
+                input_ = HumanMessage(
+                    content=user_message_input["data"],
+                    additional_kwargs={"timestamp": user_message_input["timestamp"]},
+                )
 
                 config["configurable"]["type==default/subgraphs"] = {
                     "greeter": create_simple_greeter_subgraph(),
