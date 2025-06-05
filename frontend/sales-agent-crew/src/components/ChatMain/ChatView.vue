@@ -1,5 +1,5 @@
 <template>
-  <div class="relative h-full w-full">
+  <div class="relative h-full w-full dark:bg-gray-900">
     <!-- Content -->
     <div
       ref="container"
@@ -8,12 +8,12 @@
       <!-- Sticky Top Component -->
       <div
         v-if="chatName"
-        class="sticky h-[62px] top-0 z-10 bg-white p-4 shadow"
+        class="sticky h-[62px] top-0 z-10 bg-white dark:bg-gray-800 p-4 shadow"
       >
         <div class="flex items-center justify-between">
           <!-- Left text -->
           <div
-            class="text-[16px] font-medium text-gray-800 line-clamp-1 overflow-hidden"
+            class="text-[16px] font-medium text-gray-800 dark:text-gray-100 line-clamp-1 overflow-hidden"
           >
             {{ chatName }}
           </div>
@@ -26,7 +26,7 @@
             </button>
             <button
               @click="genPDF"
-              class="text-sm h-[30px] py-1 px-2.5 bg-[#EAECF0] text-[#344054] rounded"
+              class="text-sm h-[30px] py-1 px-2.5 bg-[#EAECF0] dark:bg-gray-700 text-[#344054] dark:text-gray-200 rounded"
             >
               Download PDF
             </button>
@@ -42,7 +42,7 @@
         <!-- Title -->
         <div v-if="messagesData.length == 0" class="w-full text-center">
           <h1 v-if="!initialLoading" class="text-3xl font-bold sm:text-3xl">
-            <span class="bg-clip-text text-primary-brandTextSecondary">
+            <span class="bg-clip-text text-primary-brandTextSecondary dark:text-primary-brandTextSecondary-dark">
               What can I help you with?
             </span>
           </h1>
@@ -90,13 +90,12 @@
             :provider="provider"
             :messageId="currentMsgId"
           />
-
           <!-- End Chat Bubble -->
         </transition-group>
       </div>
 
       <!-- Documents Section -->
-      <div class="sticky z-1000 bottom-0 left-0 right-0 bg-white p-2">
+      <div class="sticky z-1000 bottom-0 left-0 right-0 bg-white dark:bg-gray-900 p-2">
         <div class="sticky bottom-0 z-10">
           <!-- Textarea -->
           <div class="max-w-4xl mx-auto lg:px-0">
@@ -110,12 +109,12 @@
                 @click="toggleExpand"
                 class="flex items-center justify-between focus:outline-none mb-2"
               >
-                <h3 class="text-sm font-medium text-gray-700">
+                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">
                   Uploaded Documents ({{ uploadedDocuments.length }})
                 </h3>
                 <svg
                   :class="{ 'transform rotate-180': isExpanded }"
-                  class="w-5 h-5 text-gray-500 transition-transform duration-200"
+                  class="w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -136,20 +135,20 @@
                     <div
                       v-for="doc in uploadedDocuments"
                       :key="doc.id"
-                      class="w-48 flex-shrink-0 p-2 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 relative group"
+                      class="w-48 flex-shrink-0 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 relative group"
                     >
                       <div class="flex items-center space-x-3">
                         <input
                           type="checkbox"
                           :checked="selectedDocuments.includes(doc.id)"
                           @change="toggleDocumentSelection(doc.id)"
-                          class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                          class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 dark:border-gray-600 rounded"
                         />
                         <div class="w-48 overflow-hidden">
-                          <p class="text-sm font-medium text-gray-900 truncate">
+                          <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                             {{ doc.filename }}
                           </p>
-                          <p class="text-xs text-gray-500 truncate">
+                          <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
                             Uploaded
                             {{
                               new Date(
@@ -182,12 +181,12 @@
                 type="search"
                 placeholder="Ask me about...companies to target, research topics, or company stocks and financials"
                 :disabled="isLoading"
-                class="p-4 pb-12 block min-h-[106px] w-full bg-primary-brandFrame border-primary-brandFrame rounded-lg text-sm focus:outline-none active:outline-none border focus:border-primary-brandColor disabled:opacity-50 disabled:pointer-events-none resize-y"
+                class="p-4 pb-12 block min-h-[106px] w-full bg-primary-brandFrame dark:bg-gray-700 border-primary-brandFrame dark:border-gray-600 rounded-lg text-sm dark:text-gray-200 focus:outline-none active:outline-none border focus:border-primary-brandColor disabled:opacity-50 disabled:pointer-events-none resize-y"
               ></textarea>
 
               <!-- Toolbar -->
               <div
-                class="absolute bottom-px inset-x-px p-2 rounded-b-lg border-primary-brandFrame"
+                class="absolute bottom-px inset-x-px p-2 rounded-b-lg border-primary-brandFrame dark:border-gray-700 dark:bg-gray-700"
               >
                 <div class="flex justify-between items-center">
                   <!-- Button Group -->
@@ -197,7 +196,7 @@
                       @click="$refs.fileInput.click()"
                       :disabled="isLoading || isUploading"
                       type="button"
-                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
+                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:z-1 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
                     >
                       <input
                         type="file"
@@ -245,10 +244,10 @@
                       @click="toggleRecording"
                       :disabled="isLoading"
                       :class="{
-                        'text-gray-500': !isRecording,
+                        'text-gray-500 dark:text-gray-400': !isRecording,
                         'text-orange-500': isRecording,
                       }"
-                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
+                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:z-1 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
                     >
                       <svg
                         v-if="!isRecording"
@@ -271,7 +270,7 @@
 
                       <svg
                         v-else
-                        class="w-6 h-6 text-gray-800"
+                        class="w-6 h-6 text-gray-800 dark:text-gray-200"
                         aria-hidden="true"
                         xmlns="http://www.w3.org/2000/svg"
                         width="24"
@@ -300,14 +299,14 @@
                         @click="toggleRecording"
                         :disabled="isLoading"
                         :class="{
-                          'text-gray-500': !isRecording,
+                          'text-gray-500 dark:text-gray-400': !isRecording,
                           'text-orange-500': isRecording,
                         }"
-                        class="inline-flex hidden shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
+                        class="inline-flex hidden shrink-0 justify-center items-center size-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:z-1 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
                       >
                         <svg
                           v-if="!isRecording"
-                          class="w-6 h-6 text-gray-800"
+                          class="w-6 h-6 text-gray-800 dark:text-gray-200"
                           aria-hidden="true"
                           xmlns="http://www.w3.org/2000/svg"
                           width="24"
@@ -326,7 +325,7 @@
                         </svg>
                         <svg
                           v-else
-                          class="w-6 h-6 text-gray-800"
+                          class="w-6 h-6 text-gray-800 dark:text-gray-200"
                           aria-hidden="true"
                           xmlns="http://www.w3.org/2000/svg"
                           width="24"
@@ -1222,7 +1221,6 @@ const addMessage = async () => {
   agentThoughtsData.value = [];
   // workflowData.value = []
   emit('agentThoughtsDataChanged', agentThoughtsData.value);
-  emit('metadataChanged', completionMetaData.value);
   if (!searchQuery.value.trim()) return;
 
   currentMsgId.value = uuidv4();

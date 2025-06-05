@@ -1,10 +1,17 @@
 <template>
-  <div class="chat-list overflow-x-hidden h-full">
-    <div v-for="group in groupedChats" :key="group.label" class="chat-group">
+  <div class="chat-list overflow-x-hidden h-full bg-white dark:bg-gray-900">
+    <div
+      v-for="group in groupedChats"
+      :key="group.label"
+      class="chat-group"
+    >
       <!-- Sticky Group Header -->
-      <div class="sticky-header text-xs text-primary-brandTextSecondary">
+      <div
+        class="sticky top-0 z-10 px-4 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800"
+      >
         {{ group.label }}
       </div>
+
       <!-- Chat Items -->
       <div>
         <ChatItem
@@ -46,7 +53,7 @@ const emit = defineEmits([
   'download-chat',
 ]);
 
-// Helper function to compute group label based on timestamp.
+// Helper: determine grouping label based on timestamp.
 function getGroupLabel(timestamp) {
   const now = new Date();
   const convDate = new Date(timestamp * 1000);
@@ -70,7 +77,8 @@ function getGroupLabel(timestamp) {
   ) {
     return 'Yesterday';
   }
-  // Difference in days.
+
+  // Difference in days
   const diffDays = (now - convDate) / (1000 * 60 * 60 * 24);
   if (diffDays <= 7) {
     return 'Last 7 Days';
@@ -79,7 +87,7 @@ function getGroupLabel(timestamp) {
   } else if (diffDays <= 60) {
     return 'Previous 30 Days';
   } else {
-    // Group by month (e.g., "January 2023")
+    // Fallback: Month Year format (e.g., "January 2023")
     return convDate.toLocaleDateString(undefined, {
       month: 'long',
       year: 'numeric',
@@ -87,7 +95,7 @@ function getGroupLabel(timestamp) {
   }
 }
 
-// Compute grouped conversations.
+// Compute grouped conversations array for rendering.
 const groupedChats = computed(() => {
   const groups = {};
   props.conversations.forEach((conv) => {
@@ -98,31 +106,29 @@ const groupedChats = computed(() => {
     groups[label].push(conv);
   });
 
-  // Order for known groups.
-  const order = [
-    'Today',
-    'Yesterday',
-    'Last 7 Days',
-    'Last 30 Days',
-    'Previous 30 Days',
-  ];
+  // Define a desired order for known groups:
+  const order = ['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'Previous 30 Days'];
   const sortedGroups = [];
+
+  // Push in-order if they exist
   order.forEach((label) => {
     if (groups[label]) {
       sortedGroups.push({ label, conversations: groups[label] });
       delete groups[label];
     }
   });
-  // Remaining groups (by month) sorted descending.
+
+  // For any remaining labels (e.g. "May 2024", "April 2025"), sort descending by date
   Object.keys(groups)
     .sort((a, b) => new Date(b) - new Date(a))
     .forEach((label) => {
       sortedGroups.push({ label, conversations: groups[label] });
     });
+
   return sortedGroups;
 });
 
-// Re-emit events from ChatItem.
+// Re-emit events from ChatItem
 function handleSelectConversation(conversation) {
   emit('select-conversation', conversation);
 }
@@ -142,7 +148,8 @@ function handleDownloadChat(conversationId) {
 
 <style scoped>
 .chat-list {
-  /* max-height: 80vh; Adjust as needed */
+  /* If you still want vertical scrolling, keep this;
+     background color is handled via Tailwind classes now. */
   overflow-y: auto;
 }
 
@@ -150,12 +157,8 @@ function handleDownloadChat(conversationId) {
   margin-bottom: 1rem;
 }
 
-/* Sticky header style */
-.sticky-header {
-  position: sticky;
-  top: 0;
-  background: #ffffff;
-  z-index: 10;
-  padding: 0.5rem 1rem;
-}
+/*
+  We removed the CSS for .sticky-header (background: #ffffff) 
+  because now we rely on Tailwind’s bg-white dark:bg-gray-800.
+*/
 </style>

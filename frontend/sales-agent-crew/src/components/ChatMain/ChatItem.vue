@@ -1,9 +1,9 @@
 <template>
   <div
-    class="p-3 m-1 w-full relative cursor-pointer group"
+    class="p-3 m-1 w-full relative cursor-pointer group dark:hover:bg-gray-700"
     @click="onSelectConversation"
     :class="{
-      'bg-primary-brandDarkGray rounded-md border border-primary-brandFrame':
+      'bg-primary-brandDarkGray rounded-md border border-primary-brandFrame dark:border-gray-700 dark:bg-gray-700':
         isActive,
     }"
   >
@@ -16,10 +16,10 @@
       aria-label="Open menu"
     >
       <svg
-        class="w-5 h-5"
+        class="w-5 h-5 text-gray-600 dark:text-gray-400"
         viewBox="0 0 24 24"
         fill="none"
-        stroke="#667085"
+        stroke="currentColor"
         stroke-width="2"
         stroke-linecap="round"
         stroke-linejoin="round"
@@ -39,7 +39,7 @@
 
     <!-- Conversation details -->
     <div class="w-full relative h-full">
-      <div class="text-md capitalize color-primary-brandGray truncate">
+      <div class="text-md capitalize text-gray-800 dark:text-gray-200 truncate">
         {{ conversation.name ? conversation.name : 'New Chat' }}
       </div>
     </div>

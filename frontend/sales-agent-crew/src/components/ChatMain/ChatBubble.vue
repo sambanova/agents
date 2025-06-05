@@ -1,273 +1,273 @@
 <template>
-    <!-- Handle streaming and agent_completion events -->
-    <li v-if="isStreamingEvent" class="px-4 items-start gap-x-2 sm:gap-x-4">
-      <div class="w-full flex">
-        <UserAvatar :type="provider" />
-        <div class="grow ml-4 p-4 bg-gray-50 rounded-lg">
-          <div class="flex items-center justify-between mb-2">
-            <span class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-              {{ props.event }}
-            </span>
-            <span class="text-xs text-gray-500">{{ formatTimestamp(props.data.timestamp || props.data.additional_kwargs?.timestamp) }}</span>
-          </div>
-          
-          <!-- Main message content -->
-          <div class="bg-white p-3 rounded border">
-            <!-- Message content -->
-            <div class="text-sm whitespace-pre-wrap mb-2">{{ props.data.content }}</div>
-            
-            <!-- Message metadata -->
-            <div class="text-xs text-gray-500">
-              <div v-if="props.data.type">Type: {{ props.data.type }}</div>
-              <div v-if="props.data.additional_kwargs?.agent_type">Agent Type: {{ props.data.additional_kwargs.agent_type }}</div>
-            </div>
+  <!-- Handle streaming and agent_completion events -->
+  <li v-if="isStreamingEvent" class="px-4 items-start gap-x-2 sm:gap-x-4">
+    <div class="w-full flex">
+      <UserAvatar :type="provider" />
+      <div class="grow ml-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+        <div class="flex items-center justify-between mb-2">
+          <span
+            class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+          >
+            {{ props.event }}
+          </span>
+          <span class="text-xs text-gray-500 dark:text-gray-400">
+            {{ formatTimestamp(props.data.timestamp || props.data.additional_kwargs?.timestamp) }}
+          </span>
+        </div>
 
-            <!-- Dropdown for full message details -->
-            <div class="mt-2">
-              <button 
-                @click="toggleDetails"
-                class="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+        <!-- Main message content -->
+        <div class="bg-white dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-600">
+          <!-- Message content -->
+          <div class="text-sm text-gray-800 dark:text-gray-100 whitespace-pre-wrap mb-2">
+            {{ props.data.content }}
+          </div>
+
+          <!-- Message metadata -->
+          <div class="text-xs text-gray-500 dark:text-gray-400">
+            <div v-if="props.data.type">Type: {{ props.data.type }}</div>
+            <div v-if="props.data.additional_kwargs?.agent_type">
+              Agent Type: {{ props.data.additional_kwargs.agent_type }}
+            </div>
+          </div>
+
+          <!-- Dropdown for full message details -->
+          <div class="mt-2">
+            <button
+              @click="toggleDetails"
+              class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 flex items-center gap-1"
+            >
+              {{ showDetails ? 'Hide' : 'Show' }} full details
+              <svg
+                :class="{ 'rotate-180': showDetails }"
+                class="w-4 h-4 transition-transform text-gray-600 dark:text-gray-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
               >
-                {{ showDetails ? 'Hide' : 'Show' }} full details
-                <svg 
-                  :class="{'rotate-180': showDetails}"
-                  class="w-4 h-4 transition-transform"
+                <path d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            <!-- Full message details -->
+            <div
+              v-if="showDetails"
+              class="mt-2 p-2 bg-gray-50 dark:bg-gray-700 rounded text-xs font-mono whitespace-pre-wrap text-gray-800 dark:text-gray-200"
+            >
+              {{ JSON.stringify(props.data, null, 2) }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </li>
+
+  <!-- Check if event is 'user_message' -->
+  <li
+    v-else-if="props.event === 'user_message'"
+    class="flex px-4 items-start gap-x-2 sm:gap-x-4"
+  >
+    <div class="grow text-end space-y-3">
+      <!-- Card -->
+      <div class="inline-block flex justify-end">
+        <p class="text-[16px] text-left color-primary-brandGray dark:text-gray-100 max-w-[80%] w-auto">
+          {{ props.data }}
+        </p>
+      </div>
+      <!-- End Card -->
+    </div>
+    <UserAvatar :type="'user'" />
+  </li>
+
+  <!-- For all other cases -->
+  <li
+    v-else
+    class="relative px-4 items-start gap-x-2 sm:gap-x-4 group"
+  >
+    <div class="w-full relative flex items-center">
+      <UserAvatar :type="provider" />
+      <div class="grow relative text-start space-y-3">
+        <!-- Card -->
+        <div class="inline-block">
+          <div
+            class="relative p-4 flex items-center capitalize space-y-3 font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center capitalize text-gray-800 dark:text-gray-100"
+          >
+            {{ provider === 'sambanova' ? 'SambaNova' : provider }} Agent
+            <!-- Menu button: visible on hover -->
+            <button
+              v-if="
+                parsedData.agent_type === 'sales_leads' ||
+                parsedData.agent_type === 'financial_analysis' ||
+                parsedData.agent_type === 'deep_research'
+              "
+              type="button"
+              class="ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+              @click.stop="toggleMenu"
+              @mousedown.stop
+              aria-label="Open menu"
+            >
+              <svg
+                class="w-5 h-5 text-gray-600 dark:text-gray-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="5" r="1" />
+                <circle cx="12" cy="12" r="1" />
+                <circle cx="12" cy="19" r="1" />
+              </svg>
+            </button>
+
+            <!-- Popover menu -->
+            <div
+              v-if="activeMenu"
+              class="absolute right-1 top-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-lg rounded z-30"
+              @click.stop
+            >
+              <button
+                class="flex items-center w-full px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-100 text-left"
+                @click="generatePDFFromHtml"
+              >
+                <svg
+                  class="w-5 h-5 mr-2 text-gray-600 dark:text-gray-400"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
                   stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
                 >
-                  <path d="M19 9l-7 7-7-7" />
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
+                Download PDF
               </button>
-              
-              <!-- Full message details -->
-              <div v-if="showDetails" class="mt-2 p-2 bg-gray-50 rounded text-xs font-mono whitespace-pre-wrap">
-                {{ JSON.stringify(props.data, null, 2) }}
-              </div>
             </div>
           </div>
         </div>
       </div>
-    </li>
+    </div>
+    <div class="w-full bg-white dark:bg-gray-800">
+      <AnalysisTimeline
+        :isLoading="isLoading"
+        :parsedData="parsedData"
+        :workflowData="workflowData"
+        :presentMetadata="parsedData.metadata"
+        :plannerText="plannerText"
+      />
+      <component :id="'chat-' + messageId" :is="selectedComponent" :parsed="parsedData" />
+    </div>
+  </li>
+</template>
 
-    <!-- Check if event is 'user_message' -->
-    <li
-      v-else-if="props.event === 'user_message'" 
-      class="flex px-4 items-start gap-x-2 sm:gap-x-4"
-    >
-      <div class="grow text-end space-y-3">
-        <!-- Card -->
-        <div class="inline-block flex justify-end">
-          <p class="text-[16px] text-left color-primary-brandGray max-w-[80%] w-auto">
-            {{ props.data }}
-          </p>
-        </div>
-        <!-- End Card -->
-      </div>
-      <UserAvatar :type="user" />
-    </li>
-    
-    <!-- For all other cases -->
-    <li v-else class="relative px-4 items-start gap-x-2 sm:gap-x-4">
-      <div class="w-full relative flex items-center">
-        <UserAvatar :type="provider" />   
-        <div class="grow relative text-start space-y-3">
-          <!-- Card -->
-          <div class="inline-block">
-            <div class="relative p-4 flex items-center capitalize space-y-3 font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center capitalize">
-              {{ provider==="sambanova"?"SambaNova":provider }} Agent
-              <!-- Menu button: visible on hover -->
-              <button
-                v-if="parsedData.agent_type==='sales_leads'||parsedData.agent_type==='financial_analysis'||parsedData.agent_type==='deep_research'"
-                type="button"
-                class="group-hover:opacity-100 transition-opacity duration-200"
-                @click.stop="toggleMenu"
-                @mousedown.stop
-                aria-label="Open menu"
-              >
-                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="5" r="1" />
-                  <circle cx="12" cy="12" r="1" />
-                  <circle cx="12" cy="19" r="1" />
-                </svg>
-              </button>
-              
-              <!-- Popover menu -->
-              <div
-                v-if="activeMenu"
-                class="absolute right-1 top-8 bg-white border border-gray-200 shadow-lg rounded z-30"
-                @click.stop
-              >
-                <button
-                  class="flex items-center w-full px-4 py-2 hover:bg-gray-100 text-left"
-                  @click="generatePDFFromHtml"
-                >
-                  <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  Download PDF
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="w-full bg-white">          
-        <AnalysisTimeline 
-          :isLoading="isLoading" 
-          :parsedData="parsedData" 
-          :workflowData="workflowData" 
-          :presentMetadata="parsedData.metadata" 
-          :plannerText="plannerText" 
-        />
-        <component :id="'chat-'+messageId" :is="selectedComponent" :parsed="parsedData" />
-      </div>
-    </li>
-  </template>
-  
-  <script setup>
-  import { computed, defineProps, ref,watch,nextTick, provide } from 'vue'
-  
-  import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
-  import AssistantComponent from '@/components/ChatMain/ResponseTypes/AssistantComponent.vue'
-  import UserProxyComponent from '@/components/ChatMain/ResponseTypes/UserProxyComponent.vue'
-  import SalesLeadComponent from '@/components/ChatMain/ResponseTypes/SalesLeadsComponent.vue'
-  import EducationalComponent from '@/components/ChatMain/EducationalComponent.vue'
-  import UnknownTypeComponent from '@/components/ChatMain/ResponseTypes/UnknownTypeComponent.vue'
-  import FinancialAnalysisComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisComponent.vue'
-  import DeepResearchComponent from '@/components/ChatMain/ResponseTypes//DeepResearchComponent.vue'
-  import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue'
-  import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'
+<script setup>
+import { computed, defineProps, ref, watch, nextTick } from 'vue'
 
-  import html2canvas from "html2canvas";
-  import jsPDF from "jspdf";
-  import html2pdf from 'html2pdf.js'
+import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
+import AssistantComponent from '@/components/ChatMain/ResponseTypes/AssistantComponent.vue'
+import UserProxyComponent from '@/components/ChatMain/ResponseTypes/UserProxyComponent.vue'
+import SalesLeadComponent from '@/components/ChatMain/ResponseTypes/SalesLeadsComponent.vue'
+import EducationalComponent from '@/components/ChatMain/EducationalComponent.vue'
+import UnknownTypeComponent from '@/components/ChatMain/ResponseTypes/UnknownTypeComponent.vue'
+import FinancialAnalysisComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisComponent.vue'
+import DeepResearchComponent from '@/components/ChatMain/ResponseTypes/DeepResearchComponent.vue'
+import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue'
+import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'
 
+import html2canvas from 'html2canvas'
+import jsPDF from 'jspdf'
+import html2pdf from 'html2pdf.js'
 
-  function fetchProvider() {
-    // Check if workflowData is an array and has elements
-    if (!props.workflowData || !Array.isArray(props.workflowData)) {
-      return null;
-    }
-    for (let i = 0; i < props.workflowData.length; i++) {
-      if (props.workflowData[i].hasOwnProperty('llm_provider')) {
-        return props.workflowData[i].llm_provider;
-      }
-    }
-    // Return null if no object with 'llm_provider' is found
-    return null;
+function fetchProvider() {
+  if (!props.workflowData || !Array.isArray(props.workflowData)) {
+    return null
   }
-  
- 
-
-  const formattedDuration=(duration) =>{
-      // Format duration to 2 decimal places
-      return duration?.toFixed(2);
+  for (let i = 0; i < props.workflowData.length; i++) {
+    if (props.workflowData[i].hasOwnProperty('llm_provider')) {
+      return props.workflowData[i].llm_provider
     }
-  
-  // Define props
-  const props = defineProps({
-    data: {
-      type: String,
-      required: true
-    },
-    event: {
-      type: String,
-      required: true
-    },
-    plannerText: {
-      type: String,
-      required: true
-    },
-    metadata: {
-      type: Object,
-      required: true
-    },
-    provider: {
-      type: String,
-      required: true
-    },
-    messageId: {
-      type: String,
-      required: true
-    },
-  
-  workflowData: {
-    type: [],
-    required: false // Ensure it's always provided
+  }
+  return null
+}
+
+const formattedDuration = (duration) => {
+  return duration?.toFixed(2)
+}
+
+const props = defineProps({
+  data: {
+    type: String,
+    required: true,
   },
-  
-  })
-  const presentMetadata = computed(() => {
+  event: {
+    type: String,
+    required: true,
+  },
+  plannerText: {
+    type: String,
+    required: true,
+  },
+  metadata: {
+    type: Object,
+    required: true,
+  },
+  provider: {
+    type: String,
+    required: true,
+  },
+  messageId: {
+    type: String,
+    required: true,
+  },
+  workflowData: {
+    type: Array,
+    required: false,
+  },
+})
 
+const parsedData = computed(() => {
+  try {
+    return JSON.parse(props.data)
+  } catch (error) {
+    console.error('Error parsing data in ChatBubble:', error)
+    return {}
+  }
+})
 
-if (!parsedData.metadata) return null;
+const selectedComponent = computed(() => {
+  switch (parsedData.value.agent_type) {
+    case 'assistant':
+      return AssistantComponent
+    case 'educational_content':
+      return EducationalComponent
+    case 'user_proxy':
+      return UserProxyComponent
+    case 'sales_leads':
+      return SalesLeadComponent
+    case 'financial_analysis':
+      return FinancialAnalysisComponent
+    case 'deep_research':
+      return DeepResearchComponent
+    case 'error':
+      return ErrorComponent
+    default:
+      return UnknownTypeComponent
+  }
+})
 
-return parsedData.metadata;
-});
-
-  const presentMetadataOld = computed(() => {
-
-
-  if (!props.metadata) return null;
-
-  return props.metadata;
-});
-
-
-
-
-
-
-
-  
-  // Parse the JSON string safely
-  const parsedData = computed(() => {
-    try {
-      return JSON.parse(props.data)
-    } catch (error) {
-      console.error('Error parsing data in ChatBubble:', error)
-      return {}
-    }
-  })
-  
-  // Choose which sub-component to display based on agent_type
-  const selectedComponent = computed(() => {
-    switch (parsedData.value.agent_type) {
-      case 'assistant':
-        return AssistantComponent
-      case 'educational_content':
-        return EducationalComponent
-      case 'user_proxy':
-        return UserProxyComponent
-      case 'sales_leads':
-        return SalesLeadComponent
-      case 'financial_analysis':
-        return FinancialAnalysisComponent
-      case 'deep_research':
-        return DeepResearchComponent
-      case 'error':
-        return ErrorComponent
-      default:
-        return UnknownTypeComponent
-    }
-  })
-  
-  // Define isOpen; if not passed as prop, define it as a ref
-  const isOpen = ref(false)  // adjust as needed; for instance, based on statusText or other logic
-  const collapsed = ref(true)
+const isOpen = ref(false)
+const collapsed = ref(true)
 function toggleCollapse() {
   collapsed.value = !collapsed.value
 }
 
-// Add refs for UI state
 const showDetails = ref(false)
 const activeMenu = ref(false)
 
-// Toggle functions
 function toggleDetails() {
   showDetails.value = !showDetails.value
 }
@@ -276,9 +276,7 @@ function toggleMenu() {
   activeMenu.value = !activeMenu.value
 }
 
-
-  const headerConfig = ref({
-  // Replace with your actual SVG markup string or generate one dynamically
+const headerConfig = ref({
   SVGMarkup: `
     <svg
       class="logo shrink-0 p-1 rounded-sm"
@@ -297,7 +295,6 @@ function toggleMenu() {
           x2="1000"
           y2="0"
         >
-          <!-- Animate x2 to create a moving effect -->
           <animate
             attributeName="x2"
             from="1000"
@@ -323,96 +320,18 @@ function toggleMenu() {
       />
     </svg>
   `,
-  topHeading: parsedData.agent_type==='sales_leads'?"Sales Lead":parsedData.agent_type==='financial_analysis'?"Financial Report":"Research  Report",
-  subHeading: 'Generated with SambaNova Agents'
+  topHeading:
+    parsedData.agent_type === 'sales_leads'
+      ? 'Sales Lead'
+      : parsedData.agent_type === 'financial_analysis'
+      ? 'Financial Report'
+      : 'Research Report',
+  subHeading: 'Generated with SambaNova Agents',
 })
-
-async function generatePDFFromHtmOLd() {
-  // Close the menu if open
-  toggleMenu();
-
-  // Get the content element to convert
-  const contentElement = document.getElementById('chat-' + props.messageId);
-  if (!contentElement) {
-    console.error('Content element not found');
-    return;
-  }
-
-  // Create a temporary wrapper element
-  const wrapper = document.createElement('div');
-  // Apply padding to match your PDF margins
-  wrapper.style.padding = '10mm';
-
-  // Create a header container for dynamic SVG logo and text
-  const headerContainer = document.createElement('div');
-  headerContainer.style.textAlign = 'center';
-  headerContainer.style.marginBottom = '10mm';
-
-  // Insert dynamic header content using template literals
-  headerContainer.innerHTML = `
-    <div style="display: flex; flex-direction: column; align-items: center;">
-      ${headerConfig.value.SVGMarkup}
-      <h1 style="margin: 5mm 0 0 0; font-size: 18pt;">${headerConfig.value.topHeading}</h1>
-      <p style="margin: 0; font-size: 12pt;">${headerConfig.value.subHeading}</p>
-    </div>
-  `;
-
-  // Append header and cloned content to the wrapper
-  wrapper.appendChild(headerContainer);
-  const clonedContent = contentElement.cloneNode(true);
-  // Remove any extra top margin to avoid overlap
-  clonedContent.style.marginTop = '0mm';
-  wrapper.appendChild(clonedContent);
-
-  // Define html2pdf options; margin is set to 0 because we're handling it in the wrapper
-  const pdfOpts = {
-    margin: 0,
-    filename: 'financial_analysis.pdf',
-    pagebreak: { mode: ['css', 'legacy'] },
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  };
-
-  try {
-    await html2pdf().set(pdfOpts).from(wrapper).save();
-  } catch (e) {
-    console.error('PDF error:', e);
-  }
-}
-
 
 async function generatePDFFromHtml() {
   toggleMenu()
-  const element = document.getElementById('chat-'+props.messageId)
-  
- // Create a temporary wrapper element
- const wrapper = document.createElement('div');
-  // Apply padding to match your PDF margins
-  wrapper.style.padding = '10mm';
-
-  // Create a header container for dynamic SVG logo and text
-  const headerContainer = document.createElement('div');
-  headerContainer.style.textAlign = 'center';
-  headerContainer.style.marginBottom = '10mm';
-
-  // Insert dynamic header content using template literals
-  headerContainer.innerHTML = `
-    <div style="display: flex; flex-direction: column; align-items: center;">
-      ${headerConfig.value.SVGMarkup}
-      <h1 style="margin: 5mm 0 0 0; font-size: 18pt;">${headerConfig.value.topHeading}</h1>
-      <p style="margin: 0; font-size: 12pt;">${headerConfig.value.subHeading}</p>
-    </div>
-  `;
-
-
-  // Append header and cloned content to the wrapper
-  // wrapper.appendChild(headerContainer);
-  // element.prepend(wrapper);
-  // Remove any extra top margin to avoid overlap
-  // clonedContent.style.marginTop = '0mm';
-  // wrapper.appendChild(clonedContent);
-
+  const element = document.getElementById('chat-' + props.messageId)
 
   const pdfOpts = {
     margin: [10, 10],
@@ -422,112 +341,34 @@ async function generatePDFFromHtml() {
     html2canvas: {
       scale: 2,
       useCORS: true,
-      letterRendering: true
+      letterRendering: true,
     },
     jsPDF: {
       unit: 'mm',
       format: 'a4',
-      orientation: 'portrait'
-    }
+      orientation: 'portrait',
+    },
   }
 
   try {
-    
     await html2pdf().set(pdfOpts).from(element).save()
-  } catch(e) {
+  } catch (e) {
     console.error('PDF error:', e)
   }
-  
 }
 
-async function generateSelectablePDF() {
-  // For testing, we use the static element with id "pdf-content".
-  const contentEl = document.getElementById('chat-'+props.messageId)
-  if (!contentEl) {
-    console.error('Content element not found')
-    return
-  }
-
-  // Create a wrapper element to house the content with explicit styling.
-  const wrapper = document.createElement('div')
-  // Set a fixed width (in pixels) that approximates your intended PDF layout.
-  // You may adjust this value (e.g., 800px) to better match your design.
-  wrapper.style.width = '800px'
-  wrapper.style.padding = '20px'
-  wrapper.style.background = '#fff'
-  // Inject the inner HTML from our test content.
-  wrapper.innerHTML = contentEl.innerHTML
-  
-  // Append the wrapper offscreen so that html2canvas can fully render it.
-  wrapper.style.position = 'absolute'
-  wrapper.style.top = '-10000px'
-  document.body.appendChild(wrapper)
-
-  // Wait for the DOM to update and a short delay to ensure full rendering.
-  await nextTick()
-  setTimeout(() => {
-    // Create a new jsPDF instance.
-    // Using unit: 'px' here helps to more directly map from CSS pixels.
-    const doc = new jsPDF({
-      unit: 'px',
-      format: 'a4',
-      orientation: 'portrait'
-    })
-
-    // Render the wrapper using jsPDF's html() method.
-    doc.html(wrapper, {
-      callback: function (doc) {
-        console.log('PDF rendering complete. Saving PDF...')
-        doc.save('output.pdf')
-        // Clean up the temporary wrapper.
-        document.body.removeChild(wrapper)
-      },
-      // Set starting coordinates inside the PDF.
-      x: 10,
-      y: 10,
-      // Specify the content width in the PDF (in px).
-      width: 800,
-      // Adjust html2canvas options.
-      html2canvas: {
-        scale: 1, // lower scale if text is too large; you can try 1 or 1.5
-        useCORS: true,
-        // This helps html2canvas know the intended width of the element.
-        windowWidth: wrapper.scrollWidth
-      }
-    })
-  }, 500) // A delay of 500ms; adjust if necessary
-}
-
-// Add streaming event support
 const isStreamingEvent = computed(() => {
-  return props.event === 'agent_completion' || ['stream_start', 'llm_stream_chunk', 'stream_complete'].includes(props.event)
+  return (
+    props.event === 'agent_completion' ||
+    ['stream_start', 'llm_stream_chunk', 'stream_complete'].includes(props.event)
+  )
 })
-
-function getEventBadgeClass(event) {
-  const classes = {
-    'stream_start': 'bg-blue-100 text-blue-800',
-    'stream_complete': 'bg-purple-100 text-purple-800',
-    'agent_completion': 'bg-green-100 text-green-800',
-    'llm_stream_chunk': 'bg-orange-100 text-orange-800'
-  }
-  return classes[event] || 'bg-gray-100 text-gray-800'
-}
-
-function getEventDotClass(event) {
-  const classes = {
-    'stream_start': 'bg-blue-500',
-    'stream_complete': 'bg-purple-500',
-    'agent_completion': 'bg-green-500',
-    'llm_stream_chunk': 'bg-orange-500'
-  }
-  return classes[event] || 'bg-gray-500'
-}
 
 function formatTimestamp(timestamp) {
   return new Date(timestamp).toLocaleTimeString()
 }
+</script>
 
-  </script>
-  <style>
-
+<style scoped>
+/* No additional styles needed for dark mode here */
 </style>
