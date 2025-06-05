@@ -409,7 +409,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                     "financial_analysis": {
                         "graph": create_financial_analysis_graph(self.redis_client),
                         "state_input_mapper": lambda x: [HumanMessage(content=x)],
-                        "state_output_mapper": lambda x: x,
+                        "state_output_mapper": lambda x: x[-1],
                     },
                     "deep_research": {
                         "graph": create_deep_research_graph(
