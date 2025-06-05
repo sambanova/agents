@@ -10,11 +10,12 @@ from langchain_core.messages import (
 from langchain_core.runnables import Runnable, RunnableConfig
 from langchain.schema.messages import HumanMessage, AIMessage
 from langgraph.types import Interrupt
+from langgraph.types import Command
 
 
 async def astream_state_websocket(
     app: Runnable,
-    input: Union[Sequence[AnyMessage], Dict[str, Any]],
+    input: HumanMessage,
     config: RunnableConfig,
     websocket_manager: WebSocketInterface,
     user_id: str,
@@ -25,10 +26,22 @@ async def astream_state_websocket(
     root_run_id: Optional[str] = None
     messages: dict[str, BaseMessage] = {}
 
+    if "resume" in input.additional_kwargs and input.additional_kwargs["resume"]:
+        # Decide if it's feedback or a brand-new request
+        if input.content.lower() == "true":
+            graph_input = Command(resume=True)
+        elif input.content.lower() == "false":
+            graph_input = Command(resume=False)
+        elif input.content and (not message.parameters.deep_research_topic):
+            # user typed some text, treat it as feedback
+            graph_input = Command(resume=input.content)
+    else:
+        graph_input = input
+
     interrupt = False
 
     async for event in app.astream_events(
-        input,
+        graph_input,
         config,
         version="v1",
         stream_mode="values",
@@ -95,21 +108,35 @@ async def astream_state_websocket(
             if new_messages:
                 # Send new messages via WebSocket
                 for msg in new_messages:
+
+                    converted_msg = convert_messages_to_dict([msg])[0]
+
+                    timestamp = converted_msg.get("additional_kwargs", {}).get(
+                        "timestamp"
+                    )
+                    if not timestamp:
+                        timestamp = msg.additional_kwargs.get("timestamp")
+                    if not timestamp:
+                        timestamp = datetime.now(timezone.utc).isoformat()
+
+                    if converted_msg.get("type") == "Interrupt":
+                        agent_type = "deep_research_interrupt"
+                    else:
+                        agent_type = converted_msg["additional_kwargs"]["agent_type"]
+                    del converted_msg["additional_kwargs"]
+
                     await websocket_manager.send_message(
                         user_id,
                         conversation_id,
                         {
                             "event": "agent_completion",
                             "run_id": root_run_id,
-                            **convert_messages_to_dict([msg])[0],
+                            **converted_msg,
                             "user_id": user_id,
                             "conversation_id": conversation_id,
                             "message_id": message_id,
-                            "timestamp": (
-                                msg.additional_kwargs.get("timestamp")
-                                if hasattr(msg, "additional_kwargs")
-                                else datetime.now(timezone.utc).isoformat()
-                            ),
+                            "timestamp": timestamp,
+                            "agent_type": agent_type,
                         },
                     )
 
@@ -245,7 +272,10 @@ def convert_messages_to_dict(output_list):
                 {
                     "content": item.value,
                     "type": "AIMessage",
-                    "agent_type": "deep_research_interrupt",
+                    "additional_kwargs": {
+                        "agent_type": "deep_research_interrupt",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    },
                 }
             )
         else:

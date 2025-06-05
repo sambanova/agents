@@ -12,6 +12,7 @@ import asyncio
 from typing import Optional, Dict
 import redis
 from starlette.websockets import WebSocketState
+from langchain_core.messages import AIMessage
 
 from agents.api.data_types import (
     APIKeys,
@@ -397,19 +398,31 @@ class WebSocketConnectionManager(WebSocketInterface):
 
                 input_ = HumanMessage(
                     content=user_message_input["data"],
-                    additional_kwargs={"timestamp": user_message_input["timestamp"]},
+                    additional_kwargs={
+                        "timestamp": user_message_input["timestamp"],
+                        "agent_type": "human",
+                        "resume": user_message_input["resume"],
+                    },
                 )
 
                 config["configurable"]["type==default/subgraphs"] = {
                     "financial_analysis": {
                         "graph": create_financial_analysis_graph(self.redis_client),
                         "state_input_mapper": lambda x: [HumanMessage(content=x)],
+                        "state_output_mapper": lambda x: x,
                     },
                     "deep_research": {
                         "graph": create_deep_research_graph(
                             api_keys.sambanova_key, "sambanova", request_timeout=120
                         ),
                         "state_input_mapper": lambda x: {"topic": x},
+                        "state_output_mapper": lambda x: AIMessage(
+                            content=x["final_report"],
+                            additional_kwargs={
+                                "agent_type": "deep_research_end",
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                            },
+                        ),
                     },
                 }
 

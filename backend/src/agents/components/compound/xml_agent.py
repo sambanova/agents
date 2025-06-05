@@ -173,7 +173,10 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
 
     # Create subgraph entry nodes
     def create_subgraph_entry_node(
-        subgraph_name: str, state_input_mapper: Callable, subgraph
+        subgraph_name: str,
+        state_input_mapper: Callable,
+        state_output_mapper: Callable,
+        subgraph,
     ):
         async def subgraph_entry_node(messages, *, config: RunnableConfig = None):
             last_message = messages[-1]
@@ -194,7 +197,7 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
             # For MessageGraph, pass messages directly, not wrapped in a dict
             result = await subgraph.ainvoke(subgraph_messages, config)
 
-            return result[-1]
+            return state_output_mapper(result)
 
         return subgraph_entry_node
 
@@ -214,7 +217,10 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
         workflow.add_node(
             node_name,
             create_subgraph_entry_node(
-                subgraph_name, subgraph_def["state_input_mapper"], subgraph_def["graph"]
+                subgraph_name,
+                subgraph_def["state_input_mapper"],
+                subgraph_def["state_output_mapper"],
+                subgraph_def["graph"],
             ),
         )
         subgraph_routing[node_name] = node_name
@@ -244,10 +250,10 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
 def _collapse_messages(messages):
 
     # Edge case for financial analysis subgraphs (this one does not return a message after the observation)
-    if (
-        len(messages) == 2
-        and messages[-1].additional_kwargs.get("agent_type") == "financial_analysis_end"
-    ):
+    if len(messages) == 2 and messages[-1].additional_kwargs.get("agent_type") in [
+        "financial_analysis_end",
+        "deep_research_end",
+    ]:
         log = f"{messages[0].content}<observation>{messages[1].content}</observation>"
         return AIMessage(content=log)
 

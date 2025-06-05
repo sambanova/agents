@@ -8,18 +8,18 @@
             <span class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
               {{ props.event }}
             </span>
-            <span class="text-xs text-gray-500">{{ formatTimestamp(props.data.timestamp || props.data.additional_kwargs?.timestamp) }}</span>
+            <span class="text-xs text-gray-500">{{ formatTimestamp(props.data.timestamp) }}</span>
           </div>
           
           <!-- Main message content -->
           <div class="bg-white p-3 rounded border">
             <!-- Message content -->
-            <div class="text-sm whitespace-pre-wrap mb-2">{{ props.data.content }}</div>
+            <div class="text-sm whitespace-pre-wrap mb-2">{{ getStreamingContent() }}</div>
             
             <!-- Message metadata -->
             <div class="text-xs text-gray-500">
               <div v-if="props.data.type">Type: {{ props.data.type }}</div>
-              <div v-if="props.data.additional_kwargs?.agent_type">Agent Type: {{ props.data.additional_kwargs.agent_type }}</div>
+              <div v-if="props.data.agent_type">Agent Type: {{ props.data.agent_type }}</div>
             </div>
 
             <!-- Dropdown for full message details -->
@@ -525,6 +525,16 @@ function getEventDotClass(event) {
 
 function formatTimestamp(timestamp) {
   return new Date(timestamp).toLocaleTimeString()
+}
+
+function getStreamingContent() {
+  if (props.event === 'llm_stream_chunk') {
+    // For llm_stream_chunk, content is at data.data.content
+    return props.data?.data?.content || ''
+  } else {
+    // For agent_completion and other events, content is at data.content
+    return props.data?.content || ''
+  }
 }
 
   </script>

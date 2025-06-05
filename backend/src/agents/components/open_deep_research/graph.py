@@ -372,6 +372,8 @@ async def generate_queries(writer_model, state: SectionState, config: RunnableCo
         ],
         task="Generate search queries",
         session_id=session_id,
+        config=configurable,
+        llm_name=get_model_name(writer_model),
     )
 
     logger.info(
