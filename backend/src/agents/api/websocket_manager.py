@@ -4,10 +4,6 @@ from agents.components.compound.assistant import get_assistant
 from agents.components.compound.financial_analysis_subgraph import (
     create_financial_analysis_graph,
 )
-from agents.components.compound.simple_subgraph_example import (
-    create_simple_analyzer_subgraph,
-    create_simple_greeter_subgraph,
-)
 from agents.components.open_deep_research.graph import create_deep_research_graph
 from autogen_core import DefaultTopicId
 from fastapi import WebSocket, WebSocketDisconnect
@@ -405,14 +401,16 @@ class WebSocketConnectionManager(WebSocketInterface):
                 )
 
                 config["configurable"]["type==default/subgraphs"] = {
-                    "financial_analysis": create_financial_analysis_graph(
-                        self.redis_client
-                    ),
-                    "deep_research": create_deep_research_graph(
-                        api_keys.sambanova_key,
-                        "sambanova",
-                        request_timeout=120,
-                    ),
+                    "financial_analysis": {
+                        "graph": create_financial_analysis_graph(self.redis_client),
+                        "state_input_mapper": lambda x: [HumanMessage(content=x)],
+                    },
+                    "deep_research": {
+                        "graph": create_deep_research_graph(
+                            api_keys.sambanova_key, "sambanova", request_timeout=120
+                        ),
+                        "state_input_mapper": lambda x: {"topic": x},
+                    },
                 }
 
                 # Stream the response directly via WebSocket

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from agents.components.compound.message_types import LiberalAIMessage
 from agents.components.financial_analysis.financial_analysis_crew import (
     FinancialAnalysisCrew,
 )
@@ -41,8 +42,8 @@ def create_financial_analysis_graph(redis_client: SecureRedisService):
 
         result = await crew.execute_financial_analysis(inputs)
 
-        return AIMessage(
-            content=result[0],
+        return LiberalAIMessage(
+            content=result[0].model_dump(),
             additional_kwargs={
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "agent_type": "financial_analysis_end",

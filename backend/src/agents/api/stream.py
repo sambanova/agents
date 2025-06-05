@@ -9,6 +9,7 @@ from langchain_core.messages import (
 )
 from langchain_core.runnables import Runnable, RunnableConfig
 from langchain.schema.messages import HumanMessage, AIMessage
+from langgraph.types import Interrupt
 
 
 async def astream_state_websocket(
@@ -23,6 +24,8 @@ async def astream_state_websocket(
     """Stream messages from the runnable directly to WebSocket."""
     root_run_id: Optional[str] = None
     messages: dict[str, BaseMessage] = {}
+
+    interrupt = False
 
     async for event in app.astream_events(
         input,
@@ -58,6 +61,9 @@ async def astream_state_websocket(
                 # StateGraph format - extract messages from state
                 if "messages" in state_chunk:
                     state_chunk_msgs = state_chunk["messages"]
+                elif "__interrupt__" in state_chunk:
+                    state_chunk_msgs = state_chunk["__interrupt__"]
+                    interrupt = True
                 else:
                     # Skip non-message state updates
                     continue
@@ -99,7 +105,11 @@ async def astream_state_websocket(
                             "user_id": user_id,
                             "conversation_id": conversation_id,
                             "message_id": message_id,
-                            "timestamp": msg.additional_kwargs.get("timestamp"),
+                            "timestamp": (
+                                msg.additional_kwargs.get("timestamp")
+                                if hasattr(msg, "additional_kwargs")
+                                else datetime.now(timezone.utc).isoformat()
+                            ),
                         },
                     )
 
@@ -134,27 +144,46 @@ async def astream_state_websocket(
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             )
+        # Stop streaming if an interrupt is detected
+        if interrupt:
+            break
 
-    # Send completion event
-    await websocket_manager.send_message(
-        user_id,
-        conversation_id,
-        {
-            "event": "stream_complete",
-            "run_id": root_run_id,
-            "data": {
-                "output": convert_messages_to_dict(
-                    event["data"]["output"]
-                    if isinstance(event["data"]["output"], list)
-                    else [event["data"]["output"]]
-                ),
+    if interrupt:
+        # Send completion event
+        await websocket_manager.send_message(
+            user_id,
+            conversation_id,
+            {
+                "event": "stream_complete",
+                "run_id": root_run_id,
+                "data": {},
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
-            "user_id": user_id,
-            "conversation_id": conversation_id,
-            "message_id": message_id,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        },
-    )
+        )
+    else:
+        # Send completion event
+        await websocket_manager.send_message(
+            user_id,
+            conversation_id,
+            {
+                "event": "stream_complete",
+                "run_id": root_run_id,
+                "data": {
+                    "output": convert_messages_to_dict(
+                        event["data"]["output"]
+                        if isinstance(event["data"]["output"], list)
+                        else [event["data"]["output"]]
+                    ),
+                },
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
 
 def convert_messages_to_dict(output_list):
@@ -210,6 +239,15 @@ def convert_messages_to_dict(output_list):
             # Add the message type
             msg_dict["type"] = item.__class__.__name__
             result.append(msg_dict)
+
+        elif isinstance(item, Interrupt):
+            result.append(
+                {
+                    "content": item.value,
+                    "type": "AIMessage",
+                    "agent_type": "deep_research_interrupt",
+                }
+            )
         else:
             # Handle other types as-is (no ID to check for duplicates)
             result.append(item)

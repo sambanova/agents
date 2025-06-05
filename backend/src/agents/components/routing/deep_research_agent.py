@@ -1,7 +1,8 @@
 ########## deep_research_agent.py (NEW CODE) ##########
 import asyncio
 import json
-from typing import Any, Union
+import time
+from typing import Any, Callable, Union
 import uuid
 from agents.storage.redis_service import SecureRedisService
 
@@ -32,10 +33,76 @@ from agents.registry.model_registry import model_registry
 from agents.utils.logging import logger
 from agents.components.open_deep_research.graph import (
     LLMTimeoutError,
-    create_publish_callback,
     create_deep_research_graph,
 )
 from agents.utils.error_utils import format_api_error_message
+
+
+def create_publish_callback(
+    user_id: str,
+    conversation_id: str,
+    message_id: str,
+    agent_name: str,
+    workflow_name: str,
+    redis_client: SecureRedisService,
+    token_usage_callback: Callable[[dict], None] = None,
+):
+
+    def callback(
+        message: str,
+        llm_name: str,
+        task: str,
+        usage: dict,
+        llm_provider: str,
+        duration: float,
+    ):
+        response_duration = usage.get("end_time", 0) - usage.get("start_time", 0)
+        if response_duration > 0:
+            duration = response_duration
+
+        # Track token usage if callback provided
+        if token_usage_callback and usage:
+            token_usage = {
+                "total_tokens": usage.get("total_tokens", 0),
+                "prompt_tokens": usage.get("prompt_tokens", 0),
+                "completion_tokens": usage.get("completion_tokens", 0),
+            }
+            token_usage_callback(token_usage)
+
+        message_data = {
+            "user_id": user_id,
+            "run_id": conversation_id,
+            "message_id": message_id,
+            "agent_name": agent_name,
+            "text": message,
+            "timestamp": time.time(),
+            "metadata": {
+                "workflow_name": workflow_name,
+                "agent_name": agent_name,
+                "llm_name": llm_name,
+                "llm_provider": llm_provider,
+                "task": task,
+                "total_tokens": usage.get("total_tokens", 0),
+                "prompt_tokens": usage.get("prompt_tokens", 0),
+                "completion_tokens": usage.get("completion_tokens", 0),
+                "acceptance_rate": usage.get("acceptance_rate", 0),
+                "completion_tokens_after_first_per_sec": usage.get(
+                    "completion_tokens_after_first_per_sec", 0
+                ),
+                "completion_tokens_after_first_per_sec_first_ten": usage.get(
+                    "completion_tokens_after_first_per_sec_first_ten", 0
+                ),
+                "completion_tokens_per_sec": usage.get("completion_tokens_per_sec", 0),
+                "time_to_first_token": usage.get("time_to_first_token", 0),
+                "total_latency": usage.get("total_latency", 0),
+                "total_tokens_per_sec": usage.get("total_tokens_per_sec", 0),
+                "duration": duration,
+            },
+        }
+        channel = f"agent_thoughts:{user_id}:{conversation_id}"
+        redis_client.publish(channel, json.dumps(message_data))
+
+    return callback
 
 
 @type_subscription(topic_type="deep_research")
