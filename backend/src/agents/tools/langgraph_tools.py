@@ -340,8 +340,8 @@ def _get_daytona(user_id: str):
 
             sandbox = daytona.create(params=params)
 
-            patched_code, expected_filenames = patch_plot_code_str(code_to_run)
-            response = sandbox.process.code_run(patched_code)
+            # patched_code, expected_filenames = patch_plot_code_str(code_to_run)
+            response = sandbox.process.code_run(code_to_run)
 
             # Ensure result is a string, even if None or other types
             result_str = str(response.result) if response.result is not None else ""
@@ -352,21 +352,21 @@ def _get_daytona(user_id: str):
                 error_detail = result_str
                 return f"Error (Exit Code {response.exit_code}): {error_detail}"
 
-            for filename in expected_filenames:
-                extension = os.path.splitext(filename)[1].lstrip(".")
-                try:
-                    image_id = str(uuid.uuid4())
-                    content = sandbox.fs.download_file(filename)
-                    await put_file(
-                        user_id,
-                        image_id,
-                        data=content,
-                        title=filename,
-                        format=extension,
-                    )
-                    result_str += f"\n\n![{filename}](attachment:{image_id})"
-                except Exception as e:
-                    pass
+            # for filename in expected_filenames:
+            #     extension = os.path.splitext(filename)[1].lstrip(".")
+            #     try:
+            #         image_id = str(uuid.uuid4())
+            #         content = sandbox.fs.download_file(filename)
+            #         await put_file(
+            #             user_id,
+            #             image_id,
+            #             data=content,
+            #             title=filename,
+            #             format=extension,
+            #         )
+            #         result_str += f"\n\n![{filename}](attachment:{image_id})"
+            #     except Exception as e:
+            #         pass
 
             daytona.remove(sandbox)
 
@@ -374,9 +374,9 @@ def _get_daytona(user_id: str):
                 for i, chart in enumerate(response.artifacts.charts):
                     image_id = str(uuid.uuid4())
                     title = chart.title or f"Chart {i+1}"
-                    await put_file(
-                        user_id, image_id, data=chart.png, title=title, format="png"
-                    )
+                    # await put_file(
+                    #     user_id, image_id, data=chart.png, title=title, format="png"
+                    # )
                     result_str += f"\n\n![{title}](attachment:{image_id})"
 
             return result_str
