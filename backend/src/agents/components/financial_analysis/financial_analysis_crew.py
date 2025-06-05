@@ -189,7 +189,6 @@ class FinancialAnalysisCrew:
         self,
         llm_api_key: str,
         provider: str,
-        serper_key: str,
         user_id: str = "",
         run_id: str = "",
         docs_included: bool = False,
@@ -231,7 +230,6 @@ class FinancialAnalysisCrew:
             api_key=llm_api_key,
             base_url=aggregator_model_info["url"],
         )
-        self.serper_key = serper_key
         self.user_id = user_id
         self.run_id = run_id
         self.docs_included = docs_included
@@ -301,7 +299,6 @@ class FinancialAnalysisCrew:
         )
 
         # 6) news
-        os.environ["SERPER_API_KEY"] = self.serper_key
         self.news_agent = Agent(
             role="Financial News Agent",
             goal="Fetch the top ~10 recent news articles relevant to {ticker}'s stock price using the 'SerperDevTool'.",
@@ -488,7 +485,7 @@ class FinancialAnalysisCrew:
             converter_cls=CustomConverter,
         )
 
-    def execute_financial_analysis(
+    async def execute_financial_analysis(
         self, inputs: Dict[str, Any]
     ) -> Tuple[str, Dict[str, Any]]:
         """
@@ -497,6 +494,7 @@ class FinancialAnalysisCrew:
         3) Aggregator => merges
         Return final JSON as string (pydantic).
         """
+
         # Parallel after competitor tasks => speeds up
         crew = Crew(
             agents=[
@@ -525,5 +523,5 @@ class FinancialAnalysisCrew:
             process=Process.sequential,  # now we use parallel for tasks, aggregator last
             verbose=self.verbose,
         )
-        final = crew.kickoff(inputs=inputs)
+        final = await crew.kickoff_async(inputs=inputs)
         return final.pydantic.model_dump_json(), dict(final.token_usage)

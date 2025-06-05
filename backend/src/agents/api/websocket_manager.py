@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta, timezone
 import os
 from agents.components.compound.assistant import get_assistant
+from agents.components.compound.financial_analysis_subgraph import (
+    create_financial_analysis_subgraph,
+)
 from agents.components.compound.simple_subgraph_example import (
     create_simple_analyzer_subgraph,
     create_simple_greeter_subgraph,
@@ -392,6 +395,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                     thread_id=conversation_id,
                     api_keys=api_keys,
                     provider=user_message_input["provider"],
+                    message_id=user_message_input["message_id"],
                 )
 
                 input_ = HumanMessage(
@@ -400,8 +404,9 @@ class WebSocketConnectionManager(WebSocketInterface):
                 )
 
                 config["configurable"]["type==default/subgraphs"] = {
-                    "greeter": create_simple_greeter_subgraph(),
-                    "analyzer": create_simple_analyzer_subgraph(),
+                    "financial_analysis": create_financial_analysis_subgraph(
+                        self.redis_client
+                    ),
                 }
 
                 # Stream the response directly via WebSocket
@@ -591,7 +596,11 @@ from langchain_core.runnables import RunnableConfig
 
 # TODO: move this
 async def _run_input_and_config(
-    user_id: str, thread_id: str, api_keys: APIKeys, provider: str
+    user_id: str,
+    thread_id: str,
+    api_keys: APIKeys,
+    provider: str,
+    message_id: str,
 ):
     # thread = await get_thread(user_id, payload.thread_id)
     # if not thread:
@@ -618,6 +627,7 @@ async def _run_input_and_config(
             "thread_id": thread_id,
             "user_id": user_id,
             "api_key": api_key,
+            "message_id": message_id,
         },
     }
 

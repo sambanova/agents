@@ -58,7 +58,7 @@ class FinancialAnalysisAgent(RoutedAgent):
             logger.info(logger.format_message(None, "Including additional document analysis in financial analysis"))
 
         # Run the synchronous function in a thread pool
-        raw_result, usage_stats = await asyncio.to_thread(crew.execute_financial_analysis, inputs)
+        raw_result, usage_stats = await crew.execute_financial_analysis(inputs)
         return raw_result, usage_stats
 
     @message_handler

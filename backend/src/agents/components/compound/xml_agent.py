@@ -176,7 +176,7 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
             last_message = messages[-1]
             # Parse subgraph input
             content = last_message.content
-            if "<   >" not in content:
+            if "<subgraph_input>" not in content:
                 subgraph_input = ""
             else:
                 subgraph_input_part = content.split("<subgraph_input>")[1]
@@ -237,6 +237,15 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
 
 
 def _collapse_messages(messages):
+
+    # Edge case for financial analysis subgraphs (this one does not return a message after the observation)
+    if (
+        len(messages) == 2
+        and messages[-1].additional_kwargs.get("agent_type") == "financial_analysis_end"
+    ):
+        log = f"{messages[0].content}<observation>{messages[1].content}</observation>"
+        return AIMessage(content=log)
+
     log = ""
     if isinstance(messages[-1], AIMessage):
         scratchpad = messages[:-1]
