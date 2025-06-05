@@ -13,7 +13,7 @@ from langgraph.graph.message import MessageGraph
 from langchain_core.runnables import RunnableConfig
 
 
-def create_financial_analysis_subgraph(redis_client: SecureRedisService):
+def create_financial_analysis_graph(redis_client: SecureRedisService):
     """Create a simple subgraph with just one node that greets the user."""
 
     async def financial_analysis_node(messages, *, config: RunnableConfig = None):

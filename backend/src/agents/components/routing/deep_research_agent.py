@@ -33,7 +33,7 @@ from agents.utils.logging import logger
 from agents.components.open_deep_research.graph import (
     LLMTimeoutError,
     create_publish_callback,
-    get_graph,
+    create_deep_research_graph,
 )
 from agents.utils.error_utils import format_api_error_message
 
@@ -145,7 +145,7 @@ class DeepResearchAgent(RoutedAgent):
                 graph_input = {"topic": message.parameters.deep_research_topic}
 
         memory = self._get_or_create_memory(session_id)
-        builder = get_graph(
+        builder = create_deep_research_graph(
             getattr(
                 self.api_keys, model_registry.get_api_key_env(provider=message.provider)
             ),
