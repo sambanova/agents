@@ -21,13 +21,13 @@
     <div class="w-full flex">
       <UserAvatar :type="provider" />
       <div class="grow ml-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-        <div class="flex  items-center justify-between mb-2">
+        <div class="flex hidden items-center justify-between mb-2">
           <span
             class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
           >
             {{ props.event }}
           </span>
-          <span class="text-xs text-gray-500 dark:text-gray-400">
+          <span class="text-xs hidden text-gray-500 dark:text-gray-400">
             {{ formatTimestamp(props.data.timestamp || props.data.additional_kwargs?.timestamp) }}
           </span>
         </div>
@@ -46,7 +46,7 @@
               <!-- {{ props.data.content }} -->
             </div>
           <!-- Message metadata -->
-          <div class="text-xs text-gray-500 dark:text-gray-400">
+          <div class="text-xs text-gray-500 dark:text-gray-400 hidden">
             <div v-if="props.data.type">Type: {{ props.data.type }}</div>
             <div v-if="props.data.additional_kwargs?.agent_type">
               Agent Type: {{ props.data.additional_kwargs.agent_type }}
