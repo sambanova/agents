@@ -1,10 +1,27 @@
 <template>
   <!-- Handle streaming and agent_completion events -->
-  <li v-if="isStreamingEvent" class="px-4 items-start gap-x-2 sm:gap-x-4">
+    <template v-if="isStreamingEvent">
+  
+   <li
+    v-if="props.data.type === 'HumanMessage'"
+    class="flex px-4 items-start gap-x-2 sm:gap-x-4"
+  >
+    <div class="grow text-end space-y-3">
+      <!-- Card -->
+      <div class="inline-block flex justify-end">
+        <p class="text-[16px] text-left color-primary-brandGray dark:text-gray-100 max-w-[80%] w-auto">
+          {{ props.data.content }}
+        </p>
+      </div>
+      <!-- End Card -->
+    </div>
+    <UserAvatar :type="'user'" />
+  </li>
+      <li v-else class="px-4 items-start gap-x-2 sm:gap-x-4">
     <div class="w-full flex">
       <UserAvatar :type="provider" />
       <div class="grow ml-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-        <div class="flex items-center justify-between mb-2">
+        <div class="flex  items-center justify-between mb-2">
           <span
             class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
           >
@@ -16,12 +33,18 @@
         </div>
 
         <!-- Main message content -->
-        <div class="bg-white dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-600">
+        <div class=" p-3  ">
           <!-- Message content -->
-          <div class="text-sm text-gray-800 dark:text-gray-100 whitespace-pre-wrap mb-2">
-            {{ props.data.content }}
+          <div class="text-sm prose text-gray-800 dark:text-gray-100  mb-2">
+            <!-- {{  formattedText(props.data.content) }} -->
+                <!-- <div class="markdown-content" v-html="formattedText(parsedData.content||'')"></div> -->
+<!-- {{ parsedData.content }} -->
           </div>
-
+        <div class="prose prose-sm  prose prose-sm dark:prose-invert mb-2 text-gray-800 dark:text-gray-100 mb-2">
+              <!-- Render Markdown → HTML here -->
+              <div v-html="renderMarkdown((props.data.content) || '')"></div>
+              <!-- {{ props.data.content }} -->
+            </div>
           <!-- Message metadata -->
           <div class="text-xs text-gray-500 dark:text-gray-400">
             <div v-if="props.data.type">Type: {{ props.data.type }}</div>
@@ -60,11 +83,13 @@
         </div>
       </div>
     </div>
+ 
   </li>
-
+    
+</template>
   <!-- Check if event is 'user_message' -->
   <li
-    v-else-if="props.event === 'user_message'"
+    v-else-if="props.type === 'user_message'"
     class="flex px-4 items-start gap-x-2 sm:gap-x-4"
   >
     <div class="grow text-end space-y-3">
@@ -181,7 +206,8 @@ import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import html2pdf from 'html2pdf.js'
-
+import { formattedText } from '@/utils/formatText'
+import { marked } from 'marked'
 function fetchProvider() {
   if (!props.workflowData || !Array.isArray(props.workflowData)) {
     return null
@@ -328,7 +354,10 @@ const headerConfig = ref({
       : 'Research Report',
   subHeading: 'Generated with SambaNova Agents',
 })
-
+function renderMarkdown(mdText) {
+  // marked.parse(...) converts Markdown → safe-ish HTML
+  return marked.parse(mdText)
+}
 async function generatePDFFromHtml() {
   toggleMenu()
   const element = document.getElementById('chat-' + props.messageId)

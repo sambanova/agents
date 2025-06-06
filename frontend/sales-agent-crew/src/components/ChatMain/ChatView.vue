@@ -3,12 +3,22 @@
     <!-- Content -->
     <div
       ref="container"
-      class="relative h-full flex flex-col overflow-x-hidden overflow-y-auto"
+      class="relative h-full flex  overflow-x-hidden overflow-y-auto"
+       :class="
+          messagesData.length == 0 ? 'justify-center align-center flex-col' : 'flex-col'
+        "
     >
-      <!-- Sticky Top Component -->
+     
+      <div
+        class=" w-full flex mx-auto"
+        :class="
+          messagesData.length == 0 ? 'justify-center align-center flex-col' : 'flex-1'
+        "
+      >
+       <!-- Sticky Top Component -->
       <div
         v-if="chatName"
-        class="sticky h-[62px] top-0 z-10 bg-white dark:bg-gray-800 p-4 shadow"
+        class="sticky hidden h-[62px] top-0 z-10 bg-white dark:bg-gray-800 p-4 shadow"
       >
         <div class="flex items-center justify-between">
           <!-- Left text -->
@@ -33,12 +43,6 @@
           </div>
         </div>
       </div>
-      <div
-        class="flex-1 w-full flex mx-auto"
-        :class="
-          messagesData.length == 0 ? 'justify-center align-center flex-col' : ''
-        "
-      >
         <!-- Title -->
         <div v-if="messagesData.length == 0" class="w-full text-center">
           <h1 v-if="!initialLoading" class="text-3xl font-bold sm:text-3xl">
@@ -92,11 +96,16 @@
           />
           <!-- End Chat Bubble -->
         </transition-group>
+        
       </div>
 
       <!-- Documents Section -->
-      <div class="sticky z-1000 bottom-0 left-0 right-0 bg-white dark:bg-gray-900 p-2">
-        <div class="sticky bottom-0 z-10">
+      <div 
+       :class="
+          messagesData.length == 0 ? 'justify-center align-center flex-col' : 'sticky'
+        "
+      class=" z-1000 bottom-0 left-0 right-0 bg-white dark:bg-gray-900 p-2">
+        <div class=" z-10">
           <!-- Textarea -->
           <div class="max-w-4xl mx-auto lg:px-0">
             <div v-if="errorMessage" class="m-1 w-full mx-auto space-y-5">
@@ -409,6 +418,7 @@ import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import ChatBubble from '@/components/ChatMain/ChatBubble.vue';
+// import StatusAnimationBox from '@/components/ChatMain/StatusAnimationBox.vue';
 import ChatLoaderBubble from '@/components/ChatMain/ChatLoaderBubble.vue';
 const router = useRouter();
 const route = useRoute();
