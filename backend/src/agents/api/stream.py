@@ -155,16 +155,9 @@ async def astream_state_websocket(
                 {
                     "event": "llm_stream_chunk",
                     "run_id": root_run_id,
-                    "data": {
-                        "content": (
-                            message.content
-                            if hasattr(message, "content")
-                            else str(message)
-                        ),
-                        "node": event["metadata"]["langgraph_node"],
-                        "id": message.id,
-                        "is_delta": True,  # Indicates this is a streaming chunk
-                    },
+                    "content": message.content,
+                    "id": message.id,
+                    "is_delta": True,
                     "user_id": user_id,
                     "conversation_id": conversation_id,
                     "message_id": message_id,

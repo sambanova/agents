@@ -528,13 +528,7 @@ function formatTimestamp(timestamp) {
 }
 
 function getStreamingContent() {
-  if (props.event === 'llm_stream_chunk') {
-    // For llm_stream_chunk, content is at data.data.content
-    return props.data?.data?.content || ''
-  } else {
-    // For agent_completion and other events, content is at data.content
-    return props.data?.content || ''
-  }
+  return props.data?.content || ''
 }
 
   </script>

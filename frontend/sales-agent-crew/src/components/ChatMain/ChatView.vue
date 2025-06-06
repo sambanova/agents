@@ -1373,19 +1373,19 @@ async function connectWebSocket() {
           });
         } else if (receivedData.event === 'llm_stream_chunk') {
           console.log('LLM stream chunk:', receivedData);
-          const chunkId = receivedData.data?.id;
+          const chunkId = receivedData.id;
           
           if (chunkId) {
             // Find existing message with the same ID
             const existingIndex = messagesData.value.findIndex(
-              (msg) => msg.event === 'llm_stream_chunk' && msg.data?.data?.id === chunkId
+              (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
             );
             
             if (existingIndex !== -1) {
               // Accumulate content for existing message
-              const existingContent = messagesData.value[existingIndex].data?.data?.content || '';
-              const newContent = receivedData.data?.content || '';
-              messagesData.value[existingIndex].data.data.content = existingContent + newContent;
+              const existingContent = messagesData.value[existingIndex].data?.content || '';
+              const newContent = receivedData.content || '';
+              messagesData.value[existingIndex].data.content = existingContent + newContent;
             } else {
               // Create new message for new ID
               messagesData.value.push({

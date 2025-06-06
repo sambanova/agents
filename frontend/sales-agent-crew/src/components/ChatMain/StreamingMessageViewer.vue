@@ -135,16 +135,16 @@
                 <div class="flex items-center justify-between">
                   <div>
                     <span class="text-gray-600">Delta:</span>
-                    <span class="ml-1" :class="message.data.is_delta ? 'text-green-600' : 'text-gray-600'">
-                      {{ message.data.is_delta ? 'Yes' : 'No' }}
+                    <span class="ml-1" :class="message.is_delta ? 'text-green-600' : 'text-gray-600'">
+                      {{ message.is_delta ? 'Yes' : 'No' }}
                     </span>
                   </div>
-                  <span class="text-xs text-gray-500 font-mono">{{ message.data.id }}</span>
+                  <span class="text-xs text-gray-500 font-mono">{{ message.id }}</span>
                 </div>
-                <div v-if="message.data.content">
+                <div v-if="message.content">
                   <span class="text-gray-600">Content:</span>
                   <div class="mt-1 p-2 bg-white rounded border-l-4 border-green-400">
-                    "{{ message.data.content }}"
+                    "{{ message.content }}"
                   </div>
                 </div>
                 <div v-else class="text-gray-500 italic">Empty content chunk</div>
