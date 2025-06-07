@@ -88,6 +88,20 @@
                     <span class="text-xs text-gray-400">{{ formatEventTime(event.timestamp) }}</span>
                   </div>
                   <div v-if="event.details" class="text-xs text-gray-600 mt-1">{{ event.details }}</div>
+                  <!-- Sub-bullets for sources -->
+                  <div v-if="event.subItems && event.subItems.length > 0" class="mt-2 ml-4 space-y-1">
+                    <div
+                      v-for="subItem in event.subItems"
+                      :key="subItem.id"
+                      class="flex items-start space-x-1"
+                    >
+                      <span class="text-xs text-gray-400 mt-0.5">•</span>
+                      <div class="text-xs text-gray-600">
+                        <span class="font-medium">{{ subItem.title }}</span>
+                        <span v-if="subItem.domain" class="text-gray-500 ml-1">({{ subItem.domain }})</span>
+                      </div>
+                    </div>
+                  </div>
                   <div class="text-xs text-gray-400 mt-1">
                     <span class="bg-gray-100 px-1 rounded">{{ event.event }}</span>
                     <span v-if="event.type" class="bg-blue-100 px-1 rounded ml-1">{{ event.type }}</span>
@@ -104,7 +118,7 @@
             <div 
               v-if="streamingResponseContent"
               class="text-gray-800 whitespace-pre-wrap"
-              v-html="renderMarkdown(streamingResponseContent)"
+              v-html="renderMarkdown(enhancedResponseContent)"
             ></div>
             <div 
               v-else-if="isCurrentlyStreaming && !streamingResponseContent"
@@ -618,37 +632,92 @@ const auditLogEvents = computed(() => {
             if (data.name === 'search_tavily' && Array.isArray(data.content)) {
               title = `✅ Found ${data.content.length} web sources`
               
-              // Extract actual domains/titles from sources
-              const sourceNames = data.content.slice(0, 3).map(source => {
+              // Extract actual domains/titles from sources for sub-bullets
+              const subItems = data.content.slice(0, 5).map((source, idx) => {
+                let displayTitle = 'Unknown Source'
+                let domain = ''
+                
                 if (source.title && source.title.trim()) {
-                  return source.title.trim()
+                  displayTitle = source.title.trim()
                 } else if (source.url) {
                   try {
-                    return new URL(source.url).hostname.replace('www.', '')
+                    const url = new URL(source.url)
+                    domain = url.hostname.replace('www.', '')
+                    displayTitle = domain
                   } catch {
-                    return source.url
+                    displayTitle = source.url
                   }
                 }
-                return 'Unknown source'
+                
+                if (source.url) {
+                  try {
+                    domain = new URL(source.url).hostname.replace('www.', '')
+                  } catch {
+                    domain = 'web'
+                  }
+                }
+                
+                return {
+                  id: `source-${idx}`,
+                  title: displayTitle,
+                  domain: domain
+                }
               })
               
+              // Keep the old details for backward compatibility
+              const sourceNames = subItems.slice(0, 3).map(item => item.title)
               details = sourceNames.join(', ')
               if (data.content.length > 3) details += `, and ${data.content.length - 3} more...`
+              
               dotClass = 'bg-green-500'
               type = 'tool_result'
+              
+              // Add subItems to the event
+              return {
+                id: `audit-${index}`,
+                title,
+                details,
+                subItems,
+                dotClass,
+                type,
+                event: event.event,
+                timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
+                fullData: data
+              }
             } else if (data.name === 'arxiv') {
               const papers = data.content && data.content.includes('Title:') ? 
                 data.content.split('Title:').length - 1 : 1
               title = `✅ Found ${papers} arXiv papers`
               
-              // Extract paper titles
+              // Extract paper titles for sub-bullets
               const titleMatches = data.content.match(/Title: ([^\n]+)/g)
+              let subItems = []
+              
               if (titleMatches) {
                 details = titleMatches.slice(0, 2).map(t => t.replace('Title: ', '').trim()).join(', ')
                 if (titleMatches.length > 2) details += `, and ${titleMatches.length - 2} more...`
+                
+                subItems = titleMatches.slice(0, 5).map((titleMatch, idx) => ({
+                  id: `paper-${idx}`,
+                  title: titleMatch.replace('Title: ', '').trim(),
+                  domain: 'arxiv.org'
+                }))
               }
+              
               dotClass = 'bg-green-500'
               type = 'tool_result'
+              
+              return {
+                id: `audit-${index}`,
+                title,
+                details,
+                subItems,
+                dotClass,
+                type,
+                event: event.event,
+                timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
+                fullData: data
+              }
             } else if (data.name === 'DaytonaCodeSandbox') {
               title = `✅ Code execution complete`
               details = 'Generated charts and analysis'
@@ -663,6 +732,7 @@ const auditLogEvents = computed(() => {
         id: `audit-${index}`,
         title,
         details,
+        subItems: [],
         dotClass,
         type,
         event: event.event,
@@ -705,6 +775,36 @@ const streamingResponseContent = computed(() => {
   })
   
   return bestContent
+})
+
+// Enhanced response content with inline references
+const enhancedResponseContent = computed(() => {
+  const content = streamingResponseContent.value
+  if (!content || !toolSources.value.length) return content
+  
+  let enhancedContent = content
+  
+  // Add inline references for web sources
+  toolSources.value.forEach((source, index) => {
+    if (source.type === 'web' && source.domain) {
+      // Look for company names, domain names, or source titles in the content
+      const patterns = [
+        source.domain.replace('.com', '').replace('.org', '').replace('.net', ''),
+        source.title.split(' ').slice(0, 3).join(' '), // First few words of title
+      ]
+      
+      patterns.forEach(pattern => {
+        if (pattern.length > 3) {
+          const regex = new RegExp(`\\b${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi')
+          enhancedContent = enhancedContent.replace(regex, (match) => {
+            return `${match}<sup><a href="${source.url}" target="_blank" rel="noopener" class="inline-ref" data-source-idx="${index}">[${index + 1}]</a></sup>`
+          })
+        }
+      })
+    }
+  })
+  
+  return enhancedContent
 })
 
 // Extract sources from tool results with proper titles and domains
@@ -1085,6 +1185,14 @@ async function generateSelectablePDF() {
 
 
   </script>
-  <style>
 
+<style scoped>
+.inline-ref {
+  @apply text-blue-600 hover:text-blue-800 text-xs font-medium no-underline;
+  text-decoration: none !important;
+}
+
+.inline-ref:hover {
+  @apply underline;
+}
 </style>
