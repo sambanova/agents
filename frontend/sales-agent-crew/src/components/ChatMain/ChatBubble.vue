@@ -19,7 +19,7 @@
             <!-- Message metadata -->
             <div class="text-xs text-gray-500">
               <div v-if="props.data.type">Type: {{ props.data.type }}</div>
-              <div v-if="props.data.agent_type">Agent Type: {{ props.data.agent_type }}</div>
+              <div v-if="props.data.additional_kwargs.agent_type">Agent Type: {{ props.data.additional_kwargs.agent_type }}</div>
             </div>
 
             <!-- Dropdown for full message details -->
