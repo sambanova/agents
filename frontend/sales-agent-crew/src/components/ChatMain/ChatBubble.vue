@@ -16,24 +16,46 @@
       </div>
       <div class="w-full bg-white">          
         <!-- Minimalist Real-time Status Line -->
-        <div class="flex items-start justify-between p-3 bg-gray-50 rounded-t-lg border-b">
-          <div class="flex items-start space-x-2 flex-1">
-            <div :class="currentStatusDot" class="w-2 h-2 rounded-full mt-1 flex-shrink-0"></div>
-            <div v-if="isStreamingResponse" class="text-sm text-gray-700">
+        <div class="flex items-start justify-between p-3 bg-gray-50 rounded-t-lg border-b status-bar">
+          <div class="flex items-start space-x-3 flex-1">
+            <div class="flex items-center space-x-2">
+              <div :class="currentStatusDot" class="w-2 h-2 rounded-full mt-1 flex-shrink-0"></div>
+              <div v-if="showStatusAnimation" class="mt-0.5">
+                <svg 
+                  class="w-3 h-3 text-gray-500 animate-spin" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+            </div>
+            <div v-if="isStreamingResponse" class="text-sm text-gray-700 transition-all duration-300">
               {{ finalStatusSummary }}
             </div>
-            <div v-else class="text-sm text-gray-700 whitespace-pre-line">{{ currentStreamingStatus }}</div>
+            <div v-else class="text-sm text-gray-700 whitespace-pre-line transition-all duration-300">
+              <span class="inline-flex items-start space-x-1">
+                <span>{{ currentStreamingStatus }}</span>
+                <span v-if="showSearchingAnimation" class="flex space-x-0.5 mt-1">
+                  <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0s"></div>
+                  <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                  <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                </span>
+              </span>
+            </div>
           </div>
           
           <button
             v-if="hasCompletedEvents || isStreamingResponse"
             @click="toggleAuditLog"
-            class="text-xs text-gray-500 hover:text-gray-700 flex items-center space-x-1"
+            class="text-xs text-gray-500 hover:text-gray-700 flex items-center space-x-1 hover:bg-gray-200 px-2 py-1 rounded transition-all duration-200"
           >
             <span>{{ showAuditLog ? 'Hide' : 'Show' }} details</span>
             <svg
               :class="{ 'rotate-180': showAuditLog }"
-              class="w-3 h-3 transition-transform"
+              class="w-3 h-3 transition-transform duration-200"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -565,6 +587,25 @@ const currentStatusDot = computed(() => {
   return 'bg-gray-500 animate-pulse'
 })
 
+// Show spinning gear animation when tools are actively running
+const showStatusAnimation = computed(() => {
+  if (!props.streamingEvents || props.streamingEvents.length === 0) return false
+  
+  const status = currentStreamingStatus.value
+  // Show animation when we're searching, executing, or processing (not when complete)
+  return status.includes('🔍') || status.includes('📚') || status.includes('⚡') || 
+         status.includes('💭') || status.includes('Processing')
+})
+
+// Show bouncing dots for searching operations
+const showSearchingAnimation = computed(() => {
+  if (!props.streamingEvents || props.streamingEvents.length === 0) return false
+  
+  const status = currentStreamingStatus.value
+  // Show bouncing dots specifically for search operations
+  return status.includes('🔍 Searching') || status.includes('📚 Searching')
+})
+
 const isCurrentlyStreaming = computed(() => {
   if (!props.streamingEvents || props.streamingEvents.length === 0) return true
   
@@ -972,13 +1013,26 @@ function renderMarkdown(content) {
   
   // Simple markdown rendering for basic formatting
   let html = content
+    // Links MUST be processed first and carefully
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, text, url) => {
+      // Clean the URL of any trailing characters
+      const cleanUrl = url.trim()
+      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline">${text}</a>`
+    })
+    // Bold and italic 
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded text-sm">$1</code>')
-    .replace(/\n\n/g, '</p><p>')
+    // Inline code
+    .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded text-sm font-mono">$1</code>')
+    // Basic headers
+    .replace(/^### (.*$)/gm, '<h3 class="text-lg font-semibold mt-4 mb-2 text-gray-900">$1</h3>')
+    .replace(/^## (.*$)/gm, '<h2 class="text-xl font-semibold mt-4 mb-2 text-gray-900">$1</h2>')
+    .replace(/^# (.*$)/gm, '<h1 class="text-2xl font-bold mt-4 mb-3 text-gray-900">$1</h1>')
+    // Paragraphs and line breaks
+    .replace(/\n\n/g, '</p><p class="mb-3">')
     .replace(/\n/g, '<br>')
   
-  return `<p>${html}</p>`
+  return `<p class="mb-3">${html}</p>`
 }
 
 function getStatusBadgeClass(status) {
@@ -1231,5 +1285,46 @@ async function generateSelectablePDF() {
 
 .inline-ref:hover {
   @apply underline;
+}
+
+/* Status bar animations */
+.animate-spin {
+  animation: spin 1.5s linear infinite;
+}
+
+.animate-bounce {
+  animation: bounce 1s infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-4px);
+  }
+  60% {
+    transform: translateY(-2px);
+  }
+}
+
+/* Smooth status transitions */
+.status-transition {
+  transition: all 0.3s ease-in-out;
+}
+
+/* Status bar hover effect */
+.status-bar:hover {
+  @apply bg-gray-100;
+  transition: background-color 0.2s ease-in-out;
 }
 </style>
