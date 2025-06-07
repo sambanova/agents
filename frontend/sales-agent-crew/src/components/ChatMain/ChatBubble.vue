@@ -1,50 +1,169 @@
 <template>
-    <!-- Handle streaming and agent_completion events -->
-    <li v-if="isStreamingEvent" class="px-4 items-start gap-x-2 sm:gap-x-4">
-      <div class="w-full flex">
-        <UserAvatar :type="provider" />
-        <div class="grow ml-4 p-4 bg-gray-50 rounded-lg">
-          <div class="flex items-center justify-between mb-2">
-            <span class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-              {{ props.event }}
-            </span>
-            <span class="text-xs text-gray-500">{{ formatTimestamp(props.data.timestamp) }}</span>
+
+
+    <!-- Handle streaming events -->
+    <li v-if="props.streamingEvents" class="relative px-4 items-start gap-x-2 sm:gap-x-4">
+      <div class="w-full relative flex items-center">
+        <UserAvatar :type="provider" />   
+        <div class="grow relative text-start space-y-3">
+          <!-- Card -->
+          <div class="inline-block">
+            <div class="relative p-4 flex items-center capitalize space-y-3 font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center capitalize">
+              {{ provider==="sambanova"?"SambaNova":provider }} Agent
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="w-full bg-white">          
+        <!-- Minimalist Real-time Status Line -->
+        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-t-lg border-b">
+          <div class="flex items-center space-x-2">
+            <div :class="currentStatusDot" class="w-2 h-2 rounded-full"></div>
+            <span class="text-sm text-gray-700">{{ currentStreamingStatus }}</span>
           </div>
           
-          <!-- Main message content -->
-          <div class="bg-white p-3 rounded border">
-            <!-- Message content -->
-            <div class="text-sm whitespace-pre-wrap mb-2">{{ getStreamingContent() }}</div>
-            
-            <!-- Message metadata -->
-            <div class="text-xs text-gray-500">
-              <div v-if="props.data.type">Type: {{ props.data.type }}</div>
-              <div v-if="props.data.agent_type">Agent Type: {{ props.data.agent_type }}</div>
-            </div>
+          <button
+            v-if="hasCompletedEvents"
+            @click="toggleAuditLog"
+            class="text-xs text-gray-500 hover:text-gray-700 flex items-center space-x-1"
+          >
+            <span>{{ showAuditLog ? 'Hide' : 'Show' }} details</span>
+            <svg
+              :class="{ 'rotate-180': showAuditLog }"
+              class="w-3 h-3 transition-transform"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <path d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </div>
 
-            <!-- Dropdown for full message details -->
-            <div class="mt-2">
-              <button 
-                @click="toggleDetails"
-                class="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
-              >
-                {{ showDetails ? 'Hide' : 'Show' }} full details
-                <svg 
-                  :class="{'rotate-180': showDetails}"
-                  class="w-4 h-4 transition-transform"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              
-              <!-- Full message details -->
-              <div v-if="showDetails" class="mt-2 p-2 bg-gray-50 rounded text-xs font-mono whitespace-pre-wrap">
-                {{ JSON.stringify(props.data, null, 2) }}
+
+
+        <!-- Artifacts/Charts (if available) -->
+        <div 
+          v-if="hasArtifacts"
+          class="p-3 bg-purple-50 border-b"
+        >
+          <div class="text-xs font-medium text-purple-800 mb-2">Generated Artifacts</div>
+          <div class="grid grid-cols-2 gap-2">
+            <div
+              v-for="artifact in artifacts"
+              :key="artifact.id"
+              class="p-2 bg-white rounded border border-purple-200 cursor-pointer hover:border-purple-400"
+              @click="openArtifact(artifact)"
+            >
+              <div class="flex items-center space-x-2">
+                <div class="w-8 h-8 bg-purple-500 rounded flex items-center justify-center">
+                  <span class="text-xs text-white">📊</span>
+                </div>
+                <div>
+                  <div class="text-xs font-medium text-gray-900">{{ artifact.title }}</div>
+                  <div class="text-xs text-gray-500">Click to view</div>
+                </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Comprehensive Audit Log (collapsible) -->
+        <div 
+          v-if="showAuditLog && hasCompletedEvents"
+          class="p-3 bg-gray-50 border-b max-h-96 overflow-y-auto"
+        >
+          <div class="text-xs font-medium text-gray-600 mb-3">Comprehensive Audit Log</div>
+          <div class="space-y-3">
+            <div
+              v-for="event in auditLogEvents"
+              :key="event.id"
+              class="border-l-2 border-gray-200 pl-3"
+            >
+              <div class="flex items-start space-x-2">
+                <div :class="event.dotClass" class="w-2 h-2 rounded-full mt-1 flex-shrink-0"></div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-gray-900">{{ event.title }}</span>
+                    <span class="text-xs text-gray-400">{{ formatEventTime(event.timestamp) }}</span>
+                  </div>
+                  <div v-if="event.details" class="text-xs text-gray-600 mt-1">{{ event.details }}</div>
+                  <div class="text-xs text-gray-400 mt-1">
+                    <span class="bg-gray-100 px-1 rounded">{{ event.event }}</span>
+                    <span v-if="event.type" class="bg-blue-100 px-1 rounded ml-1">{{ event.type }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Actual Streaming Response Content -->
+        <div class="p-4">
+          <!-- Inline Sources (minimalist) -->
+          <div v-if="toolSources && toolSources.length > 0" class="mb-4">
+            <div class="flex flex-wrap gap-2">
+              <template v-for="source in toolSources" :key="source?.url || source?.title || 'unknown'">
+                <a
+                  v-if="source && source.url"
+                  :href="source.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs text-gray-700 hover:text-gray-900 transition-colors border border-gray-200 hover:border-gray-300"
+                >
+                  <span v-if="source.type === 'web'">🌐</span>
+                  <span v-else-if="source.type === 'arxiv'">📚</span>
+                  <span v-else>📄</span>
+                  <span class="truncate max-w-[180px]">{{ source.title || 'Untitled' }}</span>
+                  <span v-if="source.domain && source.domain !== source.title && source.type === 'web'" class="text-gray-500 text-xs">
+                    • {{ source.domain }}
+                  </span>
+                  <svg class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                  </svg>
+                </a>
+                <div
+                  v-else-if="source && !source.url"
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 rounded-lg text-xs text-gray-700 border border-gray-200"
+                >
+                  <span v-if="source.type === 'web'">🌐</span>
+                  <span v-else-if="source.type === 'arxiv'">📚</span>
+                  <span v-else>📄</span>
+                  <span class="truncate max-w-[180px]">{{ source.title || 'Untitled' }}</span>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <div class="prose prose-sm max-w-none">
+            <div 
+              v-if="streamingResponseContent"
+              class="text-gray-800 whitespace-pre-wrap"
+              v-html="renderMarkdown(streamingResponseContent)"
+            ></div>
+            <div 
+              v-else-if="isCurrentlyStreaming && !streamingResponseContent"
+              class="flex items-center space-x-2 text-gray-500"
+            >
+              <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+              <span class="text-sm italic">Generating response...</span>
+            </div>
+          </div>
+          
+          <!-- Artifacts Display -->
+          <div v-if="artifacts.length > 0" class="mt-4">
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="artifact in artifacts"
+                :key="artifact.id"
+                @click="openArtifact(artifact)"
+                class="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg text-sm text-blue-800 hover:text-blue-900 transition-colors"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+                {{ artifact.title }}
+              </button>
             </div>
           </div>
         </div>
@@ -126,6 +245,13 @@
         <component :id="'chat-'+messageId" :is="selectedComponent" :parsed="parsedData" />
       </div>
     </li>
+
+    <!-- Artifact Canvas Modal -->
+    <ArtifactCanvas 
+      :isOpen="showArtifactCanvas"
+      :artifact="selectedArtifact"
+      @close="closeArtifactCanvas"
+    />
   </template>
   
   <script setup>
@@ -141,6 +267,16 @@
   import DeepResearchComponent from '@/components/ChatMain/ResponseTypes//DeepResearchComponent.vue'
   import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue'
   import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'
+import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue'
+
+// Icons for streaming timeline
+import {
+  ClockIcon,
+  MagnifyingGlassIcon,
+  ChatBubbleLeftRightIcon,
+  CheckCircleIcon
+} from '@heroicons/vue/24/outline'
+
 
   import html2canvas from "html2canvas";
   import jsPDF from "jspdf";
@@ -199,6 +335,11 @@
     type: [],
     required: false // Ensure it's always provided
   },
+  
+  streamingEvents: {
+    type: Array,
+    default: null
+  }
   
   })
   const presentMetadata = computed(() => {
@@ -264,16 +405,426 @@ function toggleCollapse() {
 }
 
 // Add refs for UI state
-const showDetails = ref(false)
 const activeMenu = ref(false)
+const showAuditLog = ref(false)
 
 // Toggle functions
-function toggleDetails() {
-  showDetails.value = !showDetails.value
-}
-
 function toggleMenu() {
   activeMenu.value = !activeMenu.value
+}
+
+function toggleAuditLog() {
+  showAuditLog.value = !showAuditLog.value
+}
+
+const selectedArtifact = ref(null)
+const showArtifactCanvas = ref(false)
+
+function openArtifact(artifact) {
+  selectedArtifact.value = artifact
+  showArtifactCanvas.value = true
+}
+
+function closeArtifactCanvas() {
+  showArtifactCanvas.value = false
+  selectedArtifact.value = null
+}
+
+// Advanced streaming parsing and status
+const currentStreamingStatus = computed(() => {
+  if (!props.streamingEvents || props.streamingEvents.length === 0) return '⏳ Starting...'
+  
+  const events = props.streamingEvents
+  let currentTool = null
+  let toolQuery = null
+  
+  // Process events in order to build current status
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i]
+    const data = event.data
+    
+    switch (event.event) {
+      case 'llm_stream_chunk':
+        if (data.content && data.content.includes('<tool>')) {
+          const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
+          // Fixed regex to handle missing closing tag
+          const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
+          
+          if (toolMatch) {
+            currentTool = toolMatch[1]
+            toolQuery = inputMatch ? inputMatch[1].trim() : null
+            
+            if (currentTool === 'search_tavily') {
+              return `🔍 Searching web: "${toolQuery || 'query'}"`
+            } else if (currentTool === 'arxiv') {
+              return `📚 Searching arXiv: "${toolQuery || 'query'}"`
+            } else if (currentTool === 'DaytonaCodeSandbox') {
+              return `⚡ Executing code in sandbox`
+            } else {
+              return `🔧 Using ${currentTool.replace('_', ' ')}: "${toolQuery || 'executing'}"`
+            }
+          }
+        } else if (data.content && data.content.trim() && !data.content.includes('<tool>')) {
+          // This is actual response content being streamed
+          return '📝 Streaming response...'
+        }
+        break
+        
+      case 'agent_completion':
+        if (data.type === 'LiberalFunctionMessage' && data.name) {
+          if (data.name === 'search_tavily') {
+            const resultCount = Array.isArray(data.content) ? data.content.length : 0
+            return `✅ Found ${resultCount} web sources`
+          } else if (data.name === 'arxiv') {
+            const papers = data.content && data.content.includes('Title:') ? 
+              data.content.split('Title:').length - 1 : 1
+            return `✅ Found ${papers} arXiv papers`
+          } else if (data.name === 'DaytonaCodeSandbox') {
+            return `✅ Code execution complete`
+          } else {
+            return `✅ ${data.name.replace('_', ' ')} completed`
+          }
+        } else if (data.agent_type === 'react_end') {
+          return '✅ Response complete'
+        }
+        break
+        
+      case 'stream_complete':
+        return '✅ Response complete'
+    }
+  }
+  
+  // If we have a current tool but no completion yet
+  if (currentTool) {
+    if (currentTool === 'search_tavily') {
+      return `🔍 Searching web: "${toolQuery || 'query'}"`
+    } else if (currentTool === 'arxiv') {
+      return `📚 Searching arXiv: "${toolQuery || 'query'}"`
+    } else if (currentTool === 'DaytonaCodeSandbox') {
+      return `⚡ Executing code in sandbox`
+    }
+  }
+  
+  return '💭 Processing...'
+})
+
+const currentStatusDot = computed(() => {
+  const status = currentStreamingStatus.value
+  if (status.includes('✅')) return 'bg-green-500'
+  if (status.includes('🔍') || status.includes('📚') || status.includes('⚡')) return 'bg-purple-500 animate-pulse'
+  if (status.includes('📝')) return 'bg-blue-500 animate-pulse'
+  if (status.includes('💭')) return 'bg-yellow-500 animate-pulse'
+  return 'bg-gray-500 animate-pulse'
+})
+
+const isCurrentlyStreaming = computed(() => {
+  if (!props.streamingEvents || props.streamingEvents.length === 0) return true
+  
+  const lastEvent = props.streamingEvents[props.streamingEvents.length - 1]
+  return lastEvent.event !== 'stream_complete'
+})
+
+const hasCompletedEvents = computed(() => {
+  if (!props.streamingEvents) return false
+  return props.streamingEvents.some(event => 
+    event.event === 'agent_completion' || event.event === 'stream_complete'
+  )
+})
+
+// Comprehensive audit log with filtered meaningful events
+const auditLogEvents = computed(() => {
+  if (!props.streamingEvents) return []
+  
+  return props.streamingEvents
+    .filter(event => {
+      // Keep meaningful events, remove clutter
+      if (event.event === 'stream_start') return false
+      if (event.event === 'stream_complete') return false
+      if (event.event === 'agent_completion' && event.data.agent_type === 'human') return false
+      if (event.event === 'agent_completion' && event.data.agent_type === 'react_end') return false
+      if (event.event === 'llm_stream_chunk' && event.data.content && !event.data.content.includes('<tool>')) return false
+      
+      return true
+    })
+    .map((event, index) => {
+      const data = event.data
+      let title = ''
+      let details = ''
+      let dotClass = 'bg-gray-400'
+      let type = 'info'
+      
+      switch (event.event) {
+        case 'llm_stream_chunk':
+          if (data.content && data.content.includes('<tool>')) {
+            const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
+            // Fixed regex to handle missing closing tag
+            const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
+            
+            if (toolMatch) {
+              const tool = toolMatch[1]
+              const query = inputMatch ? inputMatch[1].trim() : 'No query'
+              
+              if (tool === 'search_tavily') {
+                title = `🔍 Search Tavily`
+                details = `Query: "${query}"`
+              } else if (tool === 'arxiv') {
+                title = `📚 Search arXiv`
+                details = `Query: "${query}"`
+              } else if (tool === 'DaytonaCodeSandbox') {
+                title = `⚡ Execute Code`
+                details = 'Running analysis in sandbox'
+              } else {
+                title = `🔧 ${tool.replace('_', ' ')}`
+                details = `Query: "${query}"`
+              }
+              dotClass = 'bg-purple-500'
+              type = 'tool_call'
+            }
+          }
+          break
+          
+        case 'agent_completion':
+          if (data.type === 'LiberalFunctionMessage' && data.name) {
+            if (data.name === 'search_tavily' && Array.isArray(data.content)) {
+              title = `✅ Found ${data.content.length} web sources`
+              
+              // Extract actual domains/titles from sources
+              const sourceNames = data.content.slice(0, 3).map(source => {
+                if (source.title && source.title.trim()) {
+                  return source.title.trim()
+                } else if (source.url) {
+                  try {
+                    return new URL(source.url).hostname.replace('www.', '')
+                  } catch {
+                    return source.url
+                  }
+                }
+                return 'Unknown source'
+              })
+              
+              details = sourceNames.join(', ')
+              if (data.content.length > 3) details += `, and ${data.content.length - 3} more...`
+              dotClass = 'bg-green-500'
+              type = 'tool_result'
+            } else if (data.name === 'arxiv') {
+              const papers = data.content && data.content.includes('Title:') ? 
+                data.content.split('Title:').length - 1 : 1
+              title = `✅ Found ${papers} arXiv papers`
+              
+              // Extract paper titles
+              const titleMatches = data.content.match(/Title: ([^\n]+)/g)
+              if (titleMatches) {
+                details = titleMatches.slice(0, 2).map(t => t.replace('Title: ', '').trim()).join(', ')
+                if (titleMatches.length > 2) details += `, and ${titleMatches.length - 2} more...`
+              }
+              dotClass = 'bg-green-500'
+              type = 'tool_result'
+            } else if (data.name === 'DaytonaCodeSandbox') {
+              title = `✅ Code execution complete`
+              details = 'Generated charts and analysis'
+              dotClass = 'bg-green-500'
+              type = 'tool_result'
+            }
+          }
+          break
+      }
+      
+      return {
+        id: `audit-${index}`,
+        title,
+        details,
+        dotClass,
+        type,
+        event: event.event,
+        timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
+        fullData: data
+      }
+    })
+    .filter(event => event.title) // Only include events with titles
+})
+
+// Extract streaming response content with better parsing
+const streamingResponseContent = computed(() => {
+  if (!props.streamingEvents) return ''
+  
+  // First, look for the final completed response (react_end)
+  for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
+    const event = props.streamingEvents[i]
+    if (event.event === 'agent_completion' && event.data.agent_type === 'react_end') {
+      return event.data.content || ''
+    }
+  }
+  
+  // If no completed response, find the largest streaming content that's not a tool call
+  let bestContent = ''
+  let maxLength = 0
+  
+  props.streamingEvents.forEach(event => {
+    if (event.event === 'llm_stream_chunk' && 
+        event.data.content && 
+        !event.data.content.includes('<tool>') &&
+        event.data.content.trim()) {
+      
+      const content = event.data.content.trim()
+      // Prefer longer content as it's likely the main response
+      if (content.length > maxLength) {
+        maxLength = content.length
+        bestContent = content
+      }
+    }
+  })
+  
+  return bestContent
+})
+
+// Extract sources from tool results with proper titles and domains
+const toolSources = computed(() => {
+  if (!props.streamingEvents || !Array.isArray(props.streamingEvents)) return []
+  
+  const sources = []
+  
+  props.streamingEvents.forEach(event => {
+    if (event.event === 'agent_completion' && 
+        event.data.type === 'LiberalFunctionMessage' && 
+        event.data.name === 'search_tavily' &&
+        Array.isArray(event.data.content)) {
+      
+      event.data.content.forEach(source => {
+        let displayTitle = 'Unknown Source'
+        let domain = ''
+        
+        // Try to get title first, fallback to domain
+        if (source.title && source.title.trim()) {
+          displayTitle = source.title.trim()
+        } else if (source.url) {
+          try {
+            const url = new URL(source.url)
+            domain = url.hostname.replace('www.', '')
+            displayTitle = domain
+          } catch {
+            displayTitle = source.url
+          }
+        }
+        
+        // Extract domain for icon/display
+        if (source.url) {
+          try {
+            domain = new URL(source.url).hostname.replace('www.', '')
+          } catch {
+            domain = 'web'
+          }
+        }
+        
+        sources.push({
+          title: displayTitle || 'Untitled',
+          domain: domain || '',
+          url: source.url || '',
+          content: source.content ? source.content.substring(0, 200) + '...' : '',
+          type: 'web'
+        })
+      })
+    } else if (event.data.name === 'arxiv') {
+      // Parse arXiv results
+      const content = event.data.content || ''
+      const papers = content.split('Published:').slice(1)
+      
+      papers.forEach(paper => {
+        const titleMatch = paper.match(/Title: ([^\n]+)/)
+        const authorsMatch = paper.match(/Authors: ([^\n]+)/)
+        
+        if (titleMatch) {
+                  sources.push({
+          title: titleMatch[1].trim() || 'Untitled Paper',
+          authors: authorsMatch ? authorsMatch[1].trim() : '',
+          domain: 'arxiv.org',
+          url: '',
+          content: paper.substring(0, 300) + '...',
+          type: 'arxiv'
+        })
+        }
+      })
+    }
+  })
+  
+  return sources.slice(0, 5) // Limit to 5 sources for UI
+})
+
+// Check for charts/artifacts
+const hasArtifacts = computed(() => {
+  if (!props.streamingEvents) return false
+  
+  return props.streamingEvents.some(event => 
+    event.event === 'agent_completion' && 
+    event.data.name === 'DaytonaCodeSandbox' &&
+    event.data.content &&
+    event.data.content.includes('![Chart')
+  )
+})
+
+const artifacts = computed(() => {
+  if (!props.streamingEvents) return []
+  
+  const charts = []
+  
+  props.streamingEvents.forEach(event => {
+    if (event.event === 'agent_completion' && 
+        event.data.name === 'DaytonaCodeSandbox' &&
+        event.data.content) {
+      
+      const content = event.data.content
+      const chartMatches = content.match(/!\[Chart \d+\]\(attachment:([^)]+)\)/g)
+      
+      if (chartMatches) {
+        chartMatches.forEach((match, index) => {
+          const idMatch = match.match(/attachment:([^)]+)/)
+          if (idMatch) {
+            charts.push({
+              id: idMatch[1],
+              title: `Chart ${index + 1}`,
+              type: 'chart',
+              details: 'Generated from data analysis'
+            })
+          }
+        })
+      }
+    }
+  })
+  
+  return charts
+})
+
+// Modal state for artifact display already defined below
+
+function formatEventTime(timestamp) {
+  return new Date(timestamp).toLocaleTimeString([], { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
+
+function renderMarkdown(content) {
+  if (!content) return ''
+  
+  // Simple markdown rendering for basic formatting
+  let html = content
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded text-sm">$1</code>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>')
+  
+  return `<p>${html}</p>`
+}
+
+function getStatusBadgeClass(status) {
+  const classes = {
+    'executing': 'bg-blue-100 text-blue-800',
+    'completed': 'bg-green-100 text-green-800',
+    'pending': 'bg-yellow-100 text-yellow-800',
+    'error': 'bg-red-100 text-red-800'
+  }
+  return classes[status] || 'bg-gray-100 text-gray-800'
 }
 
 
@@ -498,38 +1049,9 @@ async function generateSelectablePDF() {
   }, 500) // A delay of 500ms; adjust if necessary
 }
 
-// Add streaming event support
-const isStreamingEvent = computed(() => {
-  return props.event === 'agent_completion' || ['stream_start', 'llm_stream_chunk', 'stream_complete'].includes(props.event)
-})
 
-function getEventBadgeClass(event) {
-  const classes = {
-    'stream_start': 'bg-blue-100 text-blue-800',
-    'stream_complete': 'bg-purple-100 text-purple-800',
-    'agent_completion': 'bg-green-100 text-green-800',
-    'llm_stream_chunk': 'bg-orange-100 text-orange-800'
-  }
-  return classes[event] || 'bg-gray-100 text-gray-800'
-}
 
-function getEventDotClass(event) {
-  const classes = {
-    'stream_start': 'bg-blue-500',
-    'stream_complete': 'bg-purple-500',
-    'agent_completion': 'bg-green-500',
-    'llm_stream_chunk': 'bg-orange-500'
-  }
-  return classes[event] || 'bg-gray-500'
-}
 
-function formatTimestamp(timestamp) {
-  return new Date(timestamp).toLocaleTimeString()
-}
-
-function getStreamingContent() {
-  return props.data?.content || ''
-}
 
   </script>
   <style>

@@ -68,12 +68,13 @@
                 (item) => item.message_id === msgItem.message_id
               )[0]?.data
             "
-            :key="msgItem.conversation_id"
+            :key="msgItem.conversation_id || msgItem.message_id || msgItem.timestamp"
             :event="msgItem.event"
             :data="msgItem.data"
             :messageId="msgItem.message_id"
             :provider="provider"
             :currentMsgId="currentMsgId"
+            :streamingEvents="msgItem.type === 'streaming_group' ? msgItem.events : null"
           />
           <ChatLoaderBubble
             :workflowData="
@@ -1362,6 +1363,7 @@ async function connectWebSocket() {
           messagesData.value.push({
             event: 'stream_start',
             data: receivedData,
+            message_id: currentMsgId.value,
             timestamp: new Date().toISOString()
           });
         } else if (receivedData.event === 'agent_completion') {
@@ -1369,6 +1371,7 @@ async function connectWebSocket() {
           messagesData.value.push({
             event: 'agent_completion', 
             data: receivedData,
+            message_id: currentMsgId.value,
             timestamp: receivedData.timestamp || new Date().toISOString()
           });
         } else if (receivedData.event === 'llm_stream_chunk') {
@@ -1390,7 +1393,8 @@ async function connectWebSocket() {
               // Create new message for new ID
               messagesData.value.push({
                 event: 'llm_stream_chunk',
-                data: receivedData, 
+                data: receivedData,
+                message_id: currentMsgId.value,
                 timestamp: new Date().toISOString()
               });
             }
@@ -1398,7 +1402,8 @@ async function connectWebSocket() {
             // No ID, just add as new message
             messagesData.value.push({
               event: 'llm_stream_chunk',
-              data: receivedData, 
+              data: receivedData,
+              message_id: currentMsgId.value,
               timestamp: new Date().toISOString()
             });
           }
@@ -1407,6 +1412,7 @@ async function connectWebSocket() {
           messagesData.value.push({
             event: 'stream_complete',
             data: receivedData,
+            message_id: currentMsgId.value,
             timestamp: new Date().toISOString()
           });
           isLoading.value = false;
@@ -1566,8 +1572,32 @@ watch(
 );
 
 const filteredMessages = computed(() => {
-  // Show all messages by default
-  return messagesData.value;
+  const grouped = new Map();
+  const streamingEvents = ['stream_start', 'agent_completion', 'llm_stream_chunk', 'stream_complete'];
+  
+  messagesData.value.forEach(msg => {
+    if (streamingEvents.includes(msg.event) && msg.message_id) {
+      // Group streaming events by message_id
+      if (!grouped.has(msg.message_id)) {
+        grouped.set(msg.message_id, {
+          type: 'streaming_group',
+          message_id: msg.message_id,
+          events: [],
+          timestamp: msg.timestamp
+        });
+      }
+      grouped.get(msg.message_id).events.push(msg);
+    } else {
+      // Non-streaming messages remain as individual items
+      grouped.set(msg.conversation_id || msg.timestamp || Math.random(), msg);
+    }
+  });
+  
+  return Array.from(grouped.values()).sort((a, b) => {
+    const aTime = new Date(a.timestamp || 0);
+    const bTime = new Date(b.timestamp || 0);
+    return aTime - bTime;
+  });
 });
 </script>
 
