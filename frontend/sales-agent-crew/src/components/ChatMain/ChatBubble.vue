@@ -118,7 +118,7 @@
             <div 
               v-if="streamingResponseContent"
               class="text-gray-800 whitespace-pre-wrap"
-              v-html="renderMarkdown(enhancedResponseContent)"
+              v-html="renderMarkdown(streamingResponseContent)"
             ></div>
             <div 
               v-else-if="isCurrentlyStreaming && !streamingResponseContent"
@@ -449,16 +449,28 @@ const currentStreamingStatus = computed(() => {
   if (!props.streamingEvents || props.streamingEvents.length === 0) return '⏳ Starting...'
   
   const events = props.streamingEvents
-  let lastCompletionStatus = null
   let currentTool = null
   let toolQuery = null
   
-  // Process events in reverse order to get latest status first
-  for (let i = events.length - 1; i >= 0; i--) {
+  // Process events chronologically to find the LATEST completion status
+  let latestCompletionStatus = null
+  
+  for (let i = 0; i < events.length; i++) {
     const event = events[i]
     const data = event.data
     
-    // Check for latest tool completion first
+    // Track current tool calls
+    if (event.event === 'llm_stream_chunk' && data.content && data.content.includes('<tool>')) {
+      const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
+      const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
+      
+      if (toolMatch) {
+        currentTool = toolMatch[1]
+        toolQuery = inputMatch ? inputMatch[1].trim() : null
+      }
+    }
+    
+    // Update latest completion status when we find tool results
     if (event.event === 'agent_completion' && data.type === 'LiberalFunctionMessage' && data.name) {
       if (data.name === 'search_tavily' && Array.isArray(data.content)) {
         const resultCount = data.content.length
@@ -481,7 +493,7 @@ const currentStreamingStatus = computed(() => {
           status += `\n• ${sourceNames.join('\n• ')}`
           if (resultCount > 3) status += `\n• and ${resultCount - 3} more...`
         }
-        return status
+        latestCompletionStatus = status
       } else if (data.name === 'arxiv') {
         const papers = data.content && data.content.includes('Title:') ? 
           data.content.split('Title:').length - 1 : 1
@@ -493,13 +505,23 @@ const currentStreamingStatus = computed(() => {
           status += `\n• ${titles.join('\n• ')}`
           if (titleMatches.length > 2) status += `\n• and ${titleMatches.length - 2} more...`
         }
-        return status
+        latestCompletionStatus = status
       } else if (data.name === 'DaytonaCodeSandbox') {
-        return `✅ Code execution complete\n• Generated charts and analysis`
+        latestCompletionStatus = `✅ Code execution complete\n• Generated charts and analysis`
       }
     }
+  }
+  
+  // Return latest completion status if we have one
+  if (latestCompletionStatus) {
+    return latestCompletionStatus
+  }
+  
+  // Check if we're streaming response
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i]
+    const data = event.data
     
-    // Check if we're streaming response
     if (event.event === 'llm_stream_chunk' && 
         data.content && 
         data.content.trim() && 
@@ -508,23 +530,7 @@ const currentStreamingStatus = computed(() => {
     }
   }
   
-  // Now process forward to find current tool if no completion found
-  for (let i = 0; i < events.length; i++) {
-    const event = events[i]
-    const data = event.data
-    
-    if (event.event === 'llm_stream_chunk' && data.content && data.content.includes('<tool>')) {
-      const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
-      const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
-      
-      if (toolMatch) {
-        currentTool = toolMatch[1]
-        toolQuery = inputMatch ? inputMatch[1].trim() : null
-      }
-    }
-  }
-  
-  // Return current tool status if we have one
+  // Return current tool status if we have one and no completion
   if (currentTool) {
     if (currentTool === 'search_tavily') {
       return `🔍 Searching web: "${toolQuery || 'query'}"`
@@ -772,63 +778,7 @@ const streamingResponseContent = computed(() => {
   return bestContent
 })
 
-// Enhanced response content with inline references
-const enhancedResponseContent = computed(() => {
-  const content = streamingResponseContent.value
-  if (!content || !toolSources.value.length) return content
-  
-  let enhancedContent = content
-  
-  // Add inline references for sources
-  toolSources.value.forEach((source, index) => {
-    if (!source.url) return // Skip sources without URLs
-    
-    const patterns = []
-    
-    if (source.type === 'web' && source.domain) {
-      // For web sources, look for domain and company names
-      const domainBase = source.domain.replace(/\.(com|org|net|ai|co)$/i, '')
-      patterns.push(domainBase)
-      
-      // Extract company name from title
-      if (source.title) {
-        const companyMatch = source.title.match(/^([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)/);
-        if (companyMatch) {
-          patterns.push(companyMatch[1])
-        }
-      }
-    } else if (source.type === 'arxiv') {
-      // For arXiv papers, look for key terms from title
-      if (source.title) {
-        const titleWords = source.title.split(' ')
-        const significantWords = titleWords.filter(word => 
-          word.length > 4 && 
-          !/^(the|and|for|with|using|from|that|this|their|based|model|learning|analysis|approach|method|system)$/i.test(word)
-        )
-        patterns.push(...significantWords.slice(0, 3))
-      }
-    }
-    
-    patterns.forEach(pattern => {
-      if (pattern && pattern.length > 3) {
-        // Create a more specific regex that avoids already tagged content
-        const escapedPattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        const regex = new RegExp(`(?<!<[^>]*?)\\b${escapedPattern}\\b(?![^<]*?>)(?!.*?</a>)`, 'gi')
-        
-        let matchCount = 0
-        enhancedContent = enhancedContent.replace(regex, (match) => {
-          matchCount++
-          if (matchCount === 1) { // Only add reference to first occurrence
-            return `${match}<sup><a href="${source.url}" target="_blank" rel="noopener" class="inline-ref" data-source-idx="${index}">[${index + 1}]</a></sup>`
-          }
-          return match
-        })
-      }
-    })
-  })
-  
-  return enhancedContent
-})
+
 
 // Extract sources from tool results with proper titles and domains
 const toolSources = computed(() => {
@@ -877,7 +827,7 @@ const toolSources = computed(() => {
         })
       })
     } else if (event.data.name === 'arxiv') {
-      // Parse arXiv results
+      // Parse arXiv results - remove the broken URL construction
       const content = event.data.content || ''
       const papers = content.split('Published:').slice(1)
       
@@ -888,23 +838,14 @@ const toolSources = computed(() => {
         const publishedMatch = paper.match(/Published: ([^\n]+)/)
         
         if (titleMatch) {
-          let arxivUrl = ''
-          
-          // Try to find explicit URL first
-          if (urlMatch) {
-            arxivUrl = urlMatch[1].trim()
-          } else {
-            // Try to construct arXiv URL from title
-            const title = titleMatch[1].trim()
-            // For now, we'll use a search URL since we don't have paper IDs
-            arxivUrl = `https://arxiv.org/search/?query=${encodeURIComponent(title)}&searchtype=title`
-          }
+          // Only use actual URLs from the content, don't construct fake ones
+          const arxivUrl = urlMatch ? urlMatch[1].trim() : ''
           
           sources.push({
             title: titleMatch[1].trim() || 'Untitled Paper',
             authors: authorsMatch ? authorsMatch[1].trim() : '',
             domain: 'arxiv.org',
-            url: arxivUrl,
+            url: arxivUrl, // This might be empty if no URL is provided
             content: paper.substring(0, 300) + '...',
             type: 'arxiv',
             published: publishedMatch ? publishedMatch[1].trim() : ''
@@ -974,15 +915,30 @@ function formatEventTime(timestamp) {
 function renderMarkdown(content) {
   if (!content) return ''
   
-  // Simple markdown rendering for basic formatting
+  // Enhanced markdown rendering with proper header support
   let html = content
+    // Headers (must be done before other replacements)
+    .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mt-4 mb-2">$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold mt-6 mb-3">$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-8 mb-4">$1</h1>')
+    // Bold and italic
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    // Code
     .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded text-sm">$1</code>')
-    .replace(/\n\n/g, '</p><p>')
+    // Lists (simple implementation)
+    .replace(/^(\d+)\. (.*$)/gim, '<li class="ml-4">$2</li>')
+    .replace(/^- (.*$)/gim, '<li class="ml-4 list-disc">$2</li>')
+    // Paragraphs and line breaks
+    .replace(/\n\n/g, '</p><p class="mb-2">')
     .replace(/\n/g, '<br>')
   
-  return `<p>${html}</p>`
+  // Wrap in paragraph if it doesn't already have block elements
+  if (!html.includes('<h1>') && !html.includes('<h2>') && !html.includes('<h3>') && !html.includes('<li>')) {
+    return `<p class="mb-2">${html}</p>`
+  }
+  
+  return html
 }
 
 function getStatusBadgeClass(status) {
@@ -1034,6 +990,10 @@ function getStatusBadgeClass(status) {
       />
       <path
         d="M32.2893 37.4537H30.2856V12.6174C30.2886 11.096 29.7014 9.63408 28.6505 8.546C27.5995 7.45791 26.1686 6.83051 24.6653 6.79865H11.441C9.95838 6.79865 8.53648 7.39461 7.4881 8.45542C6.43972 9.51624 5.85075 10.955 5.85075 12.4553C5.85075 13.9554 6.43972 15.3942 7.4881 16.455C8.53648 17.5158 9.95838 18.1118 11.441 18.1118H11.5512L12.7735 18.2436C14.7928 18.2517 16.7263 19.0711 18.1486 20.5217C19.5708 21.9722 20.3654 23.935 20.3574 25.9783C20.3494 28.0216 19.5396 29.978 18.106 31.4172C16.6725 32.8564 14.7327 33.6603 12.7134 33.6522H0V31.6247H12.7234C14.206 31.6247 15.628 31.0288 16.6763 29.968C17.7246 28.9072 18.3136 27.4684 18.3136 25.9681C18.3136 24.468 17.7246 23.0292 16.6763 21.9684C15.628 20.9076 14.206 20.3116 12.7234 20.3116H12.6132L11.401 20.1798C10.401 20.1798 9.41097 19.9805 8.4872 19.5933C7.56343 19.2062 6.72407 18.6386 6.01704 17.9233C5.31002 17.2079 4.74918 16.3585 4.36653 15.4238C3.9839 14.4891 3.78696 13.4873 3.78696 12.4755C3.78696 11.4638 3.9839 10.4619 4.36653 9.52719C4.74918 8.59247 5.31002 7.74315 6.01704 7.02774C6.72407 6.31233 7.56343 5.74484 8.4872 5.35766C9.41097 4.97048 10.401 4.7712 11.401 4.7712H24.6453C26.6845 4.80577 28.6286 5.6498 30.0586 7.12132C31.4885 8.59285 32.2896 10.574 32.2893 12.6377V37.4537Z"
+        fill="url(#brandGradient)"
+      />
+      <path
+        d="M12.7234 37.4535H0V35.426H12.7234C15.1998 35.426 17.5747 34.4306 19.3257 32.6588C21.0767 30.887 22.0605 28.4839 22.0605 25.9781C22.0605 23.4723 21.0767 21.0693 19.3257 19.2975C17.5747 17.5256 15.1998 16.5302 12.7234 16.5302H11.4711C10.9028 16.6121 10.3237 16.5696 9.77312 16.4054C9.22251 16.2412 8.71317 15.9593 8.27959 15.5787C7.84601 15.1981 7.49831 14.7276 7.26001 14.1992C7.02172 13.6707 6.8984 13.0966 6.8984 12.5158C6.8984 11.935 7.02172 11.3609 7.26001 10.8325C7.49831 10.3042 7.84601 9.83368 8.27959 9.45304C8.71317 9.0724 9.22251 8.79046 9.77312 8.62629C10.3237 8.46212 10.9028 8.41956 11.4711 8.5015H24.6453C25.7198 8.53061 26.7406 8.98378 27.4894 9.76418C28.2381 10.5446 28.6556 11.5903 28.6527 12.6781V37.4535H26.649V12.6172C26.6551 12.0793 26.4569 11.5595 26.0952 11.1652C25.7336 10.771 25.2359 10.5323 24.7054 10.4986H11.441C11.1747 10.4791 10.9073 10.5155 10.6555 10.6053C10.4037 10.6951 10.1729 10.8365 9.97744 11.0205C9.78207 11.2045 9.62616 11.4273 9.51958 11.675C9.413 11.9227 9.358 12.19 9.358 12.4601C9.358 12.7303 9.413 12.9975 9.51958 13.2452C9.62616 13.4929 9.78207 13.7157 9.97744 13.8997C10.1729 14.0838 10.4037 14.2252 10.6555 14.3149C10.9073 14.4047 11.1747 14.441 11.441 14.4217H12.6933C15.7117 14.4176 18.6081 15.627 20.7452 17.7838C22.8824 19.9407 24.0853 22.8681 24.0892 25.9223C24.0932 28.9766 22.898 31.9072 20.7665 34.0698C18.635 36.2322 15.7418 37.4494 12.7234 37.4535Z"
         fill="url(#brandGradient)"
       />
       <path
