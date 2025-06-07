@@ -19,11 +19,14 @@
         <div class="flex items-start justify-between p-3 bg-gray-50 rounded-t-lg border-b">
           <div class="flex items-start space-x-2 flex-1">
             <div :class="currentStatusDot" class="w-2 h-2 rounded-full mt-1 flex-shrink-0"></div>
-            <div class="text-sm text-gray-700 whitespace-pre-line">{{ currentStreamingStatus }}</div>
+            <div v-if="isStreamingResponse" class="text-sm text-gray-700">
+              {{ finalStatusSummary }}
+            </div>
+            <div v-else class="text-sm text-gray-700 whitespace-pre-line">{{ currentStreamingStatus }}</div>
           </div>
           
           <button
-            v-if="hasCompletedEvents"
+            v-if="hasCompletedEvents || isStreamingResponse"
             @click="toggleAuditLog"
             class="text-xs text-gray-500 hover:text-gray-700 flex items-center space-x-1"
           >
@@ -576,6 +579,58 @@ const hasCompletedEvents = computed(() => {
   )
 })
 
+// Check if we're currently streaming the LLM response (not tools)
+const isStreamingResponse = computed(() => {
+  if (!props.streamingEvents || props.streamingEvents.length === 0) return false
+  
+  const events = props.streamingEvents
+  
+  // Check if we have completed tool execution AND have LLM response content
+  const hasCompletedTools = events.some(event => 
+    event.event === 'agent_completion' && 
+    event.data.type === 'LiberalFunctionMessage'
+  )
+  
+  const hasResponseContent = events.some(event => 
+    event.event === 'llm_stream_chunk' && 
+    event.data.content && 
+    !event.data.content.includes('<tool>')
+  )
+  
+  // We're in "streaming response" mode if tools are done and we have response content
+  return hasCompletedTools && hasResponseContent
+})
+
+// Summary for when we've moved to response streaming
+const finalStatusSummary = computed(() => {
+  if (!props.streamingEvents) return 'Details'
+  
+  let completedTools = []
+  
+  props.streamingEvents.forEach(event => {
+    if (event.event === 'agent_completion' && 
+        event.data.type === 'LiberalFunctionMessage' && 
+        event.data.name) {
+      
+      if (event.data.name === 'search_tavily' && Array.isArray(event.data.content)) {
+        completedTools.push(`Found ${event.data.content.length} web sources`)
+      } else if (event.data.name === 'arxiv') {
+        const papers = event.data.content && event.data.content.includes('Title:') ? 
+          event.data.content.split('Title:').length - 1 : 1
+        completedTools.push(`Found ${papers} arXiv papers`)
+      } else if (event.data.name === 'DaytonaCodeSandbox') {
+        completedTools.push('Code execution complete')
+      }
+    }
+  })
+  
+  if (completedTools.length > 0) {
+    return `✅ ${completedTools.join(' • ')}`
+  }
+  
+  return 'Details'
+})
+
 // Comprehensive audit log with filtered meaningful events
 const auditLogEvents = computed(() => {
   if (!props.streamingEvents) return []
@@ -915,30 +970,15 @@ function formatEventTime(timestamp) {
 function renderMarkdown(content) {
   if (!content) return ''
   
-  // Enhanced markdown rendering with proper header support
+  // Simple markdown rendering for basic formatting
   let html = content
-    // Headers (must be done before other replacements)
-    .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mt-4 mb-2">$1</h3>')
-    .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold mt-6 mb-3">$1</h2>')
-    .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-8 mb-4">$1</h1>')
-    // Bold and italic
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    // Code
     .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded text-sm">$1</code>')
-    // Lists (simple implementation)
-    .replace(/^(\d+)\. (.*$)/gim, '<li class="ml-4">$2</li>')
-    .replace(/^- (.*$)/gim, '<li class="ml-4 list-disc">$2</li>')
-    // Paragraphs and line breaks
-    .replace(/\n\n/g, '</p><p class="mb-2">')
+    .replace(/\n\n/g, '</p><p>')
     .replace(/\n/g, '<br>')
   
-  // Wrap in paragraph if it doesn't already have block elements
-  if (!html.includes('<h1>') && !html.includes('<h2>') && !html.includes('<h3>') && !html.includes('<li>')) {
-    return `<p class="mb-2">${html}</p>`
-  }
-  
-  return html
+  return `<p>${html}</p>`
 }
 
 function getStatusBadgeClass(status) {
