@@ -206,14 +206,30 @@
             </div>
           </div>
           
-          <!-- Daytona Status Indicator (when sidebar is active) -->
+          <!-- Daytona Status Indicator and Controls -->
           <div v-if="isDaytonaActive" class="mt-4">
             <div class="inline-flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg text-sm text-blue-800">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
               </svg>
-              <span class="font-medium">Code analysis running in Daytona Sandbox</span>
-              <svg class="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span class="font-medium">{{ showDaytonaSidebar ? 'Code analysis running in Daytona Sandbox' : 'Daytona analysis available' }}</span>
+              
+              <!-- Reopen button when sidebar is closed -->
+              <button
+                v-if="!showDaytonaSidebar"
+                @click="reopenDaytonaSidebar"
+                class="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 hover:bg-blue-200 rounded text-xs font-medium transition-colors"
+                title="Open Daytona Sandbox"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                </svg>
+                Open
+              </button>
+              
+              <!-- Sidebar active indicator -->
+              <svg v-else class="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
               </svg>
             </div>
@@ -481,6 +497,7 @@ function toggleAuditLog() {
 const selectedArtifact = ref(null)
 const showArtifactCanvas = ref(false)
 const showDaytonaSidebar = ref(false)
+const daytonaSidebarClosed = ref(false) // Track if user manually closed it
 
 function openArtifact(artifact) {
   selectedArtifact.value = artifact
@@ -494,6 +511,12 @@ function closeArtifactCanvas() {
 
 function closeDaytonaSidebar() {
   showDaytonaSidebar.value = false
+  daytonaSidebarClosed.value = true // Mark as manually closed
+}
+
+function reopenDaytonaSidebar() {
+  showDaytonaSidebar.value = true
+  daytonaSidebarClosed.value = false
 }
 
 // Detect Daytona usage and automatically open sidebar
@@ -517,7 +540,7 @@ const isDaytonaActive = computed(() => {
 
 // Watch for Daytona activity and automatically open sidebar
 watch(isDaytonaActive, (isActive) => {
-  if (isActive) {
+  if (isActive && !daytonaSidebarClosed.value) {
     showDaytonaSidebar.value = true
     // Close artifact canvas if it's open since we're using sidebar now
     showArtifactCanvas.value = false

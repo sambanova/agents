@@ -31,7 +31,7 @@ from daytona_sdk import (
     Daytona as DaytonaClient,
     DaytonaConfig as DaytonaSDKConfig,
 )
-
+from utils.code_patcher import patch_plot_code_str
 
 class DDGInput(BaseModel):
     query: Annotated[str, Field(description="search query to look up")]
@@ -340,7 +340,7 @@ def _get_daytona(user_id: str):
 
             sandbox = daytona.create(params=params)
 
-            # patched_code, expected_filenames = patch_plot_code_str(code_to_run)
+            patched_code, expected_filenames = patch_plot_code_str(code_to_run)
             response = sandbox.process.code_run(code_to_run)
 
             # Ensure result is a string, even if None or other types
