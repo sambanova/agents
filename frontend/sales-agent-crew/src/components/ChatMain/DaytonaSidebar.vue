@@ -108,7 +108,11 @@
               <span>Python Analysis Script</span>
               <span>{{ codeLines }} lines</span>
             </div>
-            <div class="p-4 overflow-auto max-h-96">
+            <div 
+              ref="codeContainer"
+              class="p-4 overflow-auto max-h-96"
+              style="scrollbar-width: thin; scrollbar-color: #6b7280 #374151;"
+            >
               <pre class="text-sm font-mono leading-relaxed"><code v-text="codeContent" style="color: #e5e7eb; white-space: pre-wrap; word-wrap: break-word;"></code></pre>
             </div>
           </div>
@@ -306,7 +310,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 
 const props = defineProps({
   isOpen: {
@@ -337,6 +341,9 @@ const codeExpanded = ref(true)
 const chartsExpanded = ref(true)
 const analysisExpanded = ref(true)
 const logExpanded = ref(false)
+
+// Template refs
+const codeContainer = ref(null)
 
 // Computed properties
 const statusDotClass = computed(() => {
@@ -376,6 +383,15 @@ watch(() => props.streamingEvents, (newEvents) => {
     processStreamingEvents(newEvents)
   }
 }, { deep: true, immediate: true })
+
+// Watch for code content changes and auto-scroll
+watch(codeContent, () => {
+  nextTick(() => {
+    if (codeContainer.value && codeExpanded.value) {
+      codeContainer.value.scrollTop = codeContainer.value.scrollHeight
+    }
+  })
+})
 
 // Methods
 function processStreamingEvents(events) {
@@ -436,7 +452,7 @@ function processStreamingEvents(events) {
           // Extract charts from Daytona response
           const content = event.data.content || ''
           
-          // Look for chart attachments with improved regex
+          // Look for chart attachments with improved regex - including .png files
           const chartMatches = content.match(/!\[([^\]]*)\]\(attachment:([^)]+)\)/g)
           if (chartMatches) {
             chartMatches.forEach((match, idx) => {
@@ -447,22 +463,33 @@ function processStreamingEvents(events) {
                 const chartId = idMatch[1]
                 const title = titleMatch && titleMatch[1] ? titleMatch[1] : `Chart ${idx + 1}`
                 
+                // Create real image URL instead of dummy SVG
+                const imageUrl = `/api/files/${chartId}` // Fixed path for API endpoint
+                
                 charts.value.push({
                   id: chartId,
                   title: title,
-                  url: createChartUrl(chartId, title),
+                  url: imageUrl, // Use real backend URL
                   loading: false,
-                  downloadUrl: `https://api.example.com/charts/${chartId}/download`
+                  downloadUrl: imageUrl
                 })
                 chartCount++
+                console.log(`Added chart: ${title} with ID: ${chartId}`)
               }
             })
           }
           
-          // Extract analysis text (everything before the charts)
-          const beforeCharts = content.split('![Chart')[0].split('![Image')[0]
-          if (beforeCharts.trim()) {
-            analysisResults.value = beforeCharts.trim()
+          // Extract analysis text (everything before any image attachments)
+          let analysisText = content
+          
+          // Remove all image attachments
+          analysisText = analysisText.replace(/!\[[^\]]*\]\(attachment:[^)]+\)/g, '')
+          
+          // Remove any remaining ![Chart or ![Image references
+          analysisText = analysisText.split('![Chart')[0].split('![Image')[0].split('![plot')[0]
+          
+          if (analysisText.trim()) {
+            analysisResults.value = analysisText.trim()
           }
           
           updateStatus('✅ Analysis complete', `Generated ${chartCount} visualizations`)
@@ -591,37 +618,39 @@ function formatMarkdown(content) {
   if (!content) return ''
   
   // Professional analysis formatting
-  return content
+  let formatted = content
     // Clean up the content first
     .replace(/pr\w*\("([^"]+)"\)/g, '$1') // Remove print statements
     .replace(/pr\w*\(f"([^"]+)"\)/g, '$1') // Remove f-print statements
     .replace(/\\n/g, '\n') // Fix line breaks
     
-    // Apply professional formatting
-    .replace(/KEY INSIGHTS:/g, '<div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg font-bold text-lg mb-4">🔍 KEY INSIGHTS</div>')
-    .replace(/(\d+)\.\s+([^:]+):/g, '<div class="mt-6 mb-4"><h3 class="text-lg font-semibold text-blue-800 border-l-4 border-blue-500 pl-3 mb-2">$1. $2</h3></div>')
+    // Apply professional formatting for "Key Insights" section
+    .replace(/Key Insights:/gi, '<div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg font-bold text-lg mb-4">🔍 KEY INSIGHTS</div>')
+    
+    // Format numbered insights
+    .replace(/(\d+)\.\s+([^(\n]+)\s*(\([^)]+\))?/g, '<div class="mb-4 p-3 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg"><span class="font-semibold text-blue-800">$1.</span> <span class="text-gray-800">$2</span> <span class="text-blue-600 text-sm">$3</span></div>')
+    
+    // Format "Max Throughputs" section
+    .replace(/Max Throughputs:/gi, '<div class="mt-6 mb-4"><h3 class="text-lg font-semibold text-purple-800 border-l-4 border-purple-500 pl-3 mb-3">📊 PERFORMANCE METRICS</h3></div>')
+    
+    // Format model names and their metrics
+    .replace(/([A-Za-z-]+\d*[A-Za-z-]*\d*):\s*$/gm, '<div class="mt-4 mb-2"><h4 class="font-bold text-gray-900 bg-gray-100 px-3 py-2 rounded">$1</h4></div>')
+    
+    // Format metric lines (e.g., "150-char: 1117.8 TPS")
+    .replace(/([^:\n]+):\s*(\d+\.?\d*\s*[A-Z]+)/g, '<div class="ml-4 mb-1 flex justify-between items-center py-1"><span class="text-gray-700">$1:</span> <span class="font-semibold text-green-600 bg-green-50 px-2 py-1 rounded">$2</span></div>')
+    
+    // Format any remaining numbers with units
+    .replace(/(\d+\.?\d*)\s*(TPS|MB|GB|ms|seconds?)/g, '<span class="font-semibold text-blue-600">$1 $2</span>')
     
     // Format bullet points
     .replace(/^-\s+(.+)$/gm, '<div class="flex items-start mb-2 ml-4"><span class="text-blue-500 mr-2">•</span><span class="text-gray-700">$1</span></div>')
     
-    // Format metrics and numbers
-    .replace(/\$(\d+(?:\.\d+)?[MK]?)/g, '<span class="font-semibold text-green-600 bg-green-50 px-2 py-1 rounded">$$$1</span>')
-    .replace(/(\d+(?:\.\d+)?%)/g, '<span class="font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded">$1</span>')
-    .replace(/(\d+:\d+)/g, '<span class="font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded">$1</span>')
-    
-    // Format regions and categories
-    .replace(/(North America|Europe|Asia Pacific|Latin America|Electronics|Clothing|Home Garden)/g, '<span class="font-medium text-indigo-700 bg-indigo-50 px-2 py-1 rounded text-sm">$1</span>')
-    
-    // Format benchmarks and comparisons
-    .replace(/(above benchmarks|below benchmarks|vs \$\d+[^)]*benchmark)/g, '<span class="font-medium text-amber-700 bg-amber-50 px-2 py-1 rounded text-sm">$1</span>')
-    
-    // Clean up extra spaces and line breaks
+    // Clean up extra spaces and line breaks, but preserve structure
     .replace(/\n\s*\n/g, '<div class="my-3"></div>')
     .replace(/\n/g, '<br>')
-    
-    // Wrap in professional container
-    .replace(/^/, '<div class="prose prose-lg max-w-none text-gray-800 leading-relaxed">')
-    .concat('</div>')
+  
+  // Wrap in professional container
+  return `<div class="prose prose-lg max-w-none text-gray-800 leading-relaxed bg-white p-6 rounded-lg border shadow-sm">${formatted}</div>`
 }
 
 function formatLogTime(timestamp) {

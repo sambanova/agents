@@ -33,6 +33,9 @@ from agents.components.routing.route import SemanticRouterAgent
 from agents.storage.redis_service import SecureRedisService
 from agents.storage.redis_storage import RedisStorage
 
+# Import file API router
+from src.api.files import router as files_router
+
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
@@ -164,6 +167,9 @@ class LeadGenerationAPI:
         )
 
     def setup_routes(self):
+        # Include file API router  
+        self.app.include_router(files_router)
+        
         @self.app.get("/health")
         async def health_check():
             """Health check endpoint for Kubernetes liveness and readiness probes."""
