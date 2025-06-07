@@ -224,11 +224,19 @@ async def generate_report_plan(
         report_structure = str(report_structure)
 
     search_queries_interceptor = MessageInterceptor()
+    fixing_interceptor = MessageInterceptor()
+
+    # Create an intercepted version of the writer model for the fixing parser
+    fixing_writer_model = writer_model | RunnableLambda(
+        fixing_interceptor.capture_and_pass
+    )
+
     structured_llm = (
         writer_model
         | RunnableLambda(search_queries_interceptor.capture_and_pass)
         | OutputFixingParser.from_llm(
-            llm=writer_model, parser=PydanticOutputParser(pydantic_object=Queries)
+            llm=fixing_writer_model,  # Use the intercepted model
+            parser=PydanticOutputParser(pydantic_object=Queries),
         )
     )
 
@@ -337,7 +345,11 @@ async def generate_report_plan(
     captured_messages = []
 
     for m in search_queries_interceptor.captured_messages:
-        m.additional_kwargs["agent_type"] = "deep_research_search_queries"
+        m.additional_kwargs["agent_type"] = "deep_research_search_queries_plan"
+        captured_messages.append(m)
+
+    for m in fixing_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_search_queries_plan_fixed"
         captured_messages.append(m)
 
     for m in search_sections_interceptor.captured_messages:
@@ -392,11 +404,19 @@ async def generate_queries(writer_model, state: SectionState, config: RunnableCo
     )
 
     search_queries_interceptor = MessageInterceptor()
+    fixing_interceptor = MessageInterceptor()
+
+    # Create an intercepted version of the writer model for the fixing parser
+    fixing_writer_model = writer_model | RunnableLambda(
+        fixing_interceptor.capture_and_pass
+    )
+
     structured_llm = (
         writer_model
         | RunnableLambda(search_queries_interceptor.capture_and_pass)
         | OutputFixingParser.from_llm(
-            llm=writer_model, parser=PydanticOutputParser(pydantic_object=Queries)
+            llm=fixing_writer_model,  # Use the intercepted model
+            parser=PydanticOutputParser(pydantic_object=Queries),
         )
     )
 
@@ -425,7 +445,11 @@ async def generate_queries(writer_model, state: SectionState, config: RunnableCo
 
     captured_message = []
     for m in search_queries_interceptor.captured_messages:
-        m.additional_kwargs["agent_type"] = "deep_research_search_queries"
+        m.additional_kwargs["agent_type"] = "deep_research_search_queries_section"
+        captured_message.append(m)
+
+    for m in fixing_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_search_queries_section_fixed"
         captured_message.append(m)
 
     return {"search_queries": queries.queries, "messages": captured_message}
