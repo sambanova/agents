@@ -64,6 +64,19 @@ from langchain.output_parsers import (
 from agents.utils.logging import logger
 from langgraph.checkpoint.memory import InMemorySaver
 
+from langchain_core.runnables import RunnableLambda
+
+
+class MessageInterceptor:
+    def __init__(self):
+        self.captured_messages = []
+
+    def capture_and_pass(self, message):
+        """Capture the message and pass it through"""
+        if isinstance(message, AIMessage):
+            self.captured_messages.append(message)
+        return message
+
 
 class LLMTimeoutError(Exception):
     """Custom exception for LLM timeout."""
@@ -210,8 +223,13 @@ async def generate_report_plan(
     if isinstance(report_structure, dict):
         report_structure = str(report_structure)
 
-    structured_llm = writer_model | OutputFixingParser.from_llm(
-        llm=writer_model, parser=PydanticOutputParser(pydantic_object=Queries)
+    search_queries_interceptor = MessageInterceptor()
+    structured_llm = (
+        writer_model
+        | RunnableLambda(search_queries_interceptor.capture_and_pass)
+        | OutputFixingParser.from_llm(
+            llm=writer_model, parser=PydanticOutputParser(pydantic_object=Queries)
+        )
     )
 
     system_instructions_query = report_planner_query_writer_instructions.format(
@@ -285,8 +303,13 @@ async def generate_report_plan(
         feedback=feedback,
     )
 
-    structured_llm = planner_model | OutputFixingParser.from_llm(
-        llm=planner_model, parser=PydanticOutputParser(pydantic_object=Sections)
+    search_sections_interceptor = MessageInterceptor()
+    structured_llm = (
+        planner_model
+        | RunnableLambda(search_sections_interceptor.capture_and_pass)
+        | OutputFixingParser.from_llm(
+            llm=planner_model, parser=PydanticOutputParser(pydantic_object=Sections)
+        )
     )
 
     report_sections = await invoke_llm_with_tracking(
@@ -309,7 +332,19 @@ async def generate_report_plan(
             session_id, f"Generated plan with {len(sections)} sections"
         )
     )
-    return {"sections": sections}
+
+    # tag and concatenate the captured messages
+    captured_messages = []
+
+    for m in search_queries_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_search_queries"
+        captured_messages.append(m)
+
+    for m in search_sections_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_search_sections"
+        captured_messages.append(m)
+
+    return {"sections": sections, "messages": captured_messages}
 
 
 async def human_feedback(
@@ -356,8 +391,13 @@ async def generate_queries(writer_model, state: SectionState, config: RunnableCo
         logger.format_message(session_id, f"Generating queries for section: {sec.name}")
     )
 
-    structured_llm = writer_model | OutputFixingParser.from_llm(
-        llm=writer_model, parser=PydanticOutputParser(pydantic_object=Queries)
+    search_queries_interceptor = MessageInterceptor()
+    structured_llm = (
+        writer_model
+        | RunnableLambda(search_queries_interceptor.capture_and_pass)
+        | OutputFixingParser.from_llm(
+            llm=writer_model, parser=PydanticOutputParser(pydantic_object=Queries)
+        )
     )
 
     sys_inst = query_writer_instructions.format(
@@ -382,7 +422,13 @@ async def generate_queries(writer_model, state: SectionState, config: RunnableCo
             f"Generated {len(queries.queries)} queries for section {sec.name}.",
         )
     )
-    return {"search_queries": queries.queries}
+
+    captured_message = []
+    for m in search_queries_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_search_queries"
+        captured_message.append(m)
+
+    return {"search_queries": queries.queries, "messages": captured_message}
 
 
 async def search_web(state: SectionState, config: RunnableConfig):
@@ -453,7 +499,6 @@ async def invoke_llm_with_tracking(
         timeout_seconds: Maximum time in seconds to wait for LLM response
 
     Returns:
-        The LLM response
 
     Raises:
         LLMTimeoutError: If the LLM request exceeds the timeout duration
@@ -501,9 +546,13 @@ async def write_section(
         section_content=sec.content,
         document_summary=doc_summary,
     )
+    writer_interceptor = MessageInterceptor()
+    writer_model_with_interceptor = writer_model | RunnableLambda(
+        writer_interceptor.capture_and_pass
+    )
 
     content = await invoke_llm_with_tracking(
-        llm=writer_model,
+        llm=writer_model_with_interceptor,
         messages=[
             SystemMessage(content=sys_inst),
             HumanMessage(content="Write the section."),
@@ -525,8 +574,13 @@ async def write_section(
         section_topic=sec.description, section=sec.content
     )
 
-    structured_llm = writer_model | OutputFixingParser.from_llm(
-        llm=writer_model, parser=PydanticOutputParser(pydantic_object=Feedback)
+    grader_interceptor = MessageInterceptor()
+    structured_llm = (
+        writer_model
+        | RunnableLambda(grader_interceptor.capture_and_pass)
+        | OutputFixingParser.from_llm(
+            llm=writer_model, parser=PydanticOutputParser(pydantic_object=Feedback)
+        )
     )
 
     fb = await invoke_llm_with_tracking(
@@ -538,11 +592,23 @@ async def write_section(
         llm_name=get_model_name(writer_model),
     )
 
+    captured_messages = []
+    for m in writer_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_writer"
+        captured_messages.append(m)
+
+    for m in grader_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_grader"
+        captured_messages.append(m)
+
     if fb.grade == "pass":
         logger.info(
             logger.format_message(session_id, f"Section {sec.name} passed grading")
         )
-        return Command(update={"completed_sections": [sec]}, goto=END)
+        return Command(
+            update={"completed_sections": [sec], "messages": captured_messages},
+            goto=END,
+        )
     elif (
         state["search_iterations"]
         >= Configuration.from_runnable_config(config).max_search_depth
@@ -552,7 +618,10 @@ async def write_section(
                 session_id, f"Section {sec.name} reached max iterations, moving on"
             )
         )
-        return Command(update={"completed_sections": [sec]}, goto=END)
+        return Command(
+            update={"completed_sections": [sec], "messages": captured_messages},
+            goto=END,
+        )
     else:
         logger.info(
             logger.format_message(
@@ -561,7 +630,11 @@ async def write_section(
             )
         )
         return Command(
-            update={"search_queries": fb.follow_up_queries, "section": sec},
+            update={
+                "search_queries": fb.follow_up_queries,
+                "section": sec,
+                "messages": captured_messages,
+            },
             goto="search_web",
         )
 
@@ -580,8 +653,13 @@ async def write_final_sections(
         section_title=sec.name, section_topic=sec.description, context=rep
     )
 
+    writer_interceptor = MessageInterceptor()
+    writer_model_with_interceptor = writer_model | RunnableLambda(
+        writer_interceptor.capture_and_pass
+    )
+
     content = await invoke_llm_with_tracking(
-        llm=writer_model,
+        llm=writer_model_with_interceptor,
         messages=[
             SystemMessage(content=sys_inst),
             HumanMessage(content="Write final section."),
@@ -596,7 +674,13 @@ async def write_final_sections(
     logger.info(
         logger.format_message(session_id, f"Completed final section: {sec.name}")
     )
-    return {"completed_sections": [sec]}
+
+    captured_messages = []
+    for m in writer_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_final_section_writer"
+        captured_messages.append(m)
+
+    return {"completed_sections": [sec], "messages": captured_messages}
 
 
 async def gather_completed_sections(state: ReportState, config: RunnableConfig):

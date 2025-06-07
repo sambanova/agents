@@ -1235,7 +1235,7 @@ const addMessage = async () => {
       const message = messagesData.value[i];
       if (message.event === 'agent_completion') {
         // Check if this agent_completion has deep_research_interrupt agent_type
-        if (message.data && message.data.agent_type === 'deep_research_interrupt') {
+        if (message.data && message.data.additional_kwargs.agent_type === 'deep_research_interrupt') {
           // If user typed something, set resume to true
           shouldResume = searchQuery.value.trim().length > 0;
         }

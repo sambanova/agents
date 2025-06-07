@@ -8,7 +8,7 @@
             <span class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
               {{ props.event }}
             </span>
-            <span class="text-xs text-gray-500">{{ formatTimestamp(props.data.timestamp) }}</span>
+            <span class="text-xs text-gray-500">{{ formatTimestamp(typeof props.data === 'object' ? props.data.timestamp : null) }}</span>
           </div>
           
           <!-- Main message content -->
@@ -18,8 +18,8 @@
             
             <!-- Message metadata -->
             <div class="text-xs text-gray-500">
-              <div v-if="props.data.type">Type: {{ props.data.type }}</div>
-              <div v-if="props.data.additional_kwargs.agent_type">Agent Type: {{ props.data.additional_kwargs.agent_type }}</div>
+              <div v-if="typeof props.data === 'object' && props.data.type">Type: {{ props.data.type }}</div>
+              <div v-if="typeof props.data === 'object' && props.data.additional_kwargs?.agent_type">Agent Type: {{ props.data.additional_kwargs.agent_type }}</div>
             </div>
 
             <!-- Dropdown for full message details -->
@@ -43,7 +43,7 @@
               
               <!-- Full message details -->
               <div v-if="showDetails" class="mt-2 p-2 bg-gray-50 rounded text-xs font-mono whitespace-pre-wrap">
-                {{ JSON.stringify(props.data, null, 2) }}
+                {{ typeof props.data === 'object' ? JSON.stringify(props.data, null, 2) : props.data }}
               </div>
             </div>
           </div>
@@ -65,7 +65,7 @@
         </div>
         <!-- End Card -->
       </div>
-      <UserAvatar :type="user" />
+      <UserAvatar :type="'user'" />
     </li>
     
     <!-- For all other cases -->
@@ -180,11 +180,13 @@
     },
     plannerText: {
       type: String,
-      required: true
+      required: false,
+      default: ''
     },
     metadata: {
       type: Object,
-      required: true
+      required: false,
+      default: null
     },
     provider: {
       type: String,
@@ -266,6 +268,7 @@ function toggleCollapse() {
 // Add refs for UI state
 const showDetails = ref(false)
 const activeMenu = ref(false)
+const isLoading = ref(false)
 
 // Toggle functions
 function toggleDetails() {
@@ -524,10 +527,14 @@ function getEventDotClass(event) {
 }
 
 function formatTimestamp(timestamp) {
+  if (!timestamp) return ''
   return new Date(timestamp).toLocaleTimeString()
 }
 
 function getStreamingContent() {
+  if (typeof props.data === 'string') {
+    return props.data
+  }
   return props.data?.content || ''
 }
 

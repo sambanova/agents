@@ -63,7 +63,7 @@ async def astream_state_websocket(
                 },
             )
 
-        elif event["event"] == "on_chain_stream" and event["run_id"] == root_run_id:
+        elif event["event"] == "on_chain_stream":
             new_messages: list[BaseMessage] = []
 
             # Extract messages from the event data
@@ -111,20 +111,6 @@ async def astream_state_websocket(
 
                     converted_msg = convert_messages_to_dict([msg])[0]
 
-                    timestamp = converted_msg.get("additional_kwargs", {}).get(
-                        "timestamp"
-                    )
-                    if not timestamp:
-                        timestamp = msg.additional_kwargs.get("timestamp")
-                    if not timestamp:
-                        timestamp = datetime.now(timezone.utc).isoformat()
-
-                    if converted_msg.get("type") == "Interrupt":
-                        agent_type = "deep_research_interrupt"
-                    else:
-                        agent_type = converted_msg["additional_kwargs"]["agent_type"]
-                    del converted_msg["additional_kwargs"]
-
                     await websocket_manager.send_message(
                         user_id,
                         conversation_id,
@@ -135,8 +121,7 @@ async def astream_state_websocket(
                             "user_id": user_id,
                             "conversation_id": conversation_id,
                             "message_id": message_id,
-                            "timestamp": timestamp,
-                            "agent_type": agent_type,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         },
                     )
 
@@ -267,7 +252,6 @@ def convert_messages_to_dict(output_list):
                     "type": "AIMessage",
                     "additional_kwargs": {
                         "agent_type": "deep_research_interrupt",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     },
                 }
             )
