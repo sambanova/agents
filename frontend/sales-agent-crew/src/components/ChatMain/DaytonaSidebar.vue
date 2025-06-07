@@ -72,18 +72,7 @@
             <div v-if="statusDetails" class="text-xs text-gray-600 mt-1">{{ statusDetails }}</div>
           </div>
         </div>
-        
-        <!-- Progress Bar -->
-        <div v-if="showProgress" class="mt-3">
-          <div class="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              :class="progressBarClass" 
-              class="h-2 rounded-full transition-all duration-500"
-              :style="{ width: progressPercentage + '%' }"
-            ></div>
-          </div>
-          <div class="text-xs text-gray-500 mt-1">{{ progressText }}</div>
-        </div>
+
       </div>
 
       <!-- Code Section -->
@@ -114,13 +103,13 @@
           </div>
           
           <!-- Expandable Code Display -->
-          <div v-if="codeExpanded" class="bg-gray-900 rounded-lg overflow-hidden">
+          <div v-if="codeExpanded" class="bg-gray-900 rounded-lg overflow-hidden border">
             <div class="bg-gray-800 px-4 py-2 text-xs text-gray-300 border-b border-gray-700 flex justify-between items-center">
               <span>Python Analysis Script</span>
               <span>{{ codeLines }} lines</span>
             </div>
-            <div class="p-4 overflow-auto max-h-80">
-              <pre class="text-sm"><code v-html="highlightedCode" class="text-green-400"></code></pre>
+            <div class="p-4 overflow-auto max-h-96">
+              <pre class="text-sm font-mono leading-relaxed"><code v-text="codeContent" style="color: #e5e7eb; white-space: pre-wrap; word-wrap: break-word;"></code></pre>
             </div>
           </div>
           
@@ -234,10 +223,10 @@
             <h4 class="font-medium text-gray-900">Analysis Results</h4>
           </button>
         </div>
-        
-        <div v-if="analysisExpanded" class="bg-blue-50 rounded-lg p-4">
-          <div class="prose prose-sm max-w-none text-blue-900" v-html="formattedAnalysis"></div>
-        </div>
+                 
+         <div v-if="analysisExpanded" class="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+           <div v-html="formattedAnalysis"></div>
+         </div>
         
         <!-- Collapsed Analysis Preview -->
         <div v-else class="bg-gray-100 rounded-lg p-3">
@@ -337,9 +326,7 @@ const isCollapsed = ref(false)
 const currentStatus = ref('Initializing...')
 const statusDetails = ref('')
 const isProcessing = ref(false)
-const showProgress = ref(false)
-const progressPercentage = ref(0)
-const progressText = ref('')
+
 const codeContent = ref('')
 const analysisResults = ref('')
 const executionLog = ref([])
@@ -358,15 +345,9 @@ const statusDotClass = computed(() => {
   return 'bg-yellow-500'
 })
 
-const progressBarClass = computed(() => {
-  if (progressPercentage.value === 100) return 'bg-green-500'
-  return 'bg-blue-500'
-})
 
-const highlightedCode = computed(() => {
-  if (!codeContent.value) return ''
-  return highlightPythonCode(codeContent.value)
-})
+
+// Removed highlightedCode computed property - using plain text display instead
 
 const formattedAnalysis = computed(() => {
   if (!analysisResults.value) return ''
@@ -404,7 +385,6 @@ function processStreamingEvents(events) {
   charts.value = []
   executionLog.value = []
   isProcessing.value = false
-  showProgress.value = false
   
   let codeDetected = false
   let toolCallDetected = false
@@ -431,15 +411,15 @@ function processStreamingEvents(events) {
                   extractedCode.includes('numpy') || extractedCode.includes('pandas')) {
                 codeContent.value = extractedCode
                 codeDetected = true
-                updateStatus('📝 Writing code...', 'Generating Python analysis script')
+                updateStatus('📝 Code generated', 'Python analysis script ready')
                 addToLog('Code generation detected', 'info', timestamp)
               }
             }
             
             toolCallDetected = true
-            updateStatus('🔧 Executing code...', 'Running analysis in sandbox')
+            updateStatus('⚡ Executing code', 'Running in Daytona sandbox')
             addToLog('Tool call to DaytonaCodeSandbox detected', 'info', timestamp)
-            startProgress()
+            // Remove automatic progress - let it complete naturally
           }
           
           // Also check for code blocks in regular content
@@ -485,9 +465,9 @@ function processStreamingEvents(events) {
             analysisResults.value = beforeCharts.trim()
           }
           
-          updateStatus('✅ Analysis complete', `Generated ${chartCount} charts`)
+          updateStatus('✅ Analysis complete', `Generated ${chartCount} visualizations`)
           addToLog(`Analysis completed with ${chartCount} charts`, 'success', timestamp)
-          completeProgress()
+          isProcessing.value = false
         }
         break
     }
@@ -495,7 +475,7 @@ function processStreamingEvents(events) {
   
   // Set initial status if no specific events detected
   if (!codeDetected && !toolCallDetected) {
-    updateStatus('⏳ Waiting for analysis...', 'Ready to process code')
+    updateStatus('⏳ Ready for analysis', 'Waiting for code execution')
   }
 }
 
@@ -577,34 +557,10 @@ function createChartUrl(chartId, title) {
 function updateStatus(status, details = '') {
   currentStatus.value = status
   statusDetails.value = details
-  isProcessing.value = status.includes('...') && !status.includes('✅')
+  isProcessing.value = status.includes('Executing') || status.includes('Running')
 }
 
-function startProgress() {
-  showProgress.value = true
-  progressPercentage.value = 20
-  progressText.value = 'Setting up environment...'
-  
-  setTimeout(() => {
-    progressPercentage.value = 60
-    progressText.value = 'Executing analysis...'
-  }, 1000)
-  
-  setTimeout(() => {
-    progressPercentage.value = 80
-    progressText.value = 'Generating visualizations...'
-  }, 2000)
-}
 
-function completeProgress() {
-  progressPercentage.value = 100
-  progressText.value = 'Complete!'
-  isProcessing.value = false
-  
-  setTimeout(() => {
-    showProgress.value = false
-  }, 2000)
-}
 
 function addToLog(message, type = 'info', timestamp) {
   executionLog.value.push({
@@ -620,28 +576,52 @@ function addToLog(message, type = 'info', timestamp) {
 }
 
 function highlightPythonCode(code) {
+  if (!code) return ''
+  
+  // Simple approach: just escape HTML and add basic styling
+  // No complex regex that can break
   return code
-    .replace(/(import|from|def|class|if|else|elif|for|while|try|except|with|as|return|yield|break|continue|pass|and|or|not|in|is|lambda)/g, '<span class="text-blue-400">$1</span>')
-    .replace(/(True|False|None)/g, '<span class="text-purple-400">$1</span>')
-    .replace(/(#.*$)/gm, '<span class="text-gray-500">$1</span>')
-    .replace(/(['"].*?['"])/g, '<span class="text-yellow-400">$1</span>')
-    .replace(/(\d+\.?\d*)/g, '<span class="text-red-400">$1</span>')
-    .replace(/(plt|np|pd|matplotlib|numpy|pandas)/g, '<span class="text-cyan-400">$1</span>')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>')
 }
 
 function formatMarkdown(content) {
+  if (!content) return ''
+  
+  // Professional analysis formatting
   return content
-    .replace(/### (.*$)/gm, '<h3 class="font-semibold text-lg mb-2 text-blue-800">$1</h3>')
-    .replace(/## (.*$)/gm, '<h2 class="font-semibold text-xl mb-2 text-blue-800">$1</h2>')
-    .replace(/# (.*$)/gm, '<h1 class="font-bold text-2xl mb-3 text-blue-900">$1</h1>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold">$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em class="italic">$1</em>')
-    .replace(/`(.*?)`/g, '<code class="bg-blue-100 px-1 rounded text-sm font-mono">$1</code>')
-    .replace(/^\d+\.\s/gm, '<br>• ')
-    .replace(/\n\n/g, '</p><p class="mb-2">')
+    // Clean up the content first
+    .replace(/pr\w*\("([^"]+)"\)/g, '$1') // Remove print statements
+    .replace(/pr\w*\(f"([^"]+)"\)/g, '$1') // Remove f-print statements
+    .replace(/\\n/g, '\n') // Fix line breaks
+    
+    // Apply professional formatting
+    .replace(/KEY INSIGHTS:/g, '<div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg font-bold text-lg mb-4">🔍 KEY INSIGHTS</div>')
+    .replace(/(\d+)\.\s+([^:]+):/g, '<div class="mt-6 mb-4"><h3 class="text-lg font-semibold text-blue-800 border-l-4 border-blue-500 pl-3 mb-2">$1. $2</h3></div>')
+    
+    // Format bullet points
+    .replace(/^-\s+(.+)$/gm, '<div class="flex items-start mb-2 ml-4"><span class="text-blue-500 mr-2">•</span><span class="text-gray-700">$1</span></div>')
+    
+    // Format metrics and numbers
+    .replace(/\$(\d+(?:\.\d+)?[MK]?)/g, '<span class="font-semibold text-green-600 bg-green-50 px-2 py-1 rounded">$$$1</span>')
+    .replace(/(\d+(?:\.\d+)?%)/g, '<span class="font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded">$1</span>')
+    .replace(/(\d+:\d+)/g, '<span class="font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded">$1</span>')
+    
+    // Format regions and categories
+    .replace(/(North America|Europe|Asia Pacific|Latin America|Electronics|Clothing|Home Garden)/g, '<span class="font-medium text-indigo-700 bg-indigo-50 px-2 py-1 rounded text-sm">$1</span>')
+    
+    // Format benchmarks and comparisons
+    .replace(/(above benchmarks|below benchmarks|vs \$\d+[^)]*benchmark)/g, '<span class="font-medium text-amber-700 bg-amber-50 px-2 py-1 rounded text-sm">$1</span>')
+    
+    // Clean up extra spaces and line breaks
+    .replace(/\n\s*\n/g, '<div class="my-3"></div>')
     .replace(/\n/g, '<br>')
-    .replace(/^/, '<p class="mb-2">')
-    .concat('</p>')
+    
+    // Wrap in professional container
+    .replace(/^/, '<div class="prose prose-lg max-w-none text-gray-800 leading-relaxed">')
+    .concat('</div>')
 }
 
 function formatLogTime(timestamp) {
