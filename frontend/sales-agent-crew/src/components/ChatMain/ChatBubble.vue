@@ -16,10 +16,10 @@
       </div>
       <div class="w-full bg-white">          
         <!-- Minimalist Real-time Status Line -->
-        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-t-lg border-b">
-          <div class="flex items-center space-x-2">
-            <div :class="currentStatusDot" class="w-2 h-2 rounded-full"></div>
-            <span class="text-sm text-gray-700">{{ currentStreamingStatus }}</span>
+        <div class="flex items-start justify-between p-3 bg-gray-50 rounded-t-lg border-b">
+          <div class="flex items-start space-x-2 flex-1">
+            <div :class="currentStatusDot" class="w-2 h-2 rounded-full mt-1 flex-shrink-0"></div>
+            <div class="text-sm text-gray-700 whitespace-pre-line">{{ currentStreamingStatus }}</div>
           </div>
           
           <button
@@ -100,8 +100,23 @@
 
         <!-- Actual Streaming Response Content -->
         <div class="p-4">
-          <!-- Inline Sources (minimalist) -->
-          <div v-if="toolSources && toolSources.length > 0" class="mb-4">
+          <div class="prose prose-sm max-w-none">
+            <div 
+              v-if="streamingResponseContent"
+              class="text-gray-800 whitespace-pre-wrap"
+              v-html="renderMarkdown(streamingResponseContent)"
+            ></div>
+            <div 
+              v-else-if="isCurrentlyStreaming && !streamingResponseContent"
+              class="flex items-center space-x-2 text-gray-500"
+            >
+              <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+              <span class="text-sm italic">Generating response...</span>
+            </div>
+          </div>
+
+          <!-- Inline Sources (minimalist) - MOVED TO AFTER RESPONSE -->
+          <div v-if="toolSources && toolSources.length > 0" class="mt-4">
             <div class="flex flex-wrap gap-2">
               <template v-for="source in toolSources" :key="source?.url || source?.title || 'unknown'">
                 <a
@@ -132,21 +147,6 @@
                   <span class="truncate max-w-[180px]">{{ source.title || 'Untitled' }}</span>
                 </div>
               </template>
-            </div>
-          </div>
-
-          <div class="prose prose-sm max-w-none">
-            <div 
-              v-if="streamingResponseContent"
-              class="text-gray-800 whitespace-pre-wrap"
-              v-html="renderMarkdown(streamingResponseContent)"
-            ></div>
-            <div 
-              v-else-if="isCurrentlyStreaming && !streamingResponseContent"
-              class="flex items-center space-x-2 text-gray-500"
-            >
-              <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-              <span class="text-sm italic">Generating response...</span>
             </div>
           </div>
           
@@ -437,6 +437,7 @@ const currentStreamingStatus = computed(() => {
   const events = props.streamingEvents
   let currentTool = null
   let toolQuery = null
+  let lastToolResult = null
   
   // Process events in order to build current status
   for (let i = 0; i < events.length; i++) {
@@ -472,15 +473,44 @@ const currentStreamingStatus = computed(() => {
         
       case 'agent_completion':
         if (data.type === 'LiberalFunctionMessage' && data.name) {
+          lastToolResult = data
           if (data.name === 'search_tavily') {
             const resultCount = Array.isArray(data.content) ? data.content.length : 0
-            return `✅ Found ${resultCount} web sources`
+            const sources = Array.isArray(data.content) ? data.content.slice(0, 3) : []
+            const sourceNames = sources.map(source => {
+              if (source.title && source.title.trim()) {
+                return source.title.trim()
+              } else if (source.url) {
+                try {
+                  return new URL(source.url).hostname.replace('www.', '')
+                } catch {
+                  return source.url
+                }
+              }
+              return 'Unknown source'
+            })
+            
+            let status = `✅ Found ${resultCount} web sources`
+            if (sourceNames.length > 0) {
+              status += `\n• ${sourceNames.join('\n• ')}`
+              if (resultCount > 3) status += `\n• and ${resultCount - 3} more...`
+            }
+            return status
           } else if (data.name === 'arxiv') {
             const papers = data.content && data.content.includes('Title:') ? 
               data.content.split('Title:').length - 1 : 1
-            return `✅ Found ${papers} arXiv papers`
+            
+            // Extract paper titles for sub-bullets
+            const titleMatches = data.content.match(/Title: ([^\n]+)/g)
+            let status = `✅ Found ${papers} arXiv papers`
+            if (titleMatches) {
+              const titles = titleMatches.slice(0, 2).map(t => t.replace('Title: ', '').trim())
+              status += `\n• ${titles.join('\n• ')}`
+              if (titleMatches.length > 2) status += `\n• and ${titleMatches.length - 2} more...`
+            }
+            return status
           } else if (data.name === 'DaytonaCodeSandbox') {
-            return `✅ Code execution complete`
+            return `✅ Code execution complete\n• Generated charts and analysis`
           } else {
             return `✅ ${data.name.replace('_', ' ')} completed`
           }
@@ -731,16 +761,17 @@ const toolSources = computed(() => {
       papers.forEach(paper => {
         const titleMatch = paper.match(/Title: ([^\n]+)/)
         const authorsMatch = paper.match(/Authors: ([^\n]+)/)
+        const urlMatch = paper.match(/URL: ([^\n]+)/)
         
         if (titleMatch) {
-                  sources.push({
-          title: titleMatch[1].trim() || 'Untitled Paper',
-          authors: authorsMatch ? authorsMatch[1].trim() : '',
-          domain: 'arxiv.org',
-          url: '',
-          content: paper.substring(0, 300) + '...',
-          type: 'arxiv'
-        })
+          sources.push({
+            title: titleMatch[1].trim() || 'Untitled Paper',
+            authors: authorsMatch ? authorsMatch[1].trim() : '',
+            domain: 'arxiv.org',
+            url: urlMatch ? urlMatch[1].trim() : '',
+            content: paper.substring(0, 300) + '...',
+            type: 'arxiv'
+          })
         }
       })
     }
