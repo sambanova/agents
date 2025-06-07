@@ -67,9 +67,9 @@
 
 
 
-        <!-- Artifacts/Charts (if available) -->
+        <!-- Artifacts/Charts (if available and not using Daytona sidebar) -->
         <div 
-          v-if="hasArtifacts"
+          v-if="hasArtifacts && !isDaytonaActive"
           class="p-3 bg-purple-50 border-b"
         >
           <div class="text-xs font-medium text-purple-800 mb-2">Generated Artifacts</div>
@@ -189,8 +189,8 @@
             </div>
           </div>
           
-          <!-- Artifacts Display -->
-          <div v-if="artifacts.length > 0" class="mt-4">
+          <!-- Artifacts Display (hidden when Daytona sidebar is active) -->
+          <div v-if="artifacts.length > 0 && !isDaytonaActive" class="mt-4">
             <div class="flex flex-wrap gap-2">
               <button
                 v-for="artifact in artifacts"
@@ -203,6 +203,19 @@
                 </svg>
                 {{ artifact.title }}
               </button>
+            </div>
+          </div>
+          
+          <!-- Daytona Status Indicator (when sidebar is active) -->
+          <div v-if="isDaytonaActive" class="mt-4">
+            <div class="inline-flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+              </svg>
+              <span class="font-medium">Code analysis running in Daytona Sandbox</span>
+              <svg class="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+              </svg>
             </div>
           </div>
         </div>
@@ -285,7 +298,15 @@
       </div>
     </li>
 
-    <!-- Artifact Canvas Modal -->
+    <!-- Daytona Sidebar (replaces Artifact Canvas for Daytona operations) -->
+    <DaytonaSidebar 
+      :isOpen="showDaytonaSidebar"
+      :streamingEvents="streamingEvents"
+      @close="closeDaytonaSidebar"
+      @expand-chart="openArtifact"
+    />
+    
+    <!-- Artifact Canvas Modal (fallback for non-Daytona artifacts) -->
     <ArtifactCanvas 
       :isOpen="showArtifactCanvas"
       :artifact="selectedArtifact"
@@ -307,6 +328,7 @@
   import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue'
   import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'
 import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue'
+import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue'
 
 // Icons for streaming timeline
 import {
@@ -458,6 +480,7 @@ function toggleAuditLog() {
 
 const selectedArtifact = ref(null)
 const showArtifactCanvas = ref(false)
+const showDaytonaSidebar = ref(false)
 
 function openArtifact(artifact) {
   selectedArtifact.value = artifact
@@ -468,6 +491,38 @@ function closeArtifactCanvas() {
   showArtifactCanvas.value = false
   selectedArtifact.value = null
 }
+
+function closeDaytonaSidebar() {
+  showDaytonaSidebar.value = false
+}
+
+// Detect Daytona usage and automatically open sidebar
+const isDaytonaActive = computed(() => {
+  if (!props.streamingEvents || !Array.isArray(props.streamingEvents)) return false
+  
+  return props.streamingEvents.some(event => {
+    // Check for Daytona tool calls in streaming content
+    if (event.event === 'llm_stream_chunk' && event.data?.content) {
+      return event.data.content.includes('<tool>DaytonaCodeSandbox</tool>')
+    }
+    
+    // Check for Daytona tool results
+    if (event.event === 'agent_completion' && event.data?.name === 'DaytonaCodeSandbox') {
+      return true
+    }
+    
+    return false
+  })
+})
+
+// Watch for Daytona activity and automatically open sidebar
+watch(isDaytonaActive, (isActive) => {
+  if (isActive) {
+    showDaytonaSidebar.value = true
+    // Close artifact canvas if it's open since we're using sidebar now
+    showArtifactCanvas.value = false
+  }
+}, { immediate: true })
 
 // Advanced streaming parsing and status
 const currentStreamingStatus = computed(() => {
@@ -1011,9 +1066,25 @@ function formatEventTime(timestamp) {
 function renderMarkdown(content) {
   if (!content) return ''
   
-  // Simple markdown rendering for basic formatting
+  // Enhanced markdown rendering with code syntax highlighting
   let html = content
-    // Links MUST be processed first and carefully
+    // Handle code blocks FIRST (before other processing)
+    .replace(/```(\w+)?\n([\s\S]*?)```/g, (match, language, code) => {
+      const lang = language || 'python'
+      const highlightedCode = highlightCode(code.trim(), lang)
+      return `<div class="my-4 bg-gray-900 rounded-lg overflow-hidden">
+        <div class="bg-gray-800 px-4 py-2 text-xs text-gray-300 border-b border-gray-700 flex items-center space-x-2">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+          </svg>
+          <span>${lang.charAt(0).toUpperCase() + lang.slice(1)} Code</span>
+        </div>
+        <div class="p-4 overflow-auto">
+          <pre class="text-sm"><code class="text-green-400">${highlightedCode}</code></pre>
+        </div>
+      </div>`
+    })
+    // Links MUST be processed after code blocks but before other formatting
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, text, url) => {
       // Clean the URL of any trailing characters
       const cleanUrl = url.trim()
@@ -1022,7 +1093,7 @@ function renderMarkdown(content) {
     // Bold and italic 
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    // Inline code
+    // Inline code (skip if inside existing code tags)
     .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded text-sm font-mono">$1</code>')
     // Basic headers
     .replace(/^### (.*$)/gm, '<h3 class="text-lg font-semibold mt-4 mb-2 text-gray-900">$1</h3>')
@@ -1033,6 +1104,51 @@ function renderMarkdown(content) {
     .replace(/\n/g, '<br>')
   
   return `<p class="mb-3">${html}</p>`
+}
+
+function highlightCode(code, language) {
+  if (!code) return ''
+  
+  switch (language.toLowerCase()) {
+    case 'python':
+      return highlightPython(code)
+    case 'javascript':
+    case 'js':
+      return highlightJavaScript(code)
+    default:
+      return code // Return plain code for unsupported languages
+  }
+}
+
+function highlightPython(code) {
+  return code
+    // Python keywords
+    .replace(/(import|from|def|class|if|else|elif|for|while|try|except|with|as|return|yield|break|continue|pass|and|or|not|in|is|lambda|global|nonlocal)/g, '<span class="text-blue-400">$1</span>')
+    // Python built-ins
+    .replace(/(True|False|None|self|__init__|__name__|__main__)/g, '<span class="text-purple-400">$1</span>')
+    // Strings (handle both single and double quotes)
+    .replace(/(['"`])((?:(?!\1)[^\\]|\\.)*)(\1)/g, '<span class="text-yellow-400">$1$2$3</span>')
+    // Numbers
+    .replace(/\b(\d+\.?\d*)\b/g, '<span class="text-red-400">$1</span>')
+    // Comments
+    .replace(/(#.*$)/gm, '<span class="text-gray-500">$1</span>')
+    // Function calls
+    .replace(/\b(\w+)(?=\()/g, '<span class="text-cyan-400">$1</span>')
+}
+
+function highlightJavaScript(code) {
+  return code
+    // JavaScript keywords
+    .replace(/(const|let|var|function|if|else|for|while|return|try|catch|finally|class|extends|import|export|from|default)/g, '<span class="text-blue-400">$1</span>')
+    // JavaScript built-ins
+    .replace(/(true|false|null|undefined|this|new|typeof|instanceof)/g, '<span class="text-purple-400">$1</span>')
+    // Strings
+    .replace(/(['"`])((?:(?!\1)[^\\]|\\.)*)(\1)/g, '<span class="text-yellow-400">$1$2$3</span>')
+    // Numbers
+    .replace(/\b(\d+\.?\d*)\b/g, '<span class="text-red-400">$1</span>')
+    // Comments
+    .replace(/(\/\/.*$)/gm, '<span class="text-gray-500">$1</span>')
+    .replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="text-gray-500">$1</span>')
 }
 
 function getStatusBadgeClass(status) {
