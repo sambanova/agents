@@ -5,6 +5,7 @@ from langchain_core.messages import (
     MessageLikeRepresentation,
     ToolMessage,
     _message_from_dict,
+    AIMessage,
 )
 from langgraph.graph.message import Messages, add_messages
 from pydantic import Field
@@ -15,6 +16,10 @@ class LiberalToolMessage(ToolMessage):
 
 
 class LiberalFunctionMessage(FunctionMessage):
+    content: Any = Field(default="")
+
+
+class LiberalAIMessage(AIMessage):
     content: Any = Field(default="")
 
 

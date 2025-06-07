@@ -2,12 +2,9 @@ from datetime import datetime, timedelta, timezone
 import os
 from agents.components.compound.assistant import get_assistant
 from agents.components.compound.financial_analysis_subgraph import (
-    create_financial_analysis_subgraph,
+    create_financial_analysis_graph,
 )
-from agents.components.compound.simple_subgraph_example import (
-    create_simple_analyzer_subgraph,
-    create_simple_greeter_subgraph,
-)
+from agents.components.open_deep_research.graph import create_deep_research_graph
 from autogen_core import DefaultTopicId
 from fastapi import WebSocket, WebSocketDisconnect
 import json
@@ -15,6 +12,7 @@ import asyncio
 from typing import Optional, Dict
 import redis
 from starlette.websockets import WebSocketState
+from langchain_core.messages import AIMessage
 
 from agents.api.data_types import (
     APIKeys,
@@ -400,13 +398,32 @@ class WebSocketConnectionManager(WebSocketInterface):
 
                 input_ = HumanMessage(
                     content=user_message_input["data"],
-                    additional_kwargs={"timestamp": user_message_input["timestamp"]},
+                    additional_kwargs={
+                        "timestamp": user_message_input["timestamp"],
+                        "agent_type": "human",
+                        "resume": user_message_input["resume"],
+                    },
                 )
 
                 config["configurable"]["type==default/subgraphs"] = {
-                    "financial_analysis": create_financial_analysis_subgraph(
-                        self.redis_client
-                    ),
+                    "financial_analysis": {
+                        "graph": create_financial_analysis_graph(self.redis_client),
+                        "state_input_mapper": lambda x: [HumanMessage(content=x)],
+                        "state_output_mapper": lambda x: x[-1],
+                    },
+                    "deep_research": {
+                        "graph": create_deep_research_graph(
+                            api_keys.sambanova_key, "sambanova", request_timeout=120
+                        ),
+                        "state_input_mapper": lambda x: {"topic": x},
+                        "state_output_mapper": lambda x: AIMessage(
+                            content=x["final_report"],
+                            additional_kwargs={
+                                "agent_type": "deep_research_end",
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                            },
+                        ),
+                    },
                 }
 
                 # Stream the response directly via WebSocket

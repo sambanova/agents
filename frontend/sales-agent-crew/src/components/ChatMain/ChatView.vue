@@ -673,7 +673,7 @@ async function filterChat(msgData) {
         return {
           event: 'agent_completion',
           data: message,  // Pass the entire message object as data
-          timestamp: message.timestamp || message.additional_kwargs?.timestamp || new Date().toISOString()
+          timestamp: message.timestamp || new Date().toISOString()
         };
       }
       // For user_message events, keep existing behavior
@@ -1234,6 +1234,24 @@ const addMessage = async () => {
   if (!searchQuery.value.trim()) return;
 
   currentMsgId.value = uuidv4();
+  
+  // Check if the last agent_completion message is a deep_research_interrupt and user typed something
+  let shouldResume = false;
+  if (messagesData.value.length > 0) {
+    // Find the last agent_completion message (not stream_complete)
+    for (let i = messagesData.value.length - 1; i >= 0; i--) {
+      const message = messagesData.value[i];
+      if (message.event === 'agent_completion') {
+        // Check if this agent_completion has deep_research_interrupt agent_type
+        if (message.data && message.data.additional_kwargs.agent_type === 'deep_research_interrupt') {
+          // If user typed something, set resume to true
+          shouldResume = searchQuery.value.trim().length > 0;
+        }
+        break; // Found the last agent_completion, stop looking
+      }
+    }
+  }
+  
   const messagePayload = {
     event: 'user_message',
     data: searchQuery.value,
@@ -1241,6 +1259,7 @@ const addMessage = async () => {
     provider: provider.value,
     planner_model: localStorage.getItem(`selected_model_${userId.value}`) || '',
     message_id: currentMsgId.value,
+    resume: shouldResume,
   };
 
   if (selectedDocuments.value && selectedDocuments.value.length > 0) {
@@ -1362,11 +1381,35 @@ async function connectWebSocket() {
           });
         } else if (receivedData.event === 'llm_stream_chunk') {
           console.log('LLM stream chunk:', receivedData);
-          messagesData.value.push({
-            event: 'llm_stream_chunk',
-            data: receivedData, 
-            timestamp: new Date().toISOString()
-          });
+          const chunkId = receivedData.id;
+          
+          if (chunkId) {
+            // Find existing message with the same ID
+            const existingIndex = messagesData.value.findIndex(
+              (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
+            );
+            
+            if (existingIndex !== -1) {
+              // Accumulate content for existing message
+              const existingContent = messagesData.value[existingIndex].data?.content || '';
+              const newContent = receivedData.content || '';
+              messagesData.value[existingIndex].data.content = existingContent + newContent;
+            } else {
+              // Create new message for new ID
+              messagesData.value.push({
+                event: 'llm_stream_chunk',
+                data: receivedData, 
+                timestamp: new Date().toISOString()
+              });
+            }
+          } else {
+            // No ID, just add as new message
+            messagesData.value.push({
+              event: 'llm_stream_chunk',
+              data: receivedData, 
+              timestamp: new Date().toISOString()
+            });
+          }
         } else if (receivedData.event === 'stream_complete') {
           console.log('Stream complete:', receivedData);
           messagesData.value.push({

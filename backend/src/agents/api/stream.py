@@ -9,11 +9,13 @@ from langchain_core.messages import (
 )
 from langchain_core.runnables import Runnable, RunnableConfig
 from langchain.schema.messages import HumanMessage, AIMessage
+from langgraph.types import Interrupt
+from langgraph.types import Command
 
 
 async def astream_state_websocket(
     app: Runnable,
-    input: Union[Sequence[AnyMessage], Dict[str, Any]],
+    input: HumanMessage,
     config: RunnableConfig,
     websocket_manager: WebSocketInterface,
     user_id: str,
@@ -24,8 +26,22 @@ async def astream_state_websocket(
     root_run_id: Optional[str] = None
     messages: dict[str, BaseMessage] = {}
 
+    if "resume" in input.additional_kwargs and input.additional_kwargs["resume"]:
+        # Decide if it's feedback or a brand-new request
+        if input.content.lower() == "true":
+            graph_input = Command(resume=True)
+        elif input.content.lower() == "false":
+            graph_input = Command(resume=False)
+        elif input.content and (not message.parameters.deep_research_topic):
+            # user typed some text, treat it as feedback
+            graph_input = Command(resume=input.content)
+    else:
+        graph_input = input
+
+    interrupt = False
+
     async for event in app.astream_events(
-        input,
+        graph_input,
         config,
         version="v1",
         stream_mode="values",
@@ -47,7 +63,7 @@ async def astream_state_websocket(
                 },
             )
 
-        elif event["event"] == "on_chain_stream" and event["run_id"] == root_run_id:
+        elif event["event"] == "on_chain_stream":
             new_messages: list[BaseMessage] = []
 
             # Extract messages from the event data
@@ -58,6 +74,9 @@ async def astream_state_websocket(
                 # StateGraph format - extract messages from state
                 if "messages" in state_chunk:
                     state_chunk_msgs = state_chunk["messages"]
+                elif "__interrupt__" in state_chunk:
+                    state_chunk_msgs = state_chunk["__interrupt__"]
+                    interrupt = True
                 else:
                     # Skip non-message state updates
                     continue
@@ -89,17 +108,20 @@ async def astream_state_websocket(
             if new_messages:
                 # Send new messages via WebSocket
                 for msg in new_messages:
+
+                    converted_msg = convert_messages_to_dict([msg])[0]
+
                     await websocket_manager.send_message(
                         user_id,
                         conversation_id,
                         {
                             "event": "agent_completion",
                             "run_id": root_run_id,
-                            **convert_messages_to_dict([msg])[0],
+                            **converted_msg,
                             "user_id": user_id,
                             "conversation_id": conversation_id,
                             "message_id": message_id,
-                            "timestamp": msg.additional_kwargs.get("timestamp"),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         },
                     )
 
@@ -118,43 +140,55 @@ async def astream_state_websocket(
                 {
                     "event": "llm_stream_chunk",
                     "run_id": root_run_id,
-                    "data": {
-                        "content": (
-                            message.content
-                            if hasattr(message, "content")
-                            else str(message)
-                        ),
-                        "node": event["metadata"]["langgraph_node"],
-                        "id": message.id,
-                        "is_delta": True,  # Indicates this is a streaming chunk
-                    },
+                    "content": message.content,
+                    "id": message.id,
+                    "is_delta": True,
                     "user_id": user_id,
                     "conversation_id": conversation_id,
                     "message_id": message_id,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             )
+        # Stop streaming if an interrupt is detected
+        if interrupt:
+            break
 
-    # Send completion event
-    await websocket_manager.send_message(
-        user_id,
-        conversation_id,
-        {
-            "event": "stream_complete",
-            "run_id": root_run_id,
-            "data": {
-                "output": convert_messages_to_dict(
-                    event["data"]["output"]
-                    if isinstance(event["data"]["output"], list)
-                    else [event["data"]["output"]]
-                ),
+    if interrupt:
+        # Send completion event
+        await websocket_manager.send_message(
+            user_id,
+            conversation_id,
+            {
+                "event": "stream_complete",
+                "run_id": root_run_id,
+                "data": {},
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
-            "user_id": user_id,
-            "conversation_id": conversation_id,
-            "message_id": message_id,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        },
-    )
+        )
+    else:
+        # Send completion event
+        await websocket_manager.send_message(
+            user_id,
+            conversation_id,
+            {
+                "event": "stream_complete",
+                "run_id": root_run_id,
+                "data": {
+                    "output": convert_messages_to_dict(
+                        event["data"]["output"]
+                        if isinstance(event["data"]["output"], list)
+                        else [event["data"]["output"]]
+                    ),
+                },
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
 
 def convert_messages_to_dict(output_list):
@@ -210,6 +244,17 @@ def convert_messages_to_dict(output_list):
             # Add the message type
             msg_dict["type"] = item.__class__.__name__
             result.append(msg_dict)
+
+        elif isinstance(item, Interrupt):
+            result.append(
+                {
+                    "content": item.value,
+                    "type": "AIMessage",
+                    "additional_kwargs": {
+                        "agent_type": "deep_research_interrupt",
+                    },
+                }
+            )
         else:
             # Handle other types as-is (no ID to check for duplicates)
             result.append(item)

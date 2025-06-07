@@ -43,9 +43,6 @@ class RedisStorage:
             )
 
             if not is_new:
-                logger.info(
-                    f"Message with ID {message_data['id']} already exists, skipping save"
-                )
                 return False
 
         # Save the message

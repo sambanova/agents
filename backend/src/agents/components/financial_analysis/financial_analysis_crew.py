@@ -524,4 +524,4 @@ class FinancialAnalysisCrew:
             verbose=self.verbose,
         )
         final = await crew.kickoff_async(inputs=inputs)
-        return final.pydantic.model_dump_json(), dict(final.token_usage)
+        return final.pydantic, dict(final.token_usage)

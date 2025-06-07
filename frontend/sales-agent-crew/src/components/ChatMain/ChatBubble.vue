@@ -293,6 +293,7 @@ function toggleCollapse() {
 
 const showDetails = ref(false)
 const activeMenu = ref(false)
+const isLoading = ref(false)
 
 function toggleDetails() {
   showDetails.value = !showDetails.value
@@ -394,6 +395,7 @@ const isStreamingEvent = computed(() => {
 })
 
 function formatTimestamp(timestamp) {
+  if (!timestamp) return ''
   return new Date(timestamp).toLocaleTimeString()
 }
 </script>

@@ -54,44 +54,28 @@ from .utils import (
 )
 
 # We import our data models
-from api.data_types import DeepResearchReport, DeepResearchSection, DeepCitation
+from agents.api.data_types import DeepResearchReport, DeepResearchSection, DeepCitation
 
 from langchain.output_parsers import (
     OutputFixingParser,
     PydanticOutputParser,
 )
 
-from utils.logging import logger
+from agents.utils.logging import logger
+from langgraph.checkpoint.memory import InMemorySaver
+
+from langchain_core.runnables import RunnableLambda
 
 
-class UsageCallback(BaseCallbackHandler):
-    def __init__(self, provider: str):
-        self.usage = []
-        self.provider = provider
+class MessageInterceptor:
+    def __init__(self):
+        self.captured_messages = []
 
-    def on_llm_end(self, response, **kwargs):
-        if self.provider == "sambanova":
-            if hasattr(response, "generations"):
-                for generation_list in response.generations:
-                    for generation in generation_list:
-                        if hasattr(generation.message, "response_metadata"):
-                            metadata_usage = generation.message.response_metadata.get(
-                                "usage", {}
-                            )
-                            if metadata_usage:
-                                self.usage.append(metadata_usage)
-        elif self.provider == "fireworks":
-            if hasattr(response, "generations"):
-                for generation_list in response.generations:
-                    for generation in generation_list:
-                        if hasattr(generation.message, "response_metadata"):
-                            metadata_usage = generation.message.response_metadata.get(
-                                "token_usage", {}
-                            )
-                            if metadata_usage:
-                                self.usage.append(metadata_usage)
-        else:
-            raise ValueError(f"Unsupported provider: {self.provider}")
+    def capture_and_pass(self, message):
+        """Capture the message and pass it through"""
+        if isinstance(message, AIMessage):
+            self.captured_messages.append(message)
+        return message
 
 
 class LLMTimeoutError(Exception):
@@ -111,76 +95,6 @@ def get_model_name(llm):
         return "Unknown Model"
 
 
-def create_publish_callback(
-    user_id: str,
-    conversation_id: str,
-    message_id: str,
-    agent_name: str,
-    workflow_name: str,
-    redis_client: SecureRedisService,
-    token_usage_callback: Callable[[dict], None] = None,
-):
-
-    def callback(
-        message: str,
-        llm_name: str,
-        task: str,
-        usage: dict,
-        llm_provider: str,
-        duration: float,
-    ):
-        response_duration = usage.get("end_time", 0) - usage.get("start_time", 0)
-        if response_duration > 0:
-            duration = response_duration
-
-        # Track token usage if callback provided
-        if token_usage_callback and usage:
-            token_usage = {
-                "total_tokens": usage.get("total_tokens", 0),
-                "prompt_tokens": usage.get("prompt_tokens", 0),
-                "completion_tokens": usage.get("completion_tokens", 0),
-            }
-            token_usage_callback(token_usage)
-
-        message_data = {
-            "user_id": user_id,
-            "run_id": conversation_id,
-            "message_id": message_id,
-            "agent_name": agent_name,
-            "text": message,
-            "timestamp": time.time(),
-            "metadata": {
-                "workflow_name": workflow_name,
-                "agent_name": agent_name,
-                "llm_name": llm_name,
-                "llm_provider": llm_provider,
-                "task": task,
-                "total_tokens": usage.get("total_tokens", 0),
-                "prompt_tokens": usage.get("prompt_tokens", 0),
-                "completion_tokens": usage.get("completion_tokens", 0),
-                "acceptance_rate": usage.get("acceptance_rate", 0),
-                "completion_tokens_after_first_per_sec": usage.get(
-                    "completion_tokens_after_first_per_sec", 0
-                ),
-                "completion_tokens_after_first_per_sec_first_ten": usage.get(
-                    "completion_tokens_after_first_per_sec_first_ten", 0
-                ),
-                "completion_tokens_per_sec": usage.get("completion_tokens_per_sec", 0),
-                "time_to_first_token": usage.get("time_to_first_token", 0),
-                "total_latency": usage.get("total_latency", 0),
-                "total_tokens_per_sec": usage.get("total_tokens_per_sec", 0),
-                "duration": duration,
-            },
-        }
-        channel = f"agent_thoughts:{user_id}:{conversation_id}"
-        redis_client.publish(channel, json.dumps(message_data))
-
-    return callback
-
-
-###############################################################################
-# 1) Utility: parse a reference line from the sources block
-###############################################################################
 def parse_reference_line(line: str) -> DeepCitation:
     """
     If the line has an http/https link, store that as url, everything before is "title".
@@ -248,9 +162,6 @@ def extract_sources_block(section_text: str) -> Tuple[str, List[DeepCitation]]:
     return new_text, citations
 
 
-###############################################################################
-# 2) Optional remove inline references with a pattern
-###############################################################################
 def remove_inline_citation_lines(text: str) -> Tuple[str, List[DeepCitation]]:
     """
     If you want to forcibly remove lines that look like a bullet with 'http'
@@ -279,11 +190,6 @@ def remove_inline_citation_lines(text: str) -> Tuple[str, List[DeepCitation]]:
     return "\n".join(new_lines), found
 
 
-###############################################################################
-# The normal nodes
-###############################################################################
-
-
 def get_session_id_from_config(config: Configuration) -> Optional[str]:
     """
     Extract and format session ID from RunnableConfig.
@@ -301,8 +207,6 @@ async def generate_report_plan(
     feedback = state.get("feedback_on_report_plan", None)
 
     configurable = Configuration.from_runnable_config(config)
-    usage_handler_report_planner = UsageCallback(provider=configurable.provider)
-    usage_handler_query_generation = UsageCallback(provider=configurable.provider)
 
     report_structure = configurable.report_structure
     number_of_queries = configurable.number_of_queries
@@ -319,8 +223,21 @@ async def generate_report_plan(
     if isinstance(report_structure, dict):
         report_structure = str(report_structure)
 
-    structured_llm = writer_model | OutputFixingParser.from_llm(
-        llm=writer_model, parser=PydanticOutputParser(pydantic_object=Queries)
+    search_queries_interceptor = MessageInterceptor()
+    fixing_interceptor = MessageInterceptor()
+
+    # Create an intercepted version of the writer model for the fixing parser
+    fixing_writer_model = writer_model | RunnableLambda(
+        fixing_interceptor.capture_and_pass
+    )
+
+    structured_llm = (
+        writer_model
+        | RunnableLambda(search_queries_interceptor.capture_and_pass)
+        | OutputFixingParser.from_llm(
+            llm=fixing_writer_model,  # Use the intercepted model
+            parser=PydanticOutputParser(pydantic_object=Queries),
+        )
     )
 
     system_instructions_query = report_planner_query_writer_instructions.format(
@@ -329,16 +246,13 @@ async def generate_report_plan(
         number_of_queries=number_of_queries,
     )
 
-    llm_config_query = RunnableConfig(
-        callbacks=[usage_handler_query_generation], tags=["query_generation"]
-    )
     logger.info(
         logger.format_message(
             session_id, "Generating initial search queries for planning"
         )
     )
 
-    results = invoke_llm_with_tracking(
+    results = await invoke_llm_with_tracking(
         llm=structured_llm,
         messages=[
             SystemMessage(content=system_instructions_query),
@@ -347,10 +261,7 @@ async def generate_report_plan(
             ),
         ],
         task="Generate initial planning queries",
-        config=llm_config_query,
-        usage_handler=usage_handler_query_generation,
-        configurable=configurable,
-        session_id=session_id,
+        config=configurable,
         llm_name=get_model_name(writer_model),
     )
 
@@ -400,15 +311,16 @@ async def generate_report_plan(
         feedback=feedback,
     )
 
-    structured_llm = planner_model | OutputFixingParser.from_llm(
-        llm=planner_model, parser=PydanticOutputParser(pydantic_object=Sections)
+    search_sections_interceptor = MessageInterceptor()
+    structured_llm = (
+        planner_model
+        | RunnableLambda(search_sections_interceptor.capture_and_pass)
+        | OutputFixingParser.from_llm(
+            llm=planner_model, parser=PydanticOutputParser(pydantic_object=Sections)
+        )
     )
 
-    llm_config_sections = RunnableConfig(
-        callbacks=[usage_handler_report_planner], tags=["report_planning"]
-    )
-
-    report_sections = invoke_llm_with_tracking(
+    report_sections = await invoke_llm_with_tracking(
         llm=structured_llm,
         messages=[
             SystemMessage(content=system_instructions_sections),
@@ -417,9 +329,7 @@ async def generate_report_plan(
             ),
         ],
         task="Generate report sections plan",
-        config=llm_config_sections,
-        usage_handler=usage_handler_report_planner,
-        configurable=configurable,
+        config=configurable,
         session_id=session_id,
         llm_name=get_model_name(planner_model),
     )
@@ -430,10 +340,26 @@ async def generate_report_plan(
             session_id, f"Generated plan with {len(sections)} sections"
         )
     )
-    return {"sections": sections}
+
+    # tag and concatenate the captured messages
+    captured_messages = []
+
+    for m in search_queries_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_search_queries_plan"
+        captured_messages.append(m)
+
+    for m in fixing_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_search_queries_plan_fixed"
+        captured_messages.append(m)
+
+    for m in search_sections_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_search_sections"
+        captured_messages.append(m)
+
+    return {"sections": sections, "messages": captured_messages}
 
 
-def human_feedback(
+async def human_feedback(
     state: ReportState, config: RunnableConfig
 ) -> Command[
     Literal[
@@ -468,40 +394,45 @@ def human_feedback(
         raise ValueError("interrupt unknown")
 
 
-def generate_queries(writer_model, state: SectionState, config: RunnableConfig):
+async def generate_queries(writer_model, state: SectionState, config: RunnableConfig):
     sec = state["section"]
     configurable = Configuration.from_runnable_config(config)
-    usage_handler = UsageCallback(provider=configurable.provider)
     session_id = get_session_id_from_config(configurable)
 
     logger.info(
         logger.format_message(session_id, f"Generating queries for section: {sec.name}")
     )
 
-    structured_llm = writer_model | OutputFixingParser.from_llm(
-        llm=writer_model, parser=PydanticOutputParser(pydantic_object=Queries)
+    search_queries_interceptor = MessageInterceptor()
+    fixing_interceptor = MessageInterceptor()
+
+    # Create an intercepted version of the writer model for the fixing parser
+    fixing_writer_model = writer_model | RunnableLambda(
+        fixing_interceptor.capture_and_pass
+    )
+
+    structured_llm = (
+        writer_model
+        | RunnableLambda(search_queries_interceptor.capture_and_pass)
+        | OutputFixingParser.from_llm(
+            llm=fixing_writer_model,  # Use the intercepted model
+            parser=PydanticOutputParser(pydantic_object=Queries),
+        )
     )
 
     sys_inst = query_writer_instructions.format(
         section_topic=sec.description, number_of_queries=configurable.number_of_queries
     )
-    llm_config = RunnableConfig(
-        callbacks=[usage_handler],
-        tags=["query_generation"],
-        timeout=1,
-    )
 
-    queries = invoke_llm_with_tracking(
+    queries = await invoke_llm_with_tracking(
         llm=structured_llm,
         messages=[
             SystemMessage(content=sys_inst),
             HumanMessage(content="Generate search queries."),
         ],
         task="Generate search queries",
-        config=llm_config,
-        usage_handler=usage_handler,
-        configurable=configurable,
         session_id=session_id,
+        config=configurable,
         llm_name=get_model_name(writer_model),
     )
 
@@ -511,7 +442,17 @@ def generate_queries(writer_model, state: SectionState, config: RunnableConfig):
             f"Generated {len(queries.queries)} queries for section {sec.name}.",
         )
     )
-    return {"search_queries": queries.queries}
+
+    captured_message = []
+    for m in search_queries_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_search_queries_section"
+        captured_message.append(m)
+
+    for m in fixing_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_search_queries_section_fixed"
+        captured_message.append(m)
+
+    return {"search_queries": queries.queries, "messages": captured_message}
 
 
 async def search_web(state: SectionState, config: RunnableConfig):
@@ -561,14 +502,12 @@ async def search_web(state: SectionState, config: RunnableConfig):
     return {"source_str": src_str, "search_iterations": state["search_iterations"] + 1}
 
 
-def invoke_llm_with_tracking(
+async def invoke_llm_with_tracking(
     llm,
     messages: List[Any],
     task: str,
     llm_name: str,
     config: RunnableConfig,
-    usage_handler: UsageCallback,
-    configurable: Configuration,
     session_id: Optional[str] = None,
 ) -> Any:
     """Helper function to invoke LLM with timing and usage tracking.
@@ -584,14 +523,13 @@ def invoke_llm_with_tracking(
         timeout_seconds: Maximum time in seconds to wait for LLM response
 
     Returns:
-        The LLM response
 
     Raises:
         LLMTimeoutError: If the LLM request exceeds the timeout duration
     """
     start_time = time.time()
     try:
-        response = llm.invoke(messages, config=config)
+        response = await llm.ainvoke(messages)
     except requests.exceptions.ReadTimeout as e:
         logger.error(logger.format_message(session_id, f"ReadTimeout error: {str(e)}"))
         raise LLMTimeoutError(f"Request timed out: {str(e)}") from e
@@ -612,56 +550,14 @@ def invoke_llm_with_tracking(
                 f"Deep Research - LLM {llm_name} took {duration:.2f} seconds to complete task {task}",
             )
         )
-
-    if usage_handler.usage and len(usage_handler.usage) > 1:
-        logger.warning(
-            logger.format_message(
-                session_id,
-                f"Multiple usage objects found in callback. Using the first one.",
-            )
-        )
-
-    if isinstance(response, AIMessage):
-        text = response.content
-    else:
-        text = response.model_dump()
-
-    # Only call the callback if we have usage data
-    if usage_handler.usage:
-        configurable.callback(
-            message=text,
-            task=task,
-            llm_name=llm_name,
-            llm_provider=configurable.provider,
-            usage=usage_handler.usage[0],
-            duration=duration,
-        )
-    else:
-        # Log that we're missing usage data but still call the callback with empty usage
-        logger.warning(
-            logger.format_message(
-                session_id, f"No usage data available for {llm_name} on task {task}"
-            )
-        )
-        configurable.callback(
-            message=text,
-            task=task,
-            llm_name=llm_name,
-            llm_provider=configurable.provider,
-            usage={},
-            duration=duration,
-        )
-
     return response
 
 
-def write_section(
+async def write_section(
     writer_model, state: SectionState, config: RunnableConfig
 ) -> Command[Literal["__end__", "search_web"]]:
     sec = state["section"]
     configurable = Configuration.from_runnable_config(config)
-    usage_handler_section_writing = UsageCallback(provider=configurable.provider)
-    usage_handler_section_grading = UsageCallback(provider=configurable.provider)
     session_id = get_session_id_from_config(configurable)
 
     logger.info(logger.format_message(session_id, f"Writing section: {sec.name}"))
@@ -674,21 +570,19 @@ def write_section(
         section_content=sec.content,
         document_summary=doc_summary,
     )
-
-    llm_config_section_writing = RunnableConfig(
-        callbacks=[usage_handler_section_writing], tags=["section_writing"]
+    writer_interceptor = MessageInterceptor()
+    writer_model_with_interceptor = writer_model | RunnableLambda(
+        writer_interceptor.capture_and_pass
     )
 
-    content = invoke_llm_with_tracking(
-        llm=writer_model,
+    content = await invoke_llm_with_tracking(
+        llm=writer_model_with_interceptor,
         messages=[
             SystemMessage(content=sys_inst),
             HumanMessage(content="Write the section."),
         ],
         task=f"Write section - {sec.name}",
-        config=llm_config_section_writing,
-        usage_handler=usage_handler_section_writing,
-        configurable=configurable,
+        config=configurable,
         session_id=session_id,
         llm_name=get_model_name(writer_model),
     )
@@ -703,30 +597,42 @@ def write_section(
     grader_inst = section_grader_instructions.format(
         section_topic=sec.description, section=sec.content
     )
-    llm_config_section_grading = RunnableConfig(
-        callbacks=[usage_handler_section_grading], tags=["section_grading"]
+
+    grader_interceptor = MessageInterceptor()
+    structured_llm = (
+        writer_model
+        | RunnableLambda(grader_interceptor.capture_and_pass)
+        | OutputFixingParser.from_llm(
+            llm=writer_model, parser=PydanticOutputParser(pydantic_object=Feedback)
+        )
     )
 
-    structured_llm = writer_model | OutputFixingParser.from_llm(
-        llm=writer_model, parser=PydanticOutputParser(pydantic_object=Feedback)
-    )
-
-    fb = invoke_llm_with_tracking(
+    fb = await invoke_llm_with_tracking(
         llm=structured_llm,
         messages=[SystemMessage(content=grader_inst), HumanMessage(content="Grade it")],
         task=f"Grade section - {sec.name}",
-        config=llm_config_section_grading,
-        usage_handler=usage_handler_section_grading,
-        configurable=configurable,
+        config=configurable,
         session_id=session_id,
         llm_name=get_model_name(writer_model),
     )
+
+    captured_messages = []
+    for m in writer_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_writer"
+        captured_messages.append(m)
+
+    for m in grader_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_grader"
+        captured_messages.append(m)
 
     if fb.grade == "pass":
         logger.info(
             logger.format_message(session_id, f"Section {sec.name} passed grading")
         )
-        return Command(update={"completed_sections": [sec]}, goto=END)
+        return Command(
+            update={"completed_sections": [sec], "messages": captured_messages},
+            goto=END,
+        )
     elif (
         state["search_iterations"]
         >= Configuration.from_runnable_config(config).max_search_depth
@@ -736,7 +642,10 @@ def write_section(
                 session_id, f"Section {sec.name} reached max iterations, moving on"
             )
         )
-        return Command(update={"completed_sections": [sec]}, goto=END)
+        return Command(
+            update={"completed_sections": [sec], "messages": captured_messages},
+            goto=END,
+        )
     else:
         logger.info(
             logger.format_message(
@@ -745,15 +654,20 @@ def write_section(
             )
         )
         return Command(
-            update={"search_queries": fb.follow_up_queries, "section": sec},
+            update={
+                "search_queries": fb.follow_up_queries,
+                "section": sec,
+                "messages": captured_messages,
+            },
             goto="search_web",
         )
 
 
-def write_final_sections(writer_model, state: SectionState, config: RunnableConfig):
+async def write_final_sections(
+    writer_model, state: SectionState, config: RunnableConfig
+):
     sec = state["section"]
     configurable = Configuration.from_runnable_config(config)
-    usage_handler = UsageCallback(provider=configurable.provider)
     session_id = get_session_id_from_config(configurable)
 
     logger.info(logger.format_message(session_id, f"Writing final section: {sec.name}"))
@@ -762,20 +676,20 @@ def write_final_sections(writer_model, state: SectionState, config: RunnableConf
     sys_inst = final_section_writer_instructions.format(
         section_title=sec.name, section_topic=sec.description, context=rep
     )
-    llm_config = RunnableConfig(
-        callbacks=[usage_handler], tags=["final_section_writing"], timeout=1
+
+    writer_interceptor = MessageInterceptor()
+    writer_model_with_interceptor = writer_model | RunnableLambda(
+        writer_interceptor.capture_and_pass
     )
 
-    content = invoke_llm_with_tracking(
-        llm=writer_model,
+    content = await invoke_llm_with_tracking(
+        llm=writer_model_with_interceptor,
         messages=[
             SystemMessage(content=sys_inst),
             HumanMessage(content="Write final section."),
         ],
         task="Write final section",
-        config=llm_config,
-        usage_handler=usage_handler,
-        configurable=configurable,
+        config=configurable,
         session_id=session_id,
         llm_name=get_model_name(writer_model),
     )
@@ -784,10 +698,16 @@ def write_final_sections(writer_model, state: SectionState, config: RunnableConf
     logger.info(
         logger.format_message(session_id, f"Completed final section: {sec.name}")
     )
-    return {"completed_sections": [sec]}
+
+    captured_messages = []
+    for m in writer_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_final_section_writer"
+        captured_messages.append(m)
+
+    return {"completed_sections": [sec], "messages": captured_messages}
 
 
-def gather_completed_sections(state: ReportState, config: RunnableConfig):
+async def gather_completed_sections(state: ReportState, config: RunnableConfig):
     comps = state["completed_sections"]
     configurable = Configuration.from_runnable_config(config)
     session_id = get_session_id_from_config(configurable)
@@ -799,7 +719,7 @@ def gather_completed_sections(state: ReportState, config: RunnableConfig):
     return {"report_sections_from_research": rep}
 
 
-def initiate_final_section_writing(state: ReportState, config: RunnableConfig):
+async def initiate_final_section_writing(state: ReportState, config: RunnableConfig):
     configurable = Configuration.from_runnable_config(config)
     session_id = get_session_id_from_config(configurable)
 
@@ -822,7 +742,7 @@ def initiate_final_section_writing(state: ReportState, config: RunnableConfig):
     ]
 
 
-def compile_final_report(state: ReportState, config: RunnableConfig):
+async def compile_final_report(state: ReportState, config: RunnableConfig):
     configurable = Configuration.from_runnable_config(config)
     session_id = get_session_id_from_config(configurable)
 
@@ -885,26 +805,15 @@ def compile_final_report(state: ReportState, config: RunnableConfig):
     return {"final_report": final_text, "deep_research_report": report}
 
 
-def summarize_documents(summary_model, state: ReportState, config: RunnableConfig):
+async def summarize_documents(
+    summary_model, state: ReportState, config: RunnableConfig
+):
     """
     Summarize provided documents if they exist.
     """
     configurable = Configuration.from_runnable_config(config)
-    usage_handler = UsageCallback(provider=configurable.provider)
-    session_id = get_session_id_from_config(configurable)
 
     document = state.get("document", None)
-    if not document:
-        logger.info(
-            logger.format_message(session_id, "No documents provided for summarization")
-        )
-        return {"document_summary": ""}
-
-    logger.info(
-        logger.format_message(
-            session_id, f"Summarizing a {len(document)} word document"
-        )
-    )
 
     sys_inst = """You are a document summarizer. Your task is to:
     1. Read through the provided documents
@@ -915,11 +824,7 @@ def summarize_documents(summary_model, state: ReportState, config: RunnableConfi
     
     Format your response as a clear, well-structured summary."""
 
-    llm_config = RunnableConfig(
-        callbacks=[usage_handler], tags=["document_summarization"]
-    )
-
-    summary = invoke_llm_with_tracking(
+    summary = await invoke_llm_with_tracking(
         llm=summary_model,
         messages=[
             SystemMessage(content=sys_inst),
@@ -928,10 +833,7 @@ def summarize_documents(summary_model, state: ReportState, config: RunnableConfi
             ),
         ],
         task="Summarize provided document",
-        config=llm_config,
-        usage_handler=usage_handler,
-        configurable=configurable,
-        session_id=session_id,
+        config=configurable,
         llm_name=get_model_name(summary_model),
     )
 
@@ -953,7 +855,7 @@ def summarize_documents(summary_model, state: ReportState, config: RunnableConfi
     )
 
 
-def get_graph(api_key: str, provider: str, request_timeout: int = 120):
+def create_deep_research_graph(api_key: str, provider: str, request_timeout: int = 120):
     """
     Create and configure the graph for deep research.
 
@@ -1068,4 +970,4 @@ def get_graph(api_key: str, provider: str, request_timeout: int = 120):
     builder.add_edge("write_final_sections", "compile_final_report")
     builder.add_edge("compile_final_report", END)
 
-    return builder
+    return builder.compile(checkpointer=InMemorySaver())
