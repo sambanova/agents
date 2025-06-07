@@ -420,7 +420,6 @@ class WebSocketConnectionManager(WebSocketInterface):
                             content=x["final_report"],
                             additional_kwargs={
                                 "agent_type": "deep_research_end",
-                                "timestamp": datetime.now(timezone.utc).isoformat(),
                             },
                         ),
                     },

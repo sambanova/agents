@@ -105,10 +105,7 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
 
         # Process messages
         processed_messages = await _get_messages(messages)
-        result: AIMessage = await llm_with_stop.ainvoke(processed_messages, config)
-        result.additional_kwargs["timestamp"] = datetime.now(timezone.utc).isoformat()
-
-        return result
+        return await llm_with_stop.ainvoke(processed_messages, config)
 
     # Define the function that determines whether to continue or not
     def should_continue(messages):
