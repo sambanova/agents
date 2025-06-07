@@ -449,96 +449,82 @@ const currentStreamingStatus = computed(() => {
   if (!props.streamingEvents || props.streamingEvents.length === 0) return '⏳ Starting...'
   
   const events = props.streamingEvents
+  let lastCompletionStatus = null
   let currentTool = null
   let toolQuery = null
-  let lastToolResult = null
   
-  // Process events in order to build current status
+  // Process events in reverse order to get latest status first
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i]
+    const data = event.data
+    
+    // Check for latest tool completion first
+    if (event.event === 'agent_completion' && data.type === 'LiberalFunctionMessage' && data.name) {
+      if (data.name === 'search_tavily' && Array.isArray(data.content)) {
+        const resultCount = data.content.length
+        const sources = data.content.slice(0, 3)
+        const sourceNames = sources.map(source => {
+          if (source.title && source.title.trim()) {
+            return source.title.trim()
+          } else if (source.url) {
+            try {
+              return new URL(source.url).hostname.replace('www.', '')
+            } catch {
+              return source.url
+            }
+          }
+          return 'Unknown source'
+        })
+        
+        let status = `✅ Found ${resultCount} web sources`
+        if (sourceNames.length > 0) {
+          status += `\n• ${sourceNames.join('\n• ')}`
+          if (resultCount > 3) status += `\n• and ${resultCount - 3} more...`
+        }
+        return status
+      } else if (data.name === 'arxiv') {
+        const papers = data.content && data.content.includes('Title:') ? 
+          data.content.split('Title:').length - 1 : 1
+        
+        const titleMatches = data.content.match(/Title: ([^\n]+)/g)
+        let status = `✅ Found ${papers} arXiv papers`
+        if (titleMatches) {
+          const titles = titleMatches.slice(0, 2).map(t => t.replace('Title: ', '').trim())
+          status += `\n• ${titles.join('\n• ')}`
+          if (titleMatches.length > 2) status += `\n• and ${titleMatches.length - 2} more...`
+        }
+        return status
+      } else if (data.name === 'DaytonaCodeSandbox') {
+        return `✅ Code execution complete\n• Generated charts and analysis`
+      }
+    }
+    
+    // Check if we're streaming response
+    if (event.event === 'llm_stream_chunk' && 
+        data.content && 
+        data.content.trim() && 
+        !data.content.includes('<tool>')) {
+      return '📝 Streaming response...'
+    }
+  }
+  
+  // Now process forward to find current tool if no completion found
   for (let i = 0; i < events.length; i++) {
     const event = events[i]
     const data = event.data
     
-    switch (event.event) {
-      case 'llm_stream_chunk':
-        if (data.content && data.content.includes('<tool>')) {
-          const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
-          // Fixed regex to handle missing closing tag
-          const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
-          
-          if (toolMatch) {
-            currentTool = toolMatch[1]
-            toolQuery = inputMatch ? inputMatch[1].trim() : null
-            
-            if (currentTool === 'search_tavily') {
-              return `🔍 Searching web: "${toolQuery || 'query'}"`
-            } else if (currentTool === 'arxiv') {
-              return `📚 Searching arXiv: "${toolQuery || 'query'}"`
-            } else if (currentTool === 'DaytonaCodeSandbox') {
-              return `⚡ Executing code in sandbox`
-            } else {
-              return `🔧 Using ${currentTool.replace('_', ' ')}: "${toolQuery || 'executing'}"`
-            }
-          }
-        } else if (data.content && data.content.trim() && !data.content.includes('<tool>')) {
-          // This is actual response content being streamed
-          return '📝 Streaming response...'
-        }
-        break
-        
-      case 'agent_completion':
-        if (data.type === 'LiberalFunctionMessage' && data.name) {
-          lastToolResult = data
-          if (data.name === 'search_tavily') {
-            const resultCount = Array.isArray(data.content) ? data.content.length : 0
-            const sources = Array.isArray(data.content) ? data.content.slice(0, 3) : []
-            const sourceNames = sources.map(source => {
-              if (source.title && source.title.trim()) {
-                return source.title.trim()
-              } else if (source.url) {
-                try {
-                  return new URL(source.url).hostname.replace('www.', '')
-                } catch {
-                  return source.url
-                }
-              }
-              return 'Unknown source'
-            })
-            
-            let status = `✅ Found ${resultCount} web sources`
-            if (sourceNames.length > 0) {
-              status += `\n• ${sourceNames.join('\n• ')}`
-              if (resultCount > 3) status += `\n• and ${resultCount - 3} more...`
-            }
-            return status
-          } else if (data.name === 'arxiv') {
-            const papers = data.content && data.content.includes('Title:') ? 
-              data.content.split('Title:').length - 1 : 1
-            
-            // Extract paper titles for sub-bullets
-            const titleMatches = data.content.match(/Title: ([^\n]+)/g)
-            let status = `✅ Found ${papers} arXiv papers`
-            if (titleMatches) {
-              const titles = titleMatches.slice(0, 2).map(t => t.replace('Title: ', '').trim())
-              status += `\n• ${titles.join('\n• ')}`
-              if (titleMatches.length > 2) status += `\n• and ${titleMatches.length - 2} more...`
-            }
-            return status
-          } else if (data.name === 'DaytonaCodeSandbox') {
-            return `✅ Code execution complete\n• Generated charts and analysis`
-          } else {
-            return `✅ ${data.name.replace('_', ' ')} completed`
-          }
-        } else if (data.agent_type === 'react_end') {
-          return '✅ Response complete'
-        }
-        break
-        
-      case 'stream_complete':
-        return '✅ Response complete'
+    if (event.event === 'llm_stream_chunk' && data.content && data.content.includes('<tool>')) {
+      const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
+      const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
+      
+      if (toolMatch) {
+        currentTool = toolMatch[1]
+        toolQuery = inputMatch ? inputMatch[1].trim() : null
+      }
     }
   }
   
-  // If we have a current tool but no completion yet
+  // Return current tool status if we have one
   if (currentTool) {
     if (currentTool === 'search_tavily') {
       return `🔍 Searching web: "${toolQuery || 'query'}"`
@@ -546,7 +532,16 @@ const currentStreamingStatus = computed(() => {
       return `📚 Searching arXiv: "${toolQuery || 'query'}"`
     } else if (currentTool === 'DaytonaCodeSandbox') {
       return `⚡ Executing code in sandbox`
+    } else {
+      return `🔧 Using ${currentTool.replace('_', ' ')}: "${toolQuery || 'executing'}"`
     }
+  }
+  
+  // Check if we're done
+  const lastEvent = events[events.length - 1]
+  if (lastEvent?.event === 'stream_complete' || 
+      (lastEvent?.event === 'agent_completion' && lastEvent.data.agent_type === 'react_end')) {
+    return '✅ Response complete'
   }
   
   return '💭 Processing...'
@@ -784,24 +779,52 @@ const enhancedResponseContent = computed(() => {
   
   let enhancedContent = content
   
-  // Add inline references for web sources
+  // Add inline references for sources
   toolSources.value.forEach((source, index) => {
+    if (!source.url) return // Skip sources without URLs
+    
+    const patterns = []
+    
     if (source.type === 'web' && source.domain) {
-      // Look for company names, domain names, or source titles in the content
-      const patterns = [
-        source.domain.replace('.com', '').replace('.org', '').replace('.net', ''),
-        source.title.split(' ').slice(0, 3).join(' '), // First few words of title
-      ]
+      // For web sources, look for domain and company names
+      const domainBase = source.domain.replace(/\.(com|org|net|ai|co)$/i, '')
+      patterns.push(domainBase)
       
-      patterns.forEach(pattern => {
-        if (pattern.length > 3) {
-          const regex = new RegExp(`\\b${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi')
-          enhancedContent = enhancedContent.replace(regex, (match) => {
-            return `${match}<sup><a href="${source.url}" target="_blank" rel="noopener" class="inline-ref" data-source-idx="${index}">[${index + 1}]</a></sup>`
-          })
+      // Extract company name from title
+      if (source.title) {
+        const companyMatch = source.title.match(/^([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)/);
+        if (companyMatch) {
+          patterns.push(companyMatch[1])
         }
-      })
+      }
+    } else if (source.type === 'arxiv') {
+      // For arXiv papers, look for key terms from title
+      if (source.title) {
+        const titleWords = source.title.split(' ')
+        const significantWords = titleWords.filter(word => 
+          word.length > 4 && 
+          !/^(the|and|for|with|using|from|that|this|their|based|model|learning|analysis|approach|method|system)$/i.test(word)
+        )
+        patterns.push(...significantWords.slice(0, 3))
+      }
     }
+    
+    patterns.forEach(pattern => {
+      if (pattern && pattern.length > 3) {
+        // Create a more specific regex that avoids already tagged content
+        const escapedPattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const regex = new RegExp(`(?<!<[^>]*?)\\b${escapedPattern}\\b(?![^<]*?>)(?!.*?</a>)`, 'gi')
+        
+        let matchCount = 0
+        enhancedContent = enhancedContent.replace(regex, (match) => {
+          matchCount++
+          if (matchCount === 1) { // Only add reference to first occurrence
+            return `${match}<sup><a href="${source.url}" target="_blank" rel="noopener" class="inline-ref" data-source-idx="${index}">[${index + 1}]</a></sup>`
+          }
+          return match
+        })
+      }
+    })
   })
   
   return enhancedContent
@@ -862,15 +885,29 @@ const toolSources = computed(() => {
         const titleMatch = paper.match(/Title: ([^\n]+)/)
         const authorsMatch = paper.match(/Authors: ([^\n]+)/)
         const urlMatch = paper.match(/URL: ([^\n]+)/)
+        const publishedMatch = paper.match(/Published: ([^\n]+)/)
         
         if (titleMatch) {
+          let arxivUrl = ''
+          
+          // Try to find explicit URL first
+          if (urlMatch) {
+            arxivUrl = urlMatch[1].trim()
+          } else {
+            // Try to construct arXiv URL from title
+            const title = titleMatch[1].trim()
+            // For now, we'll use a search URL since we don't have paper IDs
+            arxivUrl = `https://arxiv.org/search/?query=${encodeURIComponent(title)}&searchtype=title`
+          }
+          
           sources.push({
             title: titleMatch[1].trim() || 'Untitled Paper',
             authors: authorsMatch ? authorsMatch[1].trim() : '',
             domain: 'arxiv.org',
-            url: urlMatch ? urlMatch[1].trim() : '',
+            url: arxivUrl,
             content: paper.substring(0, 300) + '...',
-            type: 'arxiv'
+            type: 'arxiv',
+            published: publishedMatch ? publishedMatch[1].trim() : ''
           })
         }
       })
