@@ -32,6 +32,8 @@ from daytona_sdk import (
     DaytonaConfig as DaytonaSDKConfig,
 )
 
+from src.agents.utils.code_patcher import patch_plot_code_str
+from src.agents.utils.file_storage import put_file
 
 class DDGInput(BaseModel):
     query: Annotated[str, Field(description="search query to look up")]
@@ -340,8 +342,11 @@ def _get_daytona(user_id: str):
 
             sandbox = daytona.create(params=params)
 
-            # patched_code, expected_filenames = patch_plot_code_str(code_to_run)
-            response = sandbox.process.code_run(code_to_run)
+            patched_code, expected_filenames = patch_plot_code_str(code_to_run)
+            print(f"Original code: {code_to_run[:200]}...")
+            print(f"Patched code: {patched_code[:200]}...")
+            print(f"Expected filenames: {expected_filenames}")
+            response = sandbox.process.code_run(patched_code)
 
             # Ensure result is a string, even if None or other types
             result_str = str(response.result) if response.result is not None else ""
@@ -352,32 +357,62 @@ def _get_daytona(user_id: str):
                 error_detail = result_str
                 return f"Error (Exit Code {response.exit_code}): {error_detail}"
 
-            # for filename in expected_filenames:
-            #     extension = os.path.splitext(filename)[1].lstrip(".")
-            #     try:
-            #         image_id = str(uuid.uuid4())
-            #         content = sandbox.fs.download_file(filename)
-            #         await put_file(
-            #             user_id,
-            #             image_id,
-            #             data=content,
-            #             title=filename,
-            #             format=extension,
-            #         )
-            #         result_str += f"\n\n![{filename}](attachment:{image_id})"
-            #     except Exception as e:
-            #         pass
+            # Debug: Check what we got from the response
+            print(f"Response exit code: {response.exit_code}")
+            print(f"Response result: {str(response.result)[:500]}...")
+            print(f"Response artifacts: {response.artifacts}")
+            if hasattr(response.artifacts, 'charts'):
+                print(f"Charts found: {len(response.artifacts.charts) if response.artifacts.charts else 0}")
+                if response.artifacts.charts:
+                    for i, chart in enumerate(response.artifacts.charts):
+                        print(f"Chart {i}: title='{chart.title}', type='{chart.type}', png_size={len(chart.png) if chart.png else 0}")
+            
+            # Process expected filenames first
+            for filename in expected_filenames:
+                extension = os.path.splitext(filename)[1].lstrip(".")
+                try:
+                    image_id = str(uuid.uuid4())
+                    content = sandbox.fs.download_file(filename)
+                    print(f"Downloaded file {filename}: {len(content)} bytes")
+                    await put_file(
+                        user_id,
+                        image_id,
+                        data=content,
+                        title=filename,
+                        format=extension,
+                    )
+                    result_str += f"\n\n![{filename}](attachment:{image_id})"
+                except Exception as e:
+                    print(f"Error downloading file {filename}: {e}")
 
-            daytona.remove(sandbox)
-
-            if response.artifacts.charts:
+            # Process charts from artifacts
+            if hasattr(response.artifacts, 'charts') and response.artifacts.charts:
+                print(f"Processing {len(response.artifacts.charts)} charts from artifacts")
                 for i, chart in enumerate(response.artifacts.charts):
                     image_id = str(uuid.uuid4())
                     title = chart.title or f"Chart {i+1}"
-                    # await put_file(
-                    #     user_id, image_id, data=chart.png, title=title, format="png"
-                    # )
-                    result_str += f"\n\n![{title}](attachment:{image_id})"
+                    try:
+                        if chart.png:
+                            # Chart.png should be base64 string, convert to bytes
+                            import base64
+                            chart_data = base64.b64decode(chart.png)
+                            await put_file(
+                                user_id, image_id, data=chart_data, title=title, format="png"
+                            )
+                            result_str += f"\n\n![{title}](attachment:{image_id})"
+                            print(f"Successfully stored chart {i}: {title}")
+                        else:
+                            print(f"Chart {i} has no PNG data")
+                            result_str += f"\n\n**Chart Generated:** {title}"
+                    except Exception as e:
+                        print(f"Error storing chart {i}: {e}")
+                        # Fallback to generic message
+                        result_str += f"\n\n**Chart Generated:** {title}"
+            else:
+                print("No charts found in response.artifacts.charts")
+
+            # Clean up sandbox after processing everything
+            daytona.remove(sandbox)
 
             return result_str
         except Exception as e:

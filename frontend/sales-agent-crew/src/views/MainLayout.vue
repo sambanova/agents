@@ -1,7 +1,7 @@
 <template>
   <!-- Outer container uses flex so the sidebar, main area, and agent sidebar appear side-by-side -->
   <div
-    class="min-h-screen transition-all bg-primary-bodyBg dark:bg-gray-900 duration-300 flex flex-col"
+    class="min-h-screen transition-all bg-primary-bodyBg duration-300 flex flex-col"
   >
     <!-- PAGE HEADER -->
     <Header
@@ -14,7 +14,9 @@
     <!-- MAIN COLUMN -->
     <div class="flex gap-2 p-2 h-[calc(100vh-4rem)]">
       <!-- LEFT SIDEBAR -->
-      <!-- If chatMode => <ChatSidebar>, else => <Sidebar>.  -->
+      <!-- If chatMode => <ChatSidebar>, else => <Sidebar>. 
+         We reference them with JS variables chatSidebarComp, sideBarComp 
+         so we do <component :is="chatSidebarComp" />. -->
       <component
         :is="chatMode ? chatSidebarComp : sideBarComp"
         @selectReport="handleSavedReportSelect"
@@ -25,9 +27,9 @@
 
       <!-- MAIN CONTENT WRAPPER -->
       <main
-        class="overflow-hidden transition-all duration-300 border border-primary-brandFrame dark:border-gray-600 rounded-lg relative flex-1 flex flex-col h-full"
+        class="overflow-hidden transition-all duration-300 border border-primary-brandFrame rounded-lg relative flex-1 flex flex-col h-full"
       >
-        <div class="flex-1 h-full bg-white dark:bg-gray-800">
+        <div class="flex-1 h-full bg-white">
           <!-- If chatMode => show chat UI, else show old workflow UI -->
           <div class="flex-1 h-full w-full">
             <div v-if="chatMode" class="flex h-full justify-center">
@@ -48,6 +50,7 @@
               <!-- OLD WORKFLOW MODE -->
 
               <!-- Pass currentRunId to <SearchSection> so it uses it in /execute calls -->
+
               <SearchNotification
                 :show="showNotification"
                 :time="searchTime"
@@ -104,10 +107,9 @@
             </div>
           </div>
         </div>
-
         <div
           v-if="!chatMode"
-          class="sticky bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-600"
+          class="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200"
         >
           <SearchSection
             :keysUpdated="keysUpdateCounter"
@@ -354,7 +356,7 @@ function handleSearchStart(type) {
 }
 
 // Watch queryType => update loading messages
-watch(queryType, (newVal) => {
+watch(queryType, (newVal, oldVal) => {
   clearSubMessageInterval();
 
   switch (newVal) {

@@ -1,29 +1,19 @@
 <template>
-  <div class="relative h-full w-full dark:bg-gray-900">
+  <div class="relative h-full w-full">
     <!-- Content -->
     <div
       ref="container"
-      class="relative h-full flex  overflow-x-hidden overflow-y-auto"
-       :class="
-          messagesData.length == 0 ? 'justify-center align-center flex-col' : 'flex-col'
-        "
+      class="relative h-full flex flex-col overflow-x-hidden overflow-y-auto"
     >
-     
-      <div
-        class=" w-full flex mx-auto"
-        :class="
-          messagesData.length == 0 ? 'justify-center align-center flex-col' : 'flex-1'
-        "
-      >
-       <!-- Sticky Top Component -->
+      <!-- Sticky Top Component -->
       <div
         v-if="chatName"
-        class="sticky hidden h-[62px] top-0 z-10 bg-white dark:bg-gray-800 p-4 shadow"
+        class="sticky h-[62px] top-0 z-10 bg-white p-4 shadow"
       >
         <div class="flex items-center justify-between">
           <!-- Left text -->
           <div
-            class="text-[16px] font-medium text-gray-800 dark:text-gray-100 line-clamp-1 overflow-hidden"
+            class="text-[16px] font-medium text-gray-800 line-clamp-1 overflow-hidden"
           >
             {{ chatName }}
           </div>
@@ -36,17 +26,23 @@
             </button>
             <button
               @click="genPDF"
-              class="text-sm h-[30px] py-1 px-2.5 bg-[#EAECF0] dark:bg-gray-700 text-[#344054] dark:text-gray-200 rounded"
+              class="text-sm h-[30px] py-1 px-2.5 bg-[#EAECF0] text-[#344054] rounded"
             >
               Download PDF
             </button>
           </div>
         </div>
       </div>
+      <div
+        class="flex-1 w-full flex mx-auto"
+        :class="
+          messagesData.length == 0 ? 'justify-center align-center flex-col' : ''
+        "
+      >
         <!-- Title -->
         <div v-if="messagesData.length == 0" class="w-full text-center">
           <h1 v-if="!initialLoading" class="text-3xl font-bold sm:text-3xl">
-            <span class="bg-clip-text text-primary-brandTextSecondary dark:text-primary-brandTextSecondary-dark">
+            <span class="bg-clip-text text-primary-brandTextSecondary">
               What can I help you with?
             </span>
           </h1>
@@ -72,12 +68,13 @@
                 (item) => item.message_id === msgItem.message_id
               )[0]?.data
             "
-            :key="msgItem.conversation_id"
+            :key="msgItem.conversation_id || msgItem.message_id || msgItem.timestamp"
             :event="msgItem.event"
             :data="msgItem.data"
             :messageId="msgItem.message_id"
             :provider="provider"
             :currentMsgId="currentMsgId"
+            :streamingEvents="msgItem.type === 'streaming_group' ? msgItem.events : null"
           />
           <ChatLoaderBubble
             :workflowData="
@@ -94,18 +91,14 @@
             :provider="provider"
             :messageId="currentMsgId"
           />
+
           <!-- End Chat Bubble -->
         </transition-group>
-        
       </div>
 
       <!-- Documents Section -->
-      <div 
-       :class="
-          messagesData.length == 0 ? 'justify-center align-center flex-col' : 'sticky'
-        "
-      class=" z-1000 bottom-0 left-0 right-0 bg-white dark:bg-gray-900 p-2">
-        <div class=" z-10">
+      <div class="sticky z-1000 bottom-0 left-0 right-0 bg-white p-2">
+        <div class="sticky bottom-0 z-10">
           <!-- Textarea -->
           <div class="max-w-4xl mx-auto lg:px-0">
             <div v-if="errorMessage" class="m-1 w-full mx-auto space-y-5">
@@ -118,12 +111,12 @@
                 @click="toggleExpand"
                 class="flex items-center justify-between focus:outline-none mb-2"
               >
-                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                <h3 class="text-sm font-medium text-gray-700">
                   Uploaded Documents ({{ uploadedDocuments.length }})
                 </h3>
                 <svg
                   :class="{ 'transform rotate-180': isExpanded }"
-                  class="w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200"
+                  class="w-5 h-5 text-gray-500 transition-transform duration-200"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -144,20 +137,20 @@
                     <div
                       v-for="doc in uploadedDocuments"
                       :key="doc.id"
-                      class="w-48 flex-shrink-0 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 relative group"
+                      class="w-48 flex-shrink-0 p-2 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 relative group"
                     >
                       <div class="flex items-center space-x-3">
                         <input
                           type="checkbox"
                           :checked="selectedDocuments.includes(doc.id)"
                           @change="toggleDocumentSelection(doc.id)"
-                          class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 dark:border-gray-600 rounded"
+                          class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                         />
                         <div class="w-48 overflow-hidden">
-                          <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                          <p class="text-sm font-medium text-gray-900 truncate">
                             {{ doc.filename }}
                           </p>
-                          <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          <p class="text-xs text-gray-500 truncate">
                             Uploaded
                             {{
                               new Date(
@@ -190,12 +183,12 @@
                 type="search"
                 placeholder="Ask me about...companies to target, research topics, or company stocks and financials"
                 :disabled="isLoading"
-                class="p-4 pb-12 block min-h-[106px] w-full bg-primary-brandFrame dark:bg-gray-700 border-primary-brandFrame dark:border-gray-600 rounded-lg text-sm dark:text-gray-200 focus:outline-none active:outline-none border focus:border-primary-brandColor disabled:opacity-50 disabled:pointer-events-none resize-y"
+                class="p-4 pb-12 block min-h-[106px] w-full bg-primary-brandFrame border-primary-brandFrame rounded-lg text-sm focus:outline-none active:outline-none border focus:border-primary-brandColor disabled:opacity-50 disabled:pointer-events-none resize-y"
               ></textarea>
 
               <!-- Toolbar -->
               <div
-                class="absolute bottom-px inset-x-px p-2 rounded-b-lg border-primary-brandFrame dark:border-gray-700 dark:bg-gray-700"
+                class="absolute bottom-px inset-x-px p-2 rounded-b-lg border-primary-brandFrame"
               >
                 <div class="flex justify-between items-center">
                   <!-- Button Group -->
@@ -205,7 +198,7 @@
                       @click="$refs.fileInput.click()"
                       :disabled="isLoading || isUploading"
                       type="button"
-                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:z-1 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
+                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
                     >
                       <input
                         type="file"
@@ -253,10 +246,10 @@
                       @click="toggleRecording"
                       :disabled="isLoading"
                       :class="{
-                        'text-gray-500 dark:text-gray-400': !isRecording,
+                        'text-gray-500': !isRecording,
                         'text-orange-500': isRecording,
                       }"
-                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:z-1 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
+                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
                     >
                       <svg
                         v-if="!isRecording"
@@ -279,7 +272,7 @@
 
                       <svg
                         v-else
-                        class="w-6 h-6 text-gray-800 dark:text-gray-200"
+                        class="w-6 h-6 text-gray-800"
                         aria-hidden="true"
                         xmlns="http://www.w3.org/2000/svg"
                         width="24"
@@ -308,14 +301,14 @@
                         @click="toggleRecording"
                         :disabled="isLoading"
                         :class="{
-                          'text-gray-500 dark:text-gray-400': !isRecording,
+                          'text-gray-500': !isRecording,
                           'text-orange-500': isRecording,
                         }"
-                        class="inline-flex hidden shrink-0 justify-center items-center size-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:z-1 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
+                        class="inline-flex hidden shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
                       >
                         <svg
                           v-if="!isRecording"
-                          class="w-6 h-6 text-gray-800 dark:text-gray-200"
+                          class="w-6 h-6 text-gray-800"
                           aria-hidden="true"
                           xmlns="http://www.w3.org/2000/svg"
                           width="24"
@@ -334,7 +327,7 @@
                         </svg>
                         <svg
                           v-else
-                          class="w-6 h-6 text-gray-800 dark:text-gray-200"
+                          class="w-6 h-6 text-gray-800"
                           aria-hidden="true"
                           xmlns="http://www.w3.org/2000/svg"
                           width="24"
@@ -418,7 +411,6 @@ import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import ChatBubble from '@/components/ChatMain/ChatBubble.vue';
-// import StatusAnimationBox from '@/components/ChatMain/StatusAnimationBox.vue';
 import ChatLoaderBubble from '@/components/ChatMain/ChatLoaderBubble.vue';
 const router = useRouter();
 const route = useRoute();
@@ -1231,6 +1223,7 @@ const addMessage = async () => {
   agentThoughtsData.value = [];
   // workflowData.value = []
   emit('agentThoughtsDataChanged', agentThoughtsData.value);
+  emit('metadataChanged', completionMetaData.value);
   if (!searchQuery.value.trim()) return;
 
   currentMsgId.value = uuidv4();
@@ -1243,7 +1236,7 @@ const addMessage = async () => {
       const message = messagesData.value[i];
       if (message.event === 'agent_completion') {
         // Check if this agent_completion has deep_research_interrupt agent_type
-        if (message.data && message.data.additional_kwargs.agent_type === 'deep_research_interrupt') {
+        if (message.data && message.data.agent_type === 'deep_research_interrupt') {
           // If user typed something, set resume to true
           shouldResume = searchQuery.value.trim().length > 0;
         }
@@ -1370,6 +1363,7 @@ async function connectWebSocket() {
           messagesData.value.push({
             event: 'stream_start',
             data: receivedData,
+            message_id: currentMsgId.value,
             timestamp: new Date().toISOString()
           });
         } else if (receivedData.event === 'agent_completion') {
@@ -1377,6 +1371,7 @@ async function connectWebSocket() {
           messagesData.value.push({
             event: 'agent_completion', 
             data: receivedData,
+            message_id: currentMsgId.value,
             timestamp: receivedData.timestamp || new Date().toISOString()
           });
         } else if (receivedData.event === 'llm_stream_chunk') {
@@ -1398,7 +1393,8 @@ async function connectWebSocket() {
               // Create new message for new ID
               messagesData.value.push({
                 event: 'llm_stream_chunk',
-                data: receivedData, 
+                data: receivedData,
+                message_id: currentMsgId.value,
                 timestamp: new Date().toISOString()
               });
             }
@@ -1406,7 +1402,8 @@ async function connectWebSocket() {
             // No ID, just add as new message
             messagesData.value.push({
               event: 'llm_stream_chunk',
-              data: receivedData, 
+              data: receivedData,
+              message_id: currentMsgId.value,
               timestamp: new Date().toISOString()
             });
           }
@@ -1415,6 +1412,7 @@ async function connectWebSocket() {
           messagesData.value.push({
             event: 'stream_complete',
             data: receivedData,
+            message_id: currentMsgId.value,
             timestamp: new Date().toISOString()
           });
           isLoading.value = false;
@@ -1574,8 +1572,32 @@ watch(
 );
 
 const filteredMessages = computed(() => {
-  // Show all messages by default
-  return messagesData.value;
+  const grouped = new Map();
+  const streamingEvents = ['stream_start', 'agent_completion', 'llm_stream_chunk', 'stream_complete'];
+  
+  messagesData.value.forEach(msg => {
+    if (streamingEvents.includes(msg.event) && msg.message_id) {
+      // Group streaming events by message_id
+      if (!grouped.has(msg.message_id)) {
+        grouped.set(msg.message_id, {
+          type: 'streaming_group',
+          message_id: msg.message_id,
+          events: [],
+          timestamp: msg.timestamp
+        });
+      }
+      grouped.get(msg.message_id).events.push(msg);
+    } else {
+      // Non-streaming messages remain as individual items
+      grouped.set(msg.conversation_id || msg.timestamp || Math.random(), msg);
+    }
+  });
+  
+  return Array.from(grouped.values()).sort((a, b) => {
+    const aTime = new Date(a.timestamp || 0);
+    const bTime = new Date(b.timestamp || 0);
+    return aTime - bTime;
+  });
 });
 </script>
 
