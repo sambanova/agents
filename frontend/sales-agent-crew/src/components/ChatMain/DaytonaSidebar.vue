@@ -452,10 +452,14 @@ function processStreamingEvents(events) {
           // Extract charts from Daytona response
           const content = event.data.content || ''
           
-          // Look for chart attachments with improved regex - including .png files
-          const chartMatches = content.match(/!\[([^\]]*)\]\(attachment:([^)]+)\)/g)
-          if (chartMatches) {
-            chartMatches.forEach((match, idx) => {
+          // Look for chart attachments, data URLs, and Redis chart references
+          const attachmentMatches = content.match(/!\[([^\]]*)\]\(attachment:([^)]+)\)/g)
+          const dataUrlMatches = content.match(/!\[([^\]]*)\]\(data:image\/[^)]+\)/g)
+          const redisChartMatches = content.match(/!\[([^\]]*)\]\(redis-chart:([^:]+):([^)]+)\)/g)
+          
+          // Handle attachment-based charts (legacy)
+          if (attachmentMatches) {
+            attachmentMatches.forEach((match, idx) => {
               const titleMatch = match.match(/!\[([^\]]*)\]/)
               const idMatch = match.match(/attachment:([^)]+)/)
               
@@ -474,7 +478,58 @@ function processStreamingEvents(events) {
                   downloadUrl: imageUrl
                 })
                 chartCount++
-                console.log(`Added chart: ${title} with ID: ${chartId}`)
+                console.log(`Added attachment chart: ${title} with ID: ${chartId}`)
+              }
+            })
+          }
+          
+          // Handle data URL-based charts (legacy)
+          if (dataUrlMatches) {
+            dataUrlMatches.forEach((match, idx) => {
+              const titleMatch = match.match(/!\[([^\]]*)\]/)
+              const urlMatch = match.match(/\]\(([^)]+)\)/)
+              
+              if (urlMatch) {
+                const dataUrl = urlMatch[1]
+                const title = titleMatch && titleMatch[1] ? titleMatch[1] : `Chart ${chartCount + idx + 1}`
+                const chartId = `data_chart_${Date.now()}_${idx}`
+                
+                charts.value.push({
+                  id: chartId,
+                  title: title,
+                  url: dataUrl, // Use data URL directly
+                  loading: false,
+                  downloadUrl: dataUrl // Data URLs can be used for download too
+                })
+                chartCount++
+                console.log(`Added data URL chart: ${title}`)
+              }
+            })
+          }
+          
+          // Handle Redis chart references (new preferred method)
+          if (redisChartMatches) {
+            redisChartMatches.forEach((match, idx) => {
+              const titleMatch = match.match(/!\[([^\]]*)\]/)
+              const redisMatch = match.match(/redis-chart:([^:]+):([^)]+)/)
+              
+              if (redisMatch) {
+                const chartId = redisMatch[1]
+                const userId = redisMatch[2]
+                const title = titleMatch && titleMatch[1] ? titleMatch[1] : `Chart ${chartCount + idx + 1}`
+                
+                // Create public URL with user_id parameter
+                const imageUrl = `/api/files/${chartId}/public?user_id=${userId}`
+                
+                charts.value.push({
+                  id: chartId,
+                  title: title,
+                  url: imageUrl, // Use public endpoint
+                  loading: false,
+                  downloadUrl: imageUrl
+                })
+                chartCount++
+                console.log(`Added Redis chart: ${title} with ID: ${chartId} for user: ${userId}`)
               }
             })
           }
@@ -482,8 +537,10 @@ function processStreamingEvents(events) {
           // Extract analysis text (everything before any image attachments)
           let analysisText = content
           
-          // Remove all image attachments
+          // Remove all image attachments (attachment URLs, data URLs, and Redis charts)
           analysisText = analysisText.replace(/!\[[^\]]*\]\(attachment:[^)]+\)/g, '')
+          analysisText = analysisText.replace(/!\[[^\]]*\]\(data:image\/[^)]+\)/g, '')
+          analysisText = analysisText.replace(/!\[[^\]]*\]\(redis-chart:[^)]+\)/g, '')
           
           // Remove any remaining ![Chart or ![Image references
           analysisText = analysisText.split('![Chart')[0].split('![Image')[0].split('![plot')[0]

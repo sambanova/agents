@@ -374,6 +374,8 @@ def _get_daytona(user_id: str):
                     image_id = str(uuid.uuid4())
                     content = sandbox.fs.download_file(filename)
                     print(f"Downloaded file {filename}: {len(content)} bytes")
+                    
+                    # Store in Redis for backup/download purposes
                     await put_file(
                         user_id,
                         image_id,
@@ -381,7 +383,13 @@ def _get_daytona(user_id: str):
                         title=filename,
                         format=extension,
                     )
-                    result_str += f"\n\n![{filename}](attachment:{image_id})"
+                    
+                    # For image files, use compact Redis references instead of data URLs
+                    if extension.lower() in ['png', 'jpg', 'jpeg', 'gif', 'svg']:
+                        result_str += f"\n\n![{filename}](redis-chart:{image_id}:{user_id})"
+                    else:
+                        # For non-image files, still use attachment reference
+                        result_str += f"\n\n![{filename}](attachment:{image_id})"
                 except Exception as e:
                     print(f"Error downloading file {filename}: {e}")
 
@@ -393,14 +401,18 @@ def _get_daytona(user_id: str):
                     title = chart.title or f"Chart {i+1}"
                     try:
                         if chart.png:
-                            # Chart.png should be base64 string, convert to bytes
+                            # Chart.png should be base64 string, convert to bytes for storage
                             import base64
                             chart_data = base64.b64decode(chart.png)
+                            
+                            # Store in Redis for backup/download purposes
                             await put_file(
                                 user_id, image_id, data=chart_data, title=title, format="png"
                             )
-                            result_str += f"\n\n![{title}](attachment:{image_id})"
-                            print(f"Successfully stored chart {i}: {title}")
+                            
+                            # Use compact Redis reference instead of data URL to save context
+                            result_str += f"\n\n![{title}](redis-chart:{image_id}:{user_id})"
+                            print(f"Successfully stored chart {i}: {title} with ID: {image_id}")
                         else:
                             print(f"Chart {i} has no PNG data")
                             result_str += f"\n\n**Chart Generated:** {title}"
