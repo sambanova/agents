@@ -16,12 +16,51 @@ from langgraph.graph.message import MessageGraph
 from agents.components.compound.prompts import xml_template
 from agents.components.compound.message_types import LiberalFunctionMessage
 from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.redis import RedisSaver
-
-
+import os
+from langgraph.checkpoint.redis import AsyncRedisSaver
 from langgraph.checkpoint.memory import InMemorySaver
 
-memory = InMemorySaver()
+
+# Configure Redis checkpointer with fallback to memory
+# You'll need to install: pip install langgraph-checkpoint-redis
+# Make sure Redis server is running with RedisJSON + RediSearch modules (Redis 8.0+ includes these by default)
+
+# Get Redis connection string from environment or use default
+redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+
+
+# Simple approach: use Redis directly without context manager pattern
+try:
+    from redis.asyncio import Redis as AsyncRedis
+
+    # Optional: Configure TTL for automatic cleanup
+    ttl_config = {
+        "default_ttl": int(
+            os.getenv("REDIS_CHECKPOINT_TTL_MINUTES", 60 * 24)
+        ),  # Default 24 hours
+        "refresh_on_read": os.getenv("REDIS_REFRESH_ON_READ", "true").lower() == "true",
+    }
+
+    # Create async Redis client
+    async_redis_client = AsyncRedis.from_url(redis_url)
+
+    # Create async Redis checkpointer with TTL configuration
+    checkpointer = AsyncRedisSaver(redis_client=async_redis_client, ttl=ttl_config)
+
+    # Initialize Redis indices (only needed once, but safe to call multiple times)
+    checkpointer.setup()
+
+    print(f"✅ Successfully initialized Redis checkpointer at {redis_url}")
+    print(
+        f"   TTL: {ttl_config['default_ttl']} minutes, Refresh on read: {ttl_config['refresh_on_read']}"
+    )
+
+except Exception as e:
+    print(f"⚠️  Could not setup Redis checkpointer: {e}")
+    print("Falling back to in-memory checkpointer")
+    print("To use Redis: ensure Redis is running with RedisJSON and RediSearch modules")
+    print("Installation: pip install langgraph-checkpoint-redis")
+    checkpointer = InMemorySaver()
 
 
 class ToolInvocation:
@@ -240,7 +279,7 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
         workflow.add_edge(f"subgraph_{subgraph_name}", END)
 
     return workflow.compile(
-        checkpointer=memory,
+        checkpointer=checkpointer,
     )
 
 
