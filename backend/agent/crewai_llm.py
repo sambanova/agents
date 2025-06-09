@@ -159,7 +159,21 @@ class CustomLLM(LLM):
                     message_headers = ""
                 
                 logger.info(f"CrewAI LLM {self.model} calling litellm.completion with messages: {message_headers}")
-                response = litellm.completion(**params)
+                try:
+                    response = litellm.completion(**params)
+                except litellm.APIError as e:
+                    # If it's a Sambanova exception, retry once
+                    if "SambanovaException" in str(e):
+                        logger.warning(f"Sambanova error occurred, retrying once: {e}")
+                        time.sleep(1)  # Brief pause before retry
+                        try:
+                            response = litellm.completion(**params)
+                        except Exception as retry_e:
+                            logger.error(f"Retry failed: {retry_e}")
+                            raise
+                    else:
+                        logger.error(f"Error calling litellm.completion: {e}")
+                        raise
                 duration = time.time() - start_time
                 if duration > 10:
                     logger.warning(f"CrewAI LLM {self.model} took {duration:.2f} seconds to complete task")

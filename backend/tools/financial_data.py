@@ -1,18 +1,16 @@
 import os
 import pandas as pd
 import httpx
+import requests_cache
 import yfinance as yf
 from typing import Dict, Any, List
-from cachetools import cached, TTLCache
-from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
+from tenacity import retry, stop_after_attempt, wait_exponential, RetryError, retry_if_exception
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from utils.logging import logger
 
 rapidapi_key = os.getenv("RAPIDAPI_KEY")
-
-# Create a cache that expires after 12 hours (12 * 60 * 60 seconds)
-cache = TTLCache(maxsize=1024, ttl=12 * 60 * 60)
+insightsentry_api_key = os.getenv("INSIGHTSENTRY_API_KEY")
 
 # Define a shared timeout configuration
 # total cap 15s, connect 5s, read 10s
@@ -40,72 +38,69 @@ def get_date_range(period):
     
     return start_date, today
 
-
-@cached(cache)
 def get_ticker_yfinance(symbol):
-    """
-    Fetches a given stock symbol using yfinance.
-    """
-    logger.info(f"Fetching ticker for {symbol}")
-    return yf.Ticker(symbol)
-
-@cached(cache)
-def get_ticker_info_yfinance(symbol):
     """
     Fetches ticker info for a given stock symbol using yfinance.
     """
     logger.info(f"Fetching ticker info for {symbol}")
-    return get_ticker_yfinance(symbol).info
+    return yf.Ticker(symbol)
 
-@cached(cache)
-def get_ticker_financials_yfinance(symbol):
+def get_ticker_info_yfinance(ticker: yf.Ticker):
+    """
+    Fetches ticker info for a given stock symbol using yfinance.
+    """
+    with requests_cache.enabled(backend='memory', expire_after=3600):
+        logger.info(f"Fetching ticker info for {ticker}")
+        return ticker.info
+
+def get_ticker_financials_yfinance(ticker: yf.Ticker):
     """
     Fetches financials for a given stock symbol using yfinance.
     """
-    logger.info(f"Fetching financials for {symbol}")
-    return get_ticker_yfinance(symbol).financials
+    with requests_cache.enabled(backend='memory', expire_after=3600):
+        logger.info(f"Fetching financials for {ticker}")
+        return ticker.financials
 
-@cached(cache)
-def get_ticker_balance_sheet_yfinance(symbol):
+def get_ticker_balance_sheet_yfinance(ticker: yf.Ticker):
     """
     Fetches balance sheet for a given stock symbol using yfinance.
     """
-    logger.info(f"Fetching balance sheet for {symbol}")
-    return get_ticker_yfinance(symbol).balance_sheet
+    with requests_cache.enabled(backend='memory', expire_after=3600):
+        logger.info(f"Fetching balance sheet for {ticker}")
+        return ticker.balance_sheet
 
-@cached(cache)
-def get_ticker_cashflow_yfinance(symbol):
+def get_ticker_cashflow_yfinance(ticker: yf.Ticker):
     """
     Fetches cash flow for a given stock symbol using yfinance.
     """
-    logger.info(f"Fetching cash flow for {symbol}")
-    return get_ticker_yfinance(symbol).cashflow
+    with requests_cache.enabled(backend='memory', expire_after=3600):
+        logger.info(f"Fetching cash flow for {ticker}")
+        return ticker.cashflow
 
-@cached(cache)
-def get_ticker_quarterly_financials_yfinance(symbol):
+def get_ticker_quarterly_financials_yfinance(ticker: yf.Ticker):
     """
     Fetches quarterly financials for a given stock symbol using yfinance.
     """
-    logger.info(f"Fetching quarterly financials for {symbol}")
-    return get_ticker_yfinance(symbol).quarterly_financials
+    with requests_cache.enabled(backend='memory', expire_after=3600):
+        logger.info(f"Fetching quarterly financials for {ticker}")
+        return ticker.quarterly_financials
 
-@cached(cache)
-def get_ticker_dividends_yfinance(symbol):
+def get_ticker_dividends_yfinance(ticker: yf.Ticker):
     """
     Fetches dividends for a given stock symbol using yfinance.
     """
-    logger.info(f"Fetching dividends for {symbol}")
-    return get_ticker_yfinance(symbol).dividends
+    with requests_cache.enabled(backend='memory', expire_after=3600):
+        logger.info(f"Fetching dividends for {ticker}")
+        return ticker.dividends
 
-@cached(cache)
-def get_price_data_yfinance(symbol, interval, period):
+def get_price_data_yfinance(ticker: yf.Ticker, interval, period):
     """
     Fetches price data for a given stock symbol using yfinance.
     """
-    logger.info(f"Fetching price data for {symbol} (interval={interval}, period={period})")
-    return get_ticker_yfinance(symbol).history(interval=interval, period=period)
+    with requests_cache.enabled(backend='memory', expire_after=3600):
+        logger.info(f"Fetching price data for {ticker} (interval={interval}, period={period})")
+        return ticker.history(interval=interval, period=period)
 
-@cached(cache)
 def get_price_data(symbol, interval="1wk", period="3mo"):
     """
     Fetches daily close prices for `symbol` (US stocks only),
@@ -158,9 +153,20 @@ def log_retry_attempt(retry_state):
         f"(Attempt {retry_state.attempt_number}, waiting {retry_state.next_action.sleep:.2f}s)..."
     )
 
+def should_retry_http_error(exception: BaseException) -> bool:
+    """Return True if we should retry, False otherwise."""
+    if isinstance(exception, httpx.HTTPStatusError):
+        # Do not retry on 4xx client errors
+        if 400 <= exception.response.status_code < 500:
+            logger.warning(f"Not retrying due to client error: {exception.response.status_code}")
+            return False
+    # Retry on other errors (e.g., 5xx server errors, connection errors)
+    return True
+
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry_error_callback=should_retry_http_error,
     reraise=True,
     before_sleep=log_retry_attempt # Log before sleeping on retry
 )
@@ -191,7 +197,6 @@ def _fetch_yahoo_module_data(symbol: str, module: str, rapidapi_key: str) -> Dic
         logger.error(f"Unexpected error fetching {module} for {symbol}: {e}")
         return {}
 
-@cached(cache)
 def get_fundamental_data(symbol: str, include_income_statement: bool = False) -> Dict[str, Any]:
     """
     Fetches fundamental data for a given stock symbol by calling the Yahoo Finance API
@@ -241,3 +246,120 @@ def get_fundamental_data(symbol: str, include_income_statement: bool = False) ->
 
     logger.info(f"Finished fundamental data fetch for {symbol}.")
     return processed_data
+
+
+#### INSIGHTSENTRY ####
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception(should_retry_http_error),
+    reraise=True,
+    before_sleep=log_retry_attempt
+)
+def _fetch_insightsentry_data_with_retry(url: str, insightsentry_api_key: str, query_string: Dict = {}) -> Dict[str, Any]:
+    """Helper function to fetch data from InsightsEntry API with retries, avoiding retries on 4xx errors."""
+    headers = {
+        "x-rapidapi-key": insightsentry_api_key,
+        "x-rapidapi-host": "insightsentry.p.rapidapi.com"
+    }
+    # Use httpx.Client with the defined timeout within the retried function
+    with httpx.Client(timeout=timeout_config) as client:
+        if query_string:
+            response = client.get(url, headers=headers, params=query_string)
+        else:
+            response = client.get(url, headers=headers)
+        response.raise_for_status() # Raises HTTPStatusError for bad responses (4xx or 5xx) in httpx
+        return response.json()
+
+def get_fundamental_data_insightsentry(symbol: str, extended: bool = False) -> Dict[str, Any]:
+    """
+    Fetches fundamental data for a given stock symbol by calling the InsightsEntry API.
+    Returns an empty dictionary if data fetching fails.
+    """
+    logger.info(f"Starting fundamental data fetch for {symbol} (extended={extended})")
+    response_data = {}
+
+    try:
+        # Fetch base info
+        url = f"https://insightsentry.p.rapidapi.com/v2/symbols/{symbol}/info"
+        info_response = _fetch_insightsentry_data_with_retry(url, insightsentry_api_key)
+        if info_response: # Check if response is not empty/None
+            response_data.update(info_response)
+            logger.info(f"Successfully fetched base info for {symbol}.")
+        else:
+            logger.warning(f"Received empty base info response for {symbol}.")
+
+        # Fetch extended financials if requested
+        if extended:
+            try:
+                url = f"https://insightsentry.p.rapidapi.com/v2/symbols/{symbol}/financials"
+                financials_response = _fetch_insightsentry_data_with_retry(url, insightsentry_api_key)
+                if financials_response: # Check if response is not empty/None
+                    response_data.update(financials_response)
+                    logger.info(f"Successfully fetched extended financials for {symbol}.")
+                else:
+                    logger.warning(f"Received empty extended financials response for {symbol}.")
+            except (RetryError, httpx.HTTPError, Exception) as e:
+                logger.error(f"Error fetching extended financials for {symbol}: {e}. Proceeding with base info.")
+                # We don't return here, just log the error and continue with base data if available
+
+    except (RetryError, httpx.HTTPError, Exception) as e:
+        logger.error(f"Error fetching fundamental data for {symbol}: {e}")
+        return {} # Return empty dict if the initial 'info' call fails
+
+    if not response_data:
+        logger.warning(f"No fundamental data could be fetched for {symbol}.")
+
+    logger.info(f"Finished fundamental data fetch for {symbol}. Returning {'partial' if extended and 'financials' not in response_data else 'complete'} data.")
+    return response_data
+
+def get_historical_ohlcv_data_insightsentry(symbol: str, period: str = "3mo") -> pd.DataFrame:
+    """
+    Fetches historical OHLCV data for a given stock symbol using InsightsEntry API.
+    Returns an empty DataFrame if data fetching fails.
+    """
+    logger.info(f"Fetching historical OHLCV data for {symbol} (period={period})")
+    querystring = {"bar_interval": "1", "bar_type": "week", "extended": "false", "badj": "true", "dadj": "false"}
+    try:
+        url = f"https://insightsentry.p.rapidapi.com/v2/symbols/{symbol}/history"
+        response = _fetch_insightsentry_data_with_retry(url, insightsentry_api_key, querystring)
+
+        # Check if 'series' key exists and is not empty
+        if not response or 'series' not in response or not response['series']:
+            logger.warning(f"No historical data found for {symbol} in the response.")
+            return pd.DataFrame()
+
+        df = pd.DataFrame(response["series"])
+
+        start_date, _ = get_date_range(period)
+        start_date_str = start_date.strftime("%Y-%m-%d")
+        # Ensure 'time' column exists before processing
+        if 'time' not in df.columns:
+            logger.error(f"'time' column missing in historical data for {symbol}.")
+            return pd.DataFrame()
+
+        df['date'] = pd.to_datetime(df['time'], unit='s')
+        df.set_index('date', inplace=True)
+        df = df[start_date_str:].rename(columns={"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume"})
+        logger.info(f"Successfully fetched and processed historical OHLCV data for {symbol}")
+        return df.sort_index()
+
+    except (RetryError, httpx.HTTPError, ValueError, KeyError, Exception) as e:
+        logger.error(f"Error fetching or processing historical OHLCV data for {symbol}: {e}")
+        return pd.DataFrame()
+
+
+def search_symbol_insightsentry(query: str) -> Dict[str, Any]:
+    """
+    Searches InsightsEntry API for a given query.
+    """
+    try:
+        logger.info(f"Searching InsightsEntry for {query}")
+        url = f"https://insightsentry.p.rapidapi.com/v2/symbols/search"
+        querystring = {"query": query, "type": "stocks"}
+        search_response = _fetch_insightsentry_data_with_retry(url, insightsentry_api_key, querystring)
+        return search_response[0]["code"]
+    except (RetryError, httpx.HTTPError, ValueError, KeyError, Exception) as e:
+        logger.error(f"Error searching InsightsEntry for {query}: {e}")
+        return None

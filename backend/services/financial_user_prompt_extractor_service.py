@@ -62,6 +62,15 @@ class FinancialPromptExtractor:
         system_msg = (
             "You are an information extraction system. "
             "Extract exactly two keys: 'company_name' and 'ticker'."
+            "For example: "
+            "{{"
+            "  'company_name': 'Apple',"
+            "  'ticker': 'AAPL'"
+            "}}"
+            "{{"
+            "  'company_name': 'General Motors',"
+            "  'ticker': 'GM'"
+            "}}"
         )
         user_msg = f"""
         The user's prompt is: "{prompt}"

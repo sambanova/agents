@@ -29,10 +29,10 @@ from crewai import Agent, Task, Crew, LLM, Process
 from utils.agent_thought import RedisConversationLogger
 from crewai.tools import tool
 from crewai_tools import SerperDevTool
-from tools.competitor_analysis_tool import competitor_analysis_tool_rapidapi
-from tools.fundamental_analysis_tool import fundamental_analysis_tool_rapidapi
-from tools.technical_analysis_tool import yf_tech_analysis_rapidapi
-from tools.risk_assessment_tool import risk_assessment_tool_rapidapi
+from tools.competitor_analysis_tool import competitor_analysis_tool
+from tools.fundamental_analysis_tool import fundamental_analysis_tool
+from tools.technical_analysis_tool import yf_tech_analysis
+from tools.risk_assessment_tool import risk_assessment_tool
 from config.model_registry import model_registry
 
 
@@ -250,6 +250,7 @@ class FinancialAnalysisCrew:
             llm=self.competitor_finder_llm,
             allow_delegation=False,
             verbose=self.verbose,
+            max_iter=1
         )
 
         # 2) competitor analysis
@@ -258,9 +259,10 @@ class FinancialAnalysisCrew:
             goal="Fetch fundamental details (market cap, margins, growth, short ratio) for the given `competitor_tickers` using the 'Competitor Analysis Tool'.",
             backstory="Data retrieval specialist. Executes the 'Competitor Analysis Tool' once per ticker and returns structured data.",
             llm=self.llm,
-            tools=[competitor_analysis_tool_rapidapi],
+            tools=[competitor_analysis_tool],
             allow_delegation=False,
             verbose=self.verbose,
+            max_iter=1
         )
 
         # 3) fundamental
@@ -269,7 +271,7 @@ class FinancialAnalysisCrew:
             goal="Retrieve comprehensive fundamental data (including `advanced_fundamentals` and `dividend_history`) for {ticker} using the 'Fundamental Analysis Tool'.",
             backstory="Financial data specialist. Executes the `fundamental_analysis_tool` once for {ticker} and returns the complete `FundamentalData` object.",
             llm=self.llm,
-            tools=[fundamental_analysis_tool_rapidapi],
+            tools=[fundamental_analysis_tool],
             allow_delegation=False,
             verbose=self.verbose,
         )
@@ -280,9 +282,10 @@ class FinancialAnalysisCrew:
             goal="Obtain 3-month weekly technical data (including price data for charting) for {ticker} using the 'Technical Analysis Tool'.",
             backstory="Technical data specialist. Executes `yf_tech_analysis` once with period='3mo' for {ticker}. Returns `TechnicalData`, ensuring `stock_price_data` is populated.",
             llm=self.llm,
-            tools=[yf_tech_analysis_rapidapi],
+            tools=[yf_tech_analysis],
             allow_delegation=False,
             verbose=self.verbose,
+            max_iter=1
         )
 
         # 5) risk
@@ -291,9 +294,10 @@ class FinancialAnalysisCrew:
             goal="Calculate key risk metrics (Beta, Sharpe, VaR, Max Drawdown, Volatility) for {ticker} using the 'Risk Assessment Tool'.",
             backstory="Risk analysis specialist. Executes `risk_assessment_tool` once for {ticker}. Returns `RiskData`, including monthly-averaged daily returns.",
             llm=self.llm,
-            tools=[risk_assessment_tool_rapidapi],
+            tools=[risk_assessment_tool],
             allow_delegation=False,
             verbose=self.verbose,
+            max_iter=1
         )
 
         # 6) news
@@ -412,7 +416,7 @@ class FinancialAnalysisCrew:
     def _init_tasks(self):
         # 1) competitor tasks => sequential
         self.enhanced_competitor_task = Task(
-            description="Find competitor tickers for {ticker}. Return competitor_tickers",
+            description="Find 3 competitor tickers for {ticker}. Return competitor_tickers",
             agent=self.enhanced_competitor_agent,
             expected_output="competitor_tickers[]",
             max_iterations=1
@@ -434,7 +438,7 @@ class FinancialAnalysisCrew:
             max_iterations=1
         )
         self.technical_task = Task(
-            description="Execute `yf_tech_analysis` for {ticker} with `period='3mo'`. Output the structured `TechnicalData` object, including `stock_price_data`.",
+            description="Execute `tech_analysis_insightsentry` for {ticker}. Output the structured `TechnicalData` object, including `stock_price_data`.",
             agent=self.technical_agent,
             expected_output="TechnicalData with stock_price_data.",
             async_execution=True,

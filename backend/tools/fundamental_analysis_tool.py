@@ -1,10 +1,55 @@
+from datetime import datetime
 import yfinance as yf
 from typing import Dict, Any, List
 from crewai.tools import tool
 
-from tools.financial_data import get_fundamental_data, get_ticker_balance_sheet_yfinance, get_ticker_cashflow_yfinance, get_ticker_dividends_yfinance, get_ticker_financials_yfinance, get_ticker_info_yfinance, get_ticker_quarterly_financials_yfinance
-
+from tools.financial_data import get_fundamental_data, get_fundamental_data_insightsentry, get_ticker_balance_sheet_yfinance, get_ticker_cashflow_yfinance, get_ticker_dividends_yfinance, get_ticker_financials_yfinance, get_ticker_info_yfinance, get_ticker_quarterly_financials_yfinance, get_ticker_yfinance
+from utils.logging import logger
 ###################### FUNDAMENTAL ANALYSIS TOOL ######################
+
+def _generate_quarterly_data_with_labels(total_revenue_values: List[Any], net_income_values: List[Any]) -> List[Dict[str, Any]]:
+    """
+    Generates a list of quarterly financial data with date labels starting
+    from the previous quarter and going backwards.
+    """
+    quarterly_csv = []
+    num_quarters_to_generate = len(total_revenue_values)
+
+    if num_quarters_to_generate > 0:
+        now = datetime.now()
+        current_label_year = now.year
+        
+        if now.month <= 3:
+            pq_label_num = 4
+            current_label_year -= 1
+        elif now.month <= 6:
+            pq_label_num = 1
+        elif now.month <= 9:
+            pq_label_num = 2
+        else:
+            pq_label_num = 3
+        
+        for i in range(num_quarters_to_generate):
+            quarter_label = f"Q{pq_label_num} {current_label_year}"
+            
+            current_total_rev = total_revenue_values[i] if i < len(total_revenue_values) else None
+            current_net_inc = net_income_values[i] if i < len(net_income_values) else None
+
+            quarterly_csv.append({
+                "date": quarter_label,
+                "total_revenue": str(current_total_rev) if current_total_rev is not None else None,
+                "net_income": str(current_net_inc) if current_net_inc is not None else None
+            })
+
+            pq_label_num -= 1
+            if pq_label_num == 0:
+                pq_label_num = 4
+                current_label_year -= 1
+                
+    quarterly_csv.reverse()
+    return quarterly_csv
+
+@tool('Fundamental Analysis Tool')
 def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
     """
     Retrieve fundamentals from yfinance: 
@@ -13,36 +58,42 @@ def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
     - dividend_history
     - quarterly_fundamentals
     """
-    info = get_ticker_info_yfinance(ticker)
 
-    result = {
-        "ticker": ticker,
-        "company_name": info.get("longName",""),
-        "sector": info.get("sector",""),
-        "industry": info.get("industry",""),
-        "market_cap": str(info.get("marketCap","")),
-        "pe_ratio": str(info.get("trailingPE","")),
-        "forward_pe": str(info.get("forwardPE","")),
-        "peg_ratio": str(info.get("pegRatio","")),
-        "ps_ratio": str(info.get("priceToSalesTrailing12Months","")),
-        "price_to_book": str(info.get("priceToBook","")),
-        "dividend_yield": str(info.get("dividendYield","")),
-        "beta": str(info.get("beta","")),
-        "year_high": str(info.get("fiftyTwoWeekHigh","")),
-        "year_low": str(info.get("fiftyTwoWeekLow","")),
-        "analyst_recommendation": info.get("recommendationKey",""),
-        "target_price": str(info.get("targetMeanPrice","")),
-        "earnings_per_share": str(info.get("trailingEps","")),
-        "profit_margins": str(info.get("profitMargins","")),
-        "operating_margins": str(info.get("operatingMargins","")),
-        "ebitda_margins": str(info.get("ebitdaMargins","")),
-        "short_ratio": str(info.get("shortRatio","")),
-    }
+    try:
+        ticker_yfinance = get_ticker_yfinance(ticker)
+        info = get_ticker_info_yfinance(ticker_yfinance)
+
+        result = {
+            "ticker": ticker,
+            "company_name": info.get("longName",""),
+            "sector": info.get("sector",""),
+            "industry": info.get("industry",""),
+            "market_cap": str(info.get("marketCap","")),
+            "pe_ratio": str(info.get("trailingPE","")),
+            "forward_pe": str(info.get("forwardPE","")),
+            "peg_ratio": str(info.get("pegRatio","")),
+            "ps_ratio": str(info.get("priceToSalesTrailing12Months","")),
+            "price_to_book": str(info.get("priceToBook","")),
+            "dividend_yield": str(info.get("dividendYield","")),
+            "beta": str(info.get("beta","")),
+            "year_high": str(info.get("fiftyTwoWeekHigh","")),
+            "year_low": str(info.get("fiftyTwoWeekLow","")),
+            "analyst_recommendation": info.get("recommendationKey",""),
+            "target_price": str(info.get("targetMeanPrice","")),
+            "earnings_per_share": str(info.get("trailingEps","")),
+            "profit_margins": str(info.get("profitMargins","")),
+            "operating_margins": str(info.get("operatingMargins","")),
+            "ebitda_margins": str(info.get("ebitdaMargins","")),
+            "short_ratio": str(info.get("shortRatio","")),
+        }
+    except Exception as e:
+        logger.error(f"Error fetching fundamental analysis data for {ticker}: {e}")
+        results = {}
 
     # Attempt advanced statement analysis
-    fin = get_ticker_financials_yfinance(ticker)
-    bs = get_ticker_balance_sheet_yfinance(ticker)
-    cf = get_ticker_cashflow_yfinance(ticker)
+    fin = get_ticker_financials_yfinance(ticker_yfinance)
+    bs = get_ticker_balance_sheet_yfinance(ticker_yfinance)
+    cf = get_ticker_cashflow_yfinance(ticker_yfinance)
 
     current_ratio = None
     debt_to_equity = None
@@ -96,8 +147,8 @@ def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
                 ocf = cf.loc["Operating Cash Flow"].iloc[0]
                 capex = cf.loc["Capital Expenditures"].iloc[0]
                 free_cash_flow = float(ocf) - float(capex)
-    except:
-        pass
+    except Exception as e:
+        logger.error(f"Error fetching advanced statement analysis data for {ticker}: {e}")
 
     result["current_ratio"] = str(current_ratio if current_ratio else "")
     result["debt_to_equity"] = str(debt_to_equity if debt_to_equity else "")
@@ -109,7 +160,7 @@ def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
 
     quarterly_csv = []
     try:
-        qfin = get_ticker_quarterly_financials_yfinance(ticker)
+        qfin = get_ticker_quarterly_financials_yfinance(ticker_yfinance)
         if qfin is not None and not qfin.empty:
             for date_col in qfin.columns:
                 col_str = str(date_col.date()) if hasattr(date_col, "date") else str(date_col)
@@ -126,8 +177,8 @@ def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
                 })
             # Sort the quarterly data by date (oldest to newest)
             quarterly_csv.sort(key=lambda x: x["date"])
-    except:
-        pass
+    except Exception as e:
+        logger.error(f"Error fetching quarterly fundamentals data for {ticker}: {e}")
 
     result["quarterly_fundamentals"] = quarterly_csv
 
@@ -139,11 +190,15 @@ def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
 
     div_hist = []
     try:
-        dividends = get_ticker_dividends_yfinance(ticker)
-        for dt, val in dividends.iteritems():
-            div_hist.append({"date": str(dt.date()), "dividend": float(val)})
-    except:
-        pass
+        dividends = get_ticker_dividends_yfinance(ticker_yfinance)
+        # Check if dividends Series is valid and non-empty before processing
+        if dividends is not None and not dividends.empty:
+            div_hist = [
+                {"date": str(dt.date()), "dividend": float(val)}
+                for dt, val in dividends.items()
+            ]
+    except Exception as e:
+        logger.error(f"Error fetching dividend history data for {ticker}: {e}")
 
     return {
         "ticker": ticker,
@@ -151,7 +206,7 @@ def fundamental_analysis_tool(ticker: str) -> Dict[str, Any]:
         "advanced_fundamentals": adv_data,
         "dividend_history": div_hist
     }
-@tool('Fundamental Analysis Tool')
+
 def fundamental_analysis_tool_rapidapi(ticker: str) -> Dict[str, Any]:
     """
     Retrieve fundamentals from yfinance: 
@@ -212,6 +267,78 @@ def fundamental_analysis_tool_rapidapi(ticker: str) -> Dict[str, Any]:
 
     div_hist = []
     # TODO: add dividend history (not available in current data)
+
+    return {
+        "ticker": ticker,
+        **result,
+        "advanced_fundamentals": adv_data,
+        "dividend_history": div_hist
+    }
+
+
+def fundamental_analysis_tool_insightsentry(ticker: str) -> Dict[str, Any]:
+    """
+    Retrieve fundamentals from InsightsEntry: 
+    - standard fields
+    - advanced_fundamentals
+    - dividend_history
+    - quarterly_fundamentals
+    """
+
+    info = get_fundamental_data_insightsentry(ticker, extended=True)
+    ebitda_margin = info.get("data", {}).get("profitability", {}).get("ebitda_margin_current", "")
+    if ebitda_margin != "":
+        ebitda_margin = str(ebitda_margin / 100)
+    result = {
+        "ticker": ticker,
+        "company_name": info.get("description",""),
+        "sector": info.get("data", {}).get("company_info", {}).get("sector", ""),
+        "industry": info.get("data", {}).get("company_info", {}).get("industry", ""),
+        "market_cap": str(info.get("market_cap", "")),
+        "pe_ratio": str(info.get("data", {}).get("valuation_ratios", {}).get("price_earnings", "")),
+        "forward_pe": str(info.get("data", {}).get("valuation_ratios", {}).get("price_earnings_fy", "")),
+        "peg_ratio": "",
+        "ps_ratio": str(info.get("data", {}).get("valuation_ratios", {}).get("price_sales_current", "")),
+        "price_to_book": str(info.get("data", {}).get("valuation_ratios", {}).get("price_book_current", "")),
+        "dividend_yield": str(info.get("data", {}).get("dividends", {}).get("dividends_yield_current", "")),
+        "beta": "",
+        "year_high": "",
+        "year_low": "",
+        "analyst_recommendation": "",
+        "target_price": str(info.get("data", {}).get("price_targets", {}).get("price_target_average", "")),
+        "earnings_per_share": str(info.get("earnings_per_share_basic_ttm","")),
+        "profit_margins": str(info.get("data", {}).get("profitability", {}).get("net_margin", "")),
+        "operating_margins": str(info.get("data", {}).get("profitability", {}).get("operating_margin", "")),
+        "ebitda_margins": ebitda_margin,
+        "short_ratio": "",
+        "current_ratio": str(info.get("data", {}).get("balance_sheet", {}).get("current_ratio", "")),
+        "debt_to_equity": str(info.get("data", {}).get("balance_sheet", {}).get("debt_to_equity_fy", "")),
+        "return_on_equity": str(info.get("data", {}).get("profitability", {}).get("return_on_equity", "")),
+        "return_on_assets": str(info.get("data", {}).get("profitability", {}).get("return_on_assets", "")),
+        "revenue_growth": "",
+        "free_cash_flow": str(info.get("data", {}).get("cash_flow", {}).get("free_cash_flow_ttm", "")),
+    }
+
+
+    total_revenue_values = info.get("data", {}).get("income_statement", {}).get("total_revenue_fq_h", [])
+    net_income_values = info.get("data", {}).get("income_statement", {}).get("net_income_fq_h", [])
+    
+    quarterly_csv = _generate_quarterly_data_with_labels(total_revenue_values, net_income_values)
+                
+    result["quarterly_fundamentals"] = quarterly_csv
+
+    adv_data = {}
+    adv_data["shares_outstanding"] = str(info.get("data", {}).get("income_statement", {}).get("basic_shares_outstanding_fy", ""))
+    adv_data["float_shares"] = ""
+    adv_data["enterprise_value"] = ""
+    adv_data["book_value"] = str(info.get("data", {}).get("valuation_ratios", {}).get("book_per_share_fy", ""))
+
+    div_hist = []
+    dividend_ex_date_h = info.get("data", {}).get("dividends", {}).get("dividend_ex_date_h", [])
+    dividend_amount_h = info.get("data", {}).get("dividends", {}).get("dividend_amount_h", [])
+    for dt, val in zip(dividend_ex_date_h, dividend_amount_h):
+        dt = datetime.fromtimestamp(dt)
+        div_hist.append({"date": str(dt.date()), "dividend": float(val)})
 
     return {
         "ticker": ticker,
