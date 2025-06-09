@@ -5,14 +5,14 @@
       ref="container"
       class="relative h-full flex  overflow-x-hidden overflow-y-auto"
        :class="
-          messagesData.length == 0 ? 'justify-center align-center flex-col' : 'flex-col'
+          (messagesData.length == 0&&streamData.length==0 )? 'justify-center align-center flex-col' : 'flex-col'
         "
     >
      
       <div
         class=" w-full flex mx-auto"
         :class="
-          messagesData.length == 0 ? 'justify-center align-center flex-col' : 'flex-1'
+          messagesData.length == 0&&streamData.length==0 ? 'justify-center align-center flex-col' : 'flex-1'
         "
       >
        <!-- Sticky Top Component -->
@@ -44,7 +44,7 @@
         </div>
       </div>
         <!-- Title -->
-        <div v-if="messagesData.length == 0" class="w-full text-center">
+        <div v-if="messagesData.length == 0&&streamData.length==0" class="w-full text-center">
           <h1 v-if="!initialLoading" class="text-3xl font-bold sm:text-3xl">
             <span class="bg-clip-text text-primary-brandTextSecondary dark:text-primary-brandTextSecondary-dark">
               What can I help you with?
@@ -58,8 +58,18 @@
           tag="ul"
           class="mt-16 max-w-4xl w-full mx-auto space-y-5"
         >
+            <li 
+            v-if="streamData.length>0"
+            key="loading" class="px-4">
+        <StatusAnimationBox
+          :isLoading="isLoading"
+          :title="toolName?toolName:'Loading...'"
+          :content="combinedContent"
+        />
+      </li>
           <!-- Chat Bubble -->
           <ChatBubble
+          
             v-for="msgItem in filteredMessages"
             :metadata="completionMetaData"
             :workflowData="
@@ -67,6 +77,8 @@
                 (item) => item.message_id === msgItem.message_id
               )
             "
+            
+             :streamData="streamData"  
             :plannerText="
               plannerTextData.filter(
                 (item) => item.message_id === msgItem.message_id
@@ -78,8 +90,11 @@
             :messageId="msgItem.message_id"
             :provider="provider"
             :currentMsgId="currentMsgId"
+            :isLoading="true"
           />
-          <ChatLoaderBubble
+       
+
+          <!-- <ChatLoaderBubble
             :workflowData="
               workflowData.filter((item) => item.message_id === currentMsgId)
             "
@@ -93,7 +108,7 @@
             "
             :provider="provider"
             :messageId="currentMsgId"
-          />
+          /> -->
           <!-- End Chat Bubble -->
         </transition-group>
         
@@ -102,7 +117,7 @@
       <!-- Documents Section -->
       <div 
        :class="
-          messagesData.length == 0 ? 'justify-center align-center flex-col' : 'sticky'
+          messagesData.length == 0&&streamData.length == 0 ? 'justify-center align-center flex-col' : 'sticky'
         "
       class=" z-1000 bottom-0 left-0 right-0 bg-white dark:bg-gray-900 p-2">
         <div class=" z-10">
@@ -430,6 +445,7 @@ import { XMarkIcon } from '@heroicons/vue/24/outline';
 import HorizontalScroll from '@/components/Common/UIComponents/HorizontalScroll.vue';
 import emitterMitt from '@/utils/eventBus.js';
 import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue';
+import StatusAnimationBox from './StatusAnimationBox.vue';
 
 // Inject the shared selectedOption from MainLayout.vue.
 const selectedOption = inject('selectedOption');
@@ -511,6 +527,49 @@ function handleKeyDown(e) {
   }
 }
 
+// 1) Combine all streaming chunks
+const combinedContent = computed(() =>
+  streamData.value
+    .filter(e => e.event === 'llm_stream_chunk')
+    .sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp))
+    .map(e => e.content)
+    .join('')
+)
+
+// 2) Extract <tool>…</tool> for title
+const rawToolName = computed(() => {
+  const m = combinedContent.value.match(/<tool>([^<]+)<\/tool>/i)
+  return m ? m[1] : ''
+})
+
+const toolName = computed(() => {
+  const ev = streamData.value.find(
+    e =>
+      e.event === 'agent_completion' &&
+      e.additional_kwargs?.agent_type === 'react_tool' &&
+      typeof e.content === 'string'
+  )
+  if (!ev) return ''
+  const m = ev.content.match(/<tool>([^<]+)<\/tool>/i)
+  if (!m) return ''
+
+  // Strip "search_" prefix (case‐insensitive)
+  const raw = m[1].replace(/^search_/i, '')
+  // Upper-case it
+  const upper = raw.toUpperCase()
+
+  // Guarantee the space
+  return `Calling: ${upper}`
+})
+
+
+
+
+const title = computed(() =>
+  rawToolName.value
+    ? `Searching ${rawToolName.value.replace(/[_-]/g,' ')}`
+    : 'Loading…'
+)
 function handleKeydownScroll(event) {
   const container = scrollContainer.value;
   if (!container) return;
@@ -582,6 +641,8 @@ const assistantThinking = ref(false);
 const isLoading = ref(false);
 const initialLoading = ref(false);
 const messagesContainer = ref(null);
+const streamData = ref([]);
+
 
 // Conversation change watcher:
 watch(
@@ -592,6 +653,7 @@ watch(
       errorMessage.value = '';
       completionMetaData.value = null;
       messagesData.value = [];
+        streamData.value = [];
       agentThoughtsData.value = [];
       searchQuery.value = '';
 
@@ -661,6 +723,7 @@ async function loadPreviousChat(convId) {
 const currentId = ref(route.params.id || '');
 
 const messagesData = ref([]);
+const streanData = ref([]);
 const workflowData = ref([]);
 const completionMetaData = ref(null);
 const agentThoughtsData = ref([]);
@@ -669,7 +732,7 @@ async function filterChat(msgData) {
   messagesData.value = msgData.messages
     .map(message => {
       // For agent_completion events, preserve the full data structure
-      if (message.event === 'agent_completion') {
+      if ((message.event === 'agent_completion')&&(message.type==="HumanMessage"||message.additional_kwargs.agent_type=="react_end")) {
         return {
           event: 'agent_completion',
           data: message,  // Pass the entire message object as data
@@ -1364,61 +1427,83 @@ async function connectWebSocket() {
         const receivedData = JSON.parse(event.data);
         
         // Handle new streaming events
-        if (receivedData.event === 'stream_start') {
-          console.log('Stream started:', receivedData);
-          // Add to messages for display
-          messagesData.value.push({
-            event: 'stream_start',
-            data: receivedData,
-            timestamp: new Date().toISOString()
-          });
-        } else if (receivedData.event === 'agent_completion') {
+        // if (receivedData.event === 'stream_start') {
+        //   console.log('Stream started:', receivedData);
+        //   // Add to messages for display
+        //   messagesData.value.push({
+        //     event: 'stream_start',
+        //     data: receivedData,
+        //     timestamp: new Date().toISOString()
+        //   });
+        // } else 
+        if (receivedData.event === 'agent_completion'&&receivedData.additional_kwargs?.agent_type	==="react_end"	) {
           console.log('Agent message stream:', receivedData);
           messagesData.value.push({
             event: 'agent_completion', 
             data: receivedData,
             timestamp: receivedData.timestamp || new Date().toISOString()
           });
-        } else if (receivedData.event === 'llm_stream_chunk') {
+            isLoading.value = false;
+        } 
+         else if (receivedData.event === 'llm_stream_chunk'||receivedData.event === 'agent_completion') {
           console.log('LLM stream chunk:', receivedData);
           const chunkId = receivedData.id;
           
-          if (chunkId) {
-            // Find existing message with the same ID
-            const existingIndex = messagesData.value.findIndex(
-              (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
-            );
+          streamData.value.push(receivedData)
+
+           streamData.value.sort(
+    (a, b) =>
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  )
+
+  console.log("streanData",streanData)
+          // if (chunkId) {
+          //   // Find existing message with the same ID
+          //   const existingIndex = messagesData.value.findIndex(
+          //     (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
+          //   );
             
-            if (existingIndex !== -1) {
-              // Accumulate content for existing message
-              const existingContent = messagesData.value[existingIndex].data?.content || '';
-              const newContent = receivedData.content || '';
-              messagesData.value[existingIndex].data.content = existingContent + newContent;
-            } else {
-              // Create new message for new ID
-              messagesData.value.push({
-                event: 'llm_stream_chunk',
-                data: receivedData, 
-                timestamp: new Date().toISOString()
-              });
-            }
-          } else {
-            // No ID, just add as new message
-            messagesData.value.push({
-              event: 'llm_stream_chunk',
-              data: receivedData, 
-              timestamp: new Date().toISOString()
-            });
-          }
+          //   if (existingIndex !== -1) {
+          //     // Accumulate content for existing message
+          //     const existingContent = messagesData.value[existingIndex].data?.content || '';
+          //     const newContent = receivedData.content || '';
+          //     messagesData.value[existingIndex].data.content = existingContent + newContent;
+          //   } else {
+          //     // Create new message for new ID
+          //     messagesData.value.push({
+          //       event: 'llm_stream_chunk',
+          //       data: receivedData, 
+          //       timestamp: new Date().toISOString()
+          //     });
+          //   }
+
+
+          // } else {
+          //   // No ID, just add as new message
+          //   messagesData.value.push({
+          //     event: 'llm_stream_chunk',
+          //     data: receivedData, 
+          //     timestamp: new Date().toISOString()
+          //   });
+          
         } else if (receivedData.event === 'stream_complete') {
           console.log('Stream complete:', receivedData);
-          messagesData.value.push({
-            event: 'stream_complete',
-            data: receivedData,
-            timestamp: new Date().toISOString()
-          });
-          isLoading.value = false;
+          // messagesData.value.push({
+          //   event: 'stream_complete',
+          //   data: receivedData,
+          //   timestamp: new Date().toISOString()
+          // });
+                   streamData.value.push(receivedData)
+
+           streamData.value.sort(
+    (a, b) =>
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  )
+
+        
         }
+
+
         // Handle legacy events
         else if (
           receivedData.event == 'user_message' ||

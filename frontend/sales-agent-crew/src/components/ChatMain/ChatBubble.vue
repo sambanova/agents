@@ -18,8 +18,19 @@
     <UserAvatar :type="'user'" />
   </li>
       <li v-else class="px-4 items-start gap-x-2 sm:gap-x-4">
-    <div class="w-full flex">
-      <UserAvatar :type="provider" />
+    <div class="w-full flex ">
+      <!-- <UserAvatar :type="provider" /> -->
+      
+      <div>
+        <!-- <StatusAnimationBox
+        isLoading="props.isLoading"
+        v-if="props.isLoading&&combinedContent" 
+      :isLoading="props.isLoading"
+    
+    :content="combinedContent"
+    :title="rawToolName ? title : undefined"
+  /> -->
+     
       <div class="grow ml-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
         <div class="flex hidden items-center justify-between mb-2">
           <span
@@ -82,6 +93,7 @@
           </div>
         </div>
       </div>
+      </div>
     </div>
  
   </li>
@@ -90,7 +102,7 @@
   <!-- Check if event is 'user_message' -->
   <li
     v-else-if="props.type === 'user_message'"
-    class="flex px-4 items-start gap-x-2 sm:gap-x-4"
+    class="flex hidden px-4 items-start gap-x-2 sm:gap-x-4"
   >
     <div class="grow text-end space-y-3">
       <!-- Card -->
@@ -107,7 +119,7 @@
   <!-- For all other cases -->
   <li
     v-else
-    class="relative px-4 items-start gap-x-2 sm:gap-x-4 group"
+    class="relative px-4 hidden items-start gap-x-2 sm:gap-x-4 group"
   >
     <div class="w-full relative flex items-center">
       <UserAvatar :type="provider" />
@@ -121,9 +133,9 @@
             <!-- Menu button: visible on hover -->
             <button
               v-if="
-                parsedData.agent_type === 'sales_leads' ||
-                parsedData.agent_type === 'financial_analysis' ||
-                parsedData.agent_type === 'deep_research'
+                parsedData?.agent_type === 'sales_leads' ||
+                parsedData?.agent_type === 'financial_analysis' ||
+                parsedData?.agent_type === 'deep_research'
               "
               type="button"
               class="ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
@@ -181,7 +193,7 @@
         :isLoading="isLoading"
         :parsedData="parsedData"
         :workflowData="workflowData"
-        :presentMetadata="parsedData.metadata"
+        :presentMetadata="parsedData?.metadata"
         :plannerText="plannerText"
       />
       <component :id="'chat-' + messageId" :is="selectedComponent" :parsed="parsedData" />
@@ -208,6 +220,7 @@ import jsPDF from 'jspdf'
 import html2pdf from 'html2pdf.js'
 import { formattedText } from '@/utils/formatText'
 import { marked } from 'marked'
+import StatusAnimationBox from './StatusAnimationBox.vue'
 function fetchProvider() {
   if (!props.workflowData || !Array.isArray(props.workflowData)) {
     return null
@@ -253,19 +266,27 @@ const props = defineProps({
     type: Array,
     required: false,
   },
+     streamData: {
+    type: Array,
+    required: false,
+    default: () => []
+  },
+
 })
 
 const parsedData = computed(() => {
-  try {
-    return JSON.parse(props.data)
-  } catch (error) {
+    if (typeof props?.data === 'object') 
+    return props.data
+  try { return JSON.parse(props?.data) }
+  catch (error) {
     console.error('Error parsing data in ChatBubble:', error)
+    
     return {}
   }
 })
 
 const selectedComponent = computed(() => {
-  switch (parsedData.value.agent_type) {
+  switch (parsedData?.value?.agent_type) {
     case 'assistant':
       return AssistantComponent
     case 'educational_content':
@@ -398,6 +419,40 @@ function formatTimestamp(timestamp) {
   if (!timestamp) return ''
   return new Date(timestamp).toLocaleTimeString()
 }
+
+
+const combinedContent = computed(() => {
+  return props.streamData
+    .filter(e => e.event === 'llm_stream_chunk')
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+    .map(e => e.content)
+    .join('')
+})
+
+// 2) look for a <tool>NAME</tool> tag in either the chunks or in an agent_completion
+//    if found, we’ll use it to build a title like “Searching Tavily”
+const rawToolName = computed(() => {
+  const re = /<tool>([^<]+)<\/tool>/i
+  const match = combinedContent.value.match(re)
+  if (match) return match[1] // e.g. "search_tavily"
+  // fallback: also check any agent_completion items
+  for (const e of props.streamData) {
+    if (e.event === 'agent_completion' && e.content) {
+      const m = e.content.match(re)
+      if (m) return m[1]
+    }
+  }
+  return null
+})
+
+const title = computed(() => {
+  if (!rawToolName.value) return ''
+  // turn "search_tavily" → ["Search","Tavily"]
+  const words = rawToolName.value
+    .split(/[_-]/g)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+  return `Searching ${words.join(' ')}`
+})
 </script>
 
 <style scoped>

@@ -47,7 +47,7 @@
             />
           </svg>
         </button>
-
+<DarkModeToggle/>
         <SignedIn>
           <UserButton
             afterSignOutUrl="/login"
@@ -75,6 +75,7 @@ import { SignedIn, UserButton } from '@clerk/vue';
 import SettingsModal from './SettingsModal.vue';
 import ToggleSwitch from '@/components/Common/UIComponents/ToggleSwitch.vue';
 import SelectProvider from '@/components/ChatMain/SelectProvider.vue';
+import DarkModeToggle from './DarkModeToggle.vue';
 // import Dropdown from './Dropdown.vue'
 
 const isWorkflowEnabled = computed(() => {
