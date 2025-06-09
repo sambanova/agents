@@ -38,16 +38,15 @@ class RedisStorage:
             dedup_key = self._get_dedup_key(user_id, conversation_id)
 
             # Atomic check-and-set: returns True if newly set, False if already existed
-            is_new = await asyncio.to_thread(
-                self.redis_client.hsetnx, dedup_key, message_data["id"], "1", user_id
+            is_new = await self.redis_client.hsetnx(
+                dedup_key, message_data["id"], "1", user_id
             )
 
             if not is_new:
                 return False
 
         # Save the message
-        await asyncio.to_thread(
-            self.redis_client.rpush,
+        await self.redis_client.rpush(
             message_key,
             json.dumps(message_data),
             user_id,
@@ -63,9 +62,7 @@ class RedisStorage:
         """
         message_key = self._get_message_key(user_id, conversation_id)
 
-        messages_raw = await asyncio.to_thread(
-            self.redis_client.lrange, message_key, start, end, user_id
-        )
+        messages_raw = await self.redis_client.lrange(message_key, start, end, user_id)
 
         if not messages_raw:
             return []
@@ -93,12 +90,7 @@ class RedisStorage:
     ) -> bool:
         """Check if a message ID already exists"""
         dedup_key = self._get_dedup_key(user_id, conversation_id)
-        return (
-            await asyncio.to_thread(
-                self.redis_client.hget, dedup_key, message_id, user_id
-            )
-            is not None
-        )
+        return await self.redis_client.hget(dedup_key, message_id, user_id) is not None
 
     async def delete_conversation_messages(
         self, user_id: str, conversation_id: str
@@ -108,17 +100,15 @@ class RedisStorage:
         dedup_key = self._get_dedup_key(user_id, conversation_id)
 
         # Delete both the message list and deduplication hash
-        deleted_messages = await asyncio.to_thread(
-            self.redis_client.delete, message_key
-        )
-        deleted_dedup = await asyncio.to_thread(self.redis_client.delete, dedup_key)
+        deleted_messages = await self.redis_client.delete(message_key)
+        deleted_dedup = await self.redis_client.delete(dedup_key)
 
         return deleted_messages > 0 or deleted_dedup > 0
 
     async def get_message_count(self, user_id: str, conversation_id: str) -> int:
         """Get the total number of messages in a conversation"""
         message_key = self._get_message_key(user_id, conversation_id)
-        return await asyncio.to_thread(self.redis_client.llen, message_key)
+        return await self.redis_client.llen(message_key)
 
     async def verify_conversation_exists(
         self, user_id: str, conversation_id: str
@@ -127,7 +117,7 @@ class RedisStorage:
         Verify if a conversation's metadata exists for the given user.
         """
         meta_key = self._get_chat_metadata_key(user_id, conversation_id)
-        return bool(await asyncio.to_thread(self.redis_client.exists, meta_key))
+        return bool(await self.redis_client.exists(meta_key))
 
     async def delete_all_user_data(self, user_id: str, conversation_id: str) -> int:
         """
@@ -137,11 +127,7 @@ class RedisStorage:
         message_key = f"messages:{user_id}:{conversation_id}"
         user_chats_key = f"user_chats:{user_id}"
 
-        # Execute all deletions in one thread
-        return await asyncio.to_thread(
-            lambda: (
-                self.redis_client.delete(meta_key),
-                self.redis_client.delete(message_key),
-                self.redis_client.zrem(user_chats_key, conversation_id),
-            )
-        )
+        # Execute all deletions
+        await self.redis_client.delete(meta_key)
+        await self.redis_client.delete(message_key)
+        return await self.redis_client.zrem(user_chats_key, conversation_id)

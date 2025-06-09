@@ -182,7 +182,7 @@ class WebSocketConnectionManager(WebSocketInterface):
             if session_key not in self.active_sessions:
                 # Create new pubsub instance for new session
                 pubsub = self.redis_client.pubsub(ignore_subscribe_messages=True)
-                await asyncio.to_thread(pubsub.subscribe, channel)
+                await pubsub.subscribe(channel)
                 self.pubsub_instances[session_key] = pubsub
 
                 self.active_sessions[session_key] = {
@@ -198,7 +198,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                 if not pubsub:
                     # Create new pubsub if somehow missing
                     pubsub = self.redis_client.pubsub(ignore_subscribe_messages=True)
-                    await asyncio.to_thread(pubsub.subscribe, channel)
+                    await pubsub.subscribe(channel)
                     self.active_sessions[session_key]["pubsub"] = pubsub
                     self.pubsub_instances[session_key] = pubsub
 
@@ -220,13 +220,8 @@ class WebSocketConnectionManager(WebSocketInterface):
             api_keys_key = f"api_keys:{user_id}"
 
             # Initial setup tasks that can run concurrently
-            setup_tasks = [
-                asyncio.to_thread(self.redis_client.exists, meta_key),
-                asyncio.to_thread(self.redis_client.hgetall, api_keys_key, user_id),
-            ]
-
-            # Wait for all setup tasks to complete
-            exists, redis_api_keys = await asyncio.gather(*setup_tasks)
+            exists = await self.redis_client.exists(meta_key)
+            redis_api_keys = await self.redis_client.hgetall(api_keys_key, user_id)
 
             if not exists:
                 await websocket.close(code=4004, reason="Conversation not found")
@@ -340,22 +335,6 @@ class WebSocketConnectionManager(WebSocketInterface):
                     ),
                 ]
 
-                # Add document loading to parallel tasks if present
-                document_content = None
-                if (
-                    "document_ids" in user_message_input
-                    and user_message_input["document_ids"]
-                ):
-                    tasks.append(
-                        asyncio.to_thread(
-                            load_documents,
-                            user_id,
-                            user_message_input["document_ids"],
-                            self.redis_client,
-                            self.context_length_summariser,
-                        )
-                    )
-
                 try:
                     # Execute all tasks in parallel
                     results = await asyncio.gather(*tasks)
@@ -377,12 +356,6 @@ class WebSocketConnectionManager(WebSocketInterface):
                         ),
                     )
                     continue
-
-                if (
-                    "document_ids" in user_message_input
-                    and user_message_input["document_ids"]
-                ):
-                    document_content = results[2]
 
                 logger.info(
                     f"Received message from user: {user_id} in conversation: {conversation_id}"
@@ -469,16 +442,12 @@ class WebSocketConnectionManager(WebSocketInterface):
     async def _update_metadata(self, meta_key: str, message_data: str, user_id: str):
         """Helper method to update metadata asynchronously"""
         try:
-            meta_data = await asyncio.to_thread(
-                self.redis_client.get, meta_key, user_id
-            )
+            meta_data = await self.redis_client.get(meta_key, user_id)
             if meta_data:
                 metadata = json.loads(meta_data)
                 if "name" not in metadata:
                     metadata["name"] = message_data
-                    await asyncio.to_thread(
-                        self.redis_client.set, meta_key, json.dumps(metadata), user_id
-                    )
+                    await self.redis_client.set(meta_key, json.dumps(metadata), user_id)
         except Exception as e:
             logger.error(f"Error updating metadata: {str(e)}")
 
@@ -498,7 +467,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                 messages = []
                 for _ in range(BATCH_SIZE):
                     try:
-                        message = pubsub.get_message(timeout=0.05)
+                        message = await pubsub.get_message(timeout=0.05)
                         if message and message["type"] == "message":
                             messages.append(message)
                         if not message:
@@ -527,8 +496,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                             }
 
                             # Store in Redis first
-                            await asyncio.to_thread(
-                                self.redis_client.rpush,
+                            await self.redis_client.rpush(
                                 message_key,
                                 json.dumps(message_data),
                                 user_id,

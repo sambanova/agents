@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Callable, Any
+from typing import Callable, Any, Dict, List, Optional
 from agents.components.compound.util import extract_api_key
 from langchain.tools import BaseTool
 from langchain.tools.render import render_text_description
@@ -20,45 +20,62 @@ import os
 import asyncio
 from langgraph.checkpoint.redis import AsyncRedisSaver
 from langgraph.checkpoint.memory import InMemorySaver
-
-# Configure Redis checkpointer with fallback to memory
-# You'll need to install: pip install langgraph-checkpoint-redis
-# Make sure Redis server is running with RedisJSON + RediSearch modules (Redis 8.0+ includes these by default)
-
-# Get Redis connection string from environment or use default
-redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
 
-# Simple approach: use Redis directly without context manager pattern
-try:
-    from redis.asyncio import Redis as AsyncRedis
+def create_checkpointer(redis_url):
+    # Simple approach: use Redis directly without context manager pattern
+    try:
+        from redis.asyncio import Redis as AsyncRedis
 
-    # Optional: Configure TTL for automatic cleanup
-    ttl_config = {
-        "default_ttl": int(
-            os.getenv("REDIS_CHECKPOINT_TTL_MINUTES", 60 * 24)
-        ),  # Default 24 hours
-        "refresh_on_read": os.getenv("REDIS_REFRESH_ON_READ", "true").lower() == "true",
-    }
+        # Create async Redis client
+        async_redis_client = AsyncRedis.from_url("redis://localhost:6379")
 
-    # Create async Redis client
-    async_redis_client = AsyncRedis.from_url(redis_url)
+        # Create async Redis checkpointer with custom namespace support
+        from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
-    # Create async Redis checkpointer with TTL configuration
-    checkpointer = AsyncRedisSaver(redis_client=async_redis_client, ttl=ttl_config)
+        # Create a custom serializer that supports our custom namespace
+        additional_import_mappings = {
+            (
+                "agents",
+                "components",
+                "compound",
+                "message_types",
+                "LiberalFunctionMessage",
+            ): (
+                "agents",
+                "components",
+                "compound",
+                "message_types",
+                "LiberalFunctionMessage",
+            )
+        }
 
-    print(f"✅ Successfully initialized Redis checkpointer at {redis_url}")
-    print(
-        f"   TTL: {ttl_config['default_ttl']} minutes, Refresh on read: {ttl_config['refresh_on_read']}"
-    )
-    print("   Call checkpointer.asetup() in FastAPI startup to initialize indices")
+        # Create checkpointer and override its serializer loads method to include our namespace
+        redis_checkpointer = AsyncRedisSaver(redis_client=async_redis_client)
 
-except Exception as e:
-    print(f"⚠️  Could not setup Redis checkpointer: {e}")
-    print("Falling back to in-memory checkpointer")
-    print("To use Redis: ensure Redis is running with RedisJSON and RediSearch modules")
-    print("Installation: pip install langgraph-checkpoint-redis")
-    checkpointer = InMemorySaver()
+        def custom_loads(s: str):
+            from langchain_core.load.load import loads
+
+            return loads(
+                s,
+                valid_namespaces=["agents", "components", "compound", "message_types"],
+                additional_import_mappings=additional_import_mappings,
+            )
+
+        redis_checkpointer.serde.loads = custom_loads
+
+        print(f"✅ Successfully initialized Redis checkpointer at {redis_url}")
+        print("   Call checkpointer.asetup() in FastAPI startup to initialize indices")
+
+        return redis_checkpointer
+
+    except Exception as e:
+        print(f"❌ Error initializing Redis checkpointer: {e}")
+        return None
+
+
+checkpointer = create_checkpointer(os.getenv("REDIS_URL"))
 
 
 class ToolInvocation:
