@@ -33,6 +33,11 @@ from agents.components.routing.route import SemanticRouterAgent
 from agents.storage.redis_service import SecureRedisService
 from agents.storage.redis_storage import RedisStorage
 
+from agents.components.compound.xml_agent import (
+    create_checkpointer,
+    set_global_checkpointer,
+)
+
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
@@ -104,6 +109,12 @@ async def lifespan(app: FastAPI):
     )
     UserProxyAgent.connection_manager = app.state.manager
     SemanticRouterAgent.connection_manager = app.state.manager
+
+    # Create checkpointer using the existing Redis client
+    app.state.checkpointer = create_checkpointer(app.state.redis_client)
+
+    # Set the global checkpointer for use in agents
+    set_global_checkpointer(app.state.checkpointer)
 
     await AsyncRedisSaver(redis_client=app.state.redis_client).asetup()
 

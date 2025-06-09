@@ -32,6 +32,16 @@ class LiberalFunctionMessage(FunctionMessage, Serializable):
 
 
 class LiberalAIMessage(AIMessage):
+
+    @classmethod
+    def is_lc_serializable(cls) -> bool:
+        return True
+
+    @classmethod
+    def get_lc_namespace(cls) -> list[str]:
+        """Return the actual namespace where this class can be imported from."""
+        return ["agents", "components", "compound", "message_types"]
+
     content: Any = Field(default="")
 
 

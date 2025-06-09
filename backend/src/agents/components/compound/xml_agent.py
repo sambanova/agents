@@ -22,17 +22,26 @@ from langgraph.checkpoint.redis import AsyncRedisSaver
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
+# Global checkpointer variable
+_global_checkpointer = None
 
-def create_checkpointer(redis_url):
+
+def set_global_checkpointer(checkpointer):
+    """Set the global checkpointer instance."""
+    global _global_checkpointer
+    _global_checkpointer = checkpointer
+
+
+def get_global_checkpointer():
+    """Get the global checkpointer instance."""
+    return _global_checkpointer
+
+
+def create_checkpointer(redis_client=None):
     # Simple approach: use Redis directly without context manager pattern
     try:
-        from redis.asyncio import Redis as AsyncRedis
-
-        # Create async Redis client
-        async_redis_client = AsyncRedis.from_url("redis://localhost:6379")
-
-        # Create async Redis checkpointer with custom namespace support
-        from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+        if redis_client is None:
+            return None
 
         # Create a custom serializer that supports our custom namespace
         additional_import_mappings = {
@@ -48,11 +57,24 @@ def create_checkpointer(redis_url):
                 "compound",
                 "message_types",
                 "LiberalFunctionMessage",
-            )
+            ),
+            (
+                "agents",
+                "components",
+                "compound",
+                "message_types",
+                "LiberalAIMessage",
+            ): (
+                "agents",
+                "components",
+                "compound",
+                "message_types",
+                "LiberalAIMessage",
+            ),
         }
 
         # Create checkpointer and override its serializer loads method to include our namespace
-        redis_checkpointer = AsyncRedisSaver(redis_client=async_redis_client)
+        redis_checkpointer = AsyncRedisSaver(redis_client=redis_client)
 
         def custom_loads(s: str):
             from langchain_core.load.load import loads
@@ -64,9 +86,6 @@ def create_checkpointer(redis_url):
             )
 
         redis_checkpointer.serde.loads = custom_loads
-
-        print(f"✅ Successfully initialized Redis checkpointer at {redis_url}")
-        print("   Call checkpointer.asetup() in FastAPI startup to initialize indices")
 
         return redis_checkpointer
 
@@ -105,6 +124,7 @@ def get_xml_agent_executor(
     llm: LanguageModelLike,
     system_message: str,
     subgraphs: dict = None,
+    checkpointer=None,
 ):
     """
     Get XML agent executor that can call either tools or subgraphs with tight integration.
@@ -115,7 +135,12 @@ def get_xml_agent_executor(
         system_message: System message for the agent
         interrupt_before_action: Whether to interrupt before action execution
         subgraphs: Dictionary of subgraphs {name: compiled_graph}
+        checkpointer: Optional checkpointer, if None will use global checkpointer
     """
+    # Use provided checkpointer or fall back to global checkpointer
+    if checkpointer is None:
+        checkpointer = get_global_checkpointer()
+
     subgraphs = subgraphs or {}
 
     # Create subgraph section for the template
