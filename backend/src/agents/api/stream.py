@@ -43,7 +43,7 @@ async def astream_state_websocket(
     async for event in app.astream_events(
         graph_input,
         config,
-        version="v1",
+        version="v2",
         stream_mode="values",
         exclude_tags=["nostream"],
     ):

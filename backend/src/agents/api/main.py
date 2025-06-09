@@ -104,6 +104,15 @@ async def lifespan(app: FastAPI):
     UserProxyAgent.connection_manager = app.state.manager
     SemanticRouterAgent.connection_manager = app.state.manager
 
+    # Initialize Redis checkpointer for LangGraph
+    try:
+        from agents.components.compound.xml_agent import checkpointer
+
+        await checkpointer.asetup()
+        print("✅ Redis checkpointer indices initialized successfully")
+    except Exception as e:
+        print(f"⚠️  Failed to initialize Redis checkpointer indices: {e}")
+
     yield  # This separates the startup and shutdown logic
 
     # Close Redis connection pool

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, ClassVar
 
 from langchain_core.messages import (
     FunctionMessage,
@@ -9,13 +9,18 @@ from langchain_core.messages import (
 )
 from langgraph.graph.message import Messages, add_messages
 from pydantic import Field
+from langchain_core.load.serializable import Serializable
 
 
 class LiberalToolMessage(ToolMessage):
     content: Any = Field(default="")
 
 
-class LiberalFunctionMessage(FunctionMessage):
+class LiberalFunctionMessage(FunctionMessage, Serializable):
+    @classmethod
+    def is_lc_serializable(cls) -> bool:
+        return True
+
     content: Any = Field(default="")
 
 

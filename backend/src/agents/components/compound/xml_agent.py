@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Callable
+from typing import Callable, Any
 from agents.components.compound.util import extract_api_key
 from langchain.tools import BaseTool
 from langchain.tools.render import render_text_description
@@ -15,11 +15,11 @@ from langgraph.graph import END
 from langgraph.graph.message import MessageGraph
 from agents.components.compound.prompts import xml_template
 from agents.components.compound.message_types import LiberalFunctionMessage
-from langchain_core.runnables import RunnableConfig
+from langchain_core.runnables import RunnableConfig, Runnable
 import os
+import asyncio
 from langgraph.checkpoint.redis import AsyncRedisSaver
 from langgraph.checkpoint.memory import InMemorySaver
-
 
 # Configure Redis checkpointer with fallback to memory
 # You'll need to install: pip install langgraph-checkpoint-redis
@@ -47,13 +47,11 @@ try:
     # Create async Redis checkpointer with TTL configuration
     checkpointer = AsyncRedisSaver(redis_client=async_redis_client, ttl=ttl_config)
 
-    # Initialize Redis indices (only needed once, but safe to call multiple times)
-    checkpointer.setup()
-
     print(f"✅ Successfully initialized Redis checkpointer at {redis_url}")
     print(
         f"   TTL: {ttl_config['default_ttl']} minutes, Refresh on read: {ttl_config['refresh_on_read']}"
     )
+    print("   Call checkpointer.asetup() in FastAPI startup to initialize indices")
 
 except Exception as e:
     print(f"⚠️  Could not setup Redis checkpointer: {e}")
