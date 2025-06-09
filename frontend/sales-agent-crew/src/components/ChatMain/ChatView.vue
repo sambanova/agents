@@ -58,26 +58,15 @@
           tag="ul"
           class="mt-16 max-w-4xl w-full mx-auto space-y-5"
         >
-          <!-- Chat Bubble -->
-          <ChatBubble
+          <!-- Raw Data Chat Bubble -->
+          <RawDataChatBubble
             v-for="msgItem in filteredMessages"
-            :metadata="completionMetaData"
-            :workflowData="
-              workflowData.filter(
-                (item) => item.message_id === msgItem.message_id
-              )
-            "
-            :plannerText="
-              plannerTextData.filter(
-                (item) => item.message_id === msgItem.message_id
-              )[0]?.data
-            "
             :key="msgItem.conversation_id"
-            :event="msgItem.event"
             :data="msgItem.data"
-            :messageId="msgItem.message_id"
             :provider="provider"
-            :currentMsgId="currentMsgId"
+            :timestamp="msgItem.timestamp"
+            :event="msgItem.event"
+            :isUser="msgItem.event === 'user_message'"
           />
           <ChatLoaderBubble
             :workflowData="
@@ -417,7 +406,7 @@ import hljs from 'highlight.js';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
-import ChatBubble from '@/components/ChatMain/ChatBubble.vue';
+import RawDataChatBubble from '@/components/ChatMain/RawDataChatBubble.vue';
 // import StatusAnimationBox from '@/components/ChatMain/StatusAnimationBox.vue';
 import ChatLoaderBubble from '@/components/ChatMain/ChatLoaderBubble.vue';
 const router = useRouter();
