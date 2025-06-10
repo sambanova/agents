@@ -407,6 +407,12 @@ function processStreamingEvents(events) {
   let chartCount = 0
 
   events.forEach((event, index) => {
+    // Safety check for null/undefined events
+    if (!event || typeof event !== 'object') {
+      console.log(`Skipping invalid event at index ${index}:`, event);
+      return;
+    }
+    
     const timestamp = event.data?.timestamp || event.timestamp || new Date().toISOString()
     
     switch (event.event) {
@@ -455,8 +461,9 @@ function processStreamingEvents(events) {
           console.log('Processing Daytona agent_completion event:', eventData);
           
           // Handle tool call (react_tool) - extract code from tool input
-          if (eventData?.agent_type === 'react_tool' && eventData.content?.includes('DaytonaCodeSandbox')) {
-            const toolInputMatch = eventData.content.match(/<tool_input>([\s\S]*?)(?:<\/tool_input>|$)/);
+          if (eventData?.agent_type === 'react_tool' && eventData.content && String(eventData.content).includes('DaytonaCodeSandbox')) {
+            const contentStr = String(eventData.content);
+            const toolInputMatch = contentStr.match(/<tool_input>([\s\S]*?)(?:<\/tool_input>|$)/);
             if (toolInputMatch && toolInputMatch[1]) {
               const extractedCode = toolInputMatch[1].trim()
               if (extractedCode.includes('import') || extractedCode.includes('def ') || 
@@ -472,7 +479,13 @@ function processStreamingEvents(events) {
           }
           
           // Extract charts from Daytona response (tool_response)
-          const content = eventData.content || ''
+          const content = String(eventData.content || '')
+          
+          // Only process if content is a valid string
+          if (!content || content.length === 0) {
+            console.log('No content to process for charts');
+            break;
+          }
           
           // Look for chart attachments, data URLs, and Redis chart references
           const attachmentMatches = content.match(/!\[([^\]]*)\]\(attachment:([^)]+)\)/g)
@@ -573,7 +586,7 @@ function processStreamingEvents(events) {
           
           updateStatus('✅ Analysis complete', `Generated ${chartCount} visualizations`)
           // Extract analysis results from tool response content
-          if (eventData?.agent_type === 'tool_response' && content) {
+          if (eventData?.agent_type === 'tool_response' && content && typeof content === 'string') {
             // Remove chart references and extract text analysis
             const analysisText = content.replace(/!\[([^\]]*)\]\([^)]+\)/g, '').trim();
             if (analysisText.length > 50) {

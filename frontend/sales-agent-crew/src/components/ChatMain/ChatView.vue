@@ -426,11 +426,12 @@ import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.v
 // Inject the shared selectedOption from MainLayout.vue.
 const selectedOption = inject('selectedOption');
 const eventData = ref(null);
-function handleButtonClick(data) {
+async function handleButtonClick(data) {
   eventData.value = data.message;
-
   chatName.value = '';
-  router.push('/');
+  
+  // Create new chat instead of just going to home
+  await createNewChat();
 }
 
 async function genPDF() {
@@ -595,9 +596,12 @@ watch(
       // Load new conversation data
       if (newId) {
         loadPreviousChat(newId);
+      } else {
+        // No conversation ID - clear everything and set to ready state
+        initialLoading.value = false;
       }
     }
-    currentId.value = newId;
+    currentId.value = newId || '';
 
     // Close existing socket and reconnect
     if (socket.value) {
@@ -671,7 +675,10 @@ async function loadPreviousChat(convId) {
     AutoScrollToBottom(true);
   } catch (err) {
     console.error('Error loading previous chat:', err);
-    errorMessage.value = 'Failed to load conversation history. Please try again.';
+    // Don't show error message for specific DaytonaSidebar errors
+    if (!err.message?.includes('content.match is not a function')) {
+      errorMessage.value = 'Failed to load conversation history. Please try again.';
+    }
     messagesData.value = [];
   } finally {
     initialLoading.value = false;
@@ -1484,10 +1491,18 @@ const addMessage = async () => {
 
   // If no conversation exists, create a new chat first.
   if (!route.params.id) {
-    await createNewChat();
-    await nextTick();
-    // After createNewChat, the router push should update the conversation id.
-    currentId.value = route.params.id; // update currentId from router params
+    try {
+      await createNewChat();
+      await nextTick();
+      // After createNewChat, the router push should update the conversation id.
+      currentId.value = route.params.id; // update currentId from router params
+      console.log('New chat created, conversation ID:', currentId.value);
+    } catch (error) {
+      console.error('Failed to create new chat:', error);
+      errorMessage.value = 'Failed to create new conversation. Please try again.';
+      isLoading.value = false;
+      return;
+    }
   }
 
   if (messagesData.value.length === 0) {
