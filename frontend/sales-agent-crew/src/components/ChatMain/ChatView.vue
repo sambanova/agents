@@ -189,7 +189,7 @@
 
               <!-- Toolbar -->
               <div
-                class="absolute bottom-px inset-x-px p-2 rounded-b-lg border-primary-brandFrame dark:border-gray-600 dark:bg-gray-700"
+                class="absolute bottom-px inset-x-px p-2 rounded-b-lg border-primary-brandFrame dark:border-gray-600 dark:bg-gray-00"
               >
                 <div class="flex justify-between items-center">
                   <!-- Button Group -->
