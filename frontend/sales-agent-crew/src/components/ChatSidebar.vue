@@ -1,6 +1,6 @@
 <template>
   <div
-    class="w-64 h-full border border-primary-brandFrame dark:border-gray-600 bg-white dark:bg-gray-800 rounded-l flex flex-col"
+    class="w-64 h-full border border-primary-brandFrame dark:border-gray-600 bg-white dark:bg-gray-800 rounded-lg flex flex-col"
   >
     <!-- Header -->
     <div class="px-4 py-2 flex items-center justify-between">

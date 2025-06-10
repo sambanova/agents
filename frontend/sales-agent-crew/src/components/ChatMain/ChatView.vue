@@ -98,7 +98,7 @@
       </div>
 
       <!-- Documents Section -->
-      <div class="sticky z-1000 bottom-0 left-0 right-0 bg-white dark:bg-gray-800 p-2">
+      <div class="sticky z-1000 bottom-0 left-0 right-0 bg-white dark:bg-gray-900 p-2">
         <div class="sticky bottom-0 z-10">
           <!-- Textarea -->
           <div class="max-w-4xl mx-auto lg:px-0">
@@ -189,7 +189,7 @@
 
               <!-- Toolbar -->
               <div
-                class="absolute bottom-px inset-x-px p-2 rounded-b-lg border-primary-brandFrame dark:border-gray-600 dark:bg-gray-800"
+                class="absolute bottom-px inset-x-px p-2 rounded-b-lg border-primary-brandFrame dark:border-gray-600 dark:bg-gray-700"
               >
                 <div class="flex justify-between items-center">
                   <!-- Button Group -->
