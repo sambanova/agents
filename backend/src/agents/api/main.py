@@ -128,9 +128,6 @@ async def lifespan(app: FastAPI):
     await app.state.redis_client.aclose()
     await pool.aclose()
 
-    # Cleanup default agent runtime
-    await app.state.agent_runtime.close()
-
 
 def get_user_id_from_token(token: HTTPAuthorizationCredentials) -> str:
     try:

@@ -30,6 +30,7 @@ from agents.components.compound.agent import agent
 from agents.api.websocket_interface import WebSocketInterface
 from agents.storage.redis_service import SecureRedisService
 from agents.storage.redis_storage import RedisStorage
+from langchain_core.messages import HumanMessage
 
 from agents.utils.logging import logger
 
@@ -165,7 +166,6 @@ class WebSocketConnectionManager(WebSocketInterface):
         await self.start_cleanup_task()
 
         from agents.components.compound.agent import agent
-        from langchain_core.messages import HumanMessage
 
         background_task = None
         session_key = f"{user_id}:{conversation_id}"
@@ -340,22 +340,17 @@ class WebSocketConnectionManager(WebSocketInterface):
                     f"Received message from user: {user_id} in conversation: {conversation_id}"
                 )
 
+                input_, model = await self.create_user_message_input(
+                    user_id, user_message_input
+                )
+
                 config = await _run_input_and_config(
                     user_id=user_id,
                     thread_id=conversation_id,
                     api_keys=api_keys,
                     provider=user_message_input["provider"],
                     message_id=user_message_input["message_id"],
-                    llm_type=user_message_input["planner_model"],
-                )
-
-                input_ = HumanMessage(
-                    content=user_message_input["data"],
-                    additional_kwargs={
-                        "timestamp": user_message_input["timestamp"],
-                        "agent_type": "human",
-                        "resume": user_message_input["resume"],
-                    },
+                    llm_type=model,
                 )
 
                 config["configurable"]["type==default/subgraphs"] = {
@@ -430,6 +425,50 @@ class WebSocketConnectionManager(WebSocketInterface):
                     await self.redis_client.set(meta_key, json.dumps(metadata), user_id)
         except Exception as e:
             logger.error(f"Error updating metadata: {str(e)}")
+
+    async def create_user_message_input(self, user_id: str, user_message_input: dict):
+        image_content = []
+        for doc in user_message_input["document_ids"]:
+            metadata = await self.message_storage.get_file_metadata(user_id, doc)
+            if metadata["format"].lower() in ["png", "jpg", "jpeg", "gif", "webp"]:
+                retrived_content = await self.message_storage.get_file_as_base64(
+                    user_id, doc
+                )
+                if retrived_content:
+                    image_content.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": "data:image/png;base64," + retrived_content,
+                            },
+                        }
+                    )
+
+        model = user_message_input["planner_model"]
+        if len(image_content) > 0:
+            input_ = HumanMessage(
+                content=[
+                    {"type": "text", "text": user_message_input["data"]},
+                    *image_content,
+                ],
+                additional_kwargs={
+                    "timestamp": user_message_input["timestamp"],
+                    "agent_type": "human",
+                    "resume": user_message_input["resume"],
+                },
+            )
+            model = "Llama Maverick"
+        else:
+            input_ = HumanMessage(
+                content=user_message_input["data"],
+                additional_kwargs={
+                    "timestamp": user_message_input["timestamp"],
+                    "agent_type": "human",
+                    "resume": user_message_input["resume"],
+                },
+            )
+
+        return input_, model
 
     async def handle_redis_messages(
         self, websocket: WebSocket, pubsub, user_id: str, conversation_id: str

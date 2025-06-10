@@ -842,7 +842,12 @@ function downloadChart(chart) {
 }
 
 function expandChart(chart) {
-  emit('expand-chart', chart)
+  // Add the type property that ArtifactCanvas expects
+  const artifactChart = {
+    ...chart,
+    type: 'chart'
+  }
+  emit('expand-chart', artifactChart)
 }
 
 function handleChartError(chart) {
@@ -860,7 +865,9 @@ async function fetchChartImage(chartId, chartIndex) {
       return
     }
 
-    const response = await fetch(`${window.location.origin}/api/files/${chartId}`, {
+    const url = `${window.location.origin}/api/files/${chartId}`
+
+    const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -877,7 +884,7 @@ async function fetchChartImage(chartId, chartIndex) {
     charts.value[chartIndex].downloadUrl = blobUrl
     charts.value[chartIndex].loading = false
     
-    console.log(`Successfully loaded chart image for ${chartId}`)
+    console.log(`Successfully loaded chart image for ${chartId}, blob URL: ${blobUrl}`)
   } catch (error) {
     console.error(`Failed to load chart image for ${chartId}:`, error)
     charts.value[chartIndex].loading = false
