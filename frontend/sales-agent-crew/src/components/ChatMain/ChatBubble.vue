@@ -397,7 +397,8 @@ import {
     },
     metadata: {
       type: Object,
-      required: true
+      required: false,
+      default: () => ({})
     },
     provider: {
       type: String,
@@ -407,10 +408,16 @@ import {
       type: String,
       required: true
     },
+    currentMsgId: {
+      type: String,
+      required: false,
+      default: ''
+    },
   
   workflowData: {
-    type: [],
-    required: false // Ensure it's always provided
+    type: Array,
+    required: false,
+    default: () => []
   },
   
   streamingEvents: {

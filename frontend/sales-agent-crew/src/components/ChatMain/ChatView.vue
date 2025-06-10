@@ -57,7 +57,7 @@
           <!-- Chat Bubble -->
           <ChatBubble
             v-for="msgItem in filteredMessages"
-            :metadata="completionMetaData"
+            :metadata="completionMetaData || {}"
             :workflowData="
               workflowData.filter(
                 (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
@@ -73,7 +73,7 @@
             :data="formatMessageData(msgItem)"
             :messageId="msgItem.message_id || msgItem.messageId || ''"
             :provider="provider"
-            :currentMsgId="currentMsgId"
+            :currentMsgId="currentMsgId || ''"
             :streamingEvents="msgItem.type === 'streaming_group' ? msgItem.events : null"
           />
           <ChatLoaderBubble
@@ -662,6 +662,7 @@ async function loadPreviousChat(convId) {
     if (resp.data && resp.data.messages) {
       await filterChat(resp.data);
       console.log('Filtered messages loaded:', messagesData.value.length);
+
     } else {
       console.warn('No messages found in chat history response');
       messagesData.value = [];
@@ -675,6 +676,8 @@ async function loadPreviousChat(convId) {
   } finally {
     initialLoading.value = false;
     isLoading.value = false;
+    // Clear any status text that might be showing "generating" or "processing"
+    statusText.value = '';
   }
 }
 const currentId = ref(route.params.id || '');
@@ -687,11 +690,53 @@ const agentThoughtsData = ref([]);
 async function filterChat(msgData) {
   messagesData.value = msgData.messages
     .map(message => {
-      // For agent_completion events, preserve the full data structure
+      // For agent_completion events, handle LangGraph format
       if (message.event === 'agent_completion') {
+        // Skip tool calls and tool results - they should only show in timeline
+        if (message.content && typeof message.content === 'string' && message.content.includes('<tool>')) {
+          console.log('Filtering out tool call message');
+          return null; // Filter out tool calls
+        }
+        if (Array.isArray(message.content)) {
+          console.log('Filtering out tool result (array content)');
+          return null; // Filter out tool results (array content)
+        }
+        
+        // Also filter by agent_type for tool messages that might not match above patterns
+        if (message.additional_kwargs?.agent_type === 'react_tool') {
+          console.log('Filtering out react_tool message');
+          return null;
+        }
+        if (message.additional_kwargs?.agent_type === 'tool_response') {
+          console.log('Filtering out tool_response message');
+          return null;
+        }
+        
+        // Only show user messages and final responses in chat bubbles
+        const isUserMessage = message.additional_kwargs?.agent_type === 'human';
+        const isFinalResponse = message.additional_kwargs?.agent_type === 'react_end';
+        
+        console.log(`Message filtering: ${message.additional_kwargs?.agent_type} -> isUser: ${isUserMessage}, isFinal: ${isFinalResponse}, showing: ${isUserMessage || isFinalResponse}`);
+        
+        if (!isUserMessage && !isFinalResponse) {
+          return null; // Filter out intermediate agent responses
+        }
+        
+        // LangGraph agent_completion events have content spread at top level
+        // Extract the actual message content
+        const messageContent = {
+          content: message.content || '',
+          additional_kwargs: message.additional_kwargs || {},
+          response_metadata: message.response_metadata || {},
+          type: message.type || 'AIMessage',
+          id: message.id || message.message_id,
+          // Extract agent_type from additional_kwargs - this is crucial for rendering
+          agent_type: isUserMessage ? 'user_proxy' : (message.additional_kwargs?.agent_type || 'assistant')
+        };
+        
         return {
           event: 'agent_completion',
-          data: message,  // Pass the entire message object as data
+          data: messageContent,
           message_id: message.message_id,
           conversation_id: message.conversation_id,
           timestamp: message.timestamp || new Date().toISOString()
@@ -788,6 +833,30 @@ async function filterChat(msgData) {
       }
     } catch (error) {
       console.error('Failed to parse think data:', error);
+    }
+  });
+
+  // Process agent_completion events for workflow metadata (tool calls/results)
+  let agentCompletionData = msgData.messages.filter(
+    (message) => message.event === 'agent_completion' && (
+      (message.content && typeof message.content === 'string' && message.content.includes('<tool>')) ||
+      Array.isArray(message.content)
+    )
+  );
+  agentCompletionData.forEach((completion) => {
+    try {
+      // Create metadata for tool calls and results
+      const metadata = {
+        workflow_name: "Agent Workflow",
+        agent_name: "Research Agent", 
+        task: Array.isArray(completion.content) ? "search_results" : "tool_call",
+        llm_name: completion.response_metadata?.model_name || "Unknown",
+        llm_provider: "agent",
+        duration: 0
+      };
+      addOrUpdateModel(metadata, completion.message_id);
+    } catch (error) {
+      console.error('Failed to process agent completion data:', error);
     }
   });
 
@@ -1723,50 +1792,70 @@ async function removeDocument(docId) {
 
 function formatMessageData(msgItem) {
   try {
-    // If it's a streaming group, we don't need to format the data
-    if (msgItem.type === 'streaming_group') {
-      return '';
-    }
-    
-    // For user messages, return the data as-is (should be a string)
-    if (msgItem.event === 'user_message') {
-      return typeof msgItem.data === 'string' ? msgItem.data : JSON.stringify(msgItem.data || '');
-    }
-    
-    // For agent completion events, the data should be the whole message object as JSON
-    if (msgItem.event === 'agent_completion') {
-      // If msgItem.data is already the full object, stringify it
-      if (typeof msgItem.data === 'object' && msgItem.data !== null) {
-        return JSON.stringify(msgItem.data);
-      }
-      // If msgItem.data is a string, but msgItem itself has the structure, use msgItem
-      if (msgItem.additional_kwargs || msgItem.content) {
-        return JSON.stringify(msgItem);
-      }
-      return typeof msgItem.data === 'string' ? msgItem.data : JSON.stringify(msgItem.data || {});
-    }
-    
-    // For completion events, try to parse and re-stringify
-    if (msgItem.event === 'completion') {
-      if (typeof msgItem.data === 'string') {
-        try {
-          // Try to parse it to validate it's valid JSON
-          JSON.parse(msgItem.data);
-          return msgItem.data;
-        } catch {
-          // If not valid JSON, wrap it
-          return JSON.stringify({ content: msgItem.data });
+    switch (msgItem.event) {
+      case 'user_message':
+        return JSON.stringify({
+          message: msgItem.data,
+          agent_type: 'user_proxy',
+          timestamp: msgItem.timestamp || new Date().toISOString()
+        });
+      
+      case 'agent_completion':
+        // agent_completion events from LangGraph have structured data
+        if (msgItem.data && typeof msgItem.data === 'object') {
+          const formatted = {
+            message: msgItem.data.content || '',
+            agent_type: msgItem.data.agent_type || 'assistant',
+            metadata: msgItem.data.response_metadata || null,
+            additional_kwargs: msgItem.data.additional_kwargs || {},
+            timestamp: msgItem.timestamp || new Date().toISOString(),
+            type: msgItem.data.type || 'AIMessage',
+            id: msgItem.data.id
+          };
+          return JSON.stringify(formatted);
         }
-      }
-      return JSON.stringify(msgItem.data || {});
+        // Fallback for unexpected format
+        return JSON.stringify({
+          message: msgItem.data || '',
+          agent_type: 'assistant',
+          timestamp: msgItem.timestamp || new Date().toISOString()
+        });
+      
+      case 'completion':
+        try {
+          const parsed = typeof msgItem.data === 'string' ? JSON.parse(msgItem.data) : msgItem.data;
+          return JSON.stringify({
+            message: parsed.message || parsed,
+            agent_type: parsed.agent_type || 'assistant',
+            metadata: parsed.metadata || null,
+            timestamp: msgItem.timestamp || new Date().toISOString()
+          });
+                  } catch (error) {
+            console.error('Error parsing completion data:', error);
+          return JSON.stringify({
+            message: msgItem.data,
+            agent_type: 'assistant',
+            timestamp: msgItem.timestamp || new Date().toISOString()
+          });
+        }
+      
+      case 'llm_stream_chunk':
+      case 'stream_start':
+      case 'stream_complete':
+        return JSON.stringify({
+          message: msgItem.data?.content || msgItem.data,
+          agent_type: 'assistant',
+          timestamp: msgItem.timestamp || new Date().toISOString(),
+          is_streaming: true
+        });
+      
+      default:
+        return JSON.stringify({
+          message: msgItem.data,
+          agent_type: 'assistant',
+          timestamp: msgItem.timestamp || new Date().toISOString()
+        });
     }
-    
-    // For all other events, ensure we return a valid JSON string
-    if (typeof msgItem.data === 'string') {
-      return msgItem.data;
-    }
-    
-    return JSON.stringify(msgItem.data || {});
   } catch (error) {
     console.error('Error formatting message data:', error, msgItem);
     return JSON.stringify({ error: 'Failed to format message data', original: msgItem });
