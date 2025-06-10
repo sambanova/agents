@@ -24,6 +24,7 @@ from agents.api.data_types import APIKeys
 from agents.utils.logging import logger
 import os
 import sys
+from src.agents.api.files import router as files_router
 
 import redis
 import uuid
@@ -178,6 +179,8 @@ class LeadGenerationAPI:
         )
 
     def setup_routes(self):
+        self.app.include_router(files_router)
+
         @self.app.get("/health")
         async def health_check():
             """Health check endpoint for Kubernetes liveness and readiness probes."""
