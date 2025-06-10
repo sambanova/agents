@@ -1,8 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from fastapi.responses import Response
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi_clerk_auth import ClerkConfig, ClerkHTTPBearer
-from agents.utils.file_storage import get_file, get_file_metadata
 import jwt
 import os
 from agents.utils.logging import logger
@@ -29,7 +28,9 @@ router = APIRouter()
 
 @router.get("/files/{file_id}")
 async def get_file_endpoint(
-    file_id: str, token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard)
+    file_id: str,
+    request: Request,
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
 ):
     """Serve files from Redis storage with user authentication."""
     try:
@@ -40,8 +41,11 @@ async def get_file_endpoint(
 
         print(f"File API: Requesting file_id: {file_id} for user: {user_id}")
 
+        # Access Redis storage service from app state
+        redis_storage_service = request.app.state.redis_storage_service
+
         # Get file metadata first to check if file exists and belongs to user
-        metadata = await get_file_metadata(user_id, file_id)
+        metadata = await redis_storage_service.get_file_metadata(user_id, file_id)
         if not metadata:
             print(f"File API: File metadata not found for {file_id} and user {user_id}")
             raise HTTPException(status_code=404, detail="File not found")
@@ -49,7 +53,7 @@ async def get_file_endpoint(
         print(f"File API: Found metadata: {metadata}")
 
         # Get file content
-        content = await get_file(user_id, file_id)
+        content = await redis_storage_service.get_file(user_id, file_id)
         if not content:
             print(f"File API: File content not found for {file_id}")
             raise HTTPException(status_code=404, detail="File content not found")
@@ -86,7 +90,9 @@ async def get_file_endpoint(
 
 @router.get("/files/{file_id}/public")
 async def get_file_public_endpoint(
-    file_id: str, user_id: str = Query(..., description="User ID for file access")
+    file_id: str,
+    request: Request,
+    user_id: str = Query(..., description="User ID for file access"),
 ):
     """
     Public endpoint for accessing files (primarily for charts/images in chat).
@@ -95,8 +101,11 @@ async def get_file_public_endpoint(
     try:
         print(f"Public File API: Requesting file_id: {file_id} for user: {user_id}")
 
+        # Access Redis storage service from app state
+        redis_storage_service = request.app.state.redis_storage_service
+
         # Get file metadata first to check if file exists and belongs to user
-        metadata = await get_file_metadata(user_id, file_id)
+        metadata = await redis_storage_service.get_file_metadata(user_id, file_id)
         if not metadata:
             print(
                 f"Public File API: File metadata not found for {file_id} and user {user_id}"
@@ -116,7 +125,7 @@ async def get_file_public_endpoint(
         print(f"Public File API: Found metadata: {metadata}")
 
         # Get file content
-        content = await get_file(user_id, file_id)
+        content = await redis_storage_service.get_file(user_id, file_id)
         if not content:
             print(f"Public File API: File content not found for {file_id}")
             raise HTTPException(status_code=404, detail="File content not found")

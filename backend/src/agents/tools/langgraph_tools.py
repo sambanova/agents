@@ -33,7 +33,23 @@ from daytona_sdk import (
 )
 
 from agents.utils.code_patcher import patch_plot_code_str
-from agents.utils.file_storage import put_file
+from agents.storage.redis_storage import RedisStorage
+from agents.storage.redis_service import SecureRedisService
+
+# Global storage for accessing Redis storage service from tools
+_global_redis_storage_service = None
+
+
+def set_global_redis_storage_service(storage_service: RedisStorage):
+    """Set the global Redis storage service for tools to use."""
+    global _global_redis_storage_service
+    _global_redis_storage_service = storage_service
+
+
+def get_global_redis_storage_service() -> RedisStorage:
+    """Get the global Redis storage service."""
+    global _global_redis_storage_service
+    return _global_redis_storage_service
 
 
 class DDGInput(BaseModel):
@@ -362,15 +378,6 @@ def _get_daytona(user_id: str):
             print(f"Response exit code: {response.exit_code}")
             print(f"Response result: {str(response.result)[:500]}...")
             print(f"Response artifacts: {response.artifacts}")
-            if hasattr(response.artifacts, "charts"):
-                print(
-                    f"Charts found: {len(response.artifacts.charts) if response.artifacts.charts else 0}"
-                )
-                if response.artifacts.charts:
-                    for i, chart in enumerate(response.artifacts.charts):
-                        print(
-                            f"Chart {i}: title='{chart.title}', type='{chart.type}', png_size={len(chart.png) if chart.png else 0}"
-                        )
 
             # Process expected filenames first
             for filename in expected_filenames:
@@ -381,13 +388,15 @@ def _get_daytona(user_id: str):
                     print(f"Downloaded file {filename}: {len(content)} bytes")
 
                     # Store in Redis for backup/download purposes
-                    await put_file(
-                        user_id,
-                        image_id,
-                        data=content,
-                        title=filename,
-                        format=extension,
-                    )
+                    storage_service = get_global_redis_storage_service()
+                    if storage_service:
+                        await storage_service.put_file(
+                            user_id,
+                            image_id,
+                            data=content,
+                            title=filename,
+                            format=extension,
+                        )
 
                     # For image files, use compact Redis references instead of data URLs
                     if extension.lower() in ["png", "jpg", "jpeg", "gif", "svg"]:
@@ -416,13 +425,15 @@ def _get_daytona(user_id: str):
                             chart_data = base64.b64decode(chart.png)
 
                             # Store in Redis for backup/download purposes
-                            await put_file(
-                                user_id,
-                                image_id,
-                                data=chart_data,
-                                title=title,
-                                format="png",
-                            )
+                            storage_service = get_global_redis_storage_service()
+                            if storage_service:
+                                await storage_service.put_file(
+                                    user_id,
+                                    image_id,
+                                    data=chart_data,
+                                    title=title,
+                                    format="png",
+                                )
 
                             # Use compact Redis reference instead of data URL to save context
                             result_str += (
