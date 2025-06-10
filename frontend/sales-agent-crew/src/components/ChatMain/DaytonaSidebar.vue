@@ -502,6 +502,13 @@ function processStreamingEvents(events) {
                 const chartId = idMatch[1]
                 const title = titleMatch && titleMatch[1] ? titleMatch[1] : `Chart ${idx + 1}`
                 
+                // Check if chart with this ID already exists to prevent duplicates
+                const existingChart = charts.value.find(chart => chart.id === chartId)
+                if (existingChart) {
+                  console.log(`Skipping duplicate attachment chart with ID: ${chartId}`)
+                  return;
+                }
+                
                 // Create real image URL instead of dummy SVG
                 const imageUrl = `/api/files/${chartId}` // Fixed path for API endpoint
                 
@@ -527,6 +534,14 @@ function processStreamingEvents(events) {
               if (urlMatch) {
                 const dataUrl = urlMatch[1]
                 const title = titleMatch && titleMatch[1] ? titleMatch[1] : `Chart ${chartCount + idx + 1}`
+                
+                // Check if chart with this exact data URL already exists to prevent duplicates
+                const existingChart = charts.value.find(chart => chart.url === dataUrl)
+                if (existingChart) {
+                  console.log(`Skipping duplicate data URL chart: ${title}`)
+                  return;
+                }
+                
                 const chartId = `data_chart_${Date.now()}_${idx}`
                 
                 charts.value.push({
@@ -552,6 +567,13 @@ function processStreamingEvents(events) {
                 const chartId = redisMatch[1]
                 const userId = redisMatch[2]
                 const title = titleMatch && titleMatch[1] ? titleMatch[1] : `Chart ${chartCount + idx + 1}`
+                
+                // Check if chart with this ID already exists to prevent duplicates
+                const existingChart = charts.value.find(chart => chart.id === chartId)
+                if (existingChart) {
+                  console.log(`Skipping duplicate Redis chart with ID: ${chartId}`)
+                  return;
+                }
                 
                 // Create public URL with user_id parameter
                 const imageUrl = `/api/files/${chartId}/public?user_id=${userId}`

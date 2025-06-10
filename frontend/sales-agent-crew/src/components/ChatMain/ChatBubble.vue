@@ -820,7 +820,20 @@ const auditLogEvents = computed(() => {
     // For loaded conversations without streaming events, create synthetic audit log from workflow data
     if (props.workflowData && props.workflowData.length > 0) {
       console.log('Creating synthetic audit log from workflow data');
-      return props.workflowData.map((workflow, index) => ({
+      
+      // Deduplicate workflow data based on task and tool name
+      const uniqueWorkflows = [];
+      const seenWorkflowKeys = new Set();
+      
+      props.workflowData.forEach(workflow => {
+        const workflowKey = `${workflow.agent_name || 'Agent'}-${workflow.task || 'Task'}-${workflow.tool_name || 'NoTool'}`;
+        if (!seenWorkflowKeys.has(workflowKey)) {
+          seenWorkflowKeys.add(workflowKey);
+          uniqueWorkflows.push(workflow);
+        }
+      });
+      
+      return uniqueWorkflows.map((workflow, index) => ({
         id: `synthetic-audit-${index}`,
         title: `✅ ${workflow.agent_name || 'Agent'} - ${workflow.task || 'Task'}`,
         details: workflow.tool_name ? `Tool: ${workflow.tool_name}` : 'Completed successfully',
@@ -837,7 +850,42 @@ const auditLogEvents = computed(() => {
   
   console.log('Processing streamingEvents for audit log, events:', props.streamingEvents);
   
-  return props.streamingEvents
+  // First, deduplicate events to prevent duplicate audit log entries
+  const uniqueEvents = [];
+  const seenEventKeys = new Set();
+  
+  props.streamingEvents.forEach(event => {
+    // Create a unique key based on event content for deduplication
+    let eventKey = '';
+    
+    if (event.event === 'llm_stream_chunk' && event.data?.content?.includes('<tool>')) {
+      // For tool calls, use tool name + timestamp
+      const toolMatch = event.data.content.match(/<tool>([^<]+)<\/tool>/);
+      if (toolMatch) {
+        eventKey = `tool-${toolMatch[1]}-${event.data.timestamp || event.timestamp}`;
+      }
+    } else if (event.event === 'agent_completion' && event.data?.name) {
+      // For tool responses, use tool name + content hash for deduplication
+      const contentHash = event.data.content ? String(event.data.content).substring(0, 50) : '';
+      eventKey = `completion-${event.data.name}-${contentHash}`;
+    } else if (event.event === 'agent_completion' && event.data?.agent_type) {
+      // For other agent completions, use agent_type + timestamp
+      eventKey = `agent-${event.data.agent_type}-${event.data.timestamp || event.timestamp}`;
+    } else {
+      // For other events, use event type + timestamp
+      eventKey = `${event.event}-${event.data?.timestamp || event.timestamp}`;
+    }
+    
+    // Only add if we haven't seen this event key before
+    if (!seenEventKeys.has(eventKey)) {
+      seenEventKeys.add(eventKey);
+      uniqueEvents.push(event);
+    } else {
+      console.log(`Skipping duplicate audit log event: ${eventKey}`);
+    }
+  });
+  
+  return uniqueEvents
     .filter(event => {
       // Keep meaningful events, remove clutter - but include tool-related events
       if (event.event === 'stream_start') return false
