@@ -38,19 +38,10 @@ from agents.components.compound.xml_agent import (
     create_checkpointer,
     set_global_checkpointer,
 )
+from agents.tools.langgraph_tools import set_global_redis_storage_service
 
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
-
-# Import the new chat logic
-from agents.components.convo_newsletter_crew import crew_chat
-
-# Original Services
-from agents.services.query_router_service import QueryRouterService
 from agents.services.user_prompt_extractor_service import UserPromptExtractor
 from agents.components.lead_generation_crew import ResearchCrew
-from agents.components.samba_research_flow.samba_research_flow import SambaResearchFlow
 
 # For financial analysis
 from agents.services.financial_user_prompt_extractor_service import (
@@ -99,6 +90,9 @@ async def lifespan(app: FastAPI):
         connection_pool=pool, decode_responses=True
     )
     app.state.redis_storage_service = RedisStorage(redis_client=app.state.redis_client)
+
+    # Set global Redis storage service for tools
+    set_global_redis_storage_service(app.state.redis_storage_service)
 
     print(
         f"[LeadGenerationAPI] Using Redis at {redis_host}:{redis_port} with connection pool"
