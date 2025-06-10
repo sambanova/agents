@@ -80,9 +80,10 @@ async def lifespan(app: FastAPI):
         db=0,
         decode_responses=True,
         max_connections=100,
-        socket_timeout=5,  # Add timeout to prevent hanging connections
-        socket_connect_timeout=5,  # Add connection timeout
-        health_check_interval=30,  # Add health check to remove stale connections
+        socket_timeout=30,
+        socket_connect_timeout=10,
+        health_check_interval=30,
+        retry_on_timeout=True,
     )
 
     # Create SecureRedisService with Redis client

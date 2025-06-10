@@ -346,6 +346,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                     api_keys=api_keys,
                     provider=user_message_input["provider"],
                     message_id=user_message_input["message_id"],
+                    llm_type=user_message_input["planner_model"],
                 )
 
                 input_ = HumanMessage(
@@ -561,18 +562,12 @@ async def _run_input_and_config(
     api_keys: APIKeys,
     provider: str,
     message_id: str,
+    llm_type: str,
 ):
-    # thread = await get_thread(user_id, payload.thread_id)
-    # if not thread:
-    #     raise HTTPException(status_code=404, detail="Thread not found")
-
-    # assistant = await get_assistant(user_id, str(thread.assistant_id))
-    # if not assistant:
-    #     raise HTTPException(status_code=404, detail="Assistant not found")
 
     assistant = get_assistant(
         user_id=user_id,
-        llm_type="DeepSeek V3",
+        llm_type=llm_type,
     )
 
     if provider == "sambanova":
