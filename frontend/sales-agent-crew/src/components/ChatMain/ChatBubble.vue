@@ -526,9 +526,19 @@ function reopenDaytonaSidebar() {
   daytonaSidebarClosed.value = false
 }
 
-// Detect Daytona usage and automatically open sidebar
+// Detect Daytona usage and automatically open sidebar - ENHANCED FOR LOADED CONVERSATIONS
 const isDaytonaActive = computed(() => {
-  if (!props.streamingEvents || !Array.isArray(props.streamingEvents)) return false
+  if (!props.streamingEvents || !Array.isArray(props.streamingEvents)) {
+    // For loaded conversations, check if any workflow data indicates Daytona usage
+    if (props.workflowData && props.workflowData.length > 0) {
+      return props.workflowData.some(item => 
+        item.tool_name === 'DaytonaCodeSandbox' || 
+        item.task === 'code_execution' ||
+        item.agent_name === 'Daytona Sandbox'
+      );
+    }
+    return false;
+  }
   
   return props.streamingEvents.some(event => {
     // Check for Daytona tool calls in streaming content
@@ -538,6 +548,11 @@ const isDaytonaActive = computed(() => {
     
     // Check for Daytona tool results
     if (event.event === 'agent_completion' && event.data?.name === 'DaytonaCodeSandbox') {
+      return true
+    }
+    
+    // Check our custom flag for loaded conversations
+    if (event.isDaytonaRelated) {
       return true
     }
     
@@ -556,7 +571,13 @@ watch(isDaytonaActive, (isActive) => {
 
 // Advanced streaming parsing and status
 const currentStreamingStatus = computed(() => {
-  if (!props.streamingEvents || props.streamingEvents.length === 0) return '⏳ Starting...'
+  if (!props.streamingEvents || props.streamingEvents.length === 0) {
+    // For loaded conversations, show completion status if we have workflow data
+    if (props.workflowData && props.workflowData.length > 0) {
+      return '✅ Response complete';
+    }
+    return '⏳ Starting...';
+  }
   
   const events = props.streamingEvents
   let currentTool = null
@@ -699,8 +720,22 @@ const isCurrentlyStreaming = computed(() => {
 })
 
 const hasCompletedEvents = computed(() => {
-  if (!props.streamingEvents) return false
+  if (!props.streamingEvents || props.streamingEvents.length === 0) {
+    // For loaded conversations, check if we have any tool-related or completion events
+    if (props.workflowData && props.workflowData.length > 0) return true;
+    if (props.metadata && Object.keys(props.metadata).length > 0) return true;
+    return false;
+  }
+  
+  // Check for any completed tool executions, final responses, or tool-related events
   return props.streamingEvents.some(event => 
+    (event.event === 'agent_completion' && event.data.type === 'LiberalFunctionMessage') ||
+    (event.event === 'agent_completion' && event.data.name === 'DaytonaCodeSandbox') ||
+    (event.event === 'agent_completion' && event.data.name === 'search_tavily') ||
+    (event.event === 'agent_completion' && event.data.name === 'arxiv') ||
+    (event.event === 'stream_complete') ||
+    (event.event === 'agent_completion' && event.data.agent_type === 'react_end') ||
+    (event.isToolRelated || event.isDaytonaRelated) || // Check our custom flags
     event.event === 'agent_completion' || event.event === 'stream_complete'
   )
 })
@@ -727,9 +762,29 @@ const isStreamingResponse = computed(() => {
   return hasCompletedTools && hasResponseContent
 })
 
-// Summary for when we've moved to response streaming
+// Summary for when we've moved to response streaming - ENHANCED FOR LOADED CONVERSATIONS
 const finalStatusSummary = computed(() => {
-  if (!props.streamingEvents) return 'Details'
+  if (!props.streamingEvents || props.streamingEvents.length === 0) {
+    // For loaded conversations, generate summary from workflow data
+    if (props.workflowData && props.workflowData.length > 0) {
+      const completedTasks = props.workflowData.map(workflow => {
+        if (workflow.tool_name === 'DaytonaCodeSandbox' || workflow.task === 'code_execution') {
+          return 'Code execution complete';
+        } else if (workflow.tool_name === 'search_tavily' || workflow.task === 'web_search') {
+          return 'Web search complete';
+        } else if (workflow.tool_name === 'arxiv' || workflow.task === 'arxiv_search') {
+          return 'arXiv search complete';
+        } else {
+          return `${workflow.agent_name || 'Task'} complete`;
+        }
+      });
+      
+      if (completedTasks.length > 0) {
+        return `✅ ${completedTasks.join(' • ')}`;
+      }
+    }
+    return 'Details';
+  }
   
   let completedTools = []
   
@@ -757,18 +812,44 @@ const finalStatusSummary = computed(() => {
   return 'Details'
 })
 
-// Comprehensive audit log with filtered meaningful events
+// Comprehensive audit log with filtered meaningful events - ENHANCED FOR LOADED CONVERSATIONS
 const auditLogEvents = computed(() => {
-  if (!props.streamingEvents) return []
+  console.log('Computing auditLogEvents, streamingEvents:', props.streamingEvents?.length || 0, 'workflowData:', props.workflowData?.length || 0);
+  
+  if (!props.streamingEvents || props.streamingEvents.length === 0) {
+    // For loaded conversations without streaming events, create synthetic audit log from workflow data
+    if (props.workflowData && props.workflowData.length > 0) {
+      console.log('Creating synthetic audit log from workflow data');
+      return props.workflowData.map((workflow, index) => ({
+        id: `synthetic-audit-${index}`,
+        title: `✅ ${workflow.agent_name || 'Agent'} - ${workflow.task || 'Task'}`,
+        details: workflow.tool_name ? `Tool: ${workflow.tool_name}` : 'Completed successfully',
+        subItems: [],
+        dotClass: workflow.task === 'code_execution' ? 'bg-purple-500' : 'bg-green-500',
+        type: 'tool_result',
+        event: 'workflow_item',
+        timestamp: new Date().toISOString(),
+        fullData: workflow
+      }));
+    }
+    return [];
+  }
+  
+  console.log('Processing streamingEvents for audit log, events:', props.streamingEvents);
   
   return props.streamingEvents
     .filter(event => {
-      // Keep meaningful events, remove clutter
+      // Keep meaningful events, remove clutter - but include tool-related events
       if (event.event === 'stream_start') return false
       if (event.event === 'stream_complete') return false
       if (event.event === 'agent_completion' && event.data.agent_type === 'human') return false
       if (event.event === 'agent_completion' && event.data.agent_type === 'react_end') return false
       if (event.event === 'llm_stream_chunk' && event.data.content && !event.data.content.includes('<tool>')) return false
+      
+      // Always include tool-related events
+      if (event.isToolRelated || event.isDaytonaRelated) return true
+      if (event.event === 'agent_completion' && (event.data.agent_type === 'react_tool' || event.data.agent_type === 'tool_response')) return true
+      if (event.event === 'agent_completion' && event.data.name) return true // Tool responses
       
       return true
     })

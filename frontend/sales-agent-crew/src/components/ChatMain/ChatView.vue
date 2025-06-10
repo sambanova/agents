@@ -692,45 +692,59 @@ async function filterChat(msgData) {
     .map(message => {
       // For agent_completion events, handle LangGraph format
       if (message.event === 'agent_completion') {
-        // Skip tool calls and tool results - they should only show in timeline
-        if (message.content && typeof message.content === 'string' && message.content.includes('<tool>')) {
-          console.log('Filtering out tool call message');
-          return null; // Filter out tool calls
-        }
-        if (Array.isArray(message.content)) {
-          console.log('Filtering out tool result (array content)');
-          return null; // Filter out tool results (array content)
+        // For tool calls and tool results, preserve them for comprehensive audit log and Daytona sidebar
+        // but only filter them from main chat display if they're tool-related
+        const isToolCall = message.content && typeof message.content === 'string' && message.content.includes('<tool>');
+        const isToolResult = Array.isArray(message.content) || (message.additional_kwargs?.agent_type === 'react_tool');
+        const isToolResponse = message.additional_kwargs?.agent_type === 'tool_response';
+        
+        // For Daytona sandbox tool calls/results, always preserve them for sidebar processing
+        const isDaytonaRelated = (isToolCall && message.content.includes('DaytonaCodeSandbox')) ||
+                                 (message.type === 'LiberalFunctionMessage' && message.name === 'DaytonaCodeSandbox');
+        
+        if (isToolCall || isToolResult || isToolResponse || isDaytonaRelated) {
+          // Preserve tool-related messages for comprehensive audit log and Daytona processing
+          console.log('Preserving tool-related message for audit log and Daytona processing:', message.additional_kwargs?.agent_type, message.name);
+          
+          // Create structured data for tool events matching the live streaming format
+          const toolData = {
+            content: message.content || '',
+            additional_kwargs: message.additional_kwargs || {},
+            response_metadata: message.response_metadata || {},
+            type: message.type || 'AIMessage',
+            id: message.id || message.message_id,
+            name: message.name || null,
+            agent_type: message.additional_kwargs?.agent_type || 'tool'
+          };
+          
+          return {
+            event: 'agent_completion',
+            data: toolData,
+            message_id: message.message_id,
+            conversation_id: message.conversation_id,
+            timestamp: message.timestamp || new Date().toISOString(),
+            isToolRelated: true, // Flag for filtering in chat display but preserving for audit
+            isDaytonaRelated: isDaytonaRelated
+          };
         }
         
-        // Also filter by agent_type for tool messages that might not match above patterns
-        if (message.additional_kwargs?.agent_type === 'react_tool') {
-          console.log('Filtering out react_tool message');
-          return null;
-        }
-        if (message.additional_kwargs?.agent_type === 'tool_response') {
-          console.log('Filtering out tool_response message');
-          return null;
-        }
-        
-        // Only show user messages and final responses in chat bubbles
+        // Only show user messages and final responses in main chat bubbles
         const isUserMessage = message.additional_kwargs?.agent_type === 'human';
         const isFinalResponse = message.additional_kwargs?.agent_type === 'react_end';
         
         console.log(`Message filtering: ${message.additional_kwargs?.agent_type} -> isUser: ${isUserMessage}, isFinal: ${isFinalResponse}, showing: ${isUserMessage || isFinalResponse}`);
         
         if (!isUserMessage && !isFinalResponse) {
-          return null; // Filter out intermediate agent responses
+          return null; // Filter out intermediate agent responses that aren't tool-related
         }
         
         // LangGraph agent_completion events have content spread at top level
-        // Extract the actual message content
         const messageContent = {
           content: message.content || '',
           additional_kwargs: message.additional_kwargs || {},
           response_metadata: message.response_metadata || {},
           type: message.type || 'AIMessage',
           id: message.id || message.message_id,
-          // Extract agent_type from additional_kwargs - this is crucial for rendering
           agent_type: isUserMessage ? 'user_proxy' : (message.additional_kwargs?.agent_type || 'assistant')
         };
         
@@ -782,7 +796,7 @@ async function filterChat(msgData) {
           timestamp: message.timestamp || new Date().toISOString()
         };
       }
-      // Handle streaming events that might be in stored data
+      // Handle streaming events that might be in stored data - CRITICAL FOR PERSISTENCE
       else if (['stream_start', 'llm_stream_chunk', 'stream_complete'].includes(message.event)) {
         return {
           event: message.event,
@@ -836,40 +850,90 @@ async function filterChat(msgData) {
     }
   });
 
-  // Process agent_completion events for workflow metadata (tool calls/results)
+  // Process agent_completion events for workflow metadata (tool calls/results) - ENHANCED FOR PERSISTENCE
   let agentCompletionData = msgData.messages.filter(
     (message) => message.event === 'agent_completion' && (
       (message.content && typeof message.content === 'string' && message.content.includes('<tool>')) ||
-      Array.isArray(message.content)
+      Array.isArray(message.content) ||
+      (message.type === 'LiberalFunctionMessage') ||
+      (message.additional_kwargs?.agent_type === 'react_tool') ||
+      (message.additional_kwargs?.agent_type === 'tool_response') ||
+      (message.name === 'DaytonaCodeSandbox')
     )
   );
   agentCompletionData.forEach((completion) => {
     try {
-      // Create metadata for tool calls and results
-      const metadata = {
+      // Enhanced metadata for different tool types
+      let metadata = {
         workflow_name: "Agent Workflow",
         agent_name: "Research Agent", 
-        task: Array.isArray(completion.content) ? "search_results" : "tool_call",
+        task: "tool_execution",
         llm_name: completion.response_metadata?.model_name || "Unknown",
         llm_provider: "agent",
         duration: 0
       };
+
+      // Specific handling for different tool types
+      if (completion.name === 'DaytonaCodeSandbox' || 
+          (completion.content && completion.content.includes('DaytonaCodeSandbox'))) {
+        metadata.task = "code_execution";
+        metadata.agent_name = "Daytona Sandbox";
+        metadata.tool_name = "DaytonaCodeSandbox";
+      } else if (completion.name === 'search_tavily' || 
+                 (completion.content && completion.content.includes('search_tavily'))) {
+        metadata.task = "web_search";
+        metadata.tool_name = "search_tavily";
+      } else if (completion.name === 'arxiv' || 
+                 (completion.content && completion.content.includes('arxiv'))) {
+        metadata.task = "arxiv_search";
+        metadata.tool_name = "arxiv";
+      } else if (Array.isArray(completion.content)) {
+        metadata.task = "search_results";
+      } else if (completion.content && completion.content.includes('<tool>')) {
+        metadata.task = "tool_call";
+      }
+
       addOrUpdateModel(metadata, completion.message_id);
     } catch (error) {
       console.error('Failed to process agent completion data:', error);
     }
   });
 
-  // Process completion events for metadata
+  // Process completion events for metadata - ENHANCED FOR COMPREHENSIVE LOG SUMMARY PERSISTENCE
   let completionData = msgData.messages.filter(
-    (message) => message.event === 'completion'
+    (message) => message.event === 'completion' || message.event === 'stream_complete'
   );
   completionData.forEach((completion) => {
     try {
-      const parsedData = JSON.parse(completion.data);
+      let parsedData;
+      if (typeof completion.data === 'string') {
+        parsedData = JSON.parse(completion.data);
+      } else {
+        parsedData = completion.data;
+      }
+      
       if (parsedData.metadata) {
         completionMetaData.value = parsedData.metadata;
         emit('metadataChanged', completionMetaData.value);
+      }
+      
+      // Also check for stream_complete events that might contain final metadata
+      if (completion.event === 'stream_complete' && parsedData) {
+        // Create synthetic completion metadata if not present
+        if (!completionMetaData.value && workflowData.value.length > 0) {
+          const totalDuration = workflowData.value.reduce((sum, item) => sum + (item.duration || 0), 0);
+          const uniqueProviders = [...new Set(workflowData.value.map(item => item.llm_provider))];
+          const uniqueModels = [...new Set(workflowData.value.map(item => item.llm_name))];
+          
+          completionMetaData.value = {
+            total_duration: totalDuration,
+            providers_used: uniqueProviders,
+            models_used: uniqueModels,
+            total_tools: workflowData.value.length,
+            completion_status: 'completed'
+          };
+          emit('metadataChanged', completionMetaData.value);
+        }
       }
     } catch (error) {
       console.error('Failed to parse completion data:', error);
@@ -1900,11 +1964,23 @@ const filteredMessages = computed(() => {
     const grouped = new Map();
     const streamingEvents = ['stream_start', 'agent_completion', 'llm_stream_chunk', 'stream_complete'];
     
-    // First pass: count streaming events by message_id
+    // First pass: count streaming events by message_id and separate tool-related messages
     const messageIdCounts = {};
+    const toolRelatedMessages = new Map(); // Store tool-related messages separately
+    
     messagesData.value.forEach(msg => {
       if (msg && streamingEvents.includes(msg.event) && msg.message_id) {
+        // Count all streaming events
         messageIdCounts[msg.message_id] = (messageIdCounts[msg.message_id] || 0) + 1;
+        
+        // Separate tool-related messages for comprehensive audit log and Daytona processing
+        if (msg.isToolRelated || msg.isDaytonaRelated) {
+          const toolKey = `tool_${msg.message_id}`;
+          if (!toolRelatedMessages.has(toolKey)) {
+            toolRelatedMessages.set(toolKey, []);
+          }
+          toolRelatedMessages.get(toolKey).push(msg);
+        }
       }
     });
     
@@ -1931,6 +2007,42 @@ const filteredMessages = computed(() => {
         const group = grouped.get(groupKey);
         if (group && group.events) {
           group.events.push(msg);
+          
+          // Add tool-related events to the streaming group for comprehensive processing
+          const toolKey = `tool_${msg.message_id}`;
+          if (toolRelatedMessages.has(toolKey)) {
+            group.events.push(...toolRelatedMessages.get(toolKey));
+            // Sort events within the group by timestamp for proper timeline
+            group.events.sort((a, b) => {
+              const aTime = new Date(a.timestamp || 0).getTime();
+              const bTime = new Date(b.timestamp || 0).getTime();
+              return aTime - bTime;
+            });
+          }
+        }
+      } else if (msg.isToolRelated) {
+        // For tool-related messages from loaded conversations, create a synthetic streaming group
+        console.log('Creating synthetic streaming group for tool-related message:', msg.data.agent_type, msg.data.name);
+        
+        const groupKey = `streaming_${msg.message_id}`;
+        if (!grouped.has(groupKey)) {
+          grouped.set(groupKey, {
+            type: 'streaming_group',
+            message_id: msg.message_id,
+            events: [msg], // Include the tool-related message in the events
+            timestamp: msg.timestamp || new Date().toISOString()
+          });
+        } else {
+          // Add to existing group
+          const group = grouped.get(groupKey);
+          if (group && group.events) {
+            group.events.push(msg);
+            group.events.sort((a, b) => {
+              const aTime = new Date(a.timestamp || 0).getTime();
+              const bTime = new Date(b.timestamp || 0).getTime();
+              return aTime - bTime;
+            });
+          }
         }
       } else {
         // For all other messages (loaded chats, standalone messages), show individually

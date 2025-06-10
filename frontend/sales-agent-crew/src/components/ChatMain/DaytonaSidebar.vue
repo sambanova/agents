@@ -310,7 +310,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick, onMounted } from 'vue'
 
 const props = defineProps({
   isOpen: {
@@ -377,7 +377,7 @@ const analysisPreview = computed(() => {
   return text.length > 100 ? text.substring(0, 100) + '...' : text
 })
 
-// Watch for streaming events changes
+// Watch for streaming events changes - ENHANCED FOR LOADED CONVERSATIONS
 watch(() => props.streamingEvents, (newEvents) => {
   if (newEvents && newEvents.length > 0) {
     processStreamingEvents(newEvents)
@@ -448,9 +448,31 @@ function processStreamingEvents(events) {
         break
         
       case 'agent_completion':
-        if (event.data?.name === 'DaytonaCodeSandbox') {
-          // Extract charts from Daytona response
-          const content = event.data.content || ''
+        // Handle both streaming and loaded conversation agent_completion events
+        const eventData = event.data || event;
+        
+        if (eventData?.name === 'DaytonaCodeSandbox' || eventData?.agent_type === 'tool_response' || eventData?.agent_type === 'react_tool') {
+          console.log('Processing Daytona agent_completion event:', eventData);
+          
+          // Handle tool call (react_tool) - extract code from tool input
+          if (eventData?.agent_type === 'react_tool' && eventData.content?.includes('DaytonaCodeSandbox')) {
+            const toolInputMatch = eventData.content.match(/<tool_input>([\s\S]*?)(?:<\/tool_input>|$)/);
+            if (toolInputMatch && toolInputMatch[1]) {
+              const extractedCode = toolInputMatch[1].trim()
+              if (extractedCode.includes('import') || extractedCode.includes('def ') || 
+                  extractedCode.includes('plt.') || extractedCode.includes('matplotlib') ||
+                  extractedCode.includes('numpy') || extractedCode.includes('pandas')) {
+                codeContent.value = extractedCode
+                codeDetected = true
+                updateStatus('📝 Code loaded from history', 'Python analysis script')
+                addToLog('Code loaded from conversation history', 'info', timestamp)
+                console.log('Extracted code from tool call:', extractedCode.substring(0, 100) + '...');
+              }
+            }
+          }
+          
+          // Extract charts from Daytona response (tool_response)
+          const content = eventData.content || ''
           
           // Look for chart attachments, data URLs, and Redis chart references
           const attachmentMatches = content.match(/!\[([^\]]*)\]\(attachment:([^)]+)\)/g)
@@ -550,6 +572,17 @@ function processStreamingEvents(events) {
           }
           
           updateStatus('✅ Analysis complete', `Generated ${chartCount} visualizations`)
+          // Extract analysis results from tool response content
+          if (eventData?.agent_type === 'tool_response' && content) {
+            // Remove chart references and extract text analysis
+            const analysisText = content.replace(/!\[([^\]]*)\]\([^)]+\)/g, '').trim();
+            if (analysisText.length > 50) {
+              analysisResults.value = analysisText;
+              addToLog('Analysis results loaded from history', 'info', timestamp);
+              console.log('Extracted analysis results:', analysisText.substring(0, 100) + '...');
+            }
+          }
+          
           addToLog(`Analysis completed with ${chartCount} charts`, 'success', timestamp)
           isProcessing.value = false
         }
@@ -560,6 +593,9 @@ function processStreamingEvents(events) {
   // Set initial status if no specific events detected
   if (!codeDetected && !toolCallDetected) {
     updateStatus('⏳ Ready for analysis', 'Waiting for code execution')
+  } else if (codeDetected || chartCount > 0) {
+    // Update status to show loaded state
+    updateStatus('✅ Historical analysis loaded', `Code and ${chartCount} charts from conversation`)
   }
 }
 
@@ -778,6 +814,15 @@ function handleChartError(chart) {
   chart.loading = false
   addToLog(`Failed to load chart: ${chart.title}`, 'error', new Date().toISOString())
 }
+
+// Lifecycle - ENHANCED FOR LOADED CONVERSATIONS
+onMounted(() => {
+  // Process any existing streaming data (including historical data from loaded conversations)
+  if (props.streamingEvents && props.streamingEvents.length > 0) {
+    console.log('DaytonaSidebar: Processing existing streaming events on mount:', props.streamingEvents.length);
+    processStreamingEvents(props.streamingEvents);
+  }
+})
 </script>
 
 <style scoped>
