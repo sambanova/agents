@@ -1,8 +1,10 @@
 <template>
-  <div class="chat-list overflow-x-hidden h-full">
+  <div class="chat-list overflow-x-hidden h-full bg-white dark:bg-gray-900">
     <div v-for="group in groupedChats" :key="group.label" class="chat-group">
       <!-- Sticky Group Header -->
-      <div class="sticky-header text-xs text-primary-brandTextSecondary">
+      <div
+        class="sticky-header text-xs text-primary-brandTextSecondary dark:text-gray-400 bg-white dark:bg-gray-800"
+      >
         {{ group.label }}
       </div>
       <!-- Chat Items -->
@@ -21,6 +23,7 @@
     </div>
   </div>
 </template>
+
 
 <script setup>
 import { computed } from 'vue';
@@ -154,7 +157,7 @@ function handleDownloadChat(conversationId) {
 .sticky-header {
   position: sticky;
   top: 0;
-  background: #ffffff;
+
   z-index: 10;
   padding: 0.5rem 1rem;
 }

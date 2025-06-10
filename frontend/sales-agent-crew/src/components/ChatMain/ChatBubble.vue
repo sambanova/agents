@@ -1,60 +1,63 @@
 <template>
-  <div>
-    <!-- Handle streaming events -->
-    <li v-if="props.streamingEvents" class="relative px-4 items-start gap-x-2 sm:gap-x-4">
-      <div class="w-full relative flex items-center">
-        <UserAvatar :type="provider" />   
-        <div class="grow relative text-start space-y-3">
-          <!-- Card -->
-          <div class="inline-block">
-            <div class="relative p-4 flex items-center capitalize space-y-3 font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center capitalize">
-              {{ provider==="sambanova"?"SambaNova":provider }} Agent
-            </div>
+  
+    <!-- Streaming events group -->
+    <li
+      v-if="streamingEvents"
+      class="relative px-4 items-start gap-x-2 sm:gap-x-4"
+    >
+      <div class="w-full flex items-center">
+        <UserAvatar :type="provider" />
+        <div class="grow ml-4 space-y-3">
+          <div class="p-4 flex items-center font-semibold text-gray-800 dark:text-gray-100">
+            {{ providerLabel }} Agent
           </div>
         </div>
       </div>
-      <div class="w-full bg-white">          
-        <!-- Minimalist Real-time Status Line -->
-        <div class="flex items-start justify-between p-3 bg-gray-50 rounded-t-lg border-b status-bar">
-          <div class="flex items-start space-x-3 flex-1">
-            <div class="flex items-center space-x-2">
-              <div :class="currentStatusDot" class="w-2 h-2 rounded-full mt-1 flex-shrink-0"></div>
-              <div v-if="showStatusAnimation" class="mt-0.5">
-                <svg 
-                  class="w-3 h-3 text-gray-500 animate-spin" 
-                  viewBox="0 0 24 24" 
-                  fill="none" 
-                  stroke="currentColor"
-                >
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
-            </div>
-            <div v-if="isStreamingResponse" class="text-sm text-gray-700 transition-all duration-300">
+      <div class="w-full bg-white dark:bg-gray-800">
+        <!-- Status bar -->
+        <div
+          class="flex items-start justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-t-lg border-b dark:border-gray-600"
+        >
+          <div class="flex items-center space-x-2 flex-1">
+            <div :class="currentStatusDot" class="w-2 h-2 rounded-full mt-1"></div>
+            <svg
+              v-if="showStatusAnimation"
+              class="w-4 h-4 text-gray-500 dark:text-gray-300 animate-spin"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M10.325 4.317c.426-1.756 2.924-1.756..."
+              />
+            </svg>
+            <div v-if="isStreamingResponse" class="text-sm text-gray-700 dark:text-gray-300">
               {{ finalStatusSummary }}
             </div>
-            <div v-else class="text-sm text-gray-700 whitespace-pre-line transition-all duration-300">
-              <span class="inline-flex items-start space-x-1">
-                <span>{{ currentStreamingStatus }}</span>
-                <span v-if="showSearchingAnimation" class="flex space-x-0.5 mt-1">
-                  <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0s"></div>
-                  <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
-                  <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+            <div v-else class="text-sm text-gray-700 dark:text-gray-300">
+              <span class="inline-flex items-center gap-1">
+                {{ currentStreamingStatus }}
+                <span v-if="showSearchingAnimation" class="flex space-x-0.5">
+                  <span class="w-1 h-1 bg-gray-400 rounded-full animate-bounce"></span>
+                  <span class="w-1 h-1 bg-gray-400 rounded-full animate-bounce delay-150"></span>
+                  <span class="w-1 h-1 bg-gray-400 rounded-full animate-bounce delay-300"></span>
                 </span>
               </span>
             </div>
           </div>
-          
+
           <button
             v-if="hasCompletedEvents || isStreamingResponse"
             @click="toggleAuditLog"
-            class="text-xs text-gray-500 hover:text-gray-700 flex items-center space-x-1 hover:bg-gray-200 px-2 py-1 rounded transition-all duration-200"
+            class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded transition"
           >
-            <span>{{ showAuditLog ? 'Hide' : 'Show' }} details</span>
+            {{ showAuditLog ? 'Hide' : 'Show' }} details
             <svg
               :class="{ 'rotate-180': showAuditLog }"
-              class="w-3 h-3 transition-transform duration-200"
+              class="w-3 h-3 inline-block transition-transform duration-200"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -64,71 +67,63 @@
           </button>
         </div>
 
-
-
-        <!-- Artifacts/Charts (if available and not using Daytona sidebar) -->
-        <div 
-          v-if="hasArtifacts && !isDaytonaActive"
-          class="p-3 bg-purple-50 border-b"
-        >
-          <div class="text-xs font-medium text-purple-800 mb-2">Generated Artifacts</div>
+        <!-- Artifacts -->
+        <div v-if="hasArtifacts && !isDaytonaActive" class="p-3 bg-purple-50 dark:bg-purple-900 border-b dark:border-purple-700">
+          <div class="text-xs font-medium text-purple-800 dark:text-purple-200 mb-2">Generated Artifacts</div>
           <div class="grid grid-cols-2 gap-2">
             <div
               v-for="artifact in artifacts"
               :key="artifact.id"
-              class="p-2 bg-white rounded border border-purple-200 cursor-pointer hover:border-purple-400"
               @click="openArtifact(artifact)"
+              class="p-2 bg-white dark:bg-gray-800 rounded border border-purple-200 dark:border-purple-700 cursor-pointer hover:border-purple-400 transition"
             >
               <div class="flex items-center space-x-2">
                 <div class="w-8 h-8 bg-purple-500 rounded flex items-center justify-center">
                   <span class="text-xs text-white">📊</span>
                 </div>
                 <div>
-                  <div class="text-xs font-medium text-gray-900">{{ artifact.title }}</div>
-                  <div class="text-xs text-gray-500">Click to view</div>
+                  <div class="text-xs font-medium text-gray-900 dark:text-gray-100">{{ artifact.title }}</div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">Click to view</div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Comprehensive Audit Log (collapsible) -->
-        <div 
+        <!-- Audit log -->
+        <div
           v-if="showAuditLog && hasCompletedEvents"
-          class="p-3 bg-gray-50 border-b max-h-96 overflow-y-auto"
+          class="p-3 bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600 max-h-96 overflow-y-auto"
         >
-          <div class="text-xs font-medium text-gray-600 mb-3">Comprehensive Audit Log</div>
+          <div class="text-xs font-medium text-gray-600 dark:text-gray-300 mb-3">
+            Comprehensive Audit Log
+          </div>
           <div class="space-y-3">
             <div
               v-for="event in auditLogEvents"
               :key="event.id"
-              class="border-l-2 border-gray-200 pl-3"
+              class="border-l-2 border-gray-200 dark:border-gray-600 pl-3"
             >
               <div class="flex items-start space-x-2">
-                <div :class="event.dotClass" class="w-2 h-2 rounded-full mt-1 flex-shrink-0"></div>
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center justify-between">
-                    <span class="text-xs font-medium text-gray-900">{{ event.title }}</span>
-                    <span class="text-xs text-gray-400">{{ formatEventTime(event.timestamp) }}</span>
+                <div :class="event.dotClass"></div>
+                <div class="flex-1">
+                  <div class="flex justify-between">
+                    <span class="text-xs font-medium text-gray-900 dark:text-gray-100">{{ event.title }}</span>
+                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ formatEventTime(event.timestamp) }}</span>
                   </div>
-                  <div v-if="event.details" class="text-xs text-gray-600 mt-1">{{ event.details }}</div>
-                  <!-- Sub-bullets for sources -->
-                  <div v-if="event.subItems && event.subItems.length > 0" class="mt-2 ml-4 space-y-1">
-                    <div
-                      v-for="subItem in event.subItems"
-                      :key="subItem.id"
-                      class="flex items-start space-x-1"
-                    >
-                      <span class="text-xs text-gray-400 mt-0.5">•</span>
-                      <div class="text-xs text-gray-600">
-                        <span class="font-medium">{{ subItem.title }}</span>
-                        <span v-if="subItem.domain" class="text-gray-500 ml-1">({{ subItem.domain }})</span>
-                      </div>
+                  <div v-if="event.details" class="text-xs text-gray-600 dark:text-gray-400 mt-1">{{ event.details }}</div>
+                  <div
+                    v-if="event.subItems?.length"
+                    class="mt-2 ml-4 space-y-1 text-xs text-gray-600 dark:text-gray-400"
+                  >
+                    <div v-for="sub in event.subItems" :key="sub.id" class="flex items-start space-x-1">
+                      <span>•</span>
+                      <span>{{ sub.title }}<span v-if="sub.domain"> ({{ sub.domain }})</span></span>
                     </div>
                   </div>
-                  <div class="text-xs text-gray-400 mt-1">
-                    <span class="bg-gray-100 px-1 rounded">{{ event.event }}</span>
-                    <span v-if="event.type" class="bg-blue-100 px-1 rounded ml-1">{{ event.type }}</span>
+                  <div class="text-xs text-gray-400 dark:text-gray-600 mt-1">
+                    <span class="bg-gray-100 dark:bg-gray-600 px-1 rounded">{{ event.event }}</span>
+                    <span v-if="event.type" class="bg-blue-100 dark:bg-blue-600 px-1 rounded ml-1">{{ event.type }}</span>
                   </div>
                 </div>
               </div>
@@ -136,198 +131,68 @@
           </div>
         </div>
 
-        <!-- Actual Streaming Response Content -->
-        <div class="p-4">
-          <div class="prose prose-sm max-w-none">
-            <div 
-              v-if="streamingResponseContent"
-              class="text-gray-800 whitespace-pre-wrap"
-              v-html="renderMarkdown(streamingResponseContent)"
-            ></div>
-            <div 
-              v-else-if="isCurrentlyStreaming && !streamingResponseContent"
-              class="flex items-center space-x-2 text-gray-500"
+        <!-- Streaming response -->
+        <div class="p-4 bg-white dark:bg-gray-800">
+          <div v-if="streamingResponseContent" class="prose prose-sm dark:prose-invert" v-html="renderMarkdown(streamingResponseContent)"/>
+          <div
+            v-else-if="isCurrentlyStreaming"
+            class="flex items-center space-x-2 text-gray-500 dark:text-gray-400 italic"
+          >
+            <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+            <span>Generating response...</span>
+          </div>
+        </div>
+
+        <!-- Inline sources -->
+        <div v-if="toolSources.length" class="px-4 py-2">
+          <div class="flex flex-wrap gap-2">
+            <a
+              v-for="src in toolSources"
+              :key="src.url || src.title"
+              :href="src.url"
+              target="_blank"
+              class="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 dark:bg-gray-700 border dark:border-gray-600 rounded text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 transition"
             >
-              <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-              <span class="text-sm italic">Generating response...</span>
-            </div>
+              <span v-if="src.type==='web'">🌐</span>
+              <span v-else-if="src.type==='arxiv'">📚</span>
+              <span class="truncate max-w-[120px]">{{ src.title }}</span>
+            </a>
           </div>
+        </div>
 
-          <!-- Inline Sources (minimalist) - MOVED TO AFTER RESPONSE -->
-          <div v-if="toolSources && toolSources.length > 0" class="mt-4">
-            <div class="flex flex-wrap gap-2">
-              <template v-for="source in toolSources" :key="source?.url || source?.title || 'unknown'">
-                <a
-                  v-if="source && source.url"
-                  :href="source.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs text-gray-700 hover:text-gray-900 transition-colors border border-gray-200 hover:border-gray-300"
-                >
-                  <span v-if="source.type === 'web'">🌐</span>
-                  <span v-else-if="source.type === 'arxiv'">📚</span>
-                  <span v-else>📄</span>
-                  <span class="truncate max-w-[180px]">{{ source.title || 'Untitled' }}</span>
-                  <span v-if="source.domain && source.domain !== source.title && source.type === 'web'" class="text-gray-500 text-xs">
-                    • {{ source.domain }}
-                  </span>
-                  <svg class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                  </svg>
-                </a>
-                <div
-                  v-else-if="source && !source.url"
-                  class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 rounded-lg text-xs text-gray-700 border border-gray-200"
-                >
-                  <span v-if="source.type === 'web'">🌐</span>
-                  <span v-else-if="source.type === 'arxiv'">📚</span>
-                  <span v-else>📄</span>
-                  <span class="truncate max-w-[180px]">{{ source.title || 'Untitled' }}</span>
-                </div>
-              </template>
-            </div>
-          </div>
-          
-          <!-- Artifacts Display (hidden when Daytona sidebar is active) -->
-          <div v-if="artifacts.length > 0 && !isDaytonaActive" class="mt-4">
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="artifact in artifacts"
-                :key="artifact.id"
-                @click="openArtifact(artifact)"
-                class="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg text-sm text-blue-800 hover:text-blue-900 transition-colors"
-              >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                </svg>
-                {{ artifact.title }}
-              </button>
-            </div>
-          </div>
-          
-          <!-- Daytona Status Indicator and Controls -->
-          <div v-if="isDaytonaActive" class="mt-4">
-            <div class="inline-flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
-              </svg>
-              <span class="font-medium">{{ showDaytonaSidebar ? 'Code analysis running in Canvas' : 'Data analysis available' }}</span>
-              
-              <!-- Reopen button when sidebar is closed -->
-              <button
-                v-if="!showDaytonaSidebar"
-                @click="reopenDaytonaSidebar"
-                class="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 hover:bg-blue-200 rounded text-xs font-medium transition-colors"
-                title="Open Daytona Sandbox"
-              >
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                </svg>
-                Open
-              </button>
-              
-              <!-- Sidebar active indicator -->
-              <svg v-else class="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-              </svg>
-            </div>
+        <!-- Artifacts (fallback) -->
+        <div v-if="hasArtifacts && !isDaytonaActive" class="px-4 py-2">
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="art in artifacts"
+              :key="art.id"
+              @click="openArtifact(art)"
+              class="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 dark:bg-blue-900 border dark:border-blue-700 rounded text-sm text-blue-800 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-800 transition"
+            >
+              📊 {{ art.title }}
+            </button>
           </div>
         </div>
-      </div>
-    </li>
 
-    <!-- Check if event is 'user_message' -->
-    <li
-      v-else-if="props.event === 'user_message'" 
-      class="flex px-4 items-start gap-x-2 sm:gap-x-4"
-    >
-      <div class="grow text-end space-y-3">
-        <!-- Card -->
-        <div class="inline-block flex justify-end">
-          <p class="text-[16px] text-left color-primary-brandGray max-w-[80%] w-auto">
-            {{ parsedData.message || props.data }}
-          </p>
-        </div>
-        <!-- End Card -->
-      </div>
-      <UserAvatar :type="user" />
-    </li>
-    
-    <!-- For all other cases -->
-    <li v-else class="relative px-4 items-start gap-x-2 sm:gap-x-4">
-      <div class="w-full relative flex items-center">
-        <UserAvatar :type="provider" />   
-        <div class="grow relative text-start space-y-3">
-          <!-- Card -->
-          <div class="inline-block">
-            <div class="relative p-4 flex items-center capitalize space-y-3 font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center capitalize">
-              {{ provider==="sambanova"?"SambaNova":provider }} Agent
-              <!-- Menu button: visible on hover -->
-              <button
-                v-if="parsedData.agent_type==='sales_leads'||parsedData.agent_type==='financial_analysis'||parsedData.agent_type==='deep_research'"
-                type="button"
-                class="group-hover:opacity-100 transition-opacity duration-200"
-                @click.stop="toggleMenu"
-                @mousedown.stop
-                aria-label="Open menu"
-              >
-                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="5" r="1" />
-                  <circle cx="12" cy="12" r="1" />
-                  <circle cx="12" cy="19" r="1" />
-                </svg>
-              </button>
-              
-              <!-- Popover menu -->
-              <div
-                v-if="activeMenu"
-                class="absolute right-1 top-8 bg-white border border-gray-200 shadow-lg rounded z-30"
-                @click.stop
-              >
-                <button
-                  class="flex items-center w-full px-4 py-2 hover:bg-gray-100 text-left"
-                  @click="generatePDFFromHtml"
-                >
-                  <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  Download PDF
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="w-full bg-white">          
-        <AnalysisTimeline 
-          :isLoading="isLoading" 
-          :parsedData="parsedData" 
-          :workflowData="workflowData" 
-          :presentMetadata="parsedData.metadata" 
-          :plannerText="plannerText" 
+        <!-- Daytona sidebar -->
+        <DaytonaSidebar
+          v-if="showDaytonaSidebar"
+          :isOpen="showDaytonaSidebar"
+          :streamingEvents="streamingEvents"
+          @close="closeDaytonaSidebar"
+          @expand-chart="openArtifact"
         />
-        <component :id="'chat-'+messageId" :is="selectedComponent" :parsed="parsedData" />
+
+        <!-- Artifact canvas modal -->
+        <ArtifactCanvas
+          v-if="showArtifactCanvas"
+          :isOpen="showArtifactCanvas"
+          :artifact="selectedArtifact"
+          @close="closeArtifactCanvas"
+        />
       </div>
     </li>
-
-    <!-- Daytona Sidebar (replaces Artifact Canvas for Daytona operations) -->
-    <DaytonaSidebar 
-      :isOpen="showDaytonaSidebar"
-      :streamingEvents="streamingEvents"
-      @close="closeDaytonaSidebar"
-      @expand-chart="openArtifact"
-    />
-    
-    <!-- Artifact Canvas Modal (fallback for non-Daytona artifacts) -->
-    <ArtifactCanvas 
-      :isOpen="showArtifactCanvas"
-      :artifact="selectedArtifact"
-      @close="closeArtifactCanvas"
-    />
-  </div>
+  
 </template>
   
   <script setup>

@@ -1,16 +1,15 @@
 <template>
   <div
-    class="p-3 m-1 w-full relative cursor-pointer group"
+    class="p-3 m-1 w-full relative cursor-pointer group bg-white dark:bg-gray-800"
     @click="onSelectConversation"
     :class="{
-      'bg-primary-brandDarkGray rounded-md border border-primary-brandFrame':
-        isActive,
+      'bg-primary-brandDarkGray dark:bg-gray-700 rounded-md border border-primary-brandFrame dark:border-gray-600': isActive,
     }"
   >
     <!-- Menu button: visible on hover -->
     <button
       type="button"
-      class="absolute right-1 top-1 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+      class="absolute right-1 top-1 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-gray-600 dark:text-gray-400"
       @click.stop="toggleMenu"
       @mousedown.stop
       aria-label="Open menu"
@@ -19,7 +18,7 @@
         class="w-5 h-5"
         viewBox="0 0 24 24"
         fill="none"
-        stroke="#667085"
+        stroke="currentColor"
         stroke-width="2"
         stroke-linecap="round"
         stroke-linejoin="round"
@@ -39,12 +38,13 @@
 
     <!-- Conversation details -->
     <div class="w-full relative h-full">
-      <div class="text-md capitalize color-primary-brandGray truncate">
-        {{ conversation.name ? conversation.name : 'New Chat' }}
+      <div class="text-md capitalize text-primary-brandGray dark:text-gray-200 truncate">
+        {{ conversation.name || 'New Chat' }}
       </div>
     </div>
   </div>
 </template>
+
 
 <script setup>
 import { ref, computed } from 'vue';
