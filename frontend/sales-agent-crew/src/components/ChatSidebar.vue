@@ -1,11 +1,13 @@
 <template>
   <div
-    class="w-64 h-full border border-primary-brandFrame bg-white rounded-l flex flex-col"
+    class="w-64 h-full border border-primary-brandFrame dark:border-gray-600 bg-white dark:bg-gray-800 rounded-l flex flex-col"
   >
     <!-- Header -->
     <div class="px-4 py-2 flex items-center justify-between">
       <button
-        class="p-2 w-full border border-primary-brandBorder text-primary-brandColor text-sm rounded"
+        class="p-2 w-full border border-primary-brandBorder dark:border-gray-600 
+        text-primary-brandColor dark:text-primary-brandColor-dark bg-white
+         dark:bg-gray-700 text-sm rounded hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
         @click="createNewChat"
         :disabled="missingKeysArray.length > 0"
       >
@@ -16,10 +18,10 @@
     <!-- If missing any key, show a small alert -->
     <div
       v-if="missingKeysArray.length > 0"
-      class="bg-yellow-50 text-yellow-700 text-sm p-2"
+      class="bg-yellow-50 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 text-sm p-2"
     >
-      <span class="capitalize" v-for="(keyItem, index) in missingKeysArray">
-        {{ index > 0 ? ',' : '' }}{{ keyItem ? keyItem : '' }}
+      <span class="capitalize" v-for="(keyItem, index) in missingKeysArray" :key="index">
+        {{ index > 0 ? ',' : '' }}{{ keyItem }}
       </span>
       key(s) are missing. Please set them in settings.
     </div>
