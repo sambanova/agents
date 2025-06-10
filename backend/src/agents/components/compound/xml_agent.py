@@ -22,6 +22,38 @@ from langgraph.checkpoint.redis import AsyncRedisSaver
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
+
+# TODO: This is a temporary fix to get the checkpoint working. Remove this once we have a proper fix.
+try:
+    from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+
+    # Store the original method
+    original_aload_pending_sends = AsyncRedisSaver._aload_pending_sends
+
+    async def patched_aload_pending_sends(self, *args, **kwargs):
+        """Patched version that fixes the blob attribute error"""
+        try:
+            # Try the original method first
+            return await original_aload_pending_sends(self, *args, **kwargs)
+        except AttributeError as e:
+            if "'Document' object has no attribute 'blob'" in str(e):
+                # If we hit the blob error, return empty list to avoid crash
+                # This means pending sends won't work perfectly, but the checkpoint will function
+                return []
+            else:
+                # Re-raise other AttributeErrors
+                raise
+
+    # Apply the patch
+    AsyncRedisSaver._aload_pending_sends = patched_aload_pending_sends
+    print("Applied Redis checkpoint bug workaround")
+
+except ImportError:
+    # Redis checkpoint not available, no patch needed
+    pass
+except Exception as e:
+    print(f"Warning: Could not apply Redis checkpoint patch: {e}")
+
 # Global checkpointer variable
 _global_checkpointer = None
 
@@ -73,17 +105,47 @@ def create_checkpointer(redis_client=None):
             ),
         }
 
-        # Create checkpointer and override its serializer loads method to include our namespace
+        # Create checkpointer and extend its serializer configuration
         redis_checkpointer = AsyncRedisSaver(redis_client=redis_client)
 
-        def custom_loads(s: str):
-            from langchain_core.load.load import loads
+        # Store the original loads method to delegate to it first
+        original_loads = redis_checkpointer.serde.loads
 
-            return loads(
-                s,
-                valid_namespaces=["agents", "components", "compound", "message_types"],
-                additional_import_mappings=additional_import_mappings,
-            )
+        def custom_loads(s: str):
+            """
+            Extended loads method that supports custom message types.
+
+            First attempts to use the original LangGraph deserializer to preserve
+            all standard functionality, then falls back to custom configuration
+            for objects that require additional namespaces.
+            """
+            try:
+                # Delegate to original implementation first - this handles all
+                # standard LangGraph objects including subgraph states
+                return original_loads(s)
+            except Exception:
+                # Original failed, likely due to custom objects that need
+                # additional namespaces. Use extended configuration.
+                from langchain_core.load.load import loads
+
+                return loads(
+                    s,
+                    valid_namespaces=[
+                        # LangGraph core namespaces
+                        "langchain",
+                        "langchain_core",
+                        "langgraph",
+                        "langgraph.graph",
+                        "langgraph.checkpoint",
+                        "langgraph.pregel",
+                        # Custom namespaces
+                        "agents",
+                        "components",
+                        "compound",
+                        "message_types",
+                    ],
+                    additional_import_mappings=additional_import_mappings,
+                )
 
         redis_checkpointer.serde.loads = custom_loads
 

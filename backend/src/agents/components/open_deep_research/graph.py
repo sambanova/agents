@@ -1,33 +1,21 @@
-########## graph.py (UPDATED CODE) ##########
 import functools
-import json
 import time
-import asyncio
-import threading
-from concurrent.futures import ThreadPoolExecutor
-from typing import Literal, List, Optional, Tuple, Any, Callable
-import os
+from typing import Literal, List, Optional, Tuple, Any
 import re
 import requests
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.runnables import RunnableConfig
-from langchain_sambanova import ChatSambaNovaCloud
 from langchain_fireworks import ChatFireworks
-from langchain_core.callbacks import BaseCallbackHandler
 
 from langgraph.constants import Send
 from langgraph.graph import START, END, StateGraph
 from langgraph.types import interrupt, Command
-from agents.storage.redis_service import SecureRedisService
 
 from agents.utils.custom_sambanova import CustomChatSambaNovaCloud
 from agents.registry.model_registry import model_registry
 
-# We import our data models from the api module
-
-from .state import (
+from agents.components.open_deep_research.state import (
     ReportStateInput,
     ReportStateOutput,
     Sections,
@@ -36,6 +24,7 @@ from .state import (
     SectionOutputState,
     Queries,
     Feedback,
+    Section,
 )
 from .prompts import (
     report_planner_query_writer_instructions,
@@ -62,8 +51,6 @@ from langchain.output_parsers import (
 )
 
 from agents.utils.logging import logger
-from langgraph.checkpoint.memory import InMemorySaver
-
 from langchain_core.runnables import RunnableLambda
 
 
@@ -970,4 +957,4 @@ def create_deep_research_graph(api_key: str, provider: str, request_timeout: int
     builder.add_edge("write_final_sections", "compile_final_report")
     builder.add_edge("compile_final_report", END)
 
-    return builder.compile(checkpointer=InMemorySaver())
+    return builder.compile()

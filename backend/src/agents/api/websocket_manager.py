@@ -100,7 +100,7 @@ class WebSocketConnectionManager(WebSocketInterface):
 
     async def cleanup_inactive_sessions(self):
         """Cleanup sessions that have been inactive for longer than SESSION_TIMEOUT"""
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
         sessions_to_cleanup = []
 
         for session_key, last_active in self.session_last_active.items():
@@ -138,11 +138,6 @@ class WebSocketConnectionManager(WebSocketInterface):
                 # Also remove from pubsub_instances
                 self.pubsub_instances.pop(session_key, None)
 
-            if "agent_runtime" in session and session["agent_runtime"] is not None:
-                cleanup_tasks.append(
-                    asyncio.create_task(session["agent_runtime"].close())
-                )
-
             if cleanup_tasks:
                 await asyncio.gather(*cleanup_tasks, return_exceptions=True)
 
@@ -172,7 +167,6 @@ class WebSocketConnectionManager(WebSocketInterface):
         from agents.components.compound.agent import agent
         from langchain_core.messages import HumanMessage
 
-        agent_runtime = None
         background_task = None
         session_key = f"{user_id}:{conversation_id}"
         channel = f"agent_thoughts:{user_id}:{conversation_id}"
@@ -186,7 +180,6 @@ class WebSocketConnectionManager(WebSocketInterface):
                 self.pubsub_instances[session_key] = pubsub
 
                 self.active_sessions[session_key] = {
-                    "agent_runtime": None,
                     "background_task": None,
                     "websocket": websocket,
                     "is_active": True,
@@ -210,16 +203,13 @@ class WebSocketConnectionManager(WebSocketInterface):
 
             # Check if we have an existing session state to restore
             session = self.active_sessions[session_key]
-            agent_runtime = session.get("agent_runtime")
             background_task = session.get("background_task")
             pubsub = session["pubsub"]  # We know this exists now
 
             # Pre-compute keys that will be used throughout the session
             meta_key = f"chat_metadata:{user_id}:{conversation_id}"
-            message_key = f"messages:{user_id}:{conversation_id}"
             api_keys_key = f"api_keys:{user_id}"
 
-            # Initial setup tasks that can run concurrently
             exists = await self.redis_client.exists(meta_key)
             redis_api_keys = await self.redis_client.hgetall(api_keys_key, user_id)
 
@@ -260,7 +250,6 @@ class WebSocketConnectionManager(WebSocketInterface):
 
             # Store session state
             self.active_sessions[session_key] = {
-                "agent_runtime": agent_runtime,
                 "background_task": background_task,
                 "websocket": websocket,  # Store websocket reference
                 "is_active": True,  # Track connection state
@@ -268,16 +257,14 @@ class WebSocketConnectionManager(WebSocketInterface):
             }
 
             # Send connection established message
-            asyncio.create_task(
-                websocket.send_json(
-                    {
-                        "event": "connection_established",
-                        "data": "WebSocket connection established",
-                        "user_id": user_id,
-                        "conversation_id": conversation_id,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    }
-                )
+            await websocket.send_json(
+                {
+                    "event": "connection_established",
+                    "data": "WebSocket connection established",
+                    "user_id": user_id,
+                    "conversation_id": conversation_id,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
             )
 
             # Handle incoming WebSocket messages
@@ -295,16 +282,14 @@ class WebSocketConnectionManager(WebSocketInterface):
                 try:
                     user_message_input = json.loads(user_message_text)
                 except json.JSONDecodeError:
-                    asyncio.create_task(
-                        websocket.send_json(
-                            {
-                                "event": "error",
-                                "data": "Invalid JSON message format",
-                                "user_id": user_id,
-                                "conversation_id": conversation_id,
-                                "timestamp": datetime.now(timezone.utc).isoformat(),
-                            }
-                        )
+                    await websocket.send_json(
+                        {
+                            "event": "error",
+                            "data": "Invalid JSON message format",
+                            "user_id": user_id,
+                            "conversation_id": conversation_id,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        }
                     )
                     continue
 
@@ -348,12 +333,6 @@ class WebSocketConnectionManager(WebSocketInterface):
                         message=f"Error processing deep research request: {str(e)}",
                         message_id=user_message_input["message_id"],
                         sender="error_handler",
-                    )
-                    await agent_runtime.publish_message(
-                        response,
-                        DefaultTopicId(
-                            type="user_proxy", source=f"{user_id}:{conversation_id}"
-                        ),
                     )
                     continue
 
@@ -417,8 +396,8 @@ class WebSocketConnectionManager(WebSocketInterface):
                 self.active_sessions[session_key]["is_active"] = False
             self.remove_connection(user_id, conversation_id)
         except Exception as e:
-            logger.error(
-                f"Exception in WebSocket connection for conversation {conversation_id}: {str(e)}"
+            logger.info(
+                f"WebSocket connection for conversation {conversation_id} closed: {str(e)}"
             )
             if session_key in self.active_sessions:
                 self.active_sessions[session_key]["is_active"] = False
@@ -522,25 +501,27 @@ class WebSocketConnectionManager(WebSocketInterface):
 
     async def _safe_send(self, websocket: WebSocket, data: dict) -> bool:
         """
-        Safely send a message through the WebSocket with state checking.
+        Safely send a message through the WebSocket.
         """
         try:
-            # Get session key from websocket
+            # Check if session is still active
             for key, session in self.active_sessions.items():
                 if session.get("websocket") == websocket:
                     if not session.get("is_active", False):
                         return False
                     break
 
-            if (
-                websocket.client_state != WebSocketState.DISCONNECTED
-                and websocket.application_state != WebSocketState.DISCONNECTED
-            ):
-                await websocket.send_json(data)
-                return True
-            return False
+            # Just try to send - most reliable way to detect if connection is still active
+            await websocket.send_json(data)
+            return True
         except Exception as e:
-            logger.error(f"Error sending WebSocket message: {str(e)}")
+            # Mark the session as inactive when send fails
+            for key, session in self.active_sessions.items():
+                if session.get("websocket") == websocket:
+                    self.active_sessions[key]["is_active"] = False
+                    logger.info(f"Marked session {key} as inactive due to send failure")
+                    break
+
             return False
 
     async def send_message(
@@ -563,13 +544,8 @@ class WebSocketConnectionManager(WebSocketInterface):
                 logger.info(f"No WebSocket connection found for {session_key}")
                 return False
 
-            if (
-                websocket.client_state != WebSocketState.DISCONNECTED
-                and websocket.application_state != WebSocketState.DISCONNECTED
-            ):
-                await websocket.send_text(json.dumps(data))
-                return True
-            return False
+            # Just try to send - most reliable way to detect if connection is still active
+            return await self._safe_send(websocket, data)
         except Exception as e:
             logger.error(f"Error sending WebSocket message: {str(e)}")
             return False
