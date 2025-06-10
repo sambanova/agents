@@ -24,7 +24,7 @@ from agents.api.data_types import APIKeys
 from agents.utils.logging import logger
 import os
 import sys
-from src.agents.api.files import router as files_router
+from agents.api.files import router as files_router
 
 import redis
 import uuid

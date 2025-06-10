@@ -32,8 +32,9 @@ from daytona_sdk import (
     DaytonaConfig as DaytonaSDKConfig,
 )
 
-from src.agents.utils.code_patcher import patch_plot_code_str
-from src.agents.utils.file_storage import put_file
+from agents.utils.code_patcher import patch_plot_code_str
+from agents.utils.file_storage import put_file
+
 
 class DDGInput(BaseModel):
     query: Annotated[str, Field(description="search query to look up")]
@@ -361,12 +362,16 @@ def _get_daytona(user_id: str):
             print(f"Response exit code: {response.exit_code}")
             print(f"Response result: {str(response.result)[:500]}...")
             print(f"Response artifacts: {response.artifacts}")
-            if hasattr(response.artifacts, 'charts'):
-                print(f"Charts found: {len(response.artifacts.charts) if response.artifacts.charts else 0}")
+            if hasattr(response.artifacts, "charts"):
+                print(
+                    f"Charts found: {len(response.artifacts.charts) if response.artifacts.charts else 0}"
+                )
                 if response.artifacts.charts:
                     for i, chart in enumerate(response.artifacts.charts):
-                        print(f"Chart {i}: title='{chart.title}', type='{chart.type}', png_size={len(chart.png) if chart.png else 0}")
-            
+                        print(
+                            f"Chart {i}: title='{chart.title}', type='{chart.type}', png_size={len(chart.png) if chart.png else 0}"
+                        )
+
             # Process expected filenames first
             for filename in expected_filenames:
                 extension = os.path.splitext(filename)[1].lstrip(".")
@@ -374,7 +379,7 @@ def _get_daytona(user_id: str):
                     image_id = str(uuid.uuid4())
                     content = sandbox.fs.download_file(filename)
                     print(f"Downloaded file {filename}: {len(content)} bytes")
-                    
+
                     # Store in Redis for backup/download purposes
                     await put_file(
                         user_id,
@@ -383,10 +388,12 @@ def _get_daytona(user_id: str):
                         title=filename,
                         format=extension,
                     )
-                    
+
                     # For image files, use compact Redis references instead of data URLs
-                    if extension.lower() in ['png', 'jpg', 'jpeg', 'gif', 'svg']:
-                        result_str += f"\n\n![{filename}](redis-chart:{image_id}:{user_id})"
+                    if extension.lower() in ["png", "jpg", "jpeg", "gif", "svg"]:
+                        result_str += (
+                            f"\n\n![{filename}](redis-chart:{image_id}:{user_id})"
+                        )
                     else:
                         # For non-image files, still use attachment reference
                         result_str += f"\n\n![{filename}](attachment:{image_id})"
@@ -394,8 +401,10 @@ def _get_daytona(user_id: str):
                     print(f"Error downloading file {filename}: {e}")
 
             # Process charts from artifacts
-            if hasattr(response.artifacts, 'charts') and response.artifacts.charts:
-                print(f"Processing {len(response.artifacts.charts)} charts from artifacts")
+            if hasattr(response.artifacts, "charts") and response.artifacts.charts:
+                print(
+                    f"Processing {len(response.artifacts.charts)} charts from artifacts"
+                )
                 for i, chart in enumerate(response.artifacts.charts):
                     image_id = str(uuid.uuid4())
                     title = chart.title or f"Chart {i+1}"
@@ -403,16 +412,25 @@ def _get_daytona(user_id: str):
                         if chart.png:
                             # Chart.png should be base64 string, convert to bytes for storage
                             import base64
+
                             chart_data = base64.b64decode(chart.png)
-                            
+
                             # Store in Redis for backup/download purposes
                             await put_file(
-                                user_id, image_id, data=chart_data, title=title, format="png"
+                                user_id,
+                                image_id,
+                                data=chart_data,
+                                title=title,
+                                format="png",
                             )
-                            
+
                             # Use compact Redis reference instead of data URL to save context
-                            result_str += f"\n\n![{title}](redis-chart:{image_id}:{user_id})"
-                            print(f"Successfully stored chart {i}: {title} with ID: {image_id}")
+                            result_str += (
+                                f"\n\n![{title}](redis-chart:{image_id}:{user_id})"
+                            )
+                            print(
+                                f"Successfully stored chart {i}: {title} with ID: {image_id}"
+                            )
                         else:
                             print(f"Chart {i} has no PNG data")
                             result_str += f"\n\n**Chart Generated:** {title}"
