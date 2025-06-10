@@ -212,7 +212,7 @@
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
               </svg>
-              <span class="font-medium">{{ showDaytonaSidebar ? 'Code analysis running in Daytona Sandbox' : 'Daytona analysis available' }}</span>
+              <span class="font-medium">{{ showDaytonaSidebar ? 'Code analysis running in Canvas' : 'Data analysis available' }}</span>
               
               <!-- Reopen button when sidebar is closed -->
               <button

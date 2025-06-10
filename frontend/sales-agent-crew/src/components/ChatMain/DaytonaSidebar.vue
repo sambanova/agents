@@ -11,8 +11,8 @@
           </svg>
         </div>
         <div>
-          <h3 class="text-lg font-semibold text-gray-900">Daytona Sandbox</h3>
-          <p class="text-sm text-gray-600">Code Analysis & Visualization</p>
+          <h3 class="text-lg font-semibold text-gray-900">Canvas</h3>
+          <p class="text-sm text-gray-600">Data Analysis & Artefact Generation</p>
         </div>
       </div>
       
