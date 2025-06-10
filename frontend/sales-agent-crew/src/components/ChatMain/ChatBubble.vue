@@ -1,6 +1,5 @@
 <template>
-
-
+  <div>
     <!-- Handle streaming events -->
     <li v-if="props.streamingEvents" class="relative px-4 items-start gap-x-2 sm:gap-x-4">
       <div class="w-full relative flex items-center">
@@ -328,7 +327,8 @@
       :artifact="selectedArtifact"
       @close="closeArtifactCanvas"
     />
-  </template>
+  </div>
+</template>
   
   <script setup>
   import { computed, defineProps, ref,watch,nextTick, provide } from 'vue'
@@ -507,8 +507,56 @@ const showDaytonaSidebar = ref(false)
 const daytonaSidebarClosed = ref(false) // Track if user manually closed it
 
 function openArtifact(artifact) {
-  selectedArtifact.value = artifact
-  showArtifactCanvas.value = true
+  // For Daytona charts, create a simple image viewer instead of using ArtifactCanvas
+  if (artifact && artifact.url && (artifact.url.includes('/api/files/') || artifact.url.startsWith('data:image/'))) {
+    // Create a simple image modal overlay
+    const modal = document.createElement('div')
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75'
+    modal.style.zIndex = '9999'
+    
+    const container = document.createElement('div')
+    container.className = 'relative max-w-5xl max-h-[90vh] p-4'
+    
+    const img = document.createElement('img')
+    img.src = artifact.url
+    img.alt = artifact.title || 'Chart'
+    img.className = 'max-w-full max-h-full object-contain rounded-lg shadow-2xl'
+    
+    const closeBtn = document.createElement('button')
+    closeBtn.innerHTML = '×'
+    closeBtn.className = 'absolute top-2 right-2 text-white text-4xl hover:bg-white hover:bg-opacity-20 rounded-full w-12 h-12 flex items-center justify-center transition-colors'
+    
+    const title = document.createElement('div')
+    title.textContent = artifact.title || 'Chart'
+    title.className = 'absolute bottom-4 left-4 text-white bg-black bg-opacity-50 px-3 py-2 rounded-lg text-sm font-medium'
+    
+    container.appendChild(img)
+    container.appendChild(closeBtn)
+    container.appendChild(title)
+    modal.appendChild(container)
+    
+    // Close handlers
+    const closeModal = () => {
+      document.body.removeChild(modal)
+      document.removeEventListener('keydown', handleEscape)
+    }
+    
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') closeModal()
+    }
+    
+    closeBtn.addEventListener('click', closeModal)
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal()
+    })
+    document.addEventListener('keydown', handleEscape)
+    
+    document.body.appendChild(modal)
+  } else {
+    // Fallback to original ArtifactCanvas for other types
+    selectedArtifact.value = artifact
+    showArtifactCanvas.value = true
+  }
 }
 
 function closeArtifactCanvas() {
