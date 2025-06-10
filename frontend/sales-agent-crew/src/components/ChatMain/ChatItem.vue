@@ -1,6 +1,6 @@
 <template>
   <div
-    class="p-3 m-1 w-full relative cursor-pointer group bg-white dark:bg-gray-800"
+    class="p-3 m-1 w-full relative cursor-pointer group bg-white dark:bg-gray-900"
     @click="onSelectConversation"
     :class="{
       'bg-primary-brandDarkGray dark:bg-gray-700 rounded-md border border-primary-brandFrame dark:border-gray-600': isActive,
@@ -38,7 +38,7 @@
 
     <!-- Conversation details -->
     <div class="w-full relative h-full">
-      <div class="text-md capitalize text-primary-brandGray dark:text-gray-200 truncate">
+      <div class="text-md capitalize text-brandTextSecondary dark:text-gray-200 truncate">
         {{ conversation.name || 'New Chat' }}
       </div>
     </div>
