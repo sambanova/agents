@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 from enum import Enum
 from functools import lru_cache
 from typing import Annotated, Literal
@@ -379,6 +380,9 @@ def _get_daytona(user_id: str):
             print(f"Response result: {str(response.result)[:500]}...")
             print(f"Response artifacts: {response.artifacts}")
 
+            # Use consistent timestamp for all generated files
+            generation_timestamp = time.time()
+
             # Process expected filenames first
             for filename in expected_filenames:
                 extension = os.path.splitext(filename)[1].lstrip(".")
@@ -396,6 +400,7 @@ def _get_daytona(user_id: str):
                             data=content,
                             title=filename,
                             format=extension,
+                            upload_timestamp=generation_timestamp,
                         )
 
                     # For image files, use compact Redis references instead of data URLs
@@ -433,6 +438,7 @@ def _get_daytona(user_id: str):
                                     data=chart_data,
                                     title=title,
                                     format="png",
+                                    upload_timestamp=generation_timestamp,
                                 )
 
                             # Use compact Redis reference instead of data URL to save context

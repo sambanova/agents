@@ -206,7 +206,7 @@
                         ref="fileInput"
                         @change="handleFileUpload"
                         class="hidden"
-                        accept=".pdf,.doc,.docx,.csv,.xlsx,.xls"
+                        accept=".pdf,.doc,.docx,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.svg,.bmp,.tiff,.webp"
                       />
                       <svg
                         v-if="!isUploading"
@@ -1401,7 +1401,7 @@ async function handleFileUpload(event) {
 async function loadUserDocuments() {
   try {
     const response = await axios.get(
-      `${import.meta.env.VITE_API_URL}/documents`,
+      `${import.meta.env.VITE_API_URL}/files`,
       {
         headers: {
           Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
@@ -1802,7 +1802,7 @@ function addOrUpdatePlannerText(newEntry) {
 
 async function removeDocument(docId) {
   try {
-    await axios.delete(`${import.meta.env.VITE_API_URL}/documents/${docId}`, {
+    await axios.delete(`${import.meta.env.VITE_API_URL}/files/${docId}`, {
       headers: {
         Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
       },
