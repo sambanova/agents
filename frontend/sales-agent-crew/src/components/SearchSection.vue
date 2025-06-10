@@ -11,7 +11,7 @@
             ref="fileInput"
             @change="handleFileUpload"
             class="hidden"
-            accept=".pdf,.doc,.docx,.csv,.xlsx,.xls"
+            accept=".pdf,.doc,.docx,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.svg,.bmp,.tiff,.webp"
           />
           <svg
             class="shrink-0 size-4"
@@ -282,7 +282,7 @@
           ref="fileInput"
           @change="handleFileUpload"
           class="hidden"
-          accept=".pdf,.doc,.docx,.csv,.xlsx,.xls"
+          accept=".pdf,.doc,.docx,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.svg,.bmp,.tiff,.webp"
         />
         <Popover
           text="Upload Documents"
@@ -780,7 +780,7 @@ async function handleFileUpload(event) {
 async function loadUserDocuments() {
   try {
     const response = await axios.get(
-      `${import.meta.env.VITE_API_URL}/documents`,
+      `${import.meta.env.VITE_API_URL}/files`,
       {
         headers: {
           Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
@@ -804,7 +804,7 @@ async function removeDocument(docId) {
   try {
     // Remove from backend
     await axios.delete(
-      `${import.meta.env.VITE_API_URL}/documents/${userId.value}/${docId}`
+      `${import.meta.env.VITE_API_URL}/files/${userId.value}/${docId}`
     );
     // Remove from selected documents if it was selected
     const selectedIndex = selectedDocuments.value.indexOf(docId);

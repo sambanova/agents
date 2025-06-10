@@ -310,7 +310,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, nextTick, onMounted } from 'vue'
+import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   isOpen: {
@@ -509,18 +509,18 @@ function processStreamingEvents(events) {
                   return;
                 }
                 
-                // Create real image URL instead of dummy SVG
-                const imageUrl = `/api/files/${chartId}` // Fixed path for API endpoint
-                
                 charts.value.push({
                   id: chartId,
                   title: title,
-                  url: imageUrl, // Use real backend URL
-                  loading: false,
-                  downloadUrl: imageUrl
+                  url: null, // Will be set after fetching
+                  loading: true,
+                  downloadUrl: null
                 })
                 chartCount++
                 console.log(`Added attachment chart: ${title} with ID: ${chartId}`)
+                
+                // Fetch the image with auth headers and create blob URL
+                fetchChartImage(chartId, charts.value.length - 1)
               }
             })
           }
@@ -575,18 +575,18 @@ function processStreamingEvents(events) {
                   return;
                 }
                 
-                // Create public URL with user_id parameter
-                const imageUrl = `/api/files/${chartId}/public?user_id=${userId}`
-                
                 charts.value.push({
                   id: chartId,
                   title: title,
-                  url: imageUrl, // Use public endpoint
-                  loading: false,
-                  downloadUrl: imageUrl
+                  url: null, // Will be set after fetching
+                  loading: true,
+                  downloadUrl: null
                 })
                 chartCount++
-                console.log(`Added Redis chart: ${title} with ID: ${chartId} for user: ${userId}`)
+                console.log(`Added Redis chart: ${title} with ID: ${chartId}`)
+                
+                // Fetch the image with auth headers and create blob URL
+                fetchChartImage(chartId, charts.value.length - 1)
               }
             })
           }
@@ -850,6 +850,41 @@ function handleChartError(chart) {
   addToLog(`Failed to load chart: ${chart.title}`, 'error', new Date().toISOString())
 }
 
+async function fetchChartImage(chartId, chartIndex) {
+  try {
+    // Get auth token using Clerk's session method
+    const token = await window.Clerk.session.getToken()
+    if (!token) {
+      console.error('No auth token found')
+      charts.value[chartIndex].loading = false
+      return
+    }
+
+    const response = await fetch(`${window.location.origin}/api/files/${chartId}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    const blob = await response.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    
+    charts.value[chartIndex].url = blobUrl
+    charts.value[chartIndex].downloadUrl = blobUrl
+    charts.value[chartIndex].loading = false
+    
+    console.log(`Successfully loaded chart image for ${chartId}`)
+  } catch (error) {
+    console.error(`Failed to load chart image for ${chartId}:`, error)
+    charts.value[chartIndex].loading = false
+    addToLog(`Failed to load chart: ${charts.value[chartIndex].title}`, 'error', new Date().toISOString())
+  }
+}
+
 // Lifecycle - ENHANCED FOR LOADED CONVERSATIONS
 onMounted(() => {
   // Process any existing streaming data (including historical data from loaded conversations)
@@ -857,6 +892,18 @@ onMounted(() => {
     console.log('DaytonaSidebar: Processing existing streaming events on mount:', props.streamingEvents.length);
     processStreamingEvents(props.streamingEvents);
   }
+})
+
+onUnmounted(() => {
+  // Clean up blob URLs to prevent memory leaks
+  charts.value.forEach(chart => {
+    if (chart.url && chart.url.startsWith('blob:')) {
+      URL.revokeObjectURL(chart.url)
+    }
+    if (chart.downloadUrl && chart.downloadUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(chart.downloadUrl)
+    }
+  })
 })
 </script>
 

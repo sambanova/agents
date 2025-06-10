@@ -1,4 +1,13 @@
-from fastapi import Depends, FastAPI, File, Query, Request, UploadFile, WebSocket
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    WebSocket,
+)
 from fastapi_clerk_auth import (
     ClerkConfig,
     ClerkHTTPBearer,
@@ -24,7 +33,6 @@ from agents.api.data_types import APIKeys
 from agents.utils.logging import logger
 import os
 import sys
-from agents.api.files import router as files_router
 
 import redis
 import uuid
@@ -174,7 +182,6 @@ class LeadGenerationAPI:
         )
 
     def setup_routes(self):
-        self.app.include_router(files_router)
 
         @self.app.get("/health")
         async def health_check():
@@ -517,7 +524,7 @@ class LeadGenerationAPI:
             file: UploadFile = File(...),
             token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
         ):
-            """Upload and process a document."""
+            """Upload and process a document or image file."""
             try:
                 # Get and verify authenticated user
                 user_id = get_user_id_from_token(token_data)
@@ -527,65 +534,111 @@ class LeadGenerationAPI:
                         content={"error": "Invalid authentication token"},
                     )
 
-                # Generate unique document ID
-                document_id = str(uuid.uuid4())
+                # Generate unique file ID
+                file_id = str(uuid.uuid4())
 
                 # Read file content
                 content = await file.read()
 
-                # Process document
-                doc_processor = DocumentProcessingService()
-                chunks = doc_processor.process_document(content, file.filename)
-
-                # Store document metadata
-                document_metadata = {
-                    "id": document_id,
-                    "filename": file.filename,
-                    "upload_timestamp": time.time(),
-                    "num_chunks": len(chunks),
-                    "user_id": user_id,
+                # Check if file is an image
+                image_extensions = {
+                    ".png",
+                    ".jpg",
+                    ".jpeg",
+                    ".gif",
+                    ".svg",
+                    ".bmp",
+                    ".tiff",
+                    ".webp",
                 }
-
-                # Store document metadata
-                doc_key = f"document:{document_id}"
-                await self.app.state.redis_client.set(
-                    doc_key, json.dumps(document_metadata), user_id
+                file_extension = (
+                    os.path.splitext(file.filename.lower())[1] if file.filename else ""
                 )
 
-                # Add to user's document list
-                user_docs_key = f"user_documents:{user_id}"
-                await self.app.state.redis_client.sadd(user_docs_key, document_id)
+                is_image = file_extension in image_extensions or (
+                    file.content_type and file.content_type.startswith("image/")
+                )
 
-                # Store document chunks
-                chunks_key = f"document_chunks:{document_id}"
-                chunks_data = [
-                    {
-                        "text": chunk.page_content,
-                        "metadata": {**chunk.metadata, "document_id": document_id},
+                if is_image:
+                    # Handle as image file using general file storage
+                    format_ext = file_extension.lstrip(".") if file_extension else "png"
+                    upload_time = time.time()
+
+                    await self.app.state.redis_storage_service.put_file(
+                        user_id,
+                        file_id,
+                        data=content,
+                        title=file.filename or f"image.{format_ext}",
+                        format=format_ext,
+                        upload_timestamp=upload_time,
+                    )
+
+                    return JSONResponse(
+                        status_code=200,
+                        content={
+                            "message": "Image uploaded successfully",
+                            "file": {
+                                "id": file_id,
+                                "filename": file.filename,
+                                "type": "image",
+                                "upload_timestamp": upload_time,
+                                "user_id": user_id,
+                            },
+                        },
+                    )
+                else:
+                    # Handle as document with processing and chunking
+                    doc_processor = DocumentProcessingService()
+                    chunks = doc_processor.process_document(content, file.filename)
+
+                    # Store document metadata
+                    document_metadata = {
+                        "id": file_id,
+                        "filename": file.filename,
+                        "upload_timestamp": time.time(),
+                        "num_chunks": len(chunks),
+                        "user_id": user_id,
                     }
-                    for chunk in chunks
-                ]
-                await self.app.state.redis_client.set(
-                    chunks_key, json.dumps(chunks_data), user_id
-                )
 
-                return JSONResponse(
-                    status_code=200,
-                    content={
-                        "message": "Document processed successfully",
-                        "document": document_metadata,
-                    },
-                )
+                    # Store document metadata
+                    await self.app.state.redis_storage_service.store_document_metadata(
+                        user_id, file_id, document_metadata
+                    )
+
+                    # Add to user's document list
+                    await self.app.state.redis_storage_service.add_document_to_user_list(
+                        user_id, file_id
+                    )
+
+                    # Store document chunks
+                    chunks_data = [
+                        {
+                            "text": chunk.page_content,
+                            "metadata": {**chunk.metadata, "document_id": file_id},
+                        }
+                        for chunk in chunks
+                    ]
+                    await self.app.state.redis_storage_service.store_document_chunks(
+                        user_id, file_id, chunks_data
+                    )
+
+                    return JSONResponse(
+                        status_code=200,
+                        content={
+                            "message": "Document processed successfully",
+                            "document": document_metadata,
+                        },
+                    )
 
             except Exception as e:
-                print(f"[/upload] Error processing document: {str(e)}")
+                print(f"[/upload] Error processing file: {str(e)}")
                 return JSONResponse(status_code=500, content={"error": str(e)})
 
-        @self.app.get("/documents")
-        async def get_user_documents(
+        @self.app.get("/files")
+        async def get_user_files(
             token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
         ):
-            """Retrieve all documents for a user."""
+            """Retrieve all documents and uploaded files for a user."""
             try:
                 user_id = get_user_id_from_token(token_data)
                 if not user_id:
@@ -594,39 +647,54 @@ class LeadGenerationAPI:
                         content={"error": "Invalid authentication token"},
                     )
 
-                # Get all document IDs for the user
-                user_docs_key = f"user_documents:{user_id}"
-                doc_ids = await self.app.state.redis_client.smembers(user_docs_key)
+                # Get all documents for the user
+                documents = (
+                    await self.app.state.redis_storage_service.get_user_documents(
+                        user_id
+                    )
+                )
 
-                if not doc_ids:
-                    return JSONResponse(status_code=200, content={"documents": []})
+                # Get all uploaded files (images, etc.) for the user
+                files = await self.app.state.redis_storage_service.list_user_files(
+                    user_id
+                )
 
-                # Get metadata for each document
-                documents = []
-                for doc_id in doc_ids:
-                    # For deterministically encrypted values, we need to use the same method
-                    # when checking for document existence
-                    doc_key = f"document:{doc_id}"
-                    doc_data = await self.app.state.redis_client.get(doc_key, user_id)
-                    if doc_data:
-                        try:
-                            documents.append(json.loads(doc_data))
-                        except json.JSONDecodeError:
-                            # Skip invalid JSON
-                            continue
+                # Combine both lists and add type information
+                all_items = []
 
-                return JSONResponse(status_code=200, content={"documents": documents})
+                # Add documents with type "document"
+                for doc in documents:
+                    doc["type"] = "document"
+                    all_items.append(doc)
+
+                # Add files with type "file" and convert file metadata format
+                for file_item in files:
+                    file_metadata = {
+                        "id": file_item["file_id"],
+                        "filename": file_item["title"],
+                        "upload_timestamp": file_item.get("created_at", 0),
+                        "user_id": user_id,
+                        "type": "file",
+                        "format": file_item.get("format", ""),
+                        "file_size": file_item.get("file_size", 0),
+                    }
+                    all_items.append(file_metadata)
+
+                # Sort by upload timestamp (most recent first)
+                all_items.sort(key=lambda x: x.get("upload_timestamp", 0), reverse=True)
+
+                return JSONResponse(status_code=200, content={"documents": all_items})
 
             except Exception as e:
                 print(f"[/documents] Error retrieving documents: {str(e)}")
                 return JSONResponse(status_code=500, content={"error": str(e)})
 
-        @self.app.get("/documents/{document_id}/chunks")
-        async def get_document_chunks_by_id(
-            document_id: str,
+        @self.app.get("/files/{file_id}")
+        async def get_file(
+            file_id: str,
             token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
         ):
-            """Retrieve chunks for a specific document."""
+            """Serve a file by its ID for authenticated users."""
             try:
                 user_id = get_user_id_from_token(token_data)
                 if not user_id:
@@ -635,73 +703,101 @@ class LeadGenerationAPI:
                         content={"error": "Invalid authentication token"},
                     )
 
-                # Verify document belongs to user
-                user_docs_key = f"user_documents:{user_id}"
-                if not await self.app.state.redis_client.sismember(
-                    user_docs_key, document_id
-                ):
+                # Get file metadata and data
+                file_metadata = (
+                    await self.app.state.redis_storage_service.get_file_metadata(
+                        user_id, file_id
+                    )
+                )
+
+                if not file_metadata:
                     return JSONResponse(
                         status_code=404,
-                        content={"error": "Document not found or access denied"},
+                        content={"error": "File not found"},
                     )
 
-                # Get document chunks
-                chunks_key = f"document_chunks:{document_id}"
-                chunks_data = await self.app.state.redis_client.get(chunks_key, user_id)
+                file_data = await self.app.state.redis_storage_service.get_file(
+                    user_id, file_id
+                )
 
-                if not chunks_data:
-                    return JSONResponse(
-                        status_code=404, content={"error": "Document chunks not found"}
-                    )
-
-                return JSONResponse(status_code=200, content=json.loads(chunks_data))
-
-            except Exception as e:
-                print(f"[/documents/chunks] Error retrieving chunks: {str(e)}")
-                return JSONResponse(status_code=500, content={"error": str(e)})
-
-        @self.app.delete("/documents/{document_id}")
-        async def delete_document(
-            document_id: str,
-            token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
-        ):
-            """Delete a document and its associated data from the database."""
-            try:
-                user_id = get_user_id_from_token(token_data)
-                if not user_id:
-                    return JSONResponse(
-                        status_code=401,
-                        content={"error": "Invalid authentication token"},
-                    )
-
-                # Verify document belongs to user
-                user_docs_key = f"user_documents:{user_id}"
-                if not await self.app.state.redis_client.sismember(
-                    user_docs_key, document_id
-                ):
+                if not file_data:
                     return JSONResponse(
                         status_code=404,
-                        content={"error": "Document not found or access denied"},
+                        content={"error": "File data not found"},
                     )
 
-                # Delete document metadata
-                doc_key = f"document:{document_id}"
-                await self.app.state.redis_client.delete(doc_key)
+                # Determine content type based on format
+                format_ext = file_metadata.get("format", "png")
+                content_type = (
+                    f"image/{format_ext}"
+                    if format_ext in ["png", "jpg", "jpeg", "gif", "svg", "bmp", "webp"]
+                    else "application/octet-stream"
+                )
 
-                # Delete document chunks
-                chunks_key = f"document_chunks:{document_id}"
-                await self.app.state.redis_client.delete(chunks_key)
-
-                # Remove from user's document list
-                await self.app.state.redis_client.srem(user_docs_key, document_id)
-
-                return JSONResponse(
-                    status_code=200,
-                    content={"message": "Document deleted successfully"},
+                return Response(
+                    content=file_data,
+                    media_type=content_type,
+                    headers={
+                        "Content-Disposition": f"inline; filename={file_metadata.get('title', f'file.{format_ext}')}"
+                    },
                 )
 
             except Exception as e:
-                print(f"[/documents/delete] Error deleting document: {str(e)}")
+                print(f"[/files/get] Error serving file: {str(e)}")
+                return JSONResponse(status_code=500, content={"error": str(e)})
+
+        @self.app.delete("/files/{file_id}")
+        async def delete_file(
+            file_id: str,
+            token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+        ):
+            """Delete a file (document or uploaded file) and its associated data."""
+            try:
+                user_id = get_user_id_from_token(token_data)
+                if not user_id:
+                    return JSONResponse(
+                        status_code=401,
+                        content={"error": "Invalid authentication token"},
+                    )
+
+                # Check if it's a document first
+                is_document = await self.app.state.redis_storage_service.verify_document_belongs_to_user(
+                    user_id, file_id
+                )
+
+                # Check if it's a regular file
+                file_metadata = (
+                    await self.app.state.redis_storage_service.get_file_metadata(
+                        user_id, file_id
+                    )
+                )
+                is_file = file_metadata is not None
+
+                if not is_document and not is_file:
+                    return JSONResponse(
+                        status_code=404,
+                        content={"error": "File not found or access denied"},
+                    )
+
+                # Delete based on type
+                if is_document:
+                    await self.app.state.redis_storage_service.delete_document(
+                        user_id, file_id
+                    )
+                    message = "Document deleted successfully"
+                else:
+                    await self.app.state.redis_storage_service.delete_file(
+                        user_id, file_id
+                    )
+                    message = "File deleted successfully"
+
+                return JSONResponse(
+                    status_code=200,
+                    content={"message": message},
+                )
+
+            except Exception as e:
+                print(f"[/files/delete] Error deleting file: {str(e)}")
                 return JSONResponse(status_code=500, content={"error": str(e)})
 
         @self.app.post("/set_api_keys")
