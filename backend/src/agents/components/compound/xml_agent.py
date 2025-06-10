@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Callable
+from typing import Callable, Any, Dict, List, Optional
 from agents.components.compound.util import extract_api_key
 from langchain.tools import BaseTool
 from langchain.tools.render import render_text_description
@@ -15,13 +15,86 @@ from langgraph.graph import END
 from langgraph.graph.message import MessageGraph
 from agents.components.compound.prompts import xml_template
 from agents.components.compound.message_types import LiberalFunctionMessage
-from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.redis import RedisSaver
-
-
+from langchain_core.runnables import RunnableConfig, Runnable
+import os
+import asyncio
+from langgraph.checkpoint.redis import AsyncRedisSaver
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
-memory = InMemorySaver()
+# Global checkpointer variable
+_global_checkpointer = None
+
+
+def set_global_checkpointer(checkpointer):
+    """Set the global checkpointer instance."""
+    global _global_checkpointer
+    _global_checkpointer = checkpointer
+
+
+def get_global_checkpointer():
+    """Get the global checkpointer instance."""
+    return _global_checkpointer
+
+
+def create_checkpointer(redis_client=None):
+    # Simple approach: use Redis directly without context manager pattern
+    try:
+        if redis_client is None:
+            return None
+
+        # Create a custom serializer that supports our custom namespace
+        additional_import_mappings = {
+            (
+                "agents",
+                "components",
+                "compound",
+                "message_types",
+                "LiberalFunctionMessage",
+            ): (
+                "agents",
+                "components",
+                "compound",
+                "message_types",
+                "LiberalFunctionMessage",
+            ),
+            (
+                "agents",
+                "components",
+                "compound",
+                "message_types",
+                "LiberalAIMessage",
+            ): (
+                "agents",
+                "components",
+                "compound",
+                "message_types",
+                "LiberalAIMessage",
+            ),
+        }
+
+        # Create checkpointer and override its serializer loads method to include our namespace
+        redis_checkpointer = AsyncRedisSaver(redis_client=redis_client)
+
+        def custom_loads(s: str):
+            from langchain_core.load.load import loads
+
+            return loads(
+                s,
+                valid_namespaces=["agents", "components", "compound", "message_types"],
+                additional_import_mappings=additional_import_mappings,
+            )
+
+        redis_checkpointer.serde.loads = custom_loads
+
+        return redis_checkpointer
+
+    except Exception as e:
+        print(f"❌ Error initializing Redis checkpointer: {e}")
+        return None
+
+
+checkpointer = create_checkpointer(os.getenv("REDIS_URL"))
 
 
 class ToolInvocation:
@@ -51,6 +124,7 @@ def get_xml_agent_executor(
     llm: LanguageModelLike,
     system_message: str,
     subgraphs: dict = None,
+    checkpointer=None,
 ):
     """
     Get XML agent executor that can call either tools or subgraphs with tight integration.
@@ -61,7 +135,12 @@ def get_xml_agent_executor(
         system_message: System message for the agent
         interrupt_before_action: Whether to interrupt before action execution
         subgraphs: Dictionary of subgraphs {name: compiled_graph}
+        checkpointer: Optional checkpointer, if None will use global checkpointer
     """
+    # Use provided checkpointer or fall back to global checkpointer
+    if checkpointer is None:
+        checkpointer = get_global_checkpointer()
+
     subgraphs = subgraphs or {}
 
     # Create subgraph section for the template
@@ -240,7 +319,7 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
         workflow.add_edge(f"subgraph_{subgraph_name}", END)
 
     return workflow.compile(
-        checkpointer=memory,
+        checkpointer=checkpointer,
     )
 
 

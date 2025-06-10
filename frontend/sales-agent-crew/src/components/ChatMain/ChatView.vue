@@ -54,8 +54,8 @@
           tag="ul"
           class="mt-16 max-w-4xl w-full mx-auto space-y-5"
         >
-          <!-- Chat Bubble -->
-          <ChatBubble
+          <!-- Raw Data Chat Bubble -->
+          <RawDataChatBubble
             v-for="msgItem in filteredMessages"
             :metadata="completionMetaData || {}"
             :workflowData="

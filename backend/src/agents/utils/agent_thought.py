@@ -1,43 +1,36 @@
-import redis
+from agents.storage.redis_service import SecureRedisService
+import redis.asyncio as redis
 import json
 import time
+import asyncio
+import threading
 from typing import Any
 import os
 from crewai.agents.parser import AgentFinish, AgentAction
+
 
 class RedisConversationLogger:
     """
     Publishes each agent step to Redis pub/sub for real-time streaming.
     Reads REDIS_HOST/REDIS_PORT from environment to handle local vs. Docker.
     """
+
     def __init__(
         self,
+        redis_client,
         user_id="",
         run_id="",
         agent_name="",
         workflow_name="",
         llm_name="",
-        redis_client=None,
         message_id=None,
     ):
-        # Read from env or default
-        redis_host = os.getenv("REDIS_HOST", "localhost")
-        redis_port = int(os.getenv("REDIS_PORT", "6379"))
-
+        self.redis_client = redis_client
+        # Store reference to the main event loop
         try:
-            if redis_client:
-                self.r = redis_client
-            else:
-                self.r = redis.Redis(
-                    host=redis_host,
-                    port=redis_port,
-                    db=0,
-                    decode_responses=True
-                )
-            self.r.ping()
-            print(f"[RedisConversationLogger] Connected to Redis at {redis_host}:{redis_port} for {agent_name}")
-        except redis.ConnectionError as e:
-            print(f"[RedisConversationLogger] Redis connection failed: {e}")
+            self.main_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self.main_loop = None
 
         # Ensure proper string conversion and handle potential JSON objects
         if isinstance(user_id, (dict, list)):
@@ -72,18 +65,17 @@ class RedisConversationLogger:
         """Update the message_id for the next set of logs."""
         self.message_id = message_id
 
-    # TODO: log llm usage
     def log_success_event(
-                        kwargs,
-                        response_obj,
-                        start_time,
-                        end_time,
-                    ):
+        kwargs,
+        response_obj,
+        start_time,
+        end_time,
+    ):
         pass
 
     def __call__(self, output: Any):
         try:
-            if hasattr(output, 'text'):
+            if hasattr(output, "text"):
                 if isinstance(output, AgentAction):
                     task = output.tool
                 else:
@@ -107,7 +99,30 @@ class RedisConversationLogger:
                 }
                 self.init_timestamp = time.time()
                 channel = f"agent_thoughts:{self.user_id}:{self.run_id}"
-                self.r.publish(channel, json.dumps(message))
+
+                # Handle async Redis publish safely
+                self._safe_async_publish(channel, message)
         except Exception as e:
             print(f"Error publishing to Redis: {e}")
-            print(f"Message attempted: {message if 'message' in locals() else 'No message created'}")
+            print(
+                f"Message attempted: {message if 'message' in locals() else 'No message created'}"
+            )
+
+    def _safe_async_publish(self, channel: str, message: dict):
+        try:
+            # Try to get the current running loop
+            loop = asyncio.get_running_loop()
+            loop.create_task(self.redis_client.publish(channel, json.dumps(message)))
+        except RuntimeError:
+            # No current loop - use the stored main loop reference
+            if self.main_loop and not self.main_loop.is_closed():
+                asyncio.run_coroutine_threadsafe(
+                    self.redis_client.publish(channel, json.dumps(message)),
+                    self.main_loop,
+                )
+            else:
+                # Fallback: run in new thread
+                def publish():
+                    asyncio.run(self.redis_client.publish(channel, json.dumps(message)))
+
+                threading.Thread(target=publish, daemon=True).start()

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, ClassVar
 
 from langchain_core.messages import (
     FunctionMessage,
@@ -9,17 +9,39 @@ from langchain_core.messages import (
 )
 from langgraph.graph.message import Messages, add_messages
 from pydantic import Field
+from langchain_core.load.serializable import Serializable
 
 
 class LiberalToolMessage(ToolMessage):
     content: Any = Field(default="")
 
 
-class LiberalFunctionMessage(FunctionMessage):
+class LiberalFunctionMessage(FunctionMessage, Serializable):
+    """A liberal function message that allows any content type and uses custom namespace."""
+
+    @classmethod
+    def is_lc_serializable(cls) -> bool:
+        return True
+
+    @classmethod
+    def get_lc_namespace(cls) -> list[str]:
+        """Return the actual namespace where this class can be imported from."""
+        return ["agents", "components", "compound", "message_types"]
+
     content: Any = Field(default="")
 
 
 class LiberalAIMessage(AIMessage):
+
+    @classmethod
+    def is_lc_serializable(cls) -> bool:
+        return True
+
+    @classmethod
+    def get_lc_namespace(cls) -> list[str]:
+        """Return the actual namespace where this class can be imported from."""
+        return ["agents", "components", "compound", "message_types"]
+
     content: Any = Field(default="")
 
 

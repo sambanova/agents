@@ -34,6 +34,11 @@ from agents.components.routing.route import SemanticRouterAgent
 from agents.storage.redis_service import SecureRedisService
 from agents.storage.redis_storage import RedisStorage
 
+from agents.components.compound.xml_agent import (
+    create_checkpointer,
+    set_global_checkpointer,
+)
+
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
@@ -58,6 +63,7 @@ from agents.components.financial_analysis.financial_analysis_crew import (
 # For document processing
 from agents.services.document_processing_service import DocumentProcessingService
 from agents.storage.redis_service import SecureRedisService
+from langgraph.checkpoint.redis import AsyncRedisSaver
 
 CLERK_JWT_ISSUER = os.environ.get("CLERK_JWT_ISSUER")
 clerk_config = ClerkConfig(jwks_url=CLERK_JWT_ISSUER)
@@ -76,8 +82,8 @@ async def lifespan(app: FastAPI):
     redis_port = int(os.getenv("REDIS_PORT", "6379"))
     app.state.context_length_summariser = 100_000
 
-    # Create a Redis connection pool
-    pool = redis.ConnectionPool(
+    # Create an async Redis connection pool
+    pool = redis.asyncio.ConnectionPool(
         host=redis_host,
         port=redis_port,
         db=0,
@@ -105,11 +111,19 @@ async def lifespan(app: FastAPI):
     UserProxyAgent.connection_manager = app.state.manager
     SemanticRouterAgent.connection_manager = app.state.manager
 
+    # Create checkpointer using the existing Redis client
+    app.state.checkpointer = create_checkpointer(app.state.redis_client)
+
+    # Set the global checkpointer for use in agents
+    set_global_checkpointer(app.state.checkpointer)
+
+    await AsyncRedisSaver(redis_client=app.state.redis_client).asetup()
+
     yield  # This separates the startup and shutdown logic
 
     # Close Redis connection pool
-    app.state.redis_client.close()
-    pool.disconnect()
+    await app.state.redis_client.aclose()
+    await pool.aclose()
 
     # Cleanup default agent runtime
     await app.state.agent_runtime.close()
@@ -172,7 +186,7 @@ class LeadGenerationAPI:
             """Health check endpoint for Kubernetes liveness and readiness probes."""
             try:
                 # Check Redis connection
-                self.app.state.redis_client.ping()
+                await self.app.state.redis_client.ping()
                 return JSONResponse(
                     status_code=200,
                     content={"status": "healthy", "message": "Service is running"},
@@ -324,13 +338,13 @@ class LeadGenerationAPI:
                     "user_id": user_id,
                 }
                 chat_meta_key = f"chat_metadata:{user_id}:{conversation_id}"
-                self.app.state.redis_client.set(
+                await self.app.state.redis_client.set(
                     chat_meta_key, json.dumps(metadata), user_id
                 )
 
                 # Add to user's conversation list
                 user_chats_key = f"user_chats:{user_id}"
-                self.app.state.redis_client.zadd(
+                await self.app.state.redis_client.zadd(
                     user_chats_key, {conversation_id: timestamp}
                 )
 
@@ -422,7 +436,7 @@ class LeadGenerationAPI:
 
                 # Get all conversation IDs for the user, sorted by most recent
                 user_chats_key = f"user_chats:{user_id}"
-                conversation_ids = self.app.state.redis_client.zrevrange(
+                conversation_ids = await self.app.state.redis_client.zrevrange(
                     user_chats_key, 0, -1
                 )
 
@@ -433,7 +447,7 @@ class LeadGenerationAPI:
                 chats = []
                 for conv_id in conversation_ids:
                     meta_key = f"chat_metadata:{user_id}:{conv_id}"
-                    meta_data = self.app.state.redis_client.get(meta_key, user_id)
+                    meta_data = await self.app.state.redis_client.get(meta_key, user_id)
                     if meta_data:
                         data = json.loads(meta_data)
                         if "name" not in data:
@@ -539,13 +553,13 @@ class LeadGenerationAPI:
 
                 # Store document metadata
                 doc_key = f"document:{document_id}"
-                self.app.state.redis_client.set(
+                await self.app.state.redis_client.set(
                     doc_key, json.dumps(document_metadata), user_id
                 )
 
                 # Add to user's document list
                 user_docs_key = f"user_documents:{user_id}"
-                self.app.state.redis_client.sadd(user_docs_key, document_id)
+                await self.app.state.redis_client.sadd(user_docs_key, document_id)
 
                 # Store document chunks
                 chunks_key = f"document_chunks:{document_id}"
@@ -556,7 +570,7 @@ class LeadGenerationAPI:
                     }
                     for chunk in chunks
                 ]
-                self.app.state.redis_client.set(
+                await self.app.state.redis_client.set(
                     chunks_key, json.dumps(chunks_data), user_id
                 )
 
@@ -587,7 +601,7 @@ class LeadGenerationAPI:
 
                 # Get all document IDs for the user
                 user_docs_key = f"user_documents:{user_id}"
-                doc_ids = self.app.state.redis_client.smembers(user_docs_key)
+                doc_ids = await self.app.state.redis_client.smembers(user_docs_key)
 
                 if not doc_ids:
                     return JSONResponse(status_code=200, content={"documents": []})
@@ -598,7 +612,7 @@ class LeadGenerationAPI:
                     # For deterministically encrypted values, we need to use the same method
                     # when checking for document existence
                     doc_key = f"document:{doc_id}"
-                    doc_data = self.app.state.redis_client.get(doc_key, user_id)
+                    doc_data = await self.app.state.redis_client.get(doc_key, user_id)
                     if doc_data:
                         try:
                             documents.append(json.loads(doc_data))
@@ -628,7 +642,7 @@ class LeadGenerationAPI:
 
                 # Verify document belongs to user
                 user_docs_key = f"user_documents:{user_id}"
-                if not self.app.state.redis_client.sismember(
+                if not await self.app.state.redis_client.sismember(
                     user_docs_key, document_id
                 ):
                     return JSONResponse(
@@ -638,7 +652,7 @@ class LeadGenerationAPI:
 
                 # Get document chunks
                 chunks_key = f"document_chunks:{document_id}"
-                chunks_data = self.app.state.redis_client.get(chunks_key, user_id)
+                chunks_data = await self.app.state.redis_client.get(chunks_key, user_id)
 
                 if not chunks_data:
                     return JSONResponse(
@@ -667,7 +681,7 @@ class LeadGenerationAPI:
 
                 # Verify document belongs to user
                 user_docs_key = f"user_documents:{user_id}"
-                if not self.app.state.redis_client.sismember(
+                if not await self.app.state.redis_client.sismember(
                     user_docs_key, document_id
                 ):
                     return JSONResponse(
@@ -677,14 +691,14 @@ class LeadGenerationAPI:
 
                 # Delete document metadata
                 doc_key = f"document:{document_id}"
-                self.app.state.redis_client.delete(doc_key)
+                await self.app.state.redis_client.delete(doc_key)
 
                 # Delete document chunks
                 chunks_key = f"document_chunks:{document_id}"
-                self.app.state.redis_client.delete(chunks_key)
+                await self.app.state.redis_client.delete(chunks_key)
 
                 # Remove from user's document list
-                self.app.state.redis_client.srem(user_docs_key, document_id)
+                await self.app.state.redis_client.srem(user_docs_key, document_id)
 
                 return JSONResponse(
                     status_code=200,
@@ -718,7 +732,7 @@ class LeadGenerationAPI:
 
                 # Store keys in Redis with user-specific prefix
                 key_prefix = f"api_keys:{user_id}"
-                self.app.state.redis_client.hset(
+                await self.app.state.redis_client.hset(
                     key_prefix,
                     mapping={
                         "sambanova_key": keys.sambanova_key,
@@ -760,7 +774,9 @@ class LeadGenerationAPI:
                     )
 
                 key_prefix = f"api_keys:{user_id}"
-                stored_keys = self.app.state.redis_client.hgetall(key_prefix, user_id)
+                stored_keys = await self.app.state.redis_client.hgetall(
+                    key_prefix, user_id
+                )
 
                 if not stored_keys:
                     return JSONResponse(
@@ -806,7 +822,7 @@ class LeadGenerationAPI:
 
                 # 1. Delete all conversations
                 user_chats_key = f"user_chats:{user_id}"
-                conversation_ids = self.app.state.redis_client.zrange(
+                conversation_ids = await self.app.state.redis_client.zrange(
                     user_chats_key, 0, -1
                 )
 
@@ -824,29 +840,29 @@ class LeadGenerationAPI:
                     # Delete chat metadata and messages
                     meta_key = f"chat_metadata:{user_id}:{conversation_id}"
                     message_key = f"messages:{user_id}:{conversation_id}"
-                    self.app.state.redis_client.delete(meta_key)
-                    self.app.state.redis_client.delete(message_key)
+                    await self.app.state.redis_client.delete(meta_key)
+                    await self.app.state.redis_client.delete(message_key)
 
                 # Delete the user's chat list
-                self.app.state.redis_client.delete(user_chats_key)
+                await self.app.state.redis_client.delete(user_chats_key)
 
                 # 2. Delete all documents
                 user_docs_key = f"user_documents:{user_id}"
-                doc_ids = self.app.state.redis_client.smembers(user_docs_key)
+                doc_ids = await self.app.state.redis_client.smembers(user_docs_key)
 
                 for doc_id in doc_ids:
                     # Delete document metadata and chunks
                     doc_key = f"document:{doc_id}"
                     chunks_key = f"document_chunks:{doc_id}"
-                    self.app.state.redis_client.delete(doc_key)
-                    self.app.state.redis_client.delete(chunks_key)
+                    await self.app.state.redis_client.delete(doc_key)
+                    await self.app.state.redis_client.delete(chunks_key)
 
                 # Delete the user's document list
-                self.app.state.redis_client.delete(user_docs_key)
+                await self.app.state.redis_client.delete(user_docs_key)
 
                 # 3. Delete API keys
                 key_prefix = f"api_keys:{user_id}"
-                self.app.state.redis_client.delete(key_prefix)
+                await self.app.state.redis_client.delete(key_prefix)
 
                 return JSONResponse(
                     status_code=200,
