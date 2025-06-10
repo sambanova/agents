@@ -1,29 +1,19 @@
 <template>
-  <div class="relative h-full w-full dark:bg-gray-900">
+  <div class="relative h-full w-full">
     <!-- Content -->
     <div
       ref="container"
-      class="relative h-full flex  overflow-x-hidden overflow-y-auto"
-       :class="
-          messagesData.length == 0 ? 'justify-center align-center flex-col' : 'flex-col'
-        "
+      class="relative h-full flex flex-col overflow-x-hidden overflow-y-auto"
     >
-     
-      <div
-        class=" w-full flex mx-auto"
-        :class="
-          messagesData.length == 0 ? 'justify-center align-center flex-col' : 'flex-1'
-        "
-      >
-       <!-- Sticky Top Component -->
+      <!-- Sticky Top Component -->
       <div
         v-if="chatName"
-        class="sticky hidden h-[62px] top-0 z-10 bg-white dark:bg-gray-800 p-4 shadow"
+        class="sticky h-[62px] top-0 z-10 bg-white p-4 shadow"
       >
         <div class="flex items-center justify-between">
           <!-- Left text -->
           <div
-            class="text-[16px] font-medium text-gray-800 dark:text-gray-100 line-clamp-1 overflow-hidden"
+            class="text-[16px] font-medium text-gray-800 line-clamp-1 overflow-hidden"
           >
             {{ chatName }}
           </div>
@@ -36,17 +26,23 @@
             </button>
             <button
               @click="genPDF"
-              class="text-sm h-[30px] py-1 px-2.5 bg-[#EAECF0] dark:bg-gray-700 text-[#344054] dark:text-gray-200 rounded"
+              class="text-sm h-[30px] py-1 px-2.5 bg-[#EAECF0] text-[#344054] rounded"
             >
               Download PDF
             </button>
           </div>
         </div>
       </div>
+      <div
+        class="flex-1 w-full flex mx-auto"
+        :class="
+          messagesData.length == 0 ? 'justify-center align-center flex-col' : ''
+        "
+      >
         <!-- Title -->
         <div v-if="messagesData.length == 0" class="w-full text-center">
           <h1 v-if="!initialLoading" class="text-3xl font-bold sm:text-3xl">
-            <span class="bg-clip-text text-primary-brandTextSecondary dark:text-primary-brandTextSecondary-dark">
+            <span class="bg-clip-text text-primary-brandTextSecondary">
               What can I help you with?
             </span>
           </h1>
@@ -61,23 +57,24 @@
           <!-- Chat Bubble -->
           <ChatBubble
             v-for="msgItem in filteredMessages"
-            :metadata="completionMetaData"
+            :metadata="completionMetaData || {}"
             :workflowData="
               workflowData.filter(
-                (item) => item.message_id === msgItem.message_id
+                (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
               )
             "
             :plannerText="
               plannerTextData.filter(
-                (item) => item.message_id === msgItem.message_id
-              )[0]?.data
+                (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
+              )[0]?.data || ''
             "
-            :key="msgItem.conversation_id"
-            :event="msgItem.event"
-            :data="msgItem.data"
-            :messageId="msgItem.message_id"
+            :key="msgItem.conversation_id || msgItem.message_id || msgItem.timestamp || Math.random()"
+            :event="msgItem.event || 'unknown'"
+            :data="formatMessageData(msgItem)"
+            :messageId="msgItem.message_id || msgItem.messageId || ''"
             :provider="provider"
-            :currentMsgId="currentMsgId"
+            :currentMsgId="currentMsgId || ''"
+            :streamingEvents="msgItem.type === 'streaming_group' ? msgItem.events : null"
           />
           <ChatLoaderBubble
             :workflowData="
@@ -94,18 +91,14 @@
             :provider="provider"
             :messageId="currentMsgId"
           />
+
           <!-- End Chat Bubble -->
         </transition-group>
-        
       </div>
 
       <!-- Documents Section -->
-      <div 
-       :class="
-          messagesData.length == 0 ? 'justify-center align-center flex-col' : 'sticky'
-        "
-      class=" z-1000 bottom-0 left-0 right-0 bg-white dark:bg-gray-900 p-2">
-        <div class=" z-10">
+      <div class="sticky z-1000 bottom-0 left-0 right-0 bg-white p-2">
+        <div class="sticky bottom-0 z-10">
           <!-- Textarea -->
           <div class="max-w-4xl mx-auto lg:px-0">
             <div v-if="errorMessage" class="m-1 w-full mx-auto space-y-5">
@@ -118,12 +111,12 @@
                 @click="toggleExpand"
                 class="flex items-center justify-between focus:outline-none mb-2"
               >
-                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                <h3 class="text-sm font-medium text-gray-700">
                   Uploaded Documents ({{ uploadedDocuments.length }})
                 </h3>
                 <svg
                   :class="{ 'transform rotate-180': isExpanded }"
-                  class="w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200"
+                  class="w-5 h-5 text-gray-500 transition-transform duration-200"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -144,20 +137,20 @@
                     <div
                       v-for="doc in uploadedDocuments"
                       :key="doc.id"
-                      class="w-48 flex-shrink-0 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 relative group"
+                      class="w-48 flex-shrink-0 p-2 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 relative group"
                     >
                       <div class="flex items-center space-x-3">
                         <input
                           type="checkbox"
                           :checked="selectedDocuments.includes(doc.id)"
                           @change="toggleDocumentSelection(doc.id)"
-                          class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 dark:border-gray-600 rounded"
+                          class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                         />
                         <div class="w-48 overflow-hidden">
-                          <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                          <p class="text-sm font-medium text-gray-900 truncate">
                             {{ doc.filename }}
                           </p>
-                          <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          <p class="text-xs text-gray-500 truncate">
                             Uploaded
                             {{
                               new Date(
@@ -190,12 +183,12 @@
                 type="search"
                 placeholder="Ask me about...companies to target, research topics, or company stocks and financials"
                 :disabled="isLoading"
-                class="p-4 pb-12 block min-h-[106px] w-full bg-primary-brandFrame dark:bg-gray-700 border-primary-brandFrame dark:border-gray-600 rounded-lg text-sm dark:text-gray-200 focus:outline-none active:outline-none border focus:border-primary-brandColor disabled:opacity-50 disabled:pointer-events-none resize-y"
+                class="p-4 pb-12 block min-h-[106px] w-full bg-primary-brandFrame border-primary-brandFrame rounded-lg text-sm focus:outline-none active:outline-none border focus:border-primary-brandColor disabled:opacity-50 disabled:pointer-events-none resize-y"
               ></textarea>
 
               <!-- Toolbar -->
               <div
-                class="absolute bottom-px inset-x-px p-2 rounded-b-lg border-primary-brandFrame dark:border-gray-700 dark:bg-gray-700"
+                class="absolute bottom-px inset-x-px p-2 rounded-b-lg border-primary-brandFrame"
               >
                 <div class="flex justify-between items-center">
                   <!-- Button Group -->
@@ -205,7 +198,7 @@
                       @click="$refs.fileInput.click()"
                       :disabled="isLoading || isUploading"
                       type="button"
-                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:z-1 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
+                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
                     >
                       <input
                         type="file"
@@ -253,10 +246,10 @@
                       @click="toggleRecording"
                       :disabled="isLoading"
                       :class="{
-                        'text-gray-500 dark:text-gray-400': !isRecording,
+                        'text-gray-500': !isRecording,
                         'text-orange-500': isRecording,
                       }"
-                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:z-1 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
+                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
                     >
                       <svg
                         v-if="!isRecording"
@@ -279,7 +272,7 @@
 
                       <svg
                         v-else
-                        class="w-6 h-6 text-gray-800 dark:text-gray-200"
+                        class="w-6 h-6 text-gray-800"
                         aria-hidden="true"
                         xmlns="http://www.w3.org/2000/svg"
                         width="24"
@@ -308,14 +301,14 @@
                         @click="toggleRecording"
                         :disabled="isLoading"
                         :class="{
-                          'text-gray-500 dark:text-gray-400': !isRecording,
+                          'text-gray-500': !isRecording,
                           'text-orange-500': isRecording,
                         }"
-                        class="inline-flex hidden shrink-0 justify-center items-center size-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:z-1 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
+                        class="inline-flex hidden shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
                       >
                         <svg
                           v-if="!isRecording"
-                          class="w-6 h-6 text-gray-800 dark:text-gray-200"
+                          class="w-6 h-6 text-gray-800"
                           aria-hidden="true"
                           xmlns="http://www.w3.org/2000/svg"
                           width="24"
@@ -334,7 +327,7 @@
                         </svg>
                         <svg
                           v-else
-                          class="w-6 h-6 text-gray-800 dark:text-gray-200"
+                          class="w-6 h-6 text-gray-800"
                           aria-hidden="true"
                           xmlns="http://www.w3.org/2000/svg"
                           width="24"
@@ -418,7 +411,6 @@ import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import ChatBubble from '@/components/ChatMain/ChatBubble.vue';
-// import StatusAnimationBox from '@/components/ChatMain/StatusAnimationBox.vue';
 import ChatLoaderBubble from '@/components/ChatMain/ChatLoaderBubble.vue';
 const router = useRouter();
 const route = useRoute();
@@ -434,11 +426,12 @@ import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.v
 // Inject the shared selectedOption from MainLayout.vue.
 const selectedOption = inject('selectedOption');
 const eventData = ref(null);
-function handleButtonClick(data) {
+async function handleButtonClick(data) {
   eventData.value = data.message;
-
   chatName.value = '';
-  router.push('/');
+  
+  // Create new chat instead of just going to home
+  await createNewChat();
 }
 
 async function genPDF() {
@@ -588,21 +581,35 @@ watch(
   () => route.params.id,
   (newId, oldId) => {
     if (newId !== oldId) {
+      // Clear all previous data
       initialLoading.value = true;
       errorMessage.value = '';
       completionMetaData.value = null;
       messagesData.value = [];
       agentThoughtsData.value = [];
+      workflowData.value = [];
+      plannerTextData.value = [];
       searchQuery.value = '';
+      chatName.value = '';
+      isLoading.value = false;
 
-      loadPreviousChat(newId);
+      // Load new conversation data
+      if (newId) {
+        loadPreviousChat(newId);
+      } else {
+        // No conversation ID - clear everything and set to ready state
+        initialLoading.value = false;
+      }
     }
-    currentId.value = newId;
+    currentId.value = newId || '';
 
+    // Close existing socket and reconnect
     if (socket.value) {
       closeSocket();
     }
-    connectWebSocket();
+    if (newId) {
+      connectWebSocket();
+    }
   }
 );
 
@@ -636,8 +643,15 @@ const checkAndOpenSettings = () => {
 };
 
 async function loadPreviousChat(convId) {
+  if (!convId) {
+    initialLoading.value = false;
+    return;
+  }
+
   try {
-    // isLoading.value = true
+    initialLoading.value = true;
+    console.log('Loading previous chat:', convId);
+    
     const resp = await axios.get(
       `${import.meta.env.VITE_API_URL}/chat/history/${convId}`,
       {
@@ -647,15 +661,30 @@ async function loadPreviousChat(convId) {
       }
     );
 
-    initialLoading.value = false;
-    console.log(resp);
-    filterChat(resp.data);
+    console.log('Chat history response:', resp.data);
+    
+    if (resp.data && resp.data.messages) {
+      await filterChat(resp.data);
+      console.log('Filtered messages loaded:', messagesData.value.length);
+
+    } else {
+      console.warn('No messages found in chat history response');
+      messagesData.value = [];
+    }
+    
     AutoScrollToBottom(true);
   } catch (err) {
-    console.error('Error creating new chat:', err);
-    // alert('Failed to create new conversation. Check keys or console.')
-    isLoading.value = false;
+    console.error('Error loading previous chat:', err);
+    // Don't show error message for specific DaytonaSidebar errors
+    if (!err.message?.includes('content.match is not a function')) {
+      errorMessage.value = 'Failed to load conversation history. Please try again.';
+    }
+    messagesData.value = [];
+  } finally {
     initialLoading.value = false;
+    isLoading.value = false;
+    // Clear any status text that might be showing "generating" or "processing"
+    statusText.value = '';
   }
 }
 const currentId = ref(route.params.id || '');
@@ -668,38 +697,268 @@ const agentThoughtsData = ref([]);
 async function filterChat(msgData) {
   messagesData.value = msgData.messages
     .map(message => {
-      // For agent_completion events, preserve the full data structure
+      // For agent_completion events, handle LangGraph format
       if (message.event === 'agent_completion') {
+        // For tool calls and tool results, preserve them for comprehensive audit log and Daytona sidebar
+        // but only filter them from main chat display if they're tool-related
+        const isToolCall = message.content && typeof message.content === 'string' && message.content.includes('<tool>');
+        const isToolResult = Array.isArray(message.content) || (message.additional_kwargs?.agent_type === 'react_tool');
+        const isToolResponse = message.additional_kwargs?.agent_type === 'tool_response';
+        
+        // For Daytona sandbox tool calls/results, always preserve them for sidebar processing
+        const isDaytonaRelated = (isToolCall && message.content.includes('DaytonaCodeSandbox')) ||
+                                 (message.type === 'LiberalFunctionMessage' && message.name === 'DaytonaCodeSandbox');
+        
+        if (isToolCall || isToolResult || isToolResponse || isDaytonaRelated) {
+          // Preserve tool-related messages for comprehensive audit log and Daytona processing
+          console.log('Preserving tool-related message for audit log and Daytona processing:', message.additional_kwargs?.agent_type, message.name);
+          
+          // Create structured data for tool events matching the live streaming format
+          const toolData = {
+            content: message.content || '',
+            additional_kwargs: message.additional_kwargs || {},
+            response_metadata: message.response_metadata || {},
+            type: message.type || 'AIMessage',
+            id: message.id || message.message_id,
+            name: message.name || null,
+            agent_type: message.additional_kwargs?.agent_type || 'tool'
+          };
+          
+          return {
+            event: 'agent_completion',
+            data: toolData,
+            message_id: message.message_id,
+            conversation_id: message.conversation_id,
+            timestamp: message.timestamp || new Date().toISOString(),
+            isToolRelated: true, // Flag for filtering in chat display but preserving for audit
+            isDaytonaRelated: isDaytonaRelated
+          };
+        }
+        
+        // Only show user messages and final responses in main chat bubbles
+        const isUserMessage = message.additional_kwargs?.agent_type === 'human';
+        const isFinalResponse = message.additional_kwargs?.agent_type === 'react_end';
+        
+        if (!isUserMessage && !isFinalResponse) {
+          return null; // Filter out intermediate agent responses that aren't tool-related
+        }
+        
+        // For human messages, convert to user_message event type
+        if (isUserMessage) {
+          return {
+            event: 'user_message',
+            data: message.content || '',
+            message_id: message.message_id,
+            conversation_id: message.conversation_id,
+            timestamp: message.timestamp || new Date().toISOString()
+          };
+        }
+        
+        // For final responses, keep as agent_completion
+        const messageContent = {
+          content: message.content || '',
+          additional_kwargs: message.additional_kwargs || {},
+          response_metadata: message.response_metadata || {},
+          type: message.type || 'AIMessage',
+          id: message.id || message.message_id,
+          agent_type: message.additional_kwargs?.agent_type || 'assistant'
+        };
+        
         return {
           event: 'agent_completion',
-          data: message,  // Pass the entire message object as data
+          data: messageContent,
+          message_id: message.message_id,
+          conversation_id: message.conversation_id,
           timestamp: message.timestamp || new Date().toISOString()
         };
       }
       // For user_message events, keep existing behavior
       else if (message.event === 'user_message') {
-        return message;
+        return {
+          event: 'user_message',
+          data: message.data,
+          message_id: message.message_id,
+          conversation_id: message.conversation_id,
+          timestamp: message.timestamp || new Date().toISOString()
+        };
       }
-      return null;
+      // Handle completion events (legacy)
+      else if (message.event === 'completion') {
+        return {
+          event: 'completion',
+          data: message.data,
+          message_id: message.message_id,
+          conversation_id: message.conversation_id,
+          timestamp: message.timestamp || new Date().toISOString()
+        };
+      }
+      // Handle think events (agent thoughts)
+      else if (message.event === 'think') {
+        return {
+          event: 'think',
+          data: message.data,
+          message_id: message.message_id,
+          conversation_id: message.conversation_id,
+          timestamp: message.timestamp || new Date().toISOString()
+        };
+      }
+      // Handle planner events
+      else if (message.event === 'planner') {
+        return {
+          event: 'planner',
+          data: message.data,
+          message_id: message.message_id,
+          conversation_id: message.conversation_id,
+          timestamp: message.timestamp || new Date().toISOString()
+        };
+      }
+      // Handle streaming events that might be in stored data - CRITICAL FOR PERSISTENCE
+      else if (['stream_start', 'llm_stream_chunk', 'stream_complete'].includes(message.event)) {
+        return {
+          event: message.event,
+          data: message.data || message,
+          message_id: message.message_id,
+          conversation_id: message.conversation_id,
+          timestamp: message.timestamp || new Date().toISOString()
+        };
+      }
+      // For any other events, include them as well
+      else {
+        return {
+          event: message.event,
+          data: message.data || message,
+          message_id: message.message_id,
+          conversation_id: message.conversation_id,
+          timestamp: message.timestamp || new Date().toISOString()
+        };
+      }
     })
     .filter(Boolean)  // Remove null values
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
+  // Process planner data for workflow metadata
   let plannerData = msgData.messages.filter(
     (message) => message.event === 'planner'
   );
   plannerData.forEach((planner) => {
-    addOrUpdateModel(JSON.parse(planner.data).metadata, planner.message_id);
+    try {
+      const parsedData = JSON.parse(planner.data);
+      if (parsedData.metadata) {
+        addOrUpdateModel(parsedData.metadata, planner.message_id);
+      }
+    } catch (error) {
+      console.error('Failed to parse planner data:', error);
+    }
   });
+
+  // Process think events for workflow metadata
   let workData = msgData.messages.filter(
     (message) => message.event === 'think'
   );
   workData.forEach((work) => {
-    addOrUpdateModel(JSON.parse(work.data).metadata, work.message_id);
+    try {
+      const parsedData = JSON.parse(work.data);
+      if (parsedData.metadata) {
+        addOrUpdateModel(parsedData.metadata, work.message_id);
+      }
+    } catch (error) {
+      console.error('Failed to parse think data:', error);
+    }
+  });
+
+  // Process agent_completion events for workflow metadata (tool calls/results) - ENHANCED FOR PERSISTENCE
+  let agentCompletionData = msgData.messages.filter(
+    (message) => message.event === 'agent_completion' && (
+      (message.content && typeof message.content === 'string' && message.content.includes('<tool>')) ||
+      Array.isArray(message.content) ||
+      (message.type === 'LiberalFunctionMessage') ||
+      (message.additional_kwargs?.agent_type === 'react_tool') ||
+      (message.additional_kwargs?.agent_type === 'tool_response') ||
+      (message.name === 'DaytonaCodeSandbox')
+    )
+  );
+  agentCompletionData.forEach((completion) => {
+    try {
+      // Enhanced metadata for different tool types
+      let metadata = {
+        workflow_name: "Agent Workflow",
+        agent_name: "Research Agent", 
+        task: "tool_execution",
+        llm_name: completion.response_metadata?.model_name || "Unknown",
+        llm_provider: "agent",
+        duration: 0
+      };
+
+      // Specific handling for different tool types
+      if (completion.name === 'DaytonaCodeSandbox' || 
+          (completion.content && completion.content.includes('DaytonaCodeSandbox'))) {
+        metadata.task = "code_execution";
+        metadata.agent_name = "Daytona Sandbox";
+        metadata.tool_name = "DaytonaCodeSandbox";
+      } else if (completion.name === 'search_tavily' || 
+                 (completion.content && completion.content.includes('search_tavily'))) {
+        metadata.task = "web_search";
+        metadata.tool_name = "search_tavily";
+      } else if (completion.name === 'arxiv' || 
+                 (completion.content && completion.content.includes('arxiv'))) {
+        metadata.task = "arxiv_search";
+        metadata.tool_name = "arxiv";
+      } else if (Array.isArray(completion.content)) {
+        metadata.task = "search_results";
+      } else if (completion.content && completion.content.includes('<tool>')) {
+        metadata.task = "tool_call";
+      }
+
+      addOrUpdateModel(metadata, completion.message_id);
+    } catch (error) {
+      console.error('Failed to process agent completion data:', error);
+    }
+  });
+
+  // Process completion events for metadata - ENHANCED FOR COMPREHENSIVE LOG SUMMARY PERSISTENCE
+  let completionData = msgData.messages.filter(
+    (message) => message.event === 'completion' || message.event === 'stream_complete'
+  );
+  completionData.forEach((completion) => {
+    try {
+      let parsedData;
+      if (typeof completion.data === 'string') {
+        parsedData = JSON.parse(completion.data);
+      } else {
+        parsedData = completion.data;
+      }
+      
+      if (parsedData.metadata) {
+        completionMetaData.value = parsedData.metadata;
+        emit('metadataChanged', completionMetaData.value);
+      }
+      
+      // Also check for stream_complete events that might contain final metadata
+      if (completion.event === 'stream_complete' && parsedData) {
+        // Create synthetic completion metadata if not present
+        if (!completionMetaData.value && workflowData.value.length > 0) {
+          const totalDuration = workflowData.value.reduce((sum, item) => sum + (item.duration || 0), 0);
+          const uniqueProviders = [...new Set(workflowData.value.map(item => item.llm_provider))];
+          const uniqueModels = [...new Set(workflowData.value.map(item => item.llm_name))];
+          
+          completionMetaData.value = {
+            total_duration: totalDuration,
+            providers_used: uniqueProviders,
+            models_used: uniqueModels,
+            total_tools: workflowData.value.length,
+            completion_status: 'completed'
+          };
+          emit('metadataChanged', completionMetaData.value);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to parse completion data:', error);
+    }
   });
 
   AutoScrollToBottom();
 
+  // Process agent thoughts data
   agentThoughtsData.value = msgData.messages
     .filter((message) => message.event === 'think')
     .sort(
@@ -716,6 +975,24 @@ async function filterChat(msgData) {
       return acc;
     }, []);
   emit('agentThoughtsDataChanged', agentThoughtsData.value);
+
+  // Process planner text data
+  let plannerTextMessages = msgData.messages.filter(
+    (message) => message.event === 'planner'
+  );
+  plannerTextMessages.forEach((planner) => {
+    try {
+      const parsedData = JSON.parse(planner.data);
+      if (parsedData.content || parsedData.message) {
+        addOrUpdatePlannerText({
+          message_id: planner.message_id,
+          data: parsedData.content || parsedData.message || ''
+        });
+      }
+    } catch (error) {
+      console.error('Failed to parse planner text data:', error);
+    }
+  });
 
   let userMessages = messagesData.value
     .filter((message) => message.event === 'user_message')
@@ -881,8 +1158,17 @@ async function loadKeys() {
 onMounted(async () => {
   await loadKeys();
   await loadUserDocuments();
-  let newId = route.params.id;
-  if (newId) loadPreviousChat(newId);
+  
+  const conversationId = route.params.id;
+  currentId.value = conversationId || '';
+  
+  if (conversationId) {
+    console.log('Mounting with conversation ID:', conversationId);
+    await loadPreviousChat(conversationId);
+  } else {
+    console.log('Mounting without conversation ID');
+    initialLoading.value = false;
+  }
 
   emitterMitt.on('new-chat', handleButtonClick);
 });
@@ -1214,10 +1500,18 @@ const addMessage = async () => {
 
   // If no conversation exists, create a new chat first.
   if (!route.params.id) {
-    await createNewChat();
-    await nextTick();
-    // After createNewChat, the router push should update the conversation id.
-    currentId.value = route.params.id; // update currentId from router params
+    try {
+      await createNewChat();
+      await nextTick();
+      // After createNewChat, the router push should update the conversation id.
+      currentId.value = route.params.id; // update currentId from router params
+      console.log('New chat created, conversation ID:', currentId.value);
+    } catch (error) {
+      console.error('Failed to create new chat:', error);
+      errorMessage.value = 'Failed to create new conversation. Please try again.';
+      isLoading.value = false;
+      return;
+    }
   }
 
   if (messagesData.value.length === 0) {
@@ -1231,6 +1525,7 @@ const addMessage = async () => {
   agentThoughtsData.value = [];
   // workflowData.value = []
   emit('agentThoughtsDataChanged', agentThoughtsData.value);
+  emit('metadataChanged', completionMetaData.value);
   if (!searchQuery.value.trim()) return;
 
   currentMsgId.value = uuidv4();
@@ -1243,7 +1538,7 @@ const addMessage = async () => {
       const message = messagesData.value[i];
       if (message.event === 'agent_completion') {
         // Check if this agent_completion has deep_research_interrupt agent_type
-        if (message.data && message.data.additional_kwargs.agent_type === 'deep_research_interrupt') {
+        if (message.data && message.data.agent_type === 'deep_research_interrupt') {
           // If user typed something, set resume to true
           shouldResume = searchQuery.value.trim().length > 0;
         }
@@ -1259,6 +1554,7 @@ const addMessage = async () => {
     provider: provider.value,
     planner_model: localStorage.getItem(`selected_model_${userId.value}`) || '',
     message_id: currentMsgId.value,
+    conversation_id: currentId.value,
     resume: shouldResume,
   };
 
@@ -1370,6 +1666,8 @@ async function connectWebSocket() {
           messagesData.value.push({
             event: 'stream_start',
             data: receivedData,
+            message_id: currentMsgId.value,
+            conversation_id: currentId.value,
             timestamp: new Date().toISOString()
           });
         } else if (receivedData.event === 'agent_completion') {
@@ -1377,6 +1675,8 @@ async function connectWebSocket() {
           messagesData.value.push({
             event: 'agent_completion', 
             data: receivedData,
+            message_id: currentMsgId.value,
+            conversation_id: currentId.value,
             timestamp: receivedData.timestamp || new Date().toISOString()
           });
         } else if (receivedData.event === 'llm_stream_chunk') {
@@ -1398,7 +1698,9 @@ async function connectWebSocket() {
               // Create new message for new ID
               messagesData.value.push({
                 event: 'llm_stream_chunk',
-                data: receivedData, 
+                data: receivedData,
+                message_id: currentMsgId.value,
+                conversation_id: currentId.value,
                 timestamp: new Date().toISOString()
               });
             }
@@ -1406,7 +1708,9 @@ async function connectWebSocket() {
             // No ID, just add as new message
             messagesData.value.push({
               event: 'llm_stream_chunk',
-              data: receivedData, 
+              data: receivedData,
+              message_id: currentMsgId.value,
+              conversation_id: currentId.value,
               timestamp: new Date().toISOString()
             });
           }
@@ -1415,6 +1719,8 @@ async function connectWebSocket() {
           messagesData.value.push({
             event: 'stream_complete',
             data: receivedData,
+            message_id: currentMsgId.value,
+            conversation_id: currentId.value,
             timestamp: new Date().toISOString()
           });
           isLoading.value = false;
@@ -1436,7 +1742,17 @@ async function connectWebSocket() {
             console.log('completionMetaData.value', error);
             isLoading.value = false;
           }
-          messagesData.value.push(receivedData);
+          
+          // Ensure legacy messages have proper structure
+          const legacyMessage = {
+            event: receivedData.event,
+            data: receivedData.data,
+            message_id: receivedData.message_id || currentMsgId.value,
+            conversation_id: receivedData.conversation_id || currentId.value,
+            timestamp: receivedData.timestamp || new Date().toISOString()
+          };
+          
+          messagesData.value.push(legacyMessage);
           isLoading.value = false;
         } else if (receivedData.event === 'think') {
           let dataParsed = JSON.parse(receivedData.data);
@@ -1446,6 +1762,15 @@ async function connectWebSocket() {
           emit('agentThoughtsDataChanged', agentThoughtsData.value);
           try {
             addOrUpdateModel(dataParsed.metadata);
+            
+            // Add think event to messages for persistence
+            messagesData.value.push({
+              event: 'think',
+              data: receivedData.data,
+              message_id: receivedData.message_id || currentMsgId.value,
+              conversation_id: receivedData.conversation_id || currentId.value,
+              timestamp: receivedData.timestamp || new Date().toISOString()
+            });
 
             AutoScrollToBottom();
           } catch (e) {
@@ -1460,6 +1785,15 @@ async function connectWebSocket() {
         } else if (receivedData.event === 'planner') {
           let dataParsed = JSON.parse(receivedData.data);
           addOrUpdateModel(dataParsed.metadata);
+          
+          // Add planner event to messages for persistence
+          messagesData.value.push({
+            event: 'planner',
+            data: receivedData.data,
+            message_id: receivedData.message_id || currentMsgId.value,
+            conversation_id: receivedData.conversation_id || currentId.value,
+            timestamp: receivedData.timestamp || new Date().toISOString()
+          });
 
           AutoScrollToBottom();
         } else {
@@ -1544,6 +1878,78 @@ async function removeDocument(docId) {
   }
 }
 
+function formatMessageData(msgItem) {
+  try {
+    switch (msgItem.event) {
+      case 'user_message':
+        return JSON.stringify({
+          message: msgItem.data,
+          agent_type: 'user_proxy',
+          timestamp: msgItem.timestamp || new Date().toISOString()
+        });
+      
+      case 'agent_completion':
+        // agent_completion events from LangGraph have structured data
+        if (msgItem.data && typeof msgItem.data === 'object') {
+          const formatted = {
+            message: msgItem.data.content || '',
+            agent_type: msgItem.data.agent_type || 'assistant',
+            metadata: msgItem.data.response_metadata || null,
+            additional_kwargs: msgItem.data.additional_kwargs || {},
+            timestamp: msgItem.timestamp || new Date().toISOString(),
+            type: msgItem.data.type || 'AIMessage',
+            id: msgItem.data.id
+          };
+          return JSON.stringify(formatted);
+        }
+        // Fallback for unexpected format
+        return JSON.stringify({
+          message: msgItem.data || '',
+          agent_type: 'assistant',
+          timestamp: msgItem.timestamp || new Date().toISOString()
+        });
+      
+      case 'completion':
+        try {
+          const parsed = typeof msgItem.data === 'string' ? JSON.parse(msgItem.data) : msgItem.data;
+          return JSON.stringify({
+            message: parsed.message || parsed,
+            agent_type: parsed.agent_type || 'assistant',
+            metadata: parsed.metadata || null,
+            timestamp: msgItem.timestamp || new Date().toISOString()
+          });
+                  } catch (error) {
+            console.error('Error parsing completion data:', error);
+          return JSON.stringify({
+            message: msgItem.data,
+            agent_type: 'assistant',
+            timestamp: msgItem.timestamp || new Date().toISOString()
+          });
+        }
+      
+      case 'llm_stream_chunk':
+      case 'stream_start':
+      case 'stream_complete':
+        return JSON.stringify({
+          message: msgItem.data?.content || msgItem.data,
+          agent_type: 'assistant',
+          timestamp: msgItem.timestamp || new Date().toISOString(),
+          is_streaming: true
+        });
+      
+      default:
+        return JSON.stringify({
+          message: msgItem.data,
+          agent_type: 'assistant',
+          timestamp: msgItem.timestamp || new Date().toISOString()
+        });
+    }
+  } catch (error) {
+    console.error('Error formatting message data:', error, msgItem);
+    return JSON.stringify({ error: 'Failed to format message data', original: msgItem });
+  }
+}
+
 function scrollNewMessageToMiddle() {
   nextTick(() => {
     const containerEl = container.value;
@@ -1574,8 +1980,113 @@ watch(
 );
 
 const filteredMessages = computed(() => {
-  // Show all messages by default
-  return messagesData.value;
+  if (!messagesData.value || messagesData.value.length === 0) {
+    return [];
+  }
+
+  try {
+    const grouped = new Map();
+    const streamingEvents = ['stream_start', 'agent_completion', 'llm_stream_chunk', 'stream_complete'];
+    
+    // First pass: count streaming events by message_id and separate tool-related messages
+    const messageIdCounts = {};
+    const toolRelatedMessages = new Map(); // Store tool-related messages separately
+    
+    messagesData.value.forEach(msg => {
+      if (msg && streamingEvents.includes(msg.event) && msg.message_id) {
+        // Count all streaming events
+        messageIdCounts[msg.message_id] = (messageIdCounts[msg.message_id] || 0) + 1;
+        
+        // Separate tool-related messages for comprehensive audit log and Daytona processing
+        if (msg.isToolRelated || msg.isDaytonaRelated) {
+          const toolKey = `tool_${msg.message_id}`;
+          if (!toolRelatedMessages.has(toolKey)) {
+            toolRelatedMessages.set(toolKey, []);
+          }
+          toolRelatedMessages.get(toolKey).push(msg);
+        }
+      }
+    });
+    
+    // Second pass: group or separate messages
+    messagesData.value.forEach((msg, index) => {
+      if (!msg) return; // Skip null/undefined messages
+      
+      // For streaming events that appear multiple times with same message_id, group them
+      if (streamingEvents.includes(msg.event) && 
+          msg.message_id && 
+          messageIdCounts[msg.message_id] > 1) {
+        
+        const groupKey = `streaming_${msg.message_id}`;
+        
+        if (!grouped.has(groupKey)) {
+          grouped.set(groupKey, {
+            type: 'streaming_group',
+            message_id: msg.message_id,
+            events: [],
+            timestamp: msg.timestamp || new Date().toISOString()
+          });
+        }
+        
+        const group = grouped.get(groupKey);
+        if (group && group.events) {
+          group.events.push(msg);
+          
+          // Add tool-related events to the streaming group for comprehensive processing
+          const toolKey = `tool_${msg.message_id}`;
+          if (toolRelatedMessages.has(toolKey)) {
+            group.events.push(...toolRelatedMessages.get(toolKey));
+            // Sort events within the group by timestamp for proper timeline
+            group.events.sort((a, b) => {
+              const aTime = new Date(a.timestamp || 0).getTime();
+              const bTime = new Date(b.timestamp || 0).getTime();
+              return aTime - bTime;
+            });
+          }
+        }
+      } else if (msg.isToolRelated) {
+        // For tool-related messages from loaded conversations, create a synthetic streaming group
+        
+        const groupKey = `streaming_${msg.message_id}`;
+        if (!grouped.has(groupKey)) {
+          grouped.set(groupKey, {
+            type: 'streaming_group',
+            message_id: msg.message_id,
+            events: [msg], // Include the tool-related message in the events
+            timestamp: msg.timestamp || new Date().toISOString()
+          });
+        } else {
+          // Add to existing group
+          const group = grouped.get(groupKey);
+          if (group && group.events) {
+            group.events.push(msg);
+            group.events.sort((a, b) => {
+              const aTime = new Date(a.timestamp || 0).getTime();
+              const bTime = new Date(b.timestamp || 0).getTime();
+              return aTime - bTime;
+            });
+          }
+        }
+      } else {
+        // For all other messages (loaded chats, standalone messages), show individually
+        const uniqueKey = msg.conversation_id || `${msg.event}_${msg.message_id}_${index}` || msg.timestamp || `msg_${index}`;
+        grouped.set(uniqueKey, msg);
+      }
+    });
+    
+    // Convert to array and sort by timestamp
+    const result = Array.from(grouped.values()).sort((a, b) => {
+      const aTime = new Date(a.timestamp || 0).getTime();
+      const bTime = new Date(b.timestamp || 0).getTime();
+      return aTime - bTime;
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('Error in filteredMessages computed:', error);
+    // Fallback: return messages as-is if there's an error
+    return messagesData.value || [];
+  }
 });
 </script>
 
