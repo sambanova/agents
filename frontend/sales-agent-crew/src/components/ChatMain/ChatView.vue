@@ -60,18 +60,18 @@
             :metadata="completionMetaData"
             :workflowData="
               workflowData.filter(
-                (item) => item.message_id === msgItem.message_id
+                (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
               )
             "
             :plannerText="
               plannerTextData.filter(
-                (item) => item.message_id === msgItem.message_id
-              )[0]?.data
+                (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
+              )[0]?.data || ''
             "
-            :key="msgItem.conversation_id || msgItem.message_id || msgItem.timestamp"
-            :event="msgItem.event"
-            :data="msgItem.data"
-            :messageId="msgItem.message_id"
+            :key="msgItem.conversation_id || msgItem.message_id || msgItem.timestamp || Math.random()"
+            :event="msgItem.event || 'unknown'"
+            :data="formatMessageData(msgItem)"
+            :messageId="msgItem.message_id || msgItem.messageId || ''"
             :provider="provider"
             :currentMsgId="currentMsgId"
             :streamingEvents="msgItem.type === 'streaming_group' ? msgItem.events : null"
@@ -580,21 +580,32 @@ watch(
   () => route.params.id,
   (newId, oldId) => {
     if (newId !== oldId) {
+      // Clear all previous data
       initialLoading.value = true;
       errorMessage.value = '';
       completionMetaData.value = null;
       messagesData.value = [];
       agentThoughtsData.value = [];
+      workflowData.value = [];
+      plannerTextData.value = [];
       searchQuery.value = '';
+      chatName.value = '';
+      isLoading.value = false;
 
-      loadPreviousChat(newId);
+      // Load new conversation data
+      if (newId) {
+        loadPreviousChat(newId);
+      }
     }
     currentId.value = newId;
 
+    // Close existing socket and reconnect
     if (socket.value) {
       closeSocket();
     }
-    connectWebSocket();
+    if (newId) {
+      connectWebSocket();
+    }
   }
 );
 
@@ -628,8 +639,15 @@ const checkAndOpenSettings = () => {
 };
 
 async function loadPreviousChat(convId) {
+  if (!convId) {
+    initialLoading.value = false;
+    return;
+  }
+
   try {
-    // isLoading.value = true
+    initialLoading.value = true;
+    console.log('Loading previous chat:', convId);
+    
     const resp = await axios.get(
       `${import.meta.env.VITE_API_URL}/chat/history/${convId}`,
       {
@@ -639,15 +657,24 @@ async function loadPreviousChat(convId) {
       }
     );
 
-    initialLoading.value = false;
-    console.log(resp);
-    filterChat(resp.data);
+    console.log('Chat history response:', resp.data);
+    
+    if (resp.data && resp.data.messages) {
+      await filterChat(resp.data);
+      console.log('Filtered messages loaded:', messagesData.value.length);
+    } else {
+      console.warn('No messages found in chat history response');
+      messagesData.value = [];
+    }
+    
     AutoScrollToBottom(true);
   } catch (err) {
-    console.error('Error creating new chat:', err);
-    // alert('Failed to create new conversation. Check keys or console.')
-    isLoading.value = false;
+    console.error('Error loading previous chat:', err);
+    errorMessage.value = 'Failed to load conversation history. Please try again.';
+    messagesData.value = [];
+  } finally {
     initialLoading.value = false;
+    isLoading.value = false;
   }
 }
 const currentId = ref(route.params.id || '');
@@ -665,33 +692,124 @@ async function filterChat(msgData) {
         return {
           event: 'agent_completion',
           data: message,  // Pass the entire message object as data
+          message_id: message.message_id,
+          conversation_id: message.conversation_id,
           timestamp: message.timestamp || new Date().toISOString()
         };
       }
       // For user_message events, keep existing behavior
       else if (message.event === 'user_message') {
-        return message;
+        return {
+          event: 'user_message',
+          data: message.data,
+          message_id: message.message_id,
+          conversation_id: message.conversation_id,
+          timestamp: message.timestamp || new Date().toISOString()
+        };
       }
-      return null;
+      // Handle completion events (legacy)
+      else if (message.event === 'completion') {
+        return {
+          event: 'completion',
+          data: message.data,
+          message_id: message.message_id,
+          conversation_id: message.conversation_id,
+          timestamp: message.timestamp || new Date().toISOString()
+        };
+      }
+      // Handle think events (agent thoughts)
+      else if (message.event === 'think') {
+        return {
+          event: 'think',
+          data: message.data,
+          message_id: message.message_id,
+          conversation_id: message.conversation_id,
+          timestamp: message.timestamp || new Date().toISOString()
+        };
+      }
+      // Handle planner events
+      else if (message.event === 'planner') {
+        return {
+          event: 'planner',
+          data: message.data,
+          message_id: message.message_id,
+          conversation_id: message.conversation_id,
+          timestamp: message.timestamp || new Date().toISOString()
+        };
+      }
+      // Handle streaming events that might be in stored data
+      else if (['stream_start', 'llm_stream_chunk', 'stream_complete'].includes(message.event)) {
+        return {
+          event: message.event,
+          data: message.data || message,
+          message_id: message.message_id,
+          conversation_id: message.conversation_id,
+          timestamp: message.timestamp || new Date().toISOString()
+        };
+      }
+      // For any other events, include them as well
+      else {
+        return {
+          event: message.event,
+          data: message.data || message,
+          message_id: message.message_id,
+          conversation_id: message.conversation_id,
+          timestamp: message.timestamp || new Date().toISOString()
+        };
+      }
     })
     .filter(Boolean)  // Remove null values
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
+  // Process planner data for workflow metadata
   let plannerData = msgData.messages.filter(
     (message) => message.event === 'planner'
   );
   plannerData.forEach((planner) => {
-    addOrUpdateModel(JSON.parse(planner.data).metadata, planner.message_id);
+    try {
+      const parsedData = JSON.parse(planner.data);
+      if (parsedData.metadata) {
+        addOrUpdateModel(parsedData.metadata, planner.message_id);
+      }
+    } catch (error) {
+      console.error('Failed to parse planner data:', error);
+    }
   });
+
+  // Process think events for workflow metadata
   let workData = msgData.messages.filter(
     (message) => message.event === 'think'
   );
   workData.forEach((work) => {
-    addOrUpdateModel(JSON.parse(work.data).metadata, work.message_id);
+    try {
+      const parsedData = JSON.parse(work.data);
+      if (parsedData.metadata) {
+        addOrUpdateModel(parsedData.metadata, work.message_id);
+      }
+    } catch (error) {
+      console.error('Failed to parse think data:', error);
+    }
+  });
+
+  // Process completion events for metadata
+  let completionData = msgData.messages.filter(
+    (message) => message.event === 'completion'
+  );
+  completionData.forEach((completion) => {
+    try {
+      const parsedData = JSON.parse(completion.data);
+      if (parsedData.metadata) {
+        completionMetaData.value = parsedData.metadata;
+        emit('metadataChanged', completionMetaData.value);
+      }
+    } catch (error) {
+      console.error('Failed to parse completion data:', error);
+    }
   });
 
   AutoScrollToBottom();
 
+  // Process agent thoughts data
   agentThoughtsData.value = msgData.messages
     .filter((message) => message.event === 'think')
     .sort(
@@ -708,6 +826,24 @@ async function filterChat(msgData) {
       return acc;
     }, []);
   emit('agentThoughtsDataChanged', agentThoughtsData.value);
+
+  // Process planner text data
+  let plannerTextMessages = msgData.messages.filter(
+    (message) => message.event === 'planner'
+  );
+  plannerTextMessages.forEach((planner) => {
+    try {
+      const parsedData = JSON.parse(planner.data);
+      if (parsedData.content || parsedData.message) {
+        addOrUpdatePlannerText({
+          message_id: planner.message_id,
+          data: parsedData.content || parsedData.message || ''
+        });
+      }
+    } catch (error) {
+      console.error('Failed to parse planner text data:', error);
+    }
+  });
 
   let userMessages = messagesData.value
     .filter((message) => message.event === 'user_message')
@@ -873,8 +1009,17 @@ async function loadKeys() {
 onMounted(async () => {
   await loadKeys();
   await loadUserDocuments();
-  let newId = route.params.id;
-  if (newId) loadPreviousChat(newId);
+  
+  const conversationId = route.params.id;
+  currentId.value = conversationId || '';
+  
+  if (conversationId) {
+    console.log('Mounting with conversation ID:', conversationId);
+    await loadPreviousChat(conversationId);
+  } else {
+    console.log('Mounting without conversation ID');
+    initialLoading.value = false;
+  }
 
   emitterMitt.on('new-chat', handleButtonClick);
 });
@@ -1252,6 +1397,7 @@ const addMessage = async () => {
     provider: provider.value,
     planner_model: localStorage.getItem(`selected_model_${userId.value}`) || '',
     message_id: currentMsgId.value,
+    conversation_id: currentId.value,
     resume: shouldResume,
   };
 
@@ -1364,6 +1510,7 @@ async function connectWebSocket() {
             event: 'stream_start',
             data: receivedData,
             message_id: currentMsgId.value,
+            conversation_id: currentId.value,
             timestamp: new Date().toISOString()
           });
         } else if (receivedData.event === 'agent_completion') {
@@ -1372,6 +1519,7 @@ async function connectWebSocket() {
             event: 'agent_completion', 
             data: receivedData,
             message_id: currentMsgId.value,
+            conversation_id: currentId.value,
             timestamp: receivedData.timestamp || new Date().toISOString()
           });
         } else if (receivedData.event === 'llm_stream_chunk') {
@@ -1395,6 +1543,7 @@ async function connectWebSocket() {
                 event: 'llm_stream_chunk',
                 data: receivedData,
                 message_id: currentMsgId.value,
+                conversation_id: currentId.value,
                 timestamp: new Date().toISOString()
               });
             }
@@ -1404,6 +1553,7 @@ async function connectWebSocket() {
               event: 'llm_stream_chunk',
               data: receivedData,
               message_id: currentMsgId.value,
+              conversation_id: currentId.value,
               timestamp: new Date().toISOString()
             });
           }
@@ -1413,6 +1563,7 @@ async function connectWebSocket() {
             event: 'stream_complete',
             data: receivedData,
             message_id: currentMsgId.value,
+            conversation_id: currentId.value,
             timestamp: new Date().toISOString()
           });
           isLoading.value = false;
@@ -1434,7 +1585,17 @@ async function connectWebSocket() {
             console.log('completionMetaData.value', error);
             isLoading.value = false;
           }
-          messagesData.value.push(receivedData);
+          
+          // Ensure legacy messages have proper structure
+          const legacyMessage = {
+            event: receivedData.event,
+            data: receivedData.data,
+            message_id: receivedData.message_id || currentMsgId.value,
+            conversation_id: receivedData.conversation_id || currentId.value,
+            timestamp: receivedData.timestamp || new Date().toISOString()
+          };
+          
+          messagesData.value.push(legacyMessage);
           isLoading.value = false;
         } else if (receivedData.event === 'think') {
           let dataParsed = JSON.parse(receivedData.data);
@@ -1444,6 +1605,15 @@ async function connectWebSocket() {
           emit('agentThoughtsDataChanged', agentThoughtsData.value);
           try {
             addOrUpdateModel(dataParsed.metadata);
+            
+            // Add think event to messages for persistence
+            messagesData.value.push({
+              event: 'think',
+              data: receivedData.data,
+              message_id: receivedData.message_id || currentMsgId.value,
+              conversation_id: receivedData.conversation_id || currentId.value,
+              timestamp: receivedData.timestamp || new Date().toISOString()
+            });
 
             AutoScrollToBottom();
           } catch (e) {
@@ -1458,6 +1628,15 @@ async function connectWebSocket() {
         } else if (receivedData.event === 'planner') {
           let dataParsed = JSON.parse(receivedData.data);
           addOrUpdateModel(dataParsed.metadata);
+          
+          // Add planner event to messages for persistence
+          messagesData.value.push({
+            event: 'planner',
+            data: receivedData.data,
+            message_id: receivedData.message_id || currentMsgId.value,
+            conversation_id: receivedData.conversation_id || currentId.value,
+            timestamp: receivedData.timestamp || new Date().toISOString()
+          });
 
           AutoScrollToBottom();
         } else {
@@ -1542,6 +1721,58 @@ async function removeDocument(docId) {
   }
 }
 
+function formatMessageData(msgItem) {
+  try {
+    // If it's a streaming group, we don't need to format the data
+    if (msgItem.type === 'streaming_group') {
+      return '';
+    }
+    
+    // For user messages, return the data as-is (should be a string)
+    if (msgItem.event === 'user_message') {
+      return typeof msgItem.data === 'string' ? msgItem.data : JSON.stringify(msgItem.data || '');
+    }
+    
+    // For agent completion events, the data should be the whole message object as JSON
+    if (msgItem.event === 'agent_completion') {
+      // If msgItem.data is already the full object, stringify it
+      if (typeof msgItem.data === 'object' && msgItem.data !== null) {
+        return JSON.stringify(msgItem.data);
+      }
+      // If msgItem.data is a string, but msgItem itself has the structure, use msgItem
+      if (msgItem.additional_kwargs || msgItem.content) {
+        return JSON.stringify(msgItem);
+      }
+      return typeof msgItem.data === 'string' ? msgItem.data : JSON.stringify(msgItem.data || {});
+    }
+    
+    // For completion events, try to parse and re-stringify
+    if (msgItem.event === 'completion') {
+      if (typeof msgItem.data === 'string') {
+        try {
+          // Try to parse it to validate it's valid JSON
+          JSON.parse(msgItem.data);
+          return msgItem.data;
+        } catch {
+          // If not valid JSON, wrap it
+          return JSON.stringify({ content: msgItem.data });
+        }
+      }
+      return JSON.stringify(msgItem.data || {});
+    }
+    
+    // For all other events, ensure we return a valid JSON string
+    if (typeof msgItem.data === 'string') {
+      return msgItem.data;
+    }
+    
+    return JSON.stringify(msgItem.data || {});
+  } catch (error) {
+    console.error('Error formatting message data:', error, msgItem);
+    return JSON.stringify({ error: 'Failed to format message data', original: msgItem });
+  }
+}
+
 function scrollNewMessageToMiddle() {
   nextTick(() => {
     const containerEl = container.value;
@@ -1572,32 +1803,66 @@ watch(
 );
 
 const filteredMessages = computed(() => {
-  const grouped = new Map();
-  const streamingEvents = ['stream_start', 'agent_completion', 'llm_stream_chunk', 'stream_complete'];
-  
-  messagesData.value.forEach(msg => {
-    if (streamingEvents.includes(msg.event) && msg.message_id) {
-      // Group streaming events by message_id
-      if (!grouped.has(msg.message_id)) {
-        grouped.set(msg.message_id, {
-          type: 'streaming_group',
-          message_id: msg.message_id,
-          events: [],
-          timestamp: msg.timestamp
-        });
+  if (!messagesData.value || messagesData.value.length === 0) {
+    return [];
+  }
+
+  try {
+    const grouped = new Map();
+    const streamingEvents = ['stream_start', 'agent_completion', 'llm_stream_chunk', 'stream_complete'];
+    
+    // First pass: count streaming events by message_id
+    const messageIdCounts = {};
+    messagesData.value.forEach(msg => {
+      if (msg && streamingEvents.includes(msg.event) && msg.message_id) {
+        messageIdCounts[msg.message_id] = (messageIdCounts[msg.message_id] || 0) + 1;
       }
-      grouped.get(msg.message_id).events.push(msg);
-    } else {
-      // Non-streaming messages remain as individual items
-      grouped.set(msg.conversation_id || msg.timestamp || Math.random(), msg);
-    }
-  });
-  
-  return Array.from(grouped.values()).sort((a, b) => {
-    const aTime = new Date(a.timestamp || 0);
-    const bTime = new Date(b.timestamp || 0);
-    return aTime - bTime;
-  });
+    });
+    
+    // Second pass: group or separate messages
+    messagesData.value.forEach((msg, index) => {
+      if (!msg) return; // Skip null/undefined messages
+      
+      // For streaming events that appear multiple times with same message_id, group them
+      if (streamingEvents.includes(msg.event) && 
+          msg.message_id && 
+          messageIdCounts[msg.message_id] > 1) {
+        
+        const groupKey = `streaming_${msg.message_id}`;
+        
+        if (!grouped.has(groupKey)) {
+          grouped.set(groupKey, {
+            type: 'streaming_group',
+            message_id: msg.message_id,
+            events: [],
+            timestamp: msg.timestamp || new Date().toISOString()
+          });
+        }
+        
+        const group = grouped.get(groupKey);
+        if (group && group.events) {
+          group.events.push(msg);
+        }
+      } else {
+        // For all other messages (loaded chats, standalone messages), show individually
+        const uniqueKey = msg.conversation_id || `${msg.event}_${msg.message_id}_${index}` || msg.timestamp || `msg_${index}`;
+        grouped.set(uniqueKey, msg);
+      }
+    });
+    
+    // Convert to array and sort by timestamp
+    const result = Array.from(grouped.values()).sort((a, b) => {
+      const aTime = new Date(a.timestamp || 0).getTime();
+      const bTime = new Date(b.timestamp || 0).getTime();
+      return aTime - bTime;
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('Error in filteredMessages computed:', error);
+    // Fallback: return messages as-is if there's an error
+    return messagesData.value || [];
+  }
 });
 </script>
 
