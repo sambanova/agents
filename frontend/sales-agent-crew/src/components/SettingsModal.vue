@@ -238,18 +238,14 @@
             <label class="block text-sm font-medium text-gray-700 mb-2">
               Planner Model Selection
               <br>
-              <span class="text-red-500 text-sm">
-                (DeepSeek R1 8K Requires early access to API)
-              </span>
             </label>
             <select
               v-model="selectedModel"
               @change="handleModelSelection"
               class="block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
             >
-              <option value="llama-3.3-70b">Meta-Llama-3.3-70B-Instruct - 128K</option>
-              <option value="deepseek-r1">DeepSeek-R1 - 8K</option>
-              <option value="llama-3.1-405b">Meta-Llama-3.1-405B-Instruct - 16K</option>
+              <option value="DeepSeek V3">DeepSeek V3 - 32K</option>
+              <option value="Llama Maverick">Meta-Llama-Maverick - 128K</option>
             </select>
           </div>
 
