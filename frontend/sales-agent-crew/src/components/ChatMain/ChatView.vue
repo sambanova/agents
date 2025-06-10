@@ -2037,7 +2037,6 @@ const filteredMessages = computed(() => {
         }
       } else if (msg.isToolRelated) {
         // For tool-related messages from loaded conversations, create a synthetic streaming group
-        console.log('Creating synthetic streaming group for tool-related message:', msg.data.agent_type, msg.data.name);
         
         const groupKey = `streaming_${msg.message_id}`;
         if (!grouped.has(groupKey)) {

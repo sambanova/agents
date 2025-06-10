@@ -247,7 +247,7 @@
         <!-- Card -->
         <div class="inline-block flex justify-end">
           <p class="text-[16px] text-left color-primary-brandGray max-w-[80%] w-auto">
-            {{ props.data }}
+            {{ parsedData.message || props.data }}
           </p>
         </div>
         <!-- End Card -->
@@ -814,7 +814,6 @@ const finalStatusSummary = computed(() => {
 
 // Comprehensive audit log with filtered meaningful events - ENHANCED FOR LOADED CONVERSATIONS
 const auditLogEvents = computed(() => {
-  console.log('Computing auditLogEvents, streamingEvents:', props.streamingEvents?.length || 0, 'workflowData:', props.workflowData?.length || 0);
   
   if (!props.streamingEvents || props.streamingEvents.length === 0) {
     // For loaded conversations without streaming events, create synthetic audit log from workflow data
@@ -848,7 +847,7 @@ const auditLogEvents = computed(() => {
     return [];
   }
   
-  console.log('Processing streamingEvents for audit log, events:', props.streamingEvents);
+
   
   // First, deduplicate events to prevent duplicate audit log entries
   const uniqueEvents = [];
