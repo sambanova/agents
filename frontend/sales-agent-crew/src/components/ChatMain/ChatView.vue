@@ -739,20 +739,29 @@ async function filterChat(msgData) {
         const isUserMessage = message.additional_kwargs?.agent_type === 'human';
         const isFinalResponse = message.additional_kwargs?.agent_type === 'react_end';
         
-        console.log(`Message filtering: ${message.additional_kwargs?.agent_type} -> isUser: ${isUserMessage}, isFinal: ${isFinalResponse}, showing: ${isUserMessage || isFinalResponse}`);
-        
         if (!isUserMessage && !isFinalResponse) {
           return null; // Filter out intermediate agent responses that aren't tool-related
         }
         
-        // LangGraph agent_completion events have content spread at top level
+        // For human messages, convert to user_message event type
+        if (isUserMessage) {
+          return {
+            event: 'user_message',
+            data: message.content || '',
+            message_id: message.message_id,
+            conversation_id: message.conversation_id,
+            timestamp: message.timestamp || new Date().toISOString()
+          };
+        }
+        
+        // For final responses, keep as agent_completion
         const messageContent = {
           content: message.content || '',
           additional_kwargs: message.additional_kwargs || {},
           response_metadata: message.response_metadata || {},
           type: message.type || 'AIMessage',
           id: message.id || message.message_id,
-          agent_type: isUserMessage ? 'user_proxy' : (message.additional_kwargs?.agent_type || 'assistant')
+          agent_type: message.additional_kwargs?.agent_type || 'assistant'
         };
         
         return {
