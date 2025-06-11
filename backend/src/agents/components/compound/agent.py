@@ -4,6 +4,7 @@ from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Union
 
 from agents.api.stream import astream_state_websocket
 from agents.api.websocket_interface import WebSocketInterface
+from agents.components.compound.data_types import LLMType
 from agents.components.compound.xml_agent import get_xml_agent_executor
 from langchain_core.messages import AnyMessage
 from langchain_core.runnables import (
@@ -60,14 +61,6 @@ Tool = Union[
     DallE,
     Daytona,
 ]
-
-
-class LLMType(str, Enum):
-    SN_LLAMA_3_3_70B = "Llama 3.3 70B"
-    SN_LLAMA_MAVERICK = "Llama Maverick"
-    SN_DEEPSEEK_V3 = "DeepSeek V3"
-    DEEPSEEK_R1_DISTILL_LLAMA = "DeepSeek R1 Distill Llama"
-    FIREWORKS_LLAMA_3_3_70B = "Fireworks Llama 3.3 70B"
 
 
 DEFAULT_SYSTEM_MESSAGE = "You are a helpful assistant."
@@ -133,6 +126,7 @@ class ConfigurableAgent(RunnableBinding):
             llm=llm,
             system_message=system_message,
             subgraphs=subgraphs,
+            llm_type=llm_type,
         )
 
         agent_executor = _agent.with_config({"recursion_limit": 50})

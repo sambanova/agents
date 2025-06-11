@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Any, ClassVar
 
 from langchain_core.messages import (
@@ -11,6 +12,13 @@ from langgraph.graph.message import Messages, add_messages
 from pydantic import Field
 from langchain_core.load.serializable import Serializable
 
+
+class LLMType(str, Enum):
+    SN_LLAMA_3_3_70B = "Llama 3.3 70B"
+    SN_LLAMA_MAVERICK = "Llama Maverick"
+    SN_DEEPSEEK_V3 = "DeepSeek V3"
+    DEEPSEEK_R1_DISTILL_LLAMA = "DeepSeek R1 Distill Llama"
+    FIREWORKS_LLAMA_3_3_70B = "Fireworks Llama 3.3 70B"
 
 class LiberalToolMessage(ToolMessage):
     content: Any = Field(default="")
@@ -26,7 +34,7 @@ class LiberalFunctionMessage(FunctionMessage, Serializable):
     @classmethod
     def get_lc_namespace(cls) -> list[str]:
         """Return the actual namespace where this class can be imported from."""
-        return ["agents", "components", "compound", "message_types"]
+        return ["agents", "components", "compound", "data_types"]
 
     content: Any = Field(default="")
 
@@ -40,7 +48,7 @@ class LiberalAIMessage(AIMessage):
     @classmethod
     def get_lc_namespace(cls) -> list[str]:
         """Return the actual namespace where this class can be imported from."""
-        return ["agents", "components", "compound", "message_types"]
+        return ["agents", "components", "compound", "data_types"]
 
     content: Any = Field(default="")
 

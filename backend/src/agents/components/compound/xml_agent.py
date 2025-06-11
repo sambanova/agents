@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from typing import Callable, Any, Dict, List, Optional
+from agents.components.compound.data_types import LLMType
 from agents.components.compound.util import extract_api_key
 from langchain.tools import BaseTool
 from langchain.tools.render import render_text_description
@@ -14,7 +15,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END
 from langgraph.graph.message import MessageGraph
 from agents.components.compound.prompts import xml_template
-from agents.components.compound.message_types import LiberalFunctionMessage
+from agents.components.compound.data_types import LiberalFunctionMessage
 from langchain_core.runnables import RunnableConfig, Runnable
 import os
 import asyncio
@@ -81,26 +82,26 @@ def create_checkpointer(redis_client=None):
                 "agents",
                 "components",
                 "compound",
-                "message_types",
+                "data_types",
                 "LiberalFunctionMessage",
             ): (
                 "agents",
                 "components",
                 "compound",
-                "message_types",
+                "data_types",
                 "LiberalFunctionMessage",
             ),
             (
                 "agents",
                 "components",
                 "compound",
-                "message_types",
+                "data_types",
                 "LiberalAIMessage",
             ): (
                 "agents",
                 "components",
                 "compound",
-                "message_types",
+                "data_types",
                 "LiberalAIMessage",
             ),
         }
@@ -184,6 +185,7 @@ class ToolExecutor:
 def get_xml_agent_executor(
     tools: list[BaseTool],
     llm: LanguageModelLike,
+    llm_type: LLMType,
     system_message: str,
     subgraphs: dict = None,
     checkpointer=None,
@@ -229,7 +231,7 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
     async def _get_messages(messages):
         return [
             SystemMessage(content=formatted_system_message)
-        ] + await construct_chat_history(messages)
+        ] + await construct_chat_history(messages, llm_type)
 
     tool_executor = ToolExecutor(tools)
 
@@ -413,11 +415,18 @@ def _collapse_messages(messages):
     return AIMessage(content=log)
 
 
-async def construct_chat_history(messages):
+async def construct_chat_history(messages, llm_type: LLMType):
     collapsed_messages = []
     temp_messages = []
     for message in messages:
         if isinstance(message, HumanMessage):
+            # If some of the messages contain images, we need to collapse them into a single message for text based models
+            if llm_type != LLMType.SN_LLAMA_MAVERICK and isinstance(
+                message.content, list
+            ):
+                for c in message.content:
+                    if "text" in c:
+                        message.content = c["text"]
             if temp_messages:
                 collapsed_messages.append(_collapse_messages(temp_messages))
                 temp_messages = []

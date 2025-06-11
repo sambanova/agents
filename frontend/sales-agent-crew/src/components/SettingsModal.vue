@@ -345,7 +345,7 @@ const serperKey = ref('')
 const fireworksKey = ref('')
 const errorMessage = ref('')
 const successMessage = ref('')
-const selectedModel = ref('llama-3.3-70b')
+const selectedModel = ref('DeepSeek V3')
 // Key visibility controls
 const sambanovaKeyVisible = ref(false)
 const exaKeyVisible = ref(false)
