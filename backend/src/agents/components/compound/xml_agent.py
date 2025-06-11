@@ -23,6 +23,8 @@ from langgraph.checkpoint.redis import AsyncRedisSaver
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
+from agents.utils.logging import logger
+
 
 # TODO: This is a temporary fix to get the checkpoint working. Remove this once we have a proper fix.
 try:
@@ -153,7 +155,7 @@ def create_checkpointer(redis_client=None):
         return redis_checkpointer
 
     except Exception as e:
-        print(f"❌ Error initializing Redis checkpointer: {e}")
+        logger.error(f"Error initializing Redis checkpointer: {e}")
         return None
 
 
@@ -246,11 +248,68 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
             stop=["</tool_input>", "</subgraph_input>", "<observation>"]
         )
 
-        # Process messages
-        processed_messages = await _get_messages(messages)
-        return await llm_with_stop.ainvoke(processed_messages, config)
+        # Check if the last message indicates a malformed tool call that needs retry
+        last_message = messages[-1] if messages else None
 
-    # Define the function that determines whether to continue or not
+        if (
+            last_message
+            and hasattr(last_message, "additional_kwargs")
+            and last_message.additional_kwargs.get("error_type")
+            in [
+                "malformed_tool_call",
+                "parse_error",
+                "missing_tool_tag",
+                "empty_tool_name",
+            ]
+        ):
+            # Add a helpful system message about proper tool formatting
+            retry_instruction = """The previous tool call was malformed. Please ensure you use the correct format:
+<tool>tool_name</tool>
+<tool_input>
+your input here
+</tool_input>
+
+Make sure to include both opening and closing tags for both tool and tool_input."""
+
+            # Inject the retry instruction into the message history
+            processed_messages = await _get_messages(messages)
+            processed_messages.append(AIMessage(content=retry_instruction))
+        else:
+            # Process messages normally
+            processed_messages = await _get_messages(messages)
+
+        try:
+            response = await llm_with_stop.ainvoke(processed_messages, config)
+
+            # Post-process response to catch potential formatting issues
+            if hasattr(response, "content") and isinstance(response.content, str):
+                content = response.content
+
+                # Check for incomplete tool calls and attempt basic cleanup
+                if "<tool>" in content and "</tool>" not in content:
+                    # Add missing closing tool tag
+                    content += "</tool>"
+                    response.content = content
+                elif "<tool_input>" in content and "</tool_input>" not in content:
+                    # Add missing closing tool_input tag
+                    content += "</tool_input>"
+                    response.content = content
+
+            return response
+
+        except Exception as e:
+            # If LLM call fails, return an error message that the system can handle
+            error_msg = f"Agent error: {str(e)}"
+            return AIMessage(
+                content=error_msg,
+                additional_kwargs={
+                    "error_type": "agent_execution_error",
+                    "agent_type": "react_end",
+                },
+            )
+
+        # Define the function that determines whether to continue or not
+
     def should_continue(messages):
         last_message = messages[-1]
         content = last_message.content
@@ -264,52 +323,159 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
         else:
             additional_kwargs = {}
 
+        # Simple routing logic - let call_tool handle all validation
         if "</tool>" in content:
             additional_kwargs["agent_type"] = "react_tool"
-            # Update the message with action metadata
             last_message.additional_kwargs = additional_kwargs
             return "tool_action"
         elif "</subgraph>" in content:
-            additional_kwargs["agent_type"] = "react_subgraph"
-            # Update the message with action metadata
+            # Only do basic subgraph name extraction for routing
+            try:
+                subgraph_name = (
+                    content.split("<subgraph>")[1].split("</subgraph>")[0].strip()
+                )
+                if subgraph_name:
+                    additional_kwargs["agent_type"] = "react_subgraph"
+                    last_message.additional_kwargs = additional_kwargs
+                    return f"subgraph_{subgraph_name}"
+            except (IndexError, ValueError):
+                pass
+
+            # If we can't extract subgraph name, treat as end
+            additional_kwargs["agent_type"] = "react_end"
             last_message.additional_kwargs = additional_kwargs
-            # Extract subgraph name to determine which subgraph node to route to
-            subgraph_name = content.split("<subgraph>")[1].split("</subgraph>")[0]
-            return f"subgraph_{subgraph_name}"
+            return "end"
         else:
             additional_kwargs["agent_type"] = "react_end"
-            # Update the message with action metadata
             last_message.additional_kwargs = additional_kwargs
             return "end"
 
     # Define the function to execute tools
     async def call_tool(messages):
         last_message = messages[-1]
-        # Parse tool call
-        tool, tool_input = last_message.content.split("</tool>")
-        _tool = tool.split("<tool>")[1]
-        if "<tool_input>" not in tool_input:
-            _tool_input = ""
-        else:
-            _tool_input = tool_input.split("<tool_input>")[1]
-            if "</tool_input>" in _tool_input:
-                _tool_input = _tool_input.split("</tool_input>")[0]
-        action = ToolInvocation(
-            tool=_tool,
-            tool_input=_tool_input,
-        )
-        # Execute tool
-        response = await tool_executor.ainvoke(action)
-        # Create function message
-        function_message = LiberalFunctionMessage(
-            content=response,
-            name=action.tool,
-            additional_kwargs={
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "agent_type": "tool_response",
-            },
-        )
-        return function_message
+        content = last_message.content
+
+        try:
+            # Parse tool call with improved error handling
+            if "</tool>" not in content:
+                # Malformed tool call - missing closing tool tag
+                error_msg = "Error: Malformed tool call - missing </tool> tag"
+                return LiberalFunctionMessage(
+                    content=error_msg,
+                    name="system_error",
+                    additional_kwargs={
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "agent_type": "tool_response",
+                        "error_type": "malformed_tool_call",
+                    },
+                )
+
+            # Split on </tool> to separate tool name and input
+            tool_parts = content.split("</tool>", 1)
+            if len(tool_parts) < 2:
+                error_msg = "Error: Could not parse tool call - invalid format"
+                return LiberalFunctionMessage(
+                    content=error_msg,
+                    name="system_error",
+                    additional_kwargs={
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "agent_type": "tool_response",
+                        "error_type": "parse_error",
+                    },
+                )
+
+            tool_part, tool_input_part = tool_parts
+
+            # Extract tool name
+            if "<tool>" not in tool_part:
+                error_msg = "Error: Missing <tool> tag in tool call"
+                return LiberalFunctionMessage(
+                    content=error_msg,
+                    name="system_error",
+                    additional_kwargs={
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "agent_type": "tool_response",
+                        "error_type": "missing_tool_tag",
+                    },
+                )
+
+            _tool = tool_part.split("<tool>")[1].strip()
+
+            # Extract tool input
+            if "<tool_input>" not in tool_input_part:
+                _tool_input = ""
+            else:
+                tool_input_content = tool_input_part.split("<tool_input>")[1]
+                if "</tool_input>" in tool_input_content:
+                    _tool_input = tool_input_content.split("</tool_input>")[0]
+                else:
+                    # Handle case where </tool_input> is missing (malformed/truncated)
+                    _tool_input = tool_input_content.strip()
+                    # Note: This allows processing even with malformed input
+
+            # Validate tool name
+            if not _tool:
+                error_msg = "Error: Empty tool name provided"
+                return LiberalFunctionMessage(
+                    content=error_msg,
+                    name="system_error",
+                    additional_kwargs={
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "agent_type": "tool_response",
+                        "error_type": "empty_tool_name",
+                    },
+                )
+
+            action = ToolInvocation(
+                tool=_tool,
+                tool_input=_tool_input,
+            )
+
+            # Execute tool with error handling
+            try:
+                response = await tool_executor.ainvoke(action)
+
+                # Handle cases where response might be malformed or too large
+                if isinstance(response, str) and len(response) > 50000:
+                    response = (
+                        response[:50000] + "\n\n[Response truncated due to length]"
+                    )
+
+            except Exception as e:
+                error_msg = f"Error executing tool '{_tool}': {str(e)}"
+                return LiberalFunctionMessage(
+                    content=error_msg,
+                    name=_tool,
+                    additional_kwargs={
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "agent_type": "tool_response",
+                        "error_type": "tool_execution_error",
+                    },
+                )
+
+            # Create function message
+            function_message = LiberalFunctionMessage(
+                content=str(response),  # Ensure response is string
+                name=action.tool,
+                additional_kwargs={
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "agent_type": "tool_response",
+                },
+            )
+            return function_message
+
+        except Exception as e:
+            # Catch-all error handler for unexpected parsing issues
+            error_msg = f"Unexpected error parsing tool call: {str(e)}"
+            return LiberalFunctionMessage(
+                content=error_msg,
+                name="system_error",
+                additional_kwargs={
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "agent_type": "tool_response",
+                    "error_type": "unexpected_parse_error",
+                },
+            )
 
     # Create subgraph entry nodes
     def create_subgraph_entry_node(

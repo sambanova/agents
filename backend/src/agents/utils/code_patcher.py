@@ -5,7 +5,7 @@ import uuid
 def patch_plot_code_str(code_str):
     """
     Patches code string:
-    - Replaces plt.show() with plt.savefig("plot_<uuid>.png") if plt.plot() was called
+    - Replaces plt.show() with plt.savefig("plot_<uuid>.png") if matplotlib.pyplot is imported as plt
     Returns:
         - patched code as string
         - list of generated filenames
@@ -13,18 +13,21 @@ def patch_plot_code_str(code_str):
 
     class PlotPatcher(ast.NodeTransformer):
         def __init__(self):
-            self.has_plot_call = False
+            self.has_pyplot_import = False
             self.filenames = []
             super().__init__()
 
-        def visit_Call(self, node):
-            if isinstance(node.func, ast.Attribute):
-                if (
-                    node.func.attr == "plot"
-                    and isinstance(node.func.value, ast.Name)
-                    and node.func.value.id == "plt"
-                ):
-                    self.has_plot_call = True
+        def visit_Import(self, node):
+            for alias in node.names:
+                if alias.name == "matplotlib.pyplot" and alias.asname == "plt":
+                    self.has_pyplot_import = True
+            return self.generic_visit(node)
+
+        def visit_ImportFrom(self, node):
+            if node.module == "matplotlib" and any(
+                alias.name == "pyplot" and alias.asname == "plt" for alias in node.names
+            ):
+                self.has_pyplot_import = True
             return self.generic_visit(node)
 
         def visit_Expr(self, node):
@@ -35,7 +38,7 @@ def patch_plot_code_str(code_str):
                     and func.attr == "show"
                     and isinstance(func.value, ast.Name)
                     and func.value.id == "plt"
-                    and self.has_plot_call
+                    and self.has_pyplot_import
                 ):
                     filename = f"plot_{uuid.uuid4().hex[:8]}.png"
                     self.filenames.append(filename)
@@ -62,4 +65,4 @@ def patch_plot_code_str(code_str):
     except AttributeError:
         raise RuntimeError("ast.unparse requires Python 3.9+")
 
-    return patched_code, patcher.filenames 
+    return patched_code, patcher.filenames

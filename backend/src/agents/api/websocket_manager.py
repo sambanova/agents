@@ -133,7 +133,7 @@ class WebSocketConnectionManager(WebSocketInterface):
             # Clean up pubsub from session
             if "pubsub" in session:
                 try:
-                    session["pubsub"].close()
+                    await session["pubsub"].close()
                 except:
                     pass
                 # Also remove from pubsub_instances
