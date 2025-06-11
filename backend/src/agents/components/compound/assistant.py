@@ -1,4 +1,5 @@
 # TODO: Remove this
+from datetime import datetime
 from agents.components.compound.datatypes import Assistant
 
 
@@ -6,8 +7,8 @@ def get_assistant(user_id: str, llm_type: str):
     assistant = Assistant(
         config={
             "configurable": {
-                f"type==default/system_message": "You are a helpful assistant.",
-                f"type==default/tools": [
+                "type==default/system_message": f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}",
+                "type==default/tools": [
                     {
                         "type": "arxiv",
                         "config": {},
@@ -29,7 +30,7 @@ def get_assistant(user_id: str, llm_type: str):
                         "config": {},
                     },
                 ],
-                f"type==default/llm_type": llm_type,
+                "type==default/llm_type": llm_type,
             }
         },
     )

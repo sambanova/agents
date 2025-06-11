@@ -90,6 +90,15 @@ class AvailableTools(str, Enum):
 class ToolConfig(TypedDict): ...
 
 
+class DaytonaConfig(ToolConfig):
+    user_id: str
+
+
+class RetrievalConfig(ToolConfig):
+    assistant_id: str
+    thread_id: str
+
+
 class BaseTool(BaseModel):
     type: AvailableTools
     name: str
@@ -223,6 +232,7 @@ class Retrieval(BaseTool):
     description: Literal["Look up information in uploaded files."] = (
         "Look up information in uploaded files."
     )
+    config: RetrievalConfig
 
 
 class DallE(BaseTool):
@@ -236,9 +246,10 @@ class DallE(BaseTool):
 class Daytona(BaseTool):
     type: Literal[AvailableTools.DAYTONA] = AvailableTools.DAYTONA
     name: Literal["Daytona Code Sandbox"] = "Daytona Code Sandbox"
-    description: Literal[
-        "Executes Python code in a secure sandbox environment. It can be used to plot graphs, create charts, images, documents, etc. If the user asks you for any of these, you should use this tool."
-    ] = "Executes Python code in a secure sandbox environment. It can be used to plot graphs, create charts, images, documents, etc. If the user asks you for any of these, you should use this tool."
+    description: Literal["Executes Python code in a secure sandbox environment."] = (
+        "Executes Python code in a secure sandbox environment."
+    )
+    config: DaytonaConfig
 
 
 RETRIEVAL_DESCRIPTION = """Can be used to look up information that was uploaded to this assistant.
@@ -349,6 +360,24 @@ def _get_dalle_tools():
 def _get_daytona(user_id: str):
     api_key = os.getenv("DAYTONA_API_KEY")
 
+    supported_extensions = [
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "svg",
+        "pdf",
+        "docx",
+        "doc",
+        "txt",
+        "csv",
+        "xls",
+        "xlsx",
+        "ppt",
+        "pptx",
+    ]
+    images_formats = ["png", "jpg", "jpeg", "gif", "svg"]
+
     async def async_run_daytona_code(code_to_run: str) -> str:
         try:
             config = DaytonaSDKConfig(api_key=api_key)
@@ -356,12 +385,12 @@ def _get_daytona(user_id: str):
 
             params = CreateSandboxParams(
                 language="python",
-                image="harbor-transient.internal.daytona.app/daytona/data-analysis:0.0.6",
+                image="cr.app.daytona.io/sbox-transient/data-analysis:0.0.7",
             )
 
-            sandbox = daytona.create(params=params)
-
             patched_code, expected_filenames = patch_plot_code_str(code_to_run)
+            sandbox = daytona.create(params=params)
+            list_of_files = [f.name for f in sandbox.fs.list_files(".")]
             response = sandbox.process.code_run(patched_code)
 
             # Ensure result is a string, even if None or other types
@@ -374,9 +403,9 @@ def _get_daytona(user_id: str):
                 return f"Error (Exit Code {response.exit_code}): {error_detail}"
 
             # Debug: Check what we got from the response
-            print(f"Response exit code: {response.exit_code}")
-            print(f"Response result: {str(response.result)[:500]}...")
-            print(f"Response artifacts: {response.artifacts}")
+            logger.info(f"Response exit code: {response.exit_code}")
+            logger.info(f"Response result: {str(response.result)[:500]}...")
+            logger.info(f"Response artifacts: {response.artifacts}")
 
             # Use consistent timestamp for all generated files
             generation_timestamp = time.time()
@@ -385,16 +414,16 @@ def _get_daytona(user_id: str):
             for filename in expected_filenames:
                 extension = os.path.splitext(filename)[1].lstrip(".")
                 try:
-                    image_id = str(uuid.uuid4())
+                    file_id = str(uuid.uuid4())
                     content = sandbox.fs.download_file(filename)
-                    print(f"Downloaded file {filename}: {len(content)} bytes")
+                    logger.info(f"Downloaded file {filename}: {len(content)} bytes")
 
                     # Store in Redis for backup/download purposes
                     storage_service = get_global_redis_storage_service()
                     if storage_service:
                         await storage_service.put_file(
                             user_id,
-                            image_id,
+                            file_id,
                             data=content,
                             title=filename,
                             format=extension,
@@ -402,15 +431,45 @@ def _get_daytona(user_id: str):
                         )
 
                     # For image files, use compact Redis references instead of data URLs
-                    if extension.lower() in ["png", "jpg", "jpeg", "gif", "svg"]:
+                    if extension.lower() in images_formats:
                         result_str += (
-                            f"\n\n![{filename}](redis-chart:{image_id}:{user_id})"
+                            f"\n\n![{filename}](redis-chart:{file_id}:{user_id})"
                         )
                     else:
                         # For non-image files, still use attachment reference
-                        result_str += f"\n\n![{filename}](attachment:{image_id})"
+                        result_str += f"\n\n![{filename}](attachment:{file_id})"
                 except Exception as e:
                     logger.error(f"Error downloading file {filename}: {e}")
+
+            # Download all new files
+            list_of_files_after_execution = sandbox.fs.list_files(".")
+            for file in list_of_files_after_execution:
+                extension = os.path.splitext(file.name)[1].lstrip(".")
+                if file.name not in list_of_files and extension in supported_extensions:
+                    file_id = str(uuid.uuid4())
+                    content = sandbox.fs.download_file(file.name)
+                    logger.info(f"Downloaded file {file.name}: {len(content)} bytes")
+
+                    # Store in Redis for backup/download purposes
+                    storage_service = get_global_redis_storage_service()
+                    if storage_service:
+                        await storage_service.put_file(
+                            user_id,
+                            file_id,
+                            data=content,
+                            title=file.name,
+                            format=extension,
+                            upload_timestamp=generation_timestamp,
+                        )
+
+                    # For image files, use compact Redis references instead of data URLs
+                    if extension.lower() in images_formats:
+                        result_str += (
+                            f"\n\n![{file.name}](redis-chart:{file_id}:{user_id})"
+                        )
+                    else:
+                        # For non-image files, still use attachment reference
+                        result_str += f"\n\n![{file.name}](attachment:{file_id})"
 
             # Process charts from artifacts
             if hasattr(response.artifacts, "charts") and response.artifacts.charts:
@@ -485,22 +544,85 @@ def _get_daytona(user_id: str):
         name="DaytonaCodeSandbox",
         func=sync_run_daytona_code_wrapper,
         coroutine=async_run_daytona_code,
-        description="Executes Python code in a secure sandbox environment. Displays plots and text output directly without saving to files.",
+        description="Executes Python code in a secure sandbox environment. It can be used to plot graphs, create charts, images, documents, etc. If the user asks you for any of these, you should use this tool. Make sure you write everything to disk.",
         args_schema=PythonREPLInput,
     )
 
 
-TOOLS = {
-    AvailableTools.CONNERY: _get_connery_actions,
-    AvailableTools.DDG_SEARCH: _get_duck_duck_go,
-    AvailableTools.ARXIV: _get_arxiv,
-    AvailableTools.YOU_SEARCH: _get_you_search,
-    AvailableTools.SEC_FILINGS: _get_sec_filings,
-    AvailableTools.PRESS_RELEASES: _get_press_releases,
-    AvailableTools.PUBMED: _get_pubmed,
-    AvailableTools.WIKIPEDIA: _get_wikipedia,
-    AvailableTools.TAVILY: _get_tavily,
-    AvailableTools.TAVILY_ANSWER: _get_tavily_answer,
-    AvailableTools.DALL_E: _get_dalle_tools,
-    AvailableTools.DAYTONA: _get_daytona,
+TOOL_REGISTRY = {
+    AvailableTools.DAYTONA: {
+        "factory": _get_daytona,
+        "schema": Daytona,
+    },
+    AvailableTools.DDG_SEARCH: {
+        "factory": _get_duck_duck_go,
+        "schema": DDGSearch,
+    },
+    AvailableTools.CONNERY: {
+        "factory": _get_connery_actions,
+        "schema": Connery,
+    },
+    AvailableTools.ARXIV: {
+        "factory": _get_arxiv,
+        "schema": Arxiv,
+    },
+    AvailableTools.YOU_SEARCH: {
+        "factory": _get_you_search,
+        "schema": YouSearch,
+    },
+    AvailableTools.SEC_FILINGS: {
+        "factory": _get_sec_filings,
+        "schema": SecFilings,
+    },
+    AvailableTools.PRESS_RELEASES: {
+        "factory": _get_press_releases,
+        "schema": PressReleases,
+    },
+    AvailableTools.PUBMED: {
+        "factory": _get_pubmed,
+        "schema": PubMed,
+    },
+    AvailableTools.WIKIPEDIA: {
+        "factory": _get_wikipedia,
+        "schema": Wikipedia,
+    },
+    AvailableTools.TAVILY: {
+        "factory": _get_tavily,
+        "schema": Tavily,
+    },
+    AvailableTools.TAVILY_ANSWER: {
+        "factory": _get_tavily_answer,
+        "schema": TavilyAnswer,
+    },
+    AvailableTools.DALL_E: {
+        "factory": _get_dalle_tools,
+        "schema": DallE,
+    },
+    AvailableTools.RETRIEVAL: {
+        "factory": Retrieval,
+        "schema": Retrieval,
+    },
 }
+
+
+def validate_tool_config(tool_type: AvailableTools, config: dict) -> dict:
+    """Validate tool configuration against its schema."""
+    try:
+        schema_class = TOOL_REGISTRY[tool_type]["schema"]
+
+        # Create a full tool instance to validate
+        tool_data = {
+            "type": tool_type,
+            "name": schema_class.model_fields["name"].default,
+            "description": schema_class.model_fields["description"].default,
+            "config": config,
+        }
+
+        # Validate using the schema
+        validated_tool = schema_class.model_validate(tool_data)
+        return validated_tool.config
+
+    except KeyError:
+        raise ValueError(f"Unknown tool type: {tool_type}")
+    except Exception as e:
+        raise ValueError(f"Invalid config for {tool_type}: {e}")
