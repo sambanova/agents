@@ -6,6 +6,7 @@ from functools import lru_cache
 from typing import Annotated, Literal
 import uuid
 
+from agents.utils.logging import logger
 from langchain.tools.retriever import create_retriever_tool
 from langchain_community.agent_toolkits.connery import ConneryToolkit
 from langchain_community.retrievers.kay import KayAiRetriever
@@ -35,7 +36,7 @@ from daytona_sdk import (
 
 from agents.utils.code_patcher import patch_plot_code_str
 from agents.storage.redis_storage import RedisStorage
-from agents.storage.redis_service import SecureRedisService
+
 
 # Global storage for accessing Redis storage service from tools
 _global_redis_storage_service = None
@@ -236,8 +237,8 @@ class Daytona(BaseTool):
     type: Literal[AvailableTools.DAYTONA] = AvailableTools.DAYTONA
     name: Literal["Daytona Code Sandbox"] = "Daytona Code Sandbox"
     description: Literal[
-        "Executes Python code in a secure sandbox environment. Make sure that outputs are printed and plots are displayed."
-    ] = "Executes Python code in a secure sandbox environment. Make sure that outputs are printed and plots are displayed."
+        "Executes Python code in a secure sandbox environment. It can be used to plot graphs, create charts, images, documents, etc. If the user asks you for any of these, you should use this tool."
+    ] = "Executes Python code in a secure sandbox environment. It can be used to plot graphs, create charts, images, documents, etc. If the user asks you for any of these, you should use this tool."
 
 
 RETRIEVAL_DESCRIPTION = """Can be used to look up information that was uploaded to this assistant.
@@ -355,15 +356,12 @@ def _get_daytona(user_id: str):
 
             params = CreateSandboxParams(
                 language="python",
-                image="harbor-transient.internal.daytona.app/daytona/data-analysis:0.0.3",
+                image="harbor-transient.internal.daytona.app/daytona/data-analysis:0.0.6",
             )
 
             sandbox = daytona.create(params=params)
 
             patched_code, expected_filenames = patch_plot_code_str(code_to_run)
-            print(f"Original code: {code_to_run[:200]}...")
-            print(f"Patched code: {patched_code[:200]}...")
-            print(f"Expected filenames: {expected_filenames}")
             response = sandbox.process.code_run(patched_code)
 
             # Ensure result is a string, even if None or other types
@@ -412,11 +410,11 @@ def _get_daytona(user_id: str):
                         # For non-image files, still use attachment reference
                         result_str += f"\n\n![{filename}](attachment:{image_id})"
                 except Exception as e:
-                    print(f"Error downloading file {filename}: {e}")
+                    logger.error(f"Error downloading file {filename}: {e}")
 
             # Process charts from artifacts
             if hasattr(response.artifacts, "charts") and response.artifacts.charts:
-                print(
+                logger.info(
                     f"Processing {len(response.artifacts.charts)} charts from artifacts"
                 )
                 for i, chart in enumerate(response.artifacts.charts):
@@ -445,18 +443,18 @@ def _get_daytona(user_id: str):
                             result_str += (
                                 f"\n\n![{title}](redis-chart:{image_id}:{user_id})"
                             )
-                            print(
+                            logger.info(
                                 f"Successfully stored chart {i}: {title} with ID: {image_id}"
                             )
                         else:
-                            print(f"Chart {i} has no PNG data")
+                            logger.info(f"Chart {i} has no PNG data")
                             result_str += f"\n\n**Chart Generated:** {title}"
                     except Exception as e:
-                        print(f"Error storing chart {i}: {e}")
+                        logger.error(f"Error storing chart {i}: {e}")
                         # Fallback to generic message
                         result_str += f"\n\n**Chart Generated:** {title}"
             else:
-                print("No charts found in response.artifacts.charts")
+                logger.info("No charts found in response.artifacts.charts")
 
             # Clean up sandbox after processing everything
             daytona.remove(sandbox)
