@@ -5,7 +5,32 @@
       <div class="grow text-end space-y-3">
         <div class="inline-block bg-blue-500 text-white px-4 py-2 rounded-lg max-w-[80%] text-left">
           <div class="text-xs text-blue-100 mb-1" v-if="event">{{ event }}</div>
-          <div class="whitespace-pre-wrap text-sm">{{ messageContent }}</div>
+          <div class="whitespace-pre-wrap text-sm" v-html="messageContent"></div>
+          
+          <!-- Toggle button for JSON view -->
+          <div class="mt-2">
+            <button
+              @click="toggleJsonView"
+              class="text-xs text-blue-100 hover:text-white flex items-center gap-1"
+            >
+              {{ showJson ? 'Hide JSON' : 'Show JSON' }}
+              <svg 
+                :class="{ 'rotate-180': showJson }" 
+                class="w-3 h-3 transition-transform" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                stroke-width="2"
+              >
+                <path d="M19 9l-7 7-7-7"/>
+              </svg>
+            </button>
+          </div>
+          
+          <!-- Raw JSON data (hidden by default) -->
+          <div v-if="showJson" class="mt-2 bg-blue-600 border border-blue-400 rounded p-3">
+            <pre class="whitespace-pre-wrap text-xs font-mono text-blue-100 overflow-x-auto">{{ rawData }}</pre>
+          </div>
         </div>
       </div>
       <UserAvatar :type="'user'" />
@@ -27,7 +52,7 @@
 
         <!-- Message content -->
         <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded p-3">
-          <div class="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-100">{{ messageContent }}</div>
+          <div class="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-100" v-html="messageContent"></div>
         </div>
 
         <!-- Toggle button for JSON view -->
@@ -88,10 +113,38 @@ const props = defineProps({
 
 const showJson = ref(false)
 
+// Helper function to escape HTML in text content
+function escapeHtml(text) {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
 const isUserMessage = computed(() => {
-  return props.isUser || 
-         (typeof props.data === 'object' && props.data?.type === 'HumanMessage') ||
-         (typeof props.data === 'string' && props.data.includes('"type":"HumanMessage"'))
+  // Check explicit isUser prop first
+  if (props.isUser) return true
+  
+  try {
+    let parsed = props.data
+    
+    // Parse string data to object if needed
+    if (typeof props.data === 'string') {
+      try {
+        parsed = JSON.parse(props.data)
+      } catch {
+        return false
+      }
+    }
+    
+    // Check if additional_kwargs.agent_type is 'human'
+    if (typeof parsed === 'object' && parsed !== null) {
+      return parsed.additional_kwargs?.agent_type === 'human'
+    }
+    
+    return false
+  } catch (error) {
+    return false
+  }
 })
 
 const messageContent = computed(() => {
@@ -111,13 +164,36 @@ const messageContent = computed(() => {
     // If it's an object, try to extract content
     if (typeof parsed === 'object' && parsed !== null) {
       // Try different content properties in order of preference
-      const contentValue = 
+      let contentValue = 
         parsed.content || 
         parsed.message || 
         parsed.text || 
         parsed.data?.content ||
         parsed.data?.message ||
         parsed.data?.text
+      
+      // Handle array content (like messages with text and images)
+      if (Array.isArray(contentValue)) {
+        const processedContent = contentValue.map(item => {
+          if (typeof item === 'object' && item !== null) {
+            if (item.type === 'text') {
+              return escapeHtml(item.text || '[text content]')
+            } else if (item.type === 'image_url' && item.image_url?.url) {
+              const imageUrl = item.image_url.url
+              if (imageUrl.startsWith('data:image/')) {
+                return `<div class="my-2"><img src="${imageUrl}" alt="Attached image" class="max-w-full h-auto rounded border" style="max-height: 300px;" /></div>`
+              } else {
+                return `<div class="my-2"><img src="${imageUrl}" alt="Attached image" class="max-w-full h-auto rounded border" style="max-height: 300px;" /></div>`
+              }
+            } else {
+              return escapeHtml(`[${item.type || 'content'}]`)
+            }
+          }
+          return escapeHtml(String(item))
+        }).join('')
+        
+        return processedContent || '[Mixed content - see JSON for details]'
+      }
       
       if (contentValue && typeof contentValue === 'string') {
         return contentValue
@@ -142,7 +218,33 @@ const rawData = computed(() => {
   if (typeof props.data === 'string') {
     return props.data
   }
-  return JSON.stringify(props.data, null, 2)
+  
+  // Function to truncate very long strings (like base64 images)
+  const truncateLongStrings = (obj, maxLength = 200) => {
+    if (typeof obj === 'string') {
+      if (obj.length > maxLength) {
+        return obj.substring(0, maxLength) + `... [truncated ${obj.length - maxLength} more characters]`
+      }
+      return obj
+    }
+    
+    if (Array.isArray(obj)) {
+      return obj.map(item => truncateLongStrings(item, maxLength))
+    }
+    
+    if (typeof obj === 'object' && obj !== null) {
+      const result = {}
+      for (const [key, value] of Object.entries(obj)) {
+        result[key] = truncateLongStrings(value, maxLength)
+      }
+      return result
+    }
+    
+    return obj
+  }
+  
+  const truncatedData = truncateLongStrings(props.data)
+  return JSON.stringify(truncatedData, null, 2)
 })
 
 function toggleJsonView() {

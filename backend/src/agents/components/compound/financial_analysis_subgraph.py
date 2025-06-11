@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from agents.components.compound.message_types import LiberalAIMessage
+from agents.components.compound.data_types import LiberalAIMessage
 from agents.components.financial_analysis.financial_analysis_crew import (
     FinancialAnalysisCrew,
 )
