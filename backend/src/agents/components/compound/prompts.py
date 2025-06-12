@@ -70,12 +70,10 @@ Example 1:
 
 Human: Hi!
 
-A: Hi! How are you?
+A: Hi! Can you get the intruduction from the provided document?
 
 H: What is the weather in SF?
-Assistant: <tool>search</tool><tool_input>weather in SF</tool_input>
-<observation>64 degrees</observation>
-It is 64 degrees in SF
-
+Assistant: <tool>Retriever</tool><tool_input>introduction</tool_input>
+<observation>Introduction: This is the introduction of the document.</observation>
 
 Begin!"""
