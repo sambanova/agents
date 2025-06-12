@@ -33,6 +33,7 @@ from agents.storage.redis_storage import RedisStorage
 from langchain_core.messages import HumanMessage
 
 from agents.utils.logging import logger
+import mimetypes
 
 
 class WebSocketConnectionManager(WebSocketInterface):
@@ -314,27 +315,9 @@ class WebSocketConnectionManager(WebSocketInterface):
                     return
 
                 # Prepare tasks for parallel execution
-                tasks = [
-                    self._update_metadata(
-                        meta_key, user_message_input["data"], user_id
-                    ),
-                ]
-
-                try:
-                    # Execute all tasks in parallel
-                    results = await asyncio.gather(*tasks)
-                except DocumentContextLengthError as e:
-                    logger.info(f"Document context length error: {str(e)}")
-                    response = AgentStructuredResponse(
-                        agent_type=AgentEnum.Error,
-                        data=ErrorResponse(
-                            error="The documents you are trying to add exceed the allowable size."
-                        ),
-                        message=f"Error processing deep research request: {str(e)}",
-                        message_id=user_message_input["message_id"],
-                        sender="error_handler",
-                    )
-                    continue
+                await self._update_metadata(
+                    meta_key, user_message_input["data"], user_id
+                )
 
                 logger.info(
                     f"Received message from user: {user_id} in conversation: {conversation_id}"
@@ -351,6 +334,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                     provider=user_message_input["provider"],
                     message_id=user_message_input["message_id"],
                     llm_type=model,
+                    doc_ids=tuple(user_message_input["document_ids"]),
                 )
 
                 config["configurable"]["type==default/subgraphs"] = {
@@ -430,14 +414,8 @@ class WebSocketConnectionManager(WebSocketInterface):
         image_content = []
         for doc in user_message_input["document_ids"]:
             metadata = await self.message_storage.get_file_metadata(user_id, doc)
-            if metadata["format"].lower() in [
-                "png",
-                "jpg",
-                "jpeg",
-                "image/png",
-                "image/jpg",
-                "image/jpeg",
-            ]:
+            format = metadata["format"].split("/")[0]
+            if format == "image":
                 retrived_content = await self.message_storage.get_file_as_base64(
                     user_id, doc
                 )
@@ -609,11 +587,13 @@ async def _run_input_and_config(
     provider: str,
     message_id: str,
     llm_type: str,
+    doc_ids: tuple,
 ):
 
     assistant = get_assistant(
         user_id=user_id,
         llm_type=llm_type,
+        doc_ids=doc_ids,
     )
 
     if provider == "sambanova":

@@ -12,10 +12,10 @@ from __future__ import annotations
 import asyncio
 import mimetypes
 from typing import BinaryIO, List, Optional
+import os
 
 from fastapi import UploadFile
 from langchain_redis import RedisVectorStore
-
 
 from langchain_core.document_loaders.blob_loaders import Blob
 from langchain_core.runnables import (
@@ -29,9 +29,24 @@ from langchain_sambanova import SambaNovaCloudEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter, TextSplitter
 from pydantic import ConfigDict
 
-
 from agents.rag.parsing import MIMETYPE_BASED_PARSER
 from agents.rag.ingest import ingest_blob
+from agents.storage.global_services import get_sync_redis_client
+
+
+def get_embeddings() -> OpenAIEmbeddings:
+    return SambaNovaCloudEmbeddings(
+        model="E5-Mistral-7B-Instruct",
+        sambanova_api_key="f9c2c30f-faa3-464f-a8fd-e7d10160c4b1",
+    )
+
+
+# Initialize vector store with shared Redis client
+vstore = RedisVectorStore(
+    embeddings=get_embeddings(),
+    redis_client=get_sync_redis_client(),
+    index_name="sambanova-rag-index",
+)
 
 
 async def _guess_mimetype(file_name: str, file_bytes: bytes) -> str:
@@ -81,13 +96,6 @@ async def convert_ingestion_input_to_blob(file_data: bytes, file_name: str) -> B
     )
 
 
-def get_embeddings() -> OpenAIEmbeddings:
-    return SambaNovaCloudEmbeddings(
-        model="E5-Mistral-7B-Instruct",
-        sambanova_api_key="f9c2c30f-faa3-464f-a8fd-e7d10160c4b1",
-    )
-
-
 class IngestRunnable(RunnableSerializable[BinaryIO, List[str]]):
     """Runnable for ingesting files into a vectorstore."""
 
@@ -128,13 +136,6 @@ class IngestRunnable(RunnableSerializable[BinaryIO, List[str]]):
             document_id=self.document_id,
         )
         return out
-
-
-vstore = RedisVectorStore(
-    embeddings=get_embeddings(),
-    # TODO: remove hardcoded redis url
-    redis_url="redis://localhost:6379",
-)
 
 
 ingest_runnable = IngestRunnable(

@@ -3,7 +3,7 @@ import os
 import time
 from enum import Enum
 from functools import lru_cache
-from typing import Annotated, Literal
+from typing import Annotated, List, Literal
 import uuid
 
 from agents.utils.logging import logger
@@ -35,24 +35,8 @@ from daytona_sdk import (
 )
 
 from agents.utils.code_patcher import patch_plot_code_str
-from agents.storage.redis_storage import RedisStorage
+from agents.storage.global_services import get_global_redis_storage_service
 import mimetypes
-
-
-# Global storage for accessing Redis storage service from tools
-_global_redis_storage_service = None
-
-
-def set_global_redis_storage_service(storage_service: RedisStorage):
-    """Set the global Redis storage service for tools to use."""
-    global _global_redis_storage_service
-    _global_redis_storage_service = storage_service
-
-
-def get_global_redis_storage_service() -> RedisStorage:
-    """Get the global Redis storage service."""
-    global _global_redis_storage_service
-    return _global_redis_storage_service
 
 
 class DDGInput(BaseModel):
@@ -96,8 +80,9 @@ class DaytonaConfig(ToolConfig):
 
 
 class RetrievalConfig(ToolConfig):
-    assistant_id: str
-    thread_id: str
+    user_id: str
+    doc_ids: tuple
+    description: str
 
 
 class BaseTool(BaseModel):
@@ -258,16 +243,21 @@ If the user is referencing particular files, that is often a good hint that info
 If the user asks a vague question, they are likely meaning to look up info from this retriever, and you should call it!"""
 
 
-def get_retriever(assistant_id: str, thread_id: str):
-    return vstore.as_retriever(
-        search_kwargs={"filter": {"namespace": {"$in": [assistant_id, thread_id]}}}
-    )
-
-
 @lru_cache(maxsize=5)
-def get_retrieval_tool(assistant_id: str, thread_id: str, description: str):
+def _get_retrieval_tool(user_id: str, doc_ids: tuple, description: str):
+    from agents.rag.upload import vstore
+    from redisvl.query.filter import Tag
+
+    user_filter = Tag("user_id") == user_id
+    doc_filter = Tag("document_id") == list(doc_ids)
+    filter_expr = user_filter & doc_filter
+
     return create_retriever_tool(
-        get_retriever(assistant_id, thread_id),
+        vstore.as_retriever(
+            search_kwargs={
+                "filter": filter_expr,
+            }
+        ),
         "Retriever",
         description,
     )
@@ -441,10 +431,7 @@ def _get_daytona(user_id: str):
             list_of_files_after_execution = sandbox.fs.list_files(".")
             for file in list_of_files_after_execution:
                 mime_type, _ = mimetypes.guess_type(file.name)
-                if (
-                    file.name not in list_of_files
-                    and mime_type in supported_extensions
-                ):
+                if file.name not in list_of_files and mime_type in supported_extensions:
                     file_id = str(uuid.uuid4())
                     content = sandbox.fs.download_file(file.name)
                     logger.info(f"Downloaded file {file.name}: {len(content)} bytes")
@@ -598,7 +585,7 @@ TOOL_REGISTRY = {
         "schema": DallE,
     },
     AvailableTools.RETRIEVAL: {
-        "factory": Retrieval,
+        "factory": _get_retrieval_tool,
         "schema": Retrieval,
     },
 }

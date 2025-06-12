@@ -1,9 +1,10 @@
 # TODO: Remove this
 from datetime import datetime
 from agents.components.compound.datatypes import Assistant
+from agents.tools.langgraph_tools import RETRIEVAL_DESCRIPTION
 
 
-def get_assistant(user_id: str, llm_type: str):
+def get_assistant(user_id: str, llm_type: str, doc_ids: tuple):
     assistant = Assistant(
         config={
             "configurable": {
@@ -34,4 +35,16 @@ def get_assistant(user_id: str, llm_type: str):
             }
         },
     )
+
+    if doc_ids:
+        assistant.config["configurable"]["type==default/tools"].append(
+            {
+                "type": "retrieval",
+                "config": {
+                    "user_id": user_id,
+                    "doc_ids": doc_ids,
+                    "description": RETRIEVAL_DESCRIPTION,
+                },
+            }
+        )
     return assistant

@@ -1,4 +1,9 @@
+"""
+Main FastAPI application entry point.
+"""
+
 import mimetypes
+import uuid
 from agents.rag.upload import convert_ingestion_input_to_blob
 from fastapi import (
     Depends,
@@ -36,19 +41,19 @@ from agents.utils.logging import logger
 import os
 import sys
 
-import redis
-import uuid
-
 from agents.components.routing.route import SemanticRouterAgent
 
 from agents.storage.redis_service import SecureRedisService
 from agents.storage.redis_storage import RedisStorage
+from agents.storage.global_services import (
+    get_secure_redis_client,
+    set_global_redis_storage_service,
+)
 
 from agents.components.compound.xml_agent import (
     create_checkpointer,
     set_global_checkpointer,
 )
-from agents.tools.langgraph_tools import set_global_redis_storage_service
 
 from agents.services.user_prompt_extractor_service import UserPromptExtractor
 from agents.components.lead_generation_crew import ResearchCrew
@@ -63,7 +68,6 @@ from agents.components.financial_analysis.financial_analysis_crew import (
 
 # For document processing
 from agents.services.document_processing_service import DocumentProcessingService
-from agents.storage.redis_service import SecureRedisService
 from langgraph.checkpoint.redis import AsyncRedisSaver
 from agents.rag.upload import ingest_runnable
 
@@ -79,36 +83,16 @@ async def lifespan(app: FastAPI):
 
     Initializes the agent runtime and registers the UserProxyAgent.
     """
-
-    redis_host = os.getenv("REDIS_HOST", "localhost")
-    redis_port = int(os.getenv("REDIS_PORT", "6379"))
     app.state.context_length_summariser = 100_000
 
-    # Create an async Redis connection pool
-    pool = redis.asyncio.ConnectionPool(
-        host=redis_host,
-        port=redis_port,
-        db=0,
-        decode_responses=True,
-        max_connections=100,
-        socket_timeout=30,
-        socket_connect_timeout=10,
-        health_check_interval=30,
-        retry_on_timeout=True,
-    )
-
     # Create SecureRedisService with Redis client
-    app.state.redis_client = SecureRedisService(
-        connection_pool=pool, decode_responses=True
-    )
+    app.state.redis_client = get_secure_redis_client()
     app.state.redis_storage_service = RedisStorage(redis_client=app.state.redis_client)
 
     # Set global Redis storage service for tools
     set_global_redis_storage_service(app.state.redis_storage_service)
 
-    print(
-        f"[LeadGenerationAPI] Using Redis at {redis_host}:{redis_port} with connection pool"
-    )
+    print(f"[LeadGenerationAPI] Using Redis with shared connection pool")
 
     app.state.manager = WebSocketConnectionManager(
         redis_client=app.state.redis_client,
@@ -125,11 +109,7 @@ async def lifespan(app: FastAPI):
 
     await AsyncRedisSaver(redis_client=app.state.redis_client).asetup()
 
-    yield  # This separates the startup and shutdown logic
-
-    # Close Redis connection pool
-    await app.state.redis_client.aclose()
-    await pool.aclose()
+    yield
 
 
 def get_user_id_from_token(token: HTTPAuthorizationCredentials) -> str:
@@ -563,10 +543,10 @@ class LeadGenerationAPI:
                     content={
                         "message": "File uploaded successfully",
                         "file": {
-                            "id": file_id,
+                            "file_id": file_id,
                             "filename": file.filename,
-                            "type": "file",
-                            "upload_timestamp": upload_time,
+                            "type": file.content_type,
+                            "created_at": upload_time,
                             "user_id": user_id,
                         },
                     },
