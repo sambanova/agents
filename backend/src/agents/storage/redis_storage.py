@@ -158,10 +158,11 @@ class RedisStorage:
         file_id: str,
         *,
         data: bytes,
-        title: str,
+        filename: str,
         format: str,
         upload_timestamp: float,
         indexed: bool,
+        source: str,
     ):
         """Put a file in Redis storage."""
         try:
@@ -176,11 +177,12 @@ class RedisStorage:
             await self.store_file_metadata(
                 user_id,
                 file_id,
-                title=title,
+                filename=filename,
                 format=format,
                 upload_timestamp=upload_timestamp,
                 file_size=len(data),
                 indexed=indexed,
+                source=source,
             )
 
             await self.add_file_to_user_list(user_id, file_id)
@@ -334,20 +336,22 @@ class RedisStorage:
         user_id: str,
         file_id: str,
         *,
-        title: str,
+        filename: str,
         format: str,
         upload_timestamp: float,
         file_size: int,
         indexed: bool,
+        source: str,
     ) -> None:
         """Store document metadata in Redis."""
         metadata = {
             "user_id": user_id,
-            "title": title,
+            "filename": filename,
             "format": format,
             "created_at": upload_timestamp or time.time(),
             "file_size": file_size,
             "indexed": indexed,
+            "source": source,
         }
         file_metadata_key = self._get_file_metadata_key(user_id, file_id)
         await self.redis_client.set(file_metadata_key, json.dumps(metadata), user_id)
@@ -389,7 +393,9 @@ class RedisStorage:
             user_id=user_id,
         )
 
-    async def update_metadata(self, message_data: str, user_id: str, conversation_id: str):
+    async def update_metadata(
+        self, message_data: str, user_id: str, conversation_id: str
+    ):
         """Helper method to update metadata asynchronously"""
         try:
             meta_key = self._get_chat_metadata_key(user_id, conversation_id)
