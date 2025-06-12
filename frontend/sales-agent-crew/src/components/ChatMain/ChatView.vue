@@ -650,7 +650,26 @@ async function filterChat(msgData) {
   messagesData.value = msgData.messages
     .map(message => {
       // For agent_completion events, handle LangGraph format
-      if (message.event === 'agent_completion') {
+            if (message.type == 'HumanMessage') {
+                    console.log("data:",message.type,message.event ,message.additional_kwargs?.agent_type ,message)
+
+              console.log("is Human",message.content)
+              return{
+                data:message.content,
+                event:"user_message",
+                agent_type:"user_message"
+                
+              }
+          //      return {
+          //   event: 'user_message',
+          //   data: message.content || '',
+          //   message_id: message.message_id,
+          //   conversation_id: message.conversation_id,
+          //   timestamp: message.timestamp || new Date().toISOString()
+          // };
+            }
+      else if (message.event === 'agent_completion') {
+        
         // For tool calls and tool results, preserve them for comprehensive audit log and Daytona sidebar
         // but only filter them from main chat display if they're tool-related
         const isToolCall = message.content && typeof message.content === 'string' && message.content.includes('<tool>');
@@ -689,14 +708,26 @@ async function filterChat(msgData) {
         
         // Only show user messages and final responses in main chat bubbles
         const isUserMessage = message.additional_kwargs?.agent_type === 'human';
-        const isFinalResponse = message.additional_kwargs?.agent_type === 'react_end';
+       const isFinalResponse =
+                        (message.additional_kwargs?.agent_type ?? "")
+                          .includes("_end")
+                        || (message.additional_kwargs?.agent_type ?? "")
+                          .includes("_interrupt");
+                              console.log("isFinalResponse",isFinalResponse);
+        
+
+                              if(isFinalResponse){
+                                isLoading.value=false
+                              }
         
         if (!isUserMessage && !isFinalResponse) {
+          // alert(message.content)
           return null; // Filter out intermediate agent responses that aren't tool-related
         }
         
         // For human messages, convert to user_message event type
         if (isUserMessage) {
+          console.log("message.content:",message)
           return {
             event: 'user_message',
             data: message.content || '',
@@ -776,6 +807,7 @@ async function filterChat(msgData) {
       }
       // For any other events, include them as well
       else {
+       
         return {
           event: message.event,
           data: message.data || message,
@@ -788,6 +820,9 @@ async function filterChat(msgData) {
     .filter(Boolean)  // Remove null values
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
+
+    console.log("messagesData.value",messagesData.value);
+    
   // Process planner data for workflow metadata
   let plannerData = msgData.messages.filter(
     (message) => message.event === 'planner'
@@ -1677,6 +1712,7 @@ async function connectWebSocket() {
           });
           isLoading.value = false;
         }
+        
         // Handle legacy events
         else if (
           receivedData.event == 'user_message' ||
@@ -1834,7 +1870,7 @@ function formatMessageData(msgItem) {
   try {
     switch (msgItem.event) {
       case 'user_message':
-        return JSON.stringify({
+        return ({
           message: msgItem.data,
           agent_type: 'user_proxy',
           timestamp: msgItem.timestamp || new Date().toISOString()

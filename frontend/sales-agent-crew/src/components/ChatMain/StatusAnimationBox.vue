@@ -22,8 +22,13 @@
       </span>
     </div>
 
+ <div
+      ref="logRef"
+      class="prose prose-sm dark:prose-invert flex-1 py-2 overflow-y-auto"
+      v-html="content"
+    />
     <!-- Log area: shows the evolving content -->
-    <div
+    <!-- <div
       ref="logRef"
       class="flex-1 text-gray-400 dark:text-gray-300 py-2 overflow-y-auto
              space-y-1 text-sm"
@@ -31,7 +36,7 @@
       <div v-for="(line, i) in logLines" :key="i">
         {{ line }}
       </div>
-    </div>
+    </div> -->
   </div>
 </template>
 

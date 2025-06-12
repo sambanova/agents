@@ -1,8 +1,23 @@
 <template>
-  
+  {{ props.data }}
+   <li
+    v-if="props.event === 'user_message'"
+    class="flex px-4 items-start gap-x-2 sm:gap-x-4"
+  >
+    <div class="grow text-end space-y-3">
+      <!-- Card -->
+      <div class="inline-block flex justify-end">
+        <p class="text-[16px] text-left color-primary-brandGray dark:text-gray-100 max-w-[80%] w-auto">
+          {{ (props.data).message }}
+        </p>
+      </div>
+      <!-- End Card -->
+    </div>
+    <UserAvatar :type="'user'" />
+  </li>
     <!-- Streaming events group -->
     <li
-      v-if="streamingEvents"
+    v-else
       class="relative px-4 items-start gap-x-2 sm:gap-x-4"
     >
       <div class="w-full flex items-center">
@@ -18,7 +33,7 @@
         <div
           class="flex items-start justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-t-lg border-b dark:border-gray-600"
         >
-          <div class="flex items-center space-x-2 flex-1">
+          <div class="flex hidden items-center space-x-2 flex-1">
             <div :class="currentStatusDot" class="w-2 h-2 rounded-full mt-1"></div>
             <svg
               v-if="showStatusAnimation"
@@ -130,9 +145,13 @@
             </div>
           </div>
         </div>
+<StatusAnimationBox
+:title="currentStreamingStatus"
+:content="renderMarkdown(streamingResponseContent)"
 
+/>
         <!-- Streaming response -->
-        <div class="p-4 bg-white dark:bg-gray-800">
+        <div class="p-4 hidden bg-white dark:bg-gray-800">
           <div v-if="streamingResponseContent" class="prose prose-sm dark:prose-invert" v-html="renderMarkdown(streamingResponseContent)"/>
           <div
             v-else-if="isCurrentlyStreaming"
@@ -203,6 +222,9 @@
   import UserProxyComponent from '@/components/ChatMain/ResponseTypes/UserProxyComponent.vue'
   import SalesLeadComponent from '@/components/ChatMain/ResponseTypes/SalesLeadsComponent.vue'
   import EducationalComponent from '@/components/ChatMain/EducationalComponent.vue'
+    import StatusAnimationBox from '@/components/ChatMain/StatusAnimationBox.vue'
+
+  
   import UnknownTypeComponent from '@/components/ChatMain/ResponseTypes/UnknownTypeComponent.vue'
   import FinancialAnalysisComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisComponent.vue'
   import DeepResearchComponent from '@/components/ChatMain/ResponseTypes//DeepResearchComponent.vue'
@@ -223,6 +245,7 @@ import {
   import html2canvas from "html2canvas";
   import jsPDF from "jspdf";
   import html2pdf from 'html2pdf.js'
+
 
 
   function fetchProvider() {
@@ -288,9 +311,16 @@ import {
   streamingEvents: {
     type: Array,
     default: null
-  }
+  },
+  toolSources: {
+    type: Array,
+    default: () => []
+  },
+  
   
   })
+
+
   const presentMetadata = computed(() => {
 
 
@@ -1458,7 +1488,11 @@ async function generateSelectablePDF() {
   }, 500) // A delay of 500ms; adjust if necessary
 }
 
-
+const statusTitle = computed(() => {
+  return props.toolSources.length
+    ? props.toolSources[0].title
+    : 'Thinking…'
+})
 
 
 
