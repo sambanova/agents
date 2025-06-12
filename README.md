@@ -42,8 +42,8 @@ Ensure to install the prerequisites.
    - [Redis](https://redis.io/download) (via Docker or Homebrew)
      
       ```bash
-      # Install Redis with Docker
-      docker run --name redis -p 6379:6379 -d redis
+      # Run Redis with Docker
+      docker run -p 6379:6379 redis/redis-stack:latest
       ```
       ```bash
       # Install Redis with Homebrew on macOS
@@ -115,7 +115,6 @@ Follow the steps below to install the backend for the Agents application.
    uv sync
    uv pip install -e .
    # activate the virtual environment
-   uv pip install -e .
    source .venv/bin/activate
    ```
 

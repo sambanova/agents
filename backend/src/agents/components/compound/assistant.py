@@ -1,13 +1,14 @@
 # TODO: Remove this
+from datetime import datetime
 from agents.components.compound.datatypes import Assistant
+from agents.tools.langgraph_tools import RETRIEVAL_DESCRIPTION
 
 
-def get_assistant(user_id: str, llm_type: str):
+def get_assistant(user_id: str, llm_type: str, doc_ids: tuple, api_key: str):
     assistant = Assistant(
         config={
             "configurable": {
-                f"type==default/system_message": "You are a helpful assistant.",
-                f"type==default/tools": [
+                "type==default/tools": [
                     {
                         "type": "arxiv",
                         "config": {},
@@ -29,8 +30,28 @@ def get_assistant(user_id: str, llm_type: str):
                         "config": {},
                     },
                 ],
-                f"type==default/llm_type": llm_type,
+                "type==default/llm_type": llm_type,
             }
         },
     )
+
+    if doc_ids:
+        assistant.config["configurable"]["type==default/tools"].append(
+            {
+                "type": "retrieval",
+                "config": {
+                    "user_id": user_id,
+                    "doc_ids": doc_ids,
+                    "description": RETRIEVAL_DESCRIPTION,
+                    "api_key": api_key,
+                },
+            }
+        )
+        assistant.config["configurable"][
+            "type==default/system_message"
+        ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {len(doc_ids)} documents are available to you for retrieval."
+    else:
+        assistant.config["configurable"][
+            "type==default/system_message"
+        ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}"
     return assistant

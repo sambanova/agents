@@ -3,8 +3,9 @@ from datetime import datetime, timezone
 import json
 import asyncio
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
+from agents.api.data_types import APIKeys
 from agents.storage.redis_service import SecureRedisService
 from agents.utils.logging import logger
 
@@ -26,6 +27,22 @@ class RedisStorage:
     def _get_chat_metadata_key(self, user_id: str, conversation_id: str) -> str:
         """Get the Redis key for chat metadata"""
         return f"chat_metadata:{user_id}:{conversation_id}"
+
+    def _get_file_metadata_key(self, user_id: str, file_id: str) -> str:
+        """Get the Redis key for file metadata"""
+        return f"file_metadata:{user_id}:{file_id}"
+
+    def _get_user_files_key(self, user_id: str) -> str:
+        """Get the Redis key for user files"""
+        return f"user_files:{user_id}"
+
+    def _get_file_data_key(self, user_id: str, file_id: str) -> str:
+        """Get the Redis key for file data"""
+        return f"file_data:{user_id}:{file_id}"
+
+    def _get_api_key_key(self, user_id: str) -> str:
+        """Get the Redis key for user API keys"""
+        return f"api_keys:{user_id}"
 
     async def save_message_if_new(
         self, user_id: str, conversation_id: str, message_data: Dict[str, Any]
@@ -144,6 +161,7 @@ class RedisStorage:
         title: str,
         format: str,
         upload_timestamp: float,
+        indexed: bool,
     ):
         """Put a file in Redis storage."""
         try:
@@ -155,25 +173,19 @@ class RedisStorage:
             file_data_key = f"file_data:{user_id}:{file_id}"
             await self.redis_client.set(file_data_key, data, user_id)
 
-            # Store metadata
-            metadata = {
-                "user_id": user_id,
-                "title": title,
-                "format": format,
-                "created_at": upload_timestamp or time.time(),
-                "file_size": len(data),
-            }
-
-            file_metadata_key = f"file_metadata:{user_id}:{file_id}"
-            await self.redis_client.set(
-                file_metadata_key, json.dumps(metadata), user_id
+            await self.store_file_metadata(
+                user_id,
+                file_id,
+                title=title,
+                format=format,
+                upload_timestamp=upload_timestamp,
+                file_size=len(data),
+                indexed=indexed,
             )
 
-            # Also maintain an index of all files for a user
-            user_files_key = f"user_files:{user_id}"
-            await self.redis_client.sadd(user_files_key, file_id)
+            await self.add_file_to_user_list(user_id, file_id)
 
-            print(
+            logger.info(
                 f"File stored in Redis: {file_id} -> {len(data)} bytes for user {user_id}"
             )
 
@@ -181,25 +193,28 @@ class RedisStorage:
             print(f"Error storing file {file_id} in Redis: {e}")
             raise
 
-    async def get_file(self, user_id: str, file_id: str) -> Optional[bytes]:
+    async def get_file(
+        self, user_id: str, file_id: str
+    ) -> Optional[Tuple[bytes, dict]]:
         """Get a file from Redis storage."""
         try:
 
-            # Check if file exists by trying to get metadata first
-            file_metadata_key = f"file_metadata:{user_id}:{file_id}"
-            metadata_str = await self.redis_client.get(file_metadata_key, user_id)
+            if not await self.verify_file_belongs_to_user(user_id, file_id):
+                return None
 
-            if not metadata_str:
+            file_metadata = await self.get_file_metadata(user_id, file_id)
+
+            if not file_metadata:
                 return None
 
             # Get file data
-            file_data_key = f"file_data:{user_id}:{file_id}"
+            file_data_key = self._get_file_data_key(user_id, file_id)
             file_data = await self.redis_client.get(file_data_key, user_id)
 
             if isinstance(file_data, str):
                 file_data = file_data.encode("utf-8")
 
-            return file_data
+            return file_data, file_metadata
 
         except Exception as e:
             print(f"Error retrieving file {file_id} from Redis: {e}")
@@ -209,7 +224,10 @@ class RedisStorage:
         """Get file metadata from Redis storage."""
         try:
 
-            file_metadata_key = f"file_metadata:{user_id}:{file_id}"
+            if not await self.verify_file_belongs_to_user(user_id, file_id):
+                return None
+
+            file_metadata_key = self._get_file_metadata_key(user_id, file_id)
             metadata_str = await self.redis_client.get(file_metadata_key, user_id)
 
             if not metadata_str:
@@ -223,7 +241,7 @@ class RedisStorage:
 
     async def get_file_as_base64(self, user_id: str, file_id: str) -> Optional[str]:
         """Get a file as base64 string."""
-        data = await self.get_file(user_id, file_id)
+        data, _ = await self.get_file(user_id, file_id)
         if data:
             return base64.b64encode(data).decode("utf-8")
         return None
@@ -264,17 +282,20 @@ class RedisStorage:
         """Delete a file from Redis storage."""
         try:
 
+            if not await self.verify_file_belongs_to_user(user_id, file_id):
+                return False
+
             # Delete file data and metadata
-            file_data_key = f"file_data:{user_id}:{file_id}"
-            file_metadata_key = f"file_metadata:{user_id}:{file_id}"
-            user_files_key = f"user_files:{user_id}"
+            file_data_key = self._get_file_data_key(user_id, file_id)
+            file_metadata_key = self._get_file_metadata_key(user_id, file_id)
+            user_files_key = self._get_user_files_key(user_id)
 
             # Remove from all locations
             await self.redis_client.delete(file_data_key)
             await self.redis_client.delete(file_metadata_key)
             await self.redis_client.srem(user_files_key, file_id)
 
-            print(f"File deleted from Redis: {file_id} for user {user_id}")
+            logger.info(f"File deleted from Redis: {file_id} for user {user_id}")
             return True
 
         except Exception as e:
@@ -285,7 +306,7 @@ class RedisStorage:
         """List all files for a user."""
         try:
 
-            user_files_key = f"user_files:{user_id}"
+            user_files_key = self._get_user_files_key(user_id)
             file_ids = await self.redis_client.smembers(user_files_key)
 
             if not file_ids:
@@ -308,77 +329,75 @@ class RedisStorage:
             return []
 
     # Document storage methods
-    async def store_document_metadata(
-        self, user_id: str, document_id: str, metadata: Dict[str, Any]
+    async def store_file_metadata(
+        self,
+        user_id: str,
+        file_id: str,
+        *,
+        title: str,
+        format: str,
+        upload_timestamp: float,
+        file_size: int,
+        indexed: bool,
     ) -> None:
         """Store document metadata in Redis."""
-        doc_key = f"document:{document_id}"
-        await self.redis_client.set(doc_key, json.dumps(metadata), user_id)
+        metadata = {
+            "user_id": user_id,
+            "title": title,
+            "format": format,
+            "created_at": upload_timestamp or time.time(),
+            "file_size": file_size,
+            "indexed": indexed,
+        }
+        file_metadata_key = self._get_file_metadata_key(user_id, file_id)
+        await self.redis_client.set(file_metadata_key, json.dumps(metadata), user_id)
 
-    async def add_document_to_user_list(self, user_id: str, document_id: str) -> None:
-        """Add document to user's document list."""
-        user_docs_key = f"user_documents:{user_id}"
-        await self.redis_client.sadd(user_docs_key, document_id)
+    async def add_file_to_user_list(self, user_id: str, file_id: str) -> None:
+        """Add file to user's file list."""
+        user_files_key = self._get_user_files_key(user_id)
+        await self.redis_client.sadd(user_files_key, file_id)
 
-    async def store_document_chunks(
-        self, user_id: str, document_id: str, chunks_data: List[Dict[str, Any]]
-    ) -> None:
-        """Store document chunks in Redis."""
-        chunks_key = f"document_chunks:{document_id}"
-        await self.redis_client.set(chunks_key, json.dumps(chunks_data), user_id)
-
-    async def get_user_documents(self, user_id: str) -> List[Dict[str, Any]]:
-        """Get all documents for a user."""
-        user_docs_key = f"user_documents:{user_id}"
-        doc_ids = await self.redis_client.smembers(user_docs_key)
-
-        if not doc_ids:
-            return []
-
-        documents = []
-        for doc_id in doc_ids:
-            doc_key = f"document:{doc_id}"
-            doc_data = await self.redis_client.get(doc_key, user_id)
-            if doc_data:
-                try:
-                    documents.append(json.loads(doc_data))
-                except json.JSONDecodeError:
-                    continue
-
-        return documents
-
-    async def get_document_chunks(
-        self, user_id: str, document_id: str
-    ) -> Optional[List[Dict[str, Any]]]:
-        """Get chunks for a specific document."""
-        chunks_key = f"document_chunks:{document_id}"
-        chunks_data = await self.redis_client.get(chunks_key, user_id)
-
-        if not chunks_data:
-            return None
-
-        try:
-            return json.loads(chunks_data)
-        except json.JSONDecodeError:
-            return None
-
-    async def verify_document_belongs_to_user(
-        self, user_id: str, document_id: str
-    ) -> bool:
+    async def verify_file_belongs_to_user(self, user_id: str, file_id: str) -> bool:
         """Verify if a document belongs to a user."""
-        user_docs_key = f"user_documents:{user_id}"
-        return await self.redis_client.sismember(user_docs_key, document_id)
+        user_files_key = self._get_user_files_key(user_id)
+        return await self.redis_client.sismember(user_files_key, file_id)
 
-    async def delete_document(self, user_id: str, document_id: str) -> None:
-        """Delete a document and its associated data."""
-        # Delete document metadata
-        doc_key = f"document:{document_id}"
-        await self.redis_client.delete(doc_key)
+    async def get_user_api_key(self, user_id: str) -> Optional[APIKeys]:
+        """Get a user's API key."""
+        user_api_key_key = self._get_api_key_key(user_id)
+        api_keys = await self.redis_client.hgetall(user_api_key_key, user_id)
+        return APIKeys(
+            sambanova_key=api_keys.get("sambanova_key", ""),
+            serper_key=api_keys.get("serper_key", ""),
+            exa_key=api_keys.get("exa_key", ""),
+            fireworks_key=api_keys.get("fireworks_key", ""),
+        )
 
-        # Delete document chunks
-        chunks_key = f"document_chunks:{document_id}"
-        await self.redis_client.delete(chunks_key)
+    async def set_user_api_key(self, user_id: str, keys: APIKeys) -> None:
+        """Set a user's API key."""
 
-        # Remove from user's document list
-        user_docs_key = f"user_documents:{user_id}"
-        await self.redis_client.srem(user_docs_key, document_id)
+        # Store keys in Redis with user-specific prefix
+        key_prefix = self._get_api_key_key(user_id)
+        await self.redis_client.hset(
+            key_prefix,
+            mapping={
+                "sambanova_key": keys.sambanova_key,
+                "serper_key": keys.serper_key,
+                "exa_key": keys.exa_key,
+                "fireworks_key": keys.fireworks_key,
+            },
+            user_id=user_id,
+        )
+
+    async def update_metadata(self, message_data: str, user_id: str, conversation_id: str):
+        """Helper method to update metadata asynchronously"""
+        try:
+            meta_key = self._get_chat_metadata_key(user_id, conversation_id)
+            meta_data = await self.redis_client.get(meta_key, user_id)
+            if meta_data:
+                metadata = json.loads(meta_data)
+                if "name" not in metadata:
+                    metadata["name"] = message_data
+                    await self.redis_client.set(meta_key, json.dumps(metadata), user_id)
+        except Exception as e:
+            logger.error(f"Error updating metadata: {str(e)}")

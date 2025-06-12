@@ -24,9 +24,11 @@ from agents.utils.llms import (
     get_sambanova_llm,
 )
 
+from agents.utils.logging import logger
+
 from agents.tools.langgraph_tools import (
     RETRIEVAL_DESCRIPTION,
-    TOOLS,
+    TOOL_REGISTRY,
     ActionServer,
     Arxiv,
     AvailableTools,
@@ -41,8 +43,8 @@ from agents.tools.langgraph_tools import (
     TavilyAnswer,
     Wikipedia,
     YouSearch,
-    get_retrieval_tool,
     Daytona,
+    validate_tool_config,
 )
 
 Tool = Union[
@@ -112,8 +114,17 @@ class ConfigurableAgent(RunnableBinding):
         others.pop("bound", None)
         _tools = []
         for _tool in tools:
+
+            tool_type = _tool["type"]
             tool_config = _tool.get("config", {})
-            _returned_tools = TOOLS[_tool["type"]](**tool_config)
+
+            try:
+                validated_config = validate_tool_config(tool_type, tool_config)
+            except ValueError as e:
+                logger.error(f"Tool validation failed: {e}")
+                raise e
+
+            _returned_tools = TOOL_REGISTRY[tool_type]["factory"](**validated_config)
             if isinstance(_returned_tools, list):
                 _tools.extend(_returned_tools)
             else:

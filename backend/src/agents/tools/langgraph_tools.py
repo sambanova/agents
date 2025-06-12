@@ -3,9 +3,10 @@ import os
 import time
 from enum import Enum
 from functools import lru_cache
-from typing import Annotated, Literal
+from typing import Annotated, List, Literal
 import uuid
 
+from agents.utils.logging import logger
 from langchain.tools.retriever import create_retriever_tool
 from langchain_community.agent_toolkits.connery import ConneryToolkit
 from langchain_community.retrievers.kay import KayAiRetriever
@@ -34,23 +35,8 @@ from daytona_sdk import (
 )
 
 from agents.utils.code_patcher import patch_plot_code_str
-from agents.storage.redis_storage import RedisStorage
-from agents.storage.redis_service import SecureRedisService
-
-# Global storage for accessing Redis storage service from tools
-_global_redis_storage_service = None
-
-
-def set_global_redis_storage_service(storage_service: RedisStorage):
-    """Set the global Redis storage service for tools to use."""
-    global _global_redis_storage_service
-    _global_redis_storage_service = storage_service
-
-
-def get_global_redis_storage_service() -> RedisStorage:
-    """Get the global Redis storage service."""
-    global _global_redis_storage_service
-    return _global_redis_storage_service
+from agents.storage.global_services import get_global_redis_storage_service
+import mimetypes
 
 
 class DDGInput(BaseModel):
@@ -87,6 +73,17 @@ class AvailableTools(str, Enum):
 
 
 class ToolConfig(TypedDict): ...
+
+
+class DaytonaConfig(ToolConfig):
+    user_id: str
+
+
+class RetrievalConfig(ToolConfig):
+    user_id: str
+    doc_ids: tuple
+    description: str
+    api_key: str
 
 
 class BaseTool(BaseModel):
@@ -222,6 +219,7 @@ class Retrieval(BaseTool):
     description: Literal["Look up information in uploaded files."] = (
         "Look up information in uploaded files."
     )
+    config: RetrievalConfig
 
 
 class DallE(BaseTool):
@@ -235,9 +233,10 @@ class DallE(BaseTool):
 class Daytona(BaseTool):
     type: Literal[AvailableTools.DAYTONA] = AvailableTools.DAYTONA
     name: Literal["Daytona Code Sandbox"] = "Daytona Code Sandbox"
-    description: Literal[
-        "Executes Python code in a secure sandbox environment. Make sure that outputs are printed and plots are displayed."
-    ] = "Executes Python code in a secure sandbox environment. Make sure that outputs are printed and plots are displayed."
+    description: Literal["Executes Python code in a secure sandbox environment."] = (
+        "Executes Python code in a secure sandbox environment."
+    )
+    config: DaytonaConfig
 
 
 RETRIEVAL_DESCRIPTION = """Can be used to look up information that was uploaded to this assistant.
@@ -245,16 +244,19 @@ If the user is referencing particular files, that is often a good hint that info
 If the user asks a vague question, they are likely meaning to look up info from this retriever, and you should call it!"""
 
 
-def get_retriever(assistant_id: str, thread_id: str):
-    return vstore.as_retriever(
-        search_kwargs={"filter": {"namespace": {"$in": [assistant_id, thread_id]}}}
-    )
-
-
 @lru_cache(maxsize=5)
-def get_retrieval_tool(assistant_id: str, thread_id: str, description: str):
+def _get_retrieval_tool(user_id: str, doc_ids: tuple, api_key: str, description: str):
+    from redisvl.query.filter import Tag
+    from agents.rag.upload import create_user_vector_store
+
+    user_filter = Tag("user_id") == user_id
+    doc_filter = Tag("document_id") == list(doc_ids)
+    filter_expr = user_filter & doc_filter
+
     return create_retriever_tool(
-        get_retriever(assistant_id, thread_id),
+        create_user_vector_store(api_key).as_retriever(
+            search_kwargs={"filter": filter_expr}
+        ),
         "Retriever",
         description,
     )
@@ -348,6 +350,19 @@ def _get_dalle_tools():
 def _get_daytona(user_id: str):
     api_key = os.getenv("DAYTONA_API_KEY")
 
+    supported_extensions = [
+        "image/png",
+        "image/jpg",
+        "image/jpeg",
+        "image/gif",
+        "image/svg",
+        "application/pdf",
+        "application/msword",
+        "text/plain",
+        "test/csv",
+    ]
+    images_formats = ["image/png", "image/jpg", "image/jpeg", "image/gif", "image/svg"]
+
     async def async_run_daytona_code(code_to_run: str) -> str:
         try:
             config = DaytonaSDKConfig(api_key=api_key)
@@ -355,15 +370,12 @@ def _get_daytona(user_id: str):
 
             params = CreateSandboxParams(
                 language="python",
-                image="harbor-transient.internal.daytona.app/daytona/data-analysis:0.0.3",
+                image="cr.app.daytona.io/sbox-transient/data-analysis:0.0.7",
             )
 
-            sandbox = daytona.create(params=params)
-
             patched_code, expected_filenames = patch_plot_code_str(code_to_run)
-            print(f"Original code: {code_to_run[:200]}...")
-            print(f"Patched code: {patched_code[:200]}...")
-            print(f"Expected filenames: {expected_filenames}")
+            sandbox = daytona.create(params=params)
+            list_of_files = [f.name for f in sandbox.fs.list_files(".")]
             response = sandbox.process.code_run(patched_code)
 
             # Ensure result is a string, even if None or other types
@@ -376,47 +388,79 @@ def _get_daytona(user_id: str):
                 return f"Error (Exit Code {response.exit_code}): {error_detail}"
 
             # Debug: Check what we got from the response
-            print(f"Response exit code: {response.exit_code}")
-            print(f"Response result: {str(response.result)[:500]}...")
-            print(f"Response artifacts: {response.artifacts}")
+            logger.info(f"Response exit code: {response.exit_code}")
+            logger.info(f"Response result: {str(response.result)[:500]}...")
+            logger.info(f"Response artifacts: {response.artifacts}")
 
             # Use consistent timestamp for all generated files
             generation_timestamp = time.time()
 
             # Process expected filenames first
             for filename in expected_filenames:
-                extension = os.path.splitext(filename)[1].lstrip(".")
+                mime_type, _ = mimetypes.guess_type(filename)
                 try:
-                    image_id = str(uuid.uuid4())
+                    file_id = str(uuid.uuid4())
                     content = sandbox.fs.download_file(filename)
-                    print(f"Downloaded file {filename}: {len(content)} bytes")
+                    logger.info(f"Downloaded file {filename}: {len(content)} bytes")
 
                     # Store in Redis for backup/download purposes
                     storage_service = get_global_redis_storage_service()
                     if storage_service:
                         await storage_service.put_file(
                             user_id,
-                            image_id,
+                            file_id,
                             data=content,
                             title=filename,
-                            format=extension,
+                            format=mime_type,
                             upload_timestamp=generation_timestamp,
+                            indexed=False,
                         )
 
                     # For image files, use compact Redis references instead of data URLs
-                    if extension.lower() in ["png", "jpg", "jpeg", "gif", "svg"]:
+                    if mime_type in images_formats:
                         result_str += (
-                            f"\n\n![{filename}](redis-chart:{image_id}:{user_id})"
+                            f"\n\n![{filename}](redis-chart:{file_id}:{user_id})"
                         )
                     else:
                         # For non-image files, still use attachment reference
-                        result_str += f"\n\n![{filename}](attachment:{image_id})"
+                        result_str += f"\n\n![{filename}](attachment:{file_id})"
                 except Exception as e:
-                    print(f"Error downloading file {filename}: {e}")
+                    logger.error(f"Error downloading file {filename}: {e}")
+
+            # Download all new files
+            list_of_files_after_execution = sandbox.fs.list_files(".")
+            for file in list_of_files_after_execution:
+                mime_type, _ = mimetypes.guess_type(file.name)
+                if file.name not in list_of_files and mime_type in supported_extensions:
+                    file_id = str(uuid.uuid4())
+                    content = sandbox.fs.download_file(file.name)
+                    logger.info(f"Downloaded file {file.name}: {len(content)} bytes")
+
+                    # Store in Redis for backup/download purposes
+                    storage_service = get_global_redis_storage_service()
+                    if storage_service:
+                        await storage_service.put_file(
+                            user_id,
+                            file_id,
+                            data=content,
+                            title=file.name,
+                            format=mime_type,
+                            upload_timestamp=generation_timestamp,
+                            indexed=False,
+                        )
+
+                    # For image files, use compact Redis references instead of data URLs
+                    if mime_type in images_formats:
+                        result_str += (
+                            f"\n\n![{file.name}](redis-chart:{file_id}:{user_id})"
+                        )
+                    else:
+                        # For non-image files, still use attachment reference
+                        result_str += f"\n\n![{file.name}](attachment:{file_id})"
 
             # Process charts from artifacts
             if hasattr(response.artifacts, "charts") and response.artifacts.charts:
-                print(
+                logger.info(
                     f"Processing {len(response.artifacts.charts)} charts from artifacts"
                 )
                 for i, chart in enumerate(response.artifacts.charts):
@@ -439,24 +483,25 @@ def _get_daytona(user_id: str):
                                     title=title,
                                     format="png",
                                     upload_timestamp=generation_timestamp,
+                                    indexed=False,
                                 )
 
                             # Use compact Redis reference instead of data URL to save context
                             result_str += (
                                 f"\n\n![{title}](redis-chart:{image_id}:{user_id})"
                             )
-                            print(
+                            logger.info(
                                 f"Successfully stored chart {i}: {title} with ID: {image_id}"
                             )
                         else:
-                            print(f"Chart {i} has no PNG data")
+                            logger.info(f"Chart {i} has no PNG data")
                             result_str += f"\n\n**Chart Generated:** {title}"
                     except Exception as e:
-                        print(f"Error storing chart {i}: {e}")
+                        logger.error(f"Error storing chart {i}: {e}")
                         # Fallback to generic message
                         result_str += f"\n\n**Chart Generated:** {title}"
             else:
-                print("No charts found in response.artifacts.charts")
+                logger.info("No charts found in response.artifacts.charts")
 
             # Clean up sandbox after processing everything
             daytona.remove(sandbox)
@@ -487,22 +532,85 @@ def _get_daytona(user_id: str):
         name="DaytonaCodeSandbox",
         func=sync_run_daytona_code_wrapper,
         coroutine=async_run_daytona_code,
-        description="Executes Python code in a secure sandbox environment. Displays plots and text output directly without saving to files.",
+        description="Executes Python code in a secure sandbox environment. It can be used to plot graphs, create charts, images, documents, etc. If the user asks you for any of these, you should use this tool. Make sure you write everything to disk.",
         args_schema=PythonREPLInput,
     )
 
 
-TOOLS = {
-    AvailableTools.CONNERY: _get_connery_actions,
-    AvailableTools.DDG_SEARCH: _get_duck_duck_go,
-    AvailableTools.ARXIV: _get_arxiv,
-    AvailableTools.YOU_SEARCH: _get_you_search,
-    AvailableTools.SEC_FILINGS: _get_sec_filings,
-    AvailableTools.PRESS_RELEASES: _get_press_releases,
-    AvailableTools.PUBMED: _get_pubmed,
-    AvailableTools.WIKIPEDIA: _get_wikipedia,
-    AvailableTools.TAVILY: _get_tavily,
-    AvailableTools.TAVILY_ANSWER: _get_tavily_answer,
-    AvailableTools.DALL_E: _get_dalle_tools,
-    AvailableTools.DAYTONA: _get_daytona,
+TOOL_REGISTRY = {
+    AvailableTools.DAYTONA: {
+        "factory": _get_daytona,
+        "schema": Daytona,
+    },
+    AvailableTools.DDG_SEARCH: {
+        "factory": _get_duck_duck_go,
+        "schema": DDGSearch,
+    },
+    AvailableTools.CONNERY: {
+        "factory": _get_connery_actions,
+        "schema": Connery,
+    },
+    AvailableTools.ARXIV: {
+        "factory": _get_arxiv,
+        "schema": Arxiv,
+    },
+    AvailableTools.YOU_SEARCH: {
+        "factory": _get_you_search,
+        "schema": YouSearch,
+    },
+    AvailableTools.SEC_FILINGS: {
+        "factory": _get_sec_filings,
+        "schema": SecFilings,
+    },
+    AvailableTools.PRESS_RELEASES: {
+        "factory": _get_press_releases,
+        "schema": PressReleases,
+    },
+    AvailableTools.PUBMED: {
+        "factory": _get_pubmed,
+        "schema": PubMed,
+    },
+    AvailableTools.WIKIPEDIA: {
+        "factory": _get_wikipedia,
+        "schema": Wikipedia,
+    },
+    AvailableTools.TAVILY: {
+        "factory": _get_tavily,
+        "schema": Tavily,
+    },
+    AvailableTools.TAVILY_ANSWER: {
+        "factory": _get_tavily_answer,
+        "schema": TavilyAnswer,
+    },
+    AvailableTools.DALL_E: {
+        "factory": _get_dalle_tools,
+        "schema": DallE,
+    },
+    AvailableTools.RETRIEVAL: {
+        "factory": _get_retrieval_tool,
+        "schema": Retrieval,
+    },
 }
+
+
+def validate_tool_config(tool_type: AvailableTools, config: dict) -> dict:
+    """Validate tool configuration against its schema."""
+    try:
+        schema_class = TOOL_REGISTRY[tool_type]["schema"]
+
+        # Create a full tool instance to validate
+        tool_data = {
+            "type": tool_type,
+            "name": schema_class.model_fields["name"].default,
+            "description": schema_class.model_fields["description"].default,
+            "config": config,
+        }
+
+        # Validate using the schema
+        validated_tool = schema_class.model_validate(tool_data)
+        return validated_tool.config
+
+    except KeyError:
+        raise ValueError(f"Unknown tool type: {tool_type}")
+    except Exception as e:
+        raise ValueError(f"Invalid config for {tool_type}: {e}")

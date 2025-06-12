@@ -15,15 +15,15 @@ dependencies = [
   "crewai-tools==0.46.0",
   "redis==5.2.1",
   "sse-starlette==2.2.1",
-  "yfinance==0.2.61",
+  "yfinance==0.2.62",
   "scipy==1.15.1",
   "langtrace-python-sdk==3.8.18",
   "tavily-python>=0.5.0",
+  "langchain-redis==0.2.2",
 
 # Document processing
   "PyMuPDF==1.23.8",
   "python-docx==1.1.0",
-  "pandas==2.2.0",
   "openpyxl==3.1.5",
   "langchain==0.3.25",
   "python-multipart==0.0.9",  # For FastAPI file uploads
