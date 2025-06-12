@@ -3,7 +3,7 @@ import os
 import time
 from enum import Enum
 from functools import lru_cache
-from typing import Annotated, Literal
+from typing import Annotated, List, Literal
 import uuid
 
 from agents.utils.logging import logger
@@ -35,23 +35,8 @@ from daytona_sdk import (
 )
 
 from agents.utils.code_patcher import patch_plot_code_str
-from agents.storage.redis_storage import RedisStorage
-
-
-# Global storage for accessing Redis storage service from tools
-_global_redis_storage_service = None
-
-
-def set_global_redis_storage_service(storage_service: RedisStorage):
-    """Set the global Redis storage service for tools to use."""
-    global _global_redis_storage_service
-    _global_redis_storage_service = storage_service
-
-
-def get_global_redis_storage_service() -> RedisStorage:
-    """Get the global Redis storage service."""
-    global _global_redis_storage_service
-    return _global_redis_storage_service
+from agents.storage.global_services import get_global_redis_storage_service
+import mimetypes
 
 
 class DDGInput(BaseModel):
@@ -95,8 +80,10 @@ class DaytonaConfig(ToolConfig):
 
 
 class RetrievalConfig(ToolConfig):
-    assistant_id: str
-    thread_id: str
+    user_id: str
+    doc_ids: tuple
+    description: str
+    api_key: str
 
 
 class BaseTool(BaseModel):
@@ -257,16 +244,19 @@ If the user is referencing particular files, that is often a good hint that info
 If the user asks a vague question, they are likely meaning to look up info from this retriever, and you should call it!"""
 
 
-def get_retriever(assistant_id: str, thread_id: str):
-    return vstore.as_retriever(
-        search_kwargs={"filter": {"namespace": {"$in": [assistant_id, thread_id]}}}
-    )
-
-
 @lru_cache(maxsize=5)
-def get_retrieval_tool(assistant_id: str, thread_id: str, description: str):
+def _get_retrieval_tool(user_id: str, doc_ids: tuple, api_key: str, description: str):
+    from redisvl.query.filter import Tag
+    from agents.rag.upload import create_user_vector_store
+
+    user_filter = Tag("user_id") == user_id
+    doc_filter = Tag("document_id") == list(doc_ids)
+    filter_expr = user_filter & doc_filter
+
     return create_retriever_tool(
-        get_retriever(assistant_id, thread_id),
+        create_user_vector_store(api_key).as_retriever(
+            search_kwargs={"filter": filter_expr}
+        ),
         "Retriever",
         description,
     )
@@ -361,22 +351,17 @@ def _get_daytona(user_id: str):
     api_key = os.getenv("DAYTONA_API_KEY")
 
     supported_extensions = [
-        "png",
-        "jpg",
-        "jpeg",
-        "gif",
-        "svg",
-        "pdf",
-        "docx",
-        "doc",
-        "txt",
-        "csv",
-        "xls",
-        "xlsx",
-        "ppt",
-        "pptx",
+        "image/png",
+        "image/jpg",
+        "image/jpeg",
+        "image/gif",
+        "image/svg",
+        "application/pdf",
+        "application/msword",
+        "text/plain",
+        "test/csv",
     ]
-    images_formats = ["png", "jpg", "jpeg", "gif", "svg"]
+    images_formats = ["image/png", "image/jpg", "image/jpeg", "image/gif", "image/svg"]
 
     async def async_run_daytona_code(code_to_run: str) -> str:
         try:
@@ -412,7 +397,7 @@ def _get_daytona(user_id: str):
 
             # Process expected filenames first
             for filename in expected_filenames:
-                extension = os.path.splitext(filename)[1].lstrip(".")
+                mime_type, _ = mimetypes.guess_type(filename)
                 try:
                     file_id = str(uuid.uuid4())
                     content = sandbox.fs.download_file(filename)
@@ -426,12 +411,13 @@ def _get_daytona(user_id: str):
                             file_id,
                             data=content,
                             title=filename,
-                            format=extension,
+                            format=mime_type,
                             upload_timestamp=generation_timestamp,
+                            indexed=False,
                         )
 
                     # For image files, use compact Redis references instead of data URLs
-                    if extension.lower() in images_formats:
+                    if mime_type in images_formats:
                         result_str += (
                             f"\n\n![{filename}](redis-chart:{file_id}:{user_id})"
                         )
@@ -444,8 +430,8 @@ def _get_daytona(user_id: str):
             # Download all new files
             list_of_files_after_execution = sandbox.fs.list_files(".")
             for file in list_of_files_after_execution:
-                extension = os.path.splitext(file.name)[1].lstrip(".")
-                if file.name not in list_of_files and extension in supported_extensions:
+                mime_type, _ = mimetypes.guess_type(file.name)
+                if file.name not in list_of_files and mime_type in supported_extensions:
                     file_id = str(uuid.uuid4())
                     content = sandbox.fs.download_file(file.name)
                     logger.info(f"Downloaded file {file.name}: {len(content)} bytes")
@@ -458,12 +444,13 @@ def _get_daytona(user_id: str):
                             file_id,
                             data=content,
                             title=file.name,
-                            format=extension,
+                            format=mime_type,
                             upload_timestamp=generation_timestamp,
+                            indexed=False,
                         )
 
                     # For image files, use compact Redis references instead of data URLs
-                    if extension.lower() in images_formats:
+                    if mime_type in images_formats:
                         result_str += (
                             f"\n\n![{file.name}](redis-chart:{file_id}:{user_id})"
                         )
@@ -496,6 +483,7 @@ def _get_daytona(user_id: str):
                                     title=title,
                                     format="png",
                                     upload_timestamp=generation_timestamp,
+                                    indexed=False,
                                 )
 
                             # Use compact Redis reference instead of data URL to save context
@@ -599,7 +587,7 @@ TOOL_REGISTRY = {
         "schema": DallE,
     },
     AvailableTools.RETRIEVAL: {
-        "factory": Retrieval,
+        "factory": _get_retrieval_tool,
         "schema": Retrieval,
     },
 }

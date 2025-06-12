@@ -27,9 +27,11 @@ from agents.utils.llms import (
 from agents.utils.logging import logger
 
 from agents.tools.langgraph_tools import (
+    RETRIEVAL_DESCRIPTION,
     TOOL_REGISTRY,
     ActionServer,
     Arxiv,
+    AvailableTools,
     Connery,
     DallE,
     DDGSearch,
@@ -112,6 +114,7 @@ class ConfigurableAgent(RunnableBinding):
         others.pop("bound", None)
         _tools = []
         for _tool in tools:
+
             tool_type = _tool["type"]
             tool_config = _tool.get("config", {})
 
