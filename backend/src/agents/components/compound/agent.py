@@ -116,8 +116,6 @@ class ConfigurableAgent(RunnableBinding):
         for _tool in tools:
 
             tool_type = _tool["type"]
-            if tool_type == AvailableTools.RETRIEVAL:
-                print("retrieval tool")
             tool_config = _tool.get("config", {})
 
             try:

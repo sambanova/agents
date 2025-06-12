@@ -5,6 +5,7 @@ import asyncio
 import time
 from typing import List, Dict, Any, Optional, Tuple
 
+from agents.api.data_types import APIKeys
 from agents.storage.redis_service import SecureRedisService
 from agents.utils.logging import logger
 
@@ -38,6 +39,10 @@ class RedisStorage:
     def _get_file_data_key(self, user_id: str, file_id: str) -> str:
         """Get the Redis key for file data"""
         return f"file_data:{user_id}:{file_id}"
+
+    def _get_api_key_key(self, user_id: str) -> str:
+        """Get the Redis key for user API keys"""
+        return f"api_keys:{user_id}"
 
     async def save_message_if_new(
         self, user_id: str, conversation_id: str, message_data: Dict[str, Any]
@@ -156,6 +161,7 @@ class RedisStorage:
         title: str,
         format: str,
         upload_timestamp: float,
+        indexed: bool,
     ):
         """Put a file in Redis storage."""
         try:
@@ -174,6 +180,7 @@ class RedisStorage:
                 format=format,
                 upload_timestamp=upload_timestamp,
                 file_size=len(data),
+                indexed=indexed,
             )
 
             await self.add_file_to_user_list(user_id, file_id)
@@ -331,6 +338,7 @@ class RedisStorage:
         format: str,
         upload_timestamp: float,
         file_size: int,
+        indexed: bool,
     ) -> None:
         """Store document metadata in Redis."""
         metadata = {
@@ -339,6 +347,7 @@ class RedisStorage:
             "format": format,
             "created_at": upload_timestamp or time.time(),
             "file_size": file_size,
+            "indexed": indexed,
         }
         file_metadata_key = self._get_file_metadata_key(user_id, file_id)
         await self.redis_client.set(file_metadata_key, json.dumps(metadata), user_id)
@@ -352,3 +361,43 @@ class RedisStorage:
         """Verify if a document belongs to a user."""
         user_files_key = self._get_user_files_key(user_id)
         return await self.redis_client.sismember(user_files_key, file_id)
+
+    async def get_user_api_key(self, user_id: str) -> Optional[APIKeys]:
+        """Get a user's API key."""
+        user_api_key_key = self._get_api_key_key(user_id)
+        api_keys = await self.redis_client.hgetall(user_api_key_key, user_id)
+        return APIKeys(
+            sambanova_key=api_keys.get("sambanova_key", ""),
+            serper_key=api_keys.get("serper_key", ""),
+            exa_key=api_keys.get("exa_key", ""),
+            fireworks_key=api_keys.get("fireworks_key", ""),
+        )
+
+    async def set_user_api_key(self, user_id: str, keys: APIKeys) -> None:
+        """Set a user's API key."""
+
+        # Store keys in Redis with user-specific prefix
+        key_prefix = self._get_api_key_key(user_id)
+        await self.redis_client.hset(
+            key_prefix,
+            mapping={
+                "sambanova_key": keys.sambanova_key,
+                "serper_key": keys.serper_key,
+                "exa_key": keys.exa_key,
+                "fireworks_key": keys.fireworks_key,
+            },
+            user_id=user_id,
+        )
+
+    async def update_metadata(self, message_data: str, user_id: str, conversation_id: str):
+        """Helper method to update metadata asynchronously"""
+        try:
+            meta_key = self._get_chat_metadata_key(user_id, conversation_id)
+            meta_data = await self.redis_client.get(meta_key, user_id)
+            if meta_data:
+                metadata = json.loads(meta_data)
+                if "name" not in metadata:
+                    metadata["name"] = message_data
+                    await self.redis_client.set(meta_key, json.dumps(metadata), user_id)
+        except Exception as e:
+            logger.error(f"Error updating metadata: {str(e)}")

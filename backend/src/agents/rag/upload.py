@@ -10,6 +10,7 @@ For the time being, upload and ingestion are coupled
 from __future__ import annotations
 
 import asyncio
+from functools import lru_cache
 import mimetypes
 from typing import BinaryIO, List, Optional
 import os
@@ -34,19 +35,22 @@ from agents.rag.ingest import ingest_blob
 from agents.storage.global_services import get_sync_redis_client
 
 
-def get_embeddings() -> OpenAIEmbeddings:
-    return SambaNovaCloudEmbeddings(
-        model="E5-Mistral-7B-Instruct",
-        sambanova_api_key="f9c2c30f-faa3-464f-a8fd-e7d10160c4b1",
+@lru_cache(maxsize=100)
+def create_user_vector_store(api_key: str) -> RedisVectorStore:
+    # Initialize vector store with shared Redis client
+    vstore = RedisVectorStore(
+        embeddings=SambaNovaCloudEmbeddings(
+            model="E5-Mistral-7B-Instruct",
+            sambanova_api_key=api_key,
+        ),
+        redis_client=get_sync_redis_client(),
+        index_name="sambanova-rag-index",
+        metadata_schema=[
+            {"name": "user_id", "type": "tag"},
+            {"name": "document_id", "type": "tag"},
+        ],
     )
-
-
-# Initialize vector store with shared Redis client
-vstore = RedisVectorStore(
-    embeddings=get_embeddings(),
-    redis_client=get_sync_redis_client(),
-    index_name="sambanova-rag-index",
-)
+    return vstore
 
 
 async def _guess_mimetype(file_name: str, file_bytes: bytes) -> str:
@@ -100,9 +104,9 @@ class IngestRunnable(RunnableSerializable[BinaryIO, List[str]]):
     """Runnable for ingesting files into a vectorstore."""
 
     text_splitter: TextSplitter
-    vectorstore: VectorStore
     user_id: Optional[str] = None
     document_id: Optional[str] = None
+    api_key: Optional[str] = None
     """Ingested documents will be associated with user_id and document_id.
     
     ID is used as the namespace, and is filtered on at query time.
@@ -127,20 +131,24 @@ class IngestRunnable(RunnableSerializable[BinaryIO, List[str]]):
         if self.document_id is None:
             raise ValueError("Document ID is required")
 
-        out = await ingest_blob(
-            blob=blob,
-            parser=MIMETYPE_BASED_PARSER,
-            text_splitter=self.text_splitter,
-            vectorstore=self.vectorstore,
-            user_id=self.user_id,
-            document_id=self.document_id,
-        )
-        return out
+        if self.api_key:
+            vectorstore = create_user_vector_store(self.api_key)
+
+            out = await ingest_blob(
+                blob=blob,
+                parser=MIMETYPE_BASED_PARSER,
+                text_splitter=self.text_splitter,
+                vectorstore=vectorstore,
+                user_id=self.user_id,
+                document_id=self.document_id,
+            )
+            return out
+        else:
+            raise ValueError("API key is required")
 
 
 ingest_runnable = IngestRunnable(
     text_splitter=RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200),
-    vectorstore=vstore,
 ).configurable_fields(
     user_id=ConfigurableField(
         id="user_id",
@@ -151,5 +159,10 @@ ingest_runnable = IngestRunnable(
         id="document_id",
         annotation=Optional[str],
         name="Document ID",
+    ),
+    api_key=ConfigurableField(
+        id="api_key",
+        annotation=Optional[str],
+        name="API Key",
     ),
 )

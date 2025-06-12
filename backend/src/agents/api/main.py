@@ -519,8 +519,23 @@ class LeadGenerationAPI:
 
                 # Read file content
                 content = await file.read()
+                indexed = False
 
                 upload_time = time.time()
+                if file.content_type == "application/pdf":
+                    file_blobs = await convert_ingestion_input_to_blob(
+                        content, file.filename
+                    )
+                    api_keys = await self.app.state.redis_storage_service.get_user_api_key(
+                        user_id
+                    )
+                    await ingest_runnable.ainvoke(
+                        file_blobs,
+                        {"user_id": user_id, "document_id": file_id, "api_key": api_keys.sambanova_key},
+                    )
+                    logger.info(f"Indexed file successfully: {file_id}")
+                    indexed = True
+
                 await self.app.state.redis_storage_service.put_file(
                     user_id,
                     file_id,
@@ -528,15 +543,8 @@ class LeadGenerationAPI:
                     title=file.filename,
                     format=file.content_type,
                     upload_timestamp=upload_time,
+                    indexed=indexed,
                 )
-
-                if file.content_type == "application/pdf":
-                    file_blobs = await convert_ingestion_input_to_blob(
-                        content, file.filename
-                    )
-                    await ingest_runnable.ainvoke(
-                        file_blobs, {"user_id": user_id, "document_id": file_id}
-                    )
 
                 return JSONResponse(
                     status_code=200,
@@ -673,17 +681,8 @@ class LeadGenerationAPI:
                         content={"error": "Invalid authentication token"},
                     )
 
-                # Store keys in Redis with user-specific prefix
-                key_prefix = f"api_keys:{user_id}"
-                await self.app.state.redis_client.hset(
-                    key_prefix,
-                    mapping={
-                        "sambanova_key": keys.sambanova_key,
-                        "serper_key": keys.serper_key,
-                        "exa_key": keys.exa_key,
-                        "fireworks_key": keys.fireworks_key,
-                    },
-                    user_id=user_id,
+                await self.app.state.redis_storage_service.set_user_api_key(
+                    user_id, keys
                 )
 
                 return JSONResponse(

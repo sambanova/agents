@@ -207,18 +207,9 @@ class WebSocketConnectionManager(WebSocketInterface):
             background_task = session.get("background_task")
             pubsub = session["pubsub"]  # We know this exists now
 
-            # Pre-compute keys that will be used throughout the session
-            meta_key = f"chat_metadata:{user_id}:{conversation_id}"
-            api_keys_key = f"api_keys:{user_id}"
+            redis_api_keys = await self.message_storage.get_user_api_key(user_id)
 
-            exists = await self.redis_client.exists(meta_key)
-            redis_api_keys = await self.redis_client.hgetall(api_keys_key, user_id)
-
-            if not exists:
-                await websocket.close(code=4004, reason="Conversation not found")
-                return
-
-            if not redis_api_keys:
+            if redis_api_keys.sambanova_key == "":
                 await websocket.close(code=4006, reason="No API keys found")
                 return
 
@@ -226,16 +217,11 @@ class WebSocketConnectionManager(WebSocketInterface):
             self.add_connection(websocket, user_id, conversation_id)
 
             if os.getenv("ENABLE_USER_KEYS") == "true":
-                api_keys = APIKeys(
-                    sambanova_key=redis_api_keys.get("sambanova_key", ""),
-                    fireworks_key=redis_api_keys.get("fireworks_key", ""),
-                    serper_key=redis_api_keys.get("serper_key", ""),
-                    exa_key=redis_api_keys.get("exa_key", ""),
-                )
+                api_keys = redis_api_keys
             else:
                 # Initialize API keys object
                 api_keys = APIKeys(
-                    sambanova_key=redis_api_keys.get("sambanova_key", ""),
+                    sambanova_key=redis_api_keys.sambanova_key,
                     fireworks_key=os.getenv("FIREWORKS_KEY", ""),
                     serper_key=os.getenv("SERPER_KEY", ""),
                     exa_key=os.getenv("EXA_KEY", ""),
@@ -314,9 +300,8 @@ class WebSocketConnectionManager(WebSocketInterface):
                     )
                     return
 
-                # Prepare tasks for parallel execution
-                await self._update_metadata(
-                    meta_key, user_message_input["data"], user_id
+                await self.message_storage.update_metadata(
+                    user_message_input["data"], user_id, conversation_id
                 )
 
                 logger.info(
@@ -397,18 +382,6 @@ class WebSocketConnectionManager(WebSocketInterface):
             # Update last active time on disconnect
             if session_key in self.session_last_active:
                 self.session_last_active[session_key] = datetime.now(timezone.utc)
-
-    async def _update_metadata(self, meta_key: str, message_data: str, user_id: str):
-        """Helper method to update metadata asynchronously"""
-        try:
-            meta_data = await self.redis_client.get(meta_key, user_id)
-            if meta_data:
-                metadata = json.loads(meta_data)
-                if "name" not in metadata:
-                    metadata["name"] = message_data
-                    await self.redis_client.set(meta_key, json.dumps(metadata), user_id)
-        except Exception as e:
-            logger.error(f"Error updating metadata: {str(e)}")
 
     async def create_user_message_input(self, user_id: str, user_message_input: dict):
         image_content = []
@@ -594,6 +567,7 @@ async def _run_input_and_config(
         user_id=user_id,
         llm_type=llm_type,
         doc_ids=doc_ids,
+        api_key=api_keys.sambanova_key,
     )
 
     if provider == "sambanova":

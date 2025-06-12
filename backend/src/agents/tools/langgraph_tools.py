@@ -83,6 +83,7 @@ class RetrievalConfig(ToolConfig):
     user_id: str
     doc_ids: tuple
     description: str
+    api_key: str
 
 
 class BaseTool(BaseModel):
@@ -244,19 +245,17 @@ If the user asks a vague question, they are likely meaning to look up info from 
 
 
 @lru_cache(maxsize=5)
-def _get_retrieval_tool(user_id: str, doc_ids: tuple, description: str):
-    from agents.rag.upload import vstore
+def _get_retrieval_tool(user_id: str, doc_ids: tuple, api_key: str, description: str):
     from redisvl.query.filter import Tag
+    from agents.rag.upload import create_user_vector_store
 
     user_filter = Tag("user_id") == user_id
     doc_filter = Tag("document_id") == list(doc_ids)
     filter_expr = user_filter & doc_filter
 
     return create_retriever_tool(
-        vstore.as_retriever(
-            search_kwargs={
-                "filter": filter_expr,
-            }
+        create_user_vector_store(api_key).as_retriever(
+            search_kwargs={"filter": filter_expr}
         ),
         "Retriever",
         description,
@@ -414,6 +413,7 @@ def _get_daytona(user_id: str):
                             title=filename,
                             format=mime_type,
                             upload_timestamp=generation_timestamp,
+                            indexed=False,
                         )
 
                     # For image files, use compact Redis references instead of data URLs
@@ -446,6 +446,7 @@ def _get_daytona(user_id: str):
                             title=file.name,
                             format=mime_type,
                             upload_timestamp=generation_timestamp,
+                            indexed=False,
                         )
 
                     # For image files, use compact Redis references instead of data URLs
@@ -482,6 +483,7 @@ def _get_daytona(user_id: str):
                                     title=title,
                                     format="png",
                                     upload_timestamp=generation_timestamp,
+                                    indexed=False,
                                 )
 
                             # Use compact Redis reference instead of data URL to save context
