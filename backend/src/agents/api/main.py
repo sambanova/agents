@@ -1,3 +1,5 @@
+import mimetypes
+from agents.rag.upload import convert_ingestion_input_to_blob
 from fastapi import (
     Depends,
     FastAPI,
@@ -63,6 +65,7 @@ from agents.components.financial_analysis.financial_analysis_crew import (
 from agents.services.document_processing_service import DocumentProcessingService
 from agents.storage.redis_service import SecureRedisService
 from langgraph.checkpoint.redis import AsyncRedisSaver
+from agents.rag.upload import ingest_runnable
 
 CLERK_JWT_ISSUER = os.environ.get("CLERK_JWT_ISSUER")
 clerk_config = ClerkConfig(jwks_url=CLERK_JWT_ISSUER)
@@ -537,95 +540,37 @@ class LeadGenerationAPI:
                 # Read file content
                 content = await file.read()
 
-                # Check if file is an image
-                image_extensions = {
-                    ".png",
-                    ".jpg",
-                    ".jpeg",
-                    ".gif",
-                    ".svg",
-                    ".bmp",
-                    ".tiff",
-                    ".webp",
-                }
-                file_extension = (
-                    os.path.splitext(file.filename.lower())[1] if file.filename else ""
+                upload_time = time.time()
+                await self.app.state.redis_storage_service.put_file(
+                    user_id,
+                    file_id,
+                    data=content,
+                    title=file.filename,
+                    format=file.content_type,
+                    upload_timestamp=upload_time,
                 )
 
-                is_image = file_extension in image_extensions or (
-                    file.content_type and file.content_type.startswith("image/")
+                if file.content_type == "application/pdf":
+                    file_blobs = await convert_ingestion_input_to_blob(
+                        content, file.filename
+                    )
+                    await ingest_runnable.ainvoke(
+                        file_blobs, {"user_id": user_id, "document_id": file_id}
+                    )
+
+                return JSONResponse(
+                    status_code=200,
+                    content={
+                        "message": "File uploaded successfully",
+                        "file": {
+                            "id": file_id,
+                            "filename": file.filename,
+                            "type": "file",
+                            "upload_timestamp": upload_time,
+                            "user_id": user_id,
+                        },
+                    },
                 )
-
-                if is_image:
-                    # Handle as image file using general file storage
-                    format_ext = file_extension.lstrip(".") if file_extension else "png"
-                    upload_time = time.time()
-
-                    await self.app.state.redis_storage_service.put_file(
-                        user_id,
-                        file_id,
-                        data=content,
-                        title=file.filename or f"image.{format_ext}",
-                        format=format_ext,
-                        upload_timestamp=upload_time,
-                    )
-
-                    return JSONResponse(
-                        status_code=200,
-                        content={
-                            "message": "Image uploaded successfully",
-                            "file": {
-                                "id": file_id,
-                                "filename": file.filename,
-                                "type": "image",
-                                "upload_timestamp": upload_time,
-                                "user_id": user_id,
-                            },
-                        },
-                    )
-                else:
-                    # Handle as document with processing and chunking
-                    doc_processor = DocumentProcessingService()
-                    chunks = doc_processor.process_document(content, file.filename)
-
-                    # Store document metadata
-                    document_metadata = {
-                        "id": file_id,
-                        "filename": file.filename,
-                        "upload_timestamp": time.time(),
-                        "num_chunks": len(chunks),
-                        "user_id": user_id,
-                    }
-
-                    # Store document metadata
-                    await self.app.state.redis_storage_service.store_document_metadata(
-                        user_id, file_id, document_metadata
-                    )
-
-                    # Add to user's document list
-                    await self.app.state.redis_storage_service.add_document_to_user_list(
-                        user_id, file_id
-                    )
-
-                    # Store document chunks
-                    chunks_data = [
-                        {
-                            "text": chunk.page_content,
-                            "metadata": {**chunk.metadata, "document_id": file_id},
-                        }
-                        for chunk in chunks
-                    ]
-                    await self.app.state.redis_storage_service.store_document_chunks(
-                        user_id, file_id, chunks_data
-                    )
-
-                    return JSONResponse(
-                        status_code=200,
-                        content={
-                            "message": "Document processed successfully",
-                            "document": document_metadata,
-                        },
-                    )
 
             except Exception as e:
                 print(f"[/upload] Error processing file: {str(e)}")
@@ -644,46 +589,16 @@ class LeadGenerationAPI:
                         content={"error": "Invalid authentication token"},
                     )
 
-                # Get all documents for the user
-                documents = (
-                    await self.app.state.redis_storage_service.get_user_documents(
-                        user_id
-                    )
-                )
-
-                # Get all uploaded files (images, etc.) for the user
                 files = await self.app.state.redis_storage_service.list_user_files(
                     user_id
                 )
 
-                # Combine both lists and add type information
-                all_items = []
+                files.sort(key=lambda x: x.get("created_at", 0), reverse=True)
 
-                # Add documents with type "document"
-                for doc in documents:
-                    doc["type"] = "document"
-                    all_items.append(doc)
-
-                # Add files with type "file" and convert file metadata format
-                for file_item in files:
-                    file_metadata = {
-                        "id": file_item["file_id"],
-                        "filename": file_item["title"],
-                        "upload_timestamp": file_item.get("created_at", 0),
-                        "user_id": user_id,
-                        "type": "file",
-                        "format": file_item.get("format", ""),
-                        "file_size": file_item.get("file_size", 0),
-                    }
-                    all_items.append(file_metadata)
-
-                # Sort by upload timestamp (most recent first)
-                all_items.sort(key=lambda x: x.get("upload_timestamp", 0), reverse=True)
-
-                return JSONResponse(status_code=200, content={"documents": all_items})
+                return JSONResponse(status_code=200, content={"documents": files})
 
             except Exception as e:
-                print(f"[/documents] Error retrieving documents: {str(e)}")
+                print(f"[/files] Error retrieving files: {str(e)}")
                 return JSONResponse(status_code=500, content={"error": str(e)})
 
         @self.app.get("/files/{file_id}")
@@ -700,21 +615,10 @@ class LeadGenerationAPI:
                         content={"error": "Invalid authentication token"},
                     )
 
-                # Get file metadata and data
-                file_metadata = (
-                    await self.app.state.redis_storage_service.get_file_metadata(
+                file_data, file_metadata = (
+                    await self.app.state.redis_storage_service.get_file(
                         user_id, file_id
                     )
-                )
-
-                if not file_metadata:
-                    return JSONResponse(
-                        status_code=404,
-                        content={"error": "File not found"},
-                    )
-
-                file_data = await self.app.state.redis_storage_service.get_file(
-                    user_id, file_id
                 )
 
                 if not file_data:
@@ -723,19 +627,11 @@ class LeadGenerationAPI:
                         content={"error": "File data not found"},
                     )
 
-                # Determine content type based on format
-                format_ext = file_metadata.get("format", "png")
-                content_type = (
-                    f"image/{format_ext}"
-                    if format_ext in ["png", "jpg", "jpeg", "gif", "svg", "bmp", "webp"]
-                    else "application/octet-stream"
-                )
-
                 return Response(
                     content=file_data,
-                    media_type=content_type,
+                    media_type=file_metadata["format"],
                     headers={
-                        "Content-Disposition": f"inline; filename={file_metadata.get('title', f'file.{format_ext}')}"
+                        "Content-Disposition": f"inline; filename={file_metadata['title']}"
                     },
                 )
 
@@ -757,40 +653,19 @@ class LeadGenerationAPI:
                         content={"error": "Invalid authentication token"},
                     )
 
-                # Check if it's a document first
-                is_document = await self.app.state.redis_storage_service.verify_document_belongs_to_user(
+                result = await self.app.state.redis_storage_service.delete_file(
                     user_id, file_id
                 )
 
-                # Check if it's a regular file
-                file_metadata = (
-                    await self.app.state.redis_storage_service.get_file_metadata(
-                        user_id, file_id
-                    )
-                )
-                is_file = file_metadata is not None
-
-                if not is_document and not is_file:
+                if not result:
                     return JSONResponse(
                         status_code=404,
                         content={"error": "File not found or access denied"},
                     )
 
-                # Delete based on type
-                if is_document:
-                    await self.app.state.redis_storage_service.delete_document(
-                        user_id, file_id
-                    )
-                    message = "Document deleted successfully"
-                else:
-                    await self.app.state.redis_storage_service.delete_file(
-                        user_id, file_id
-                    )
-                    message = "File deleted successfully"
-
                 return JSONResponse(
                     status_code=200,
-                    content={"message": message},
+                    content={"message": "File deleted successfully"},
                 )
 
             except Exception as e:

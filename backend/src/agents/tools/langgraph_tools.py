@@ -36,6 +36,7 @@ from daytona_sdk import (
 
 from agents.utils.code_patcher import patch_plot_code_str
 from agents.storage.redis_storage import RedisStorage
+import mimetypes
 
 
 # Global storage for accessing Redis storage service from tools
@@ -361,22 +362,17 @@ def _get_daytona(user_id: str):
     api_key = os.getenv("DAYTONA_API_KEY")
 
     supported_extensions = [
-        "png",
-        "jpg",
-        "jpeg",
-        "gif",
-        "svg",
-        "pdf",
-        "docx",
-        "doc",
-        "txt",
-        "csv",
-        "xls",
-        "xlsx",
-        "ppt",
-        "pptx",
+        "image/png",
+        "image/jpg",
+        "image/jpeg",
+        "image/gif",
+        "image/svg",
+        "application/pdf",
+        "application/msword",
+        "text/plain",
+        "test/csv",
     ]
-    images_formats = ["png", "jpg", "jpeg", "gif", "svg"]
+    images_formats = ["image/png", "image/jpg", "image/jpeg", "image/gif", "image/svg"]
 
     async def async_run_daytona_code(code_to_run: str) -> str:
         try:
@@ -412,7 +408,7 @@ def _get_daytona(user_id: str):
 
             # Process expected filenames first
             for filename in expected_filenames:
-                extension = os.path.splitext(filename)[1].lstrip(".")
+                mime_type, _ = mimetypes.guess_type(filename)
                 try:
                     file_id = str(uuid.uuid4())
                     content = sandbox.fs.download_file(filename)
@@ -426,12 +422,12 @@ def _get_daytona(user_id: str):
                             file_id,
                             data=content,
                             title=filename,
-                            format=extension,
+                            format=mime_type,
                             upload_timestamp=generation_timestamp,
                         )
 
                     # For image files, use compact Redis references instead of data URLs
-                    if extension.lower() in images_formats:
+                    if mime_type in images_formats:
                         result_str += (
                             f"\n\n![{filename}](redis-chart:{file_id}:{user_id})"
                         )
@@ -444,8 +440,11 @@ def _get_daytona(user_id: str):
             # Download all new files
             list_of_files_after_execution = sandbox.fs.list_files(".")
             for file in list_of_files_after_execution:
-                extension = os.path.splitext(file.name)[1].lstrip(".")
-                if file.name not in list_of_files and extension in supported_extensions:
+                mime_type, _ = mimetypes.guess_type(file.name)
+                if (
+                    file.name not in list_of_files
+                    and mime_type in supported_extensions
+                ):
                     file_id = str(uuid.uuid4())
                     content = sandbox.fs.download_file(file.name)
                     logger.info(f"Downloaded file {file.name}: {len(content)} bytes")
@@ -458,12 +457,12 @@ def _get_daytona(user_id: str):
                             file_id,
                             data=content,
                             title=file.name,
-                            format=extension,
+                            format=mime_type,
                             upload_timestamp=generation_timestamp,
                         )
 
                     # For image files, use compact Redis references instead of data URLs
-                    if extension.lower() in images_formats:
+                    if mime_type in images_formats:
                         result_str += (
                             f"\n\n![{file.name}](redis-chart:{file_id}:{user_id})"
                         )

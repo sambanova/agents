@@ -430,7 +430,14 @@ class WebSocketConnectionManager(WebSocketInterface):
         image_content = []
         for doc in user_message_input["document_ids"]:
             metadata = await self.message_storage.get_file_metadata(user_id, doc)
-            if metadata["format"].lower() in ["png", "jpg", "jpeg", "gif", "webp"]:
+            if metadata["format"].lower() in [
+                "png",
+                "jpg",
+                "jpeg",
+                "image/png",
+                "image/jpg",
+                "image/jpeg",
+            ]:
                 retrived_content = await self.message_storage.get_file_as_base64(
                     user_id, doc
                 )
