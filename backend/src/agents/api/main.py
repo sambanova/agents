@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
     # Set global Redis storage service for tools
     set_global_redis_storage_service(app.state.redis_storage_service)
 
-    print(f"[LeadGenerationAPI] Using Redis with shared connection pool")
+    logger.info("Using Redis with shared connection pool")
 
     app.state.manager = WebSocketConnectionManager(
         redis_client=app.state.redis_client,
@@ -311,7 +311,7 @@ async def init_chat(
         )
 
     except Exception as e:
-        print(f"[/chat/init] Error initializing chat: {str(e)}")
+        logger.error(f"Error initializing chat: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={"error": f"Failed to initialize chat: {str(e)}"},
@@ -360,7 +360,9 @@ async def get_conversation_messages(
         return JSONResponse(status_code=200, content={"messages": messages})
 
     except Exception as e:
-        print(f"[/chat/history/{conversation_id}] Error retrieving messages: {str(e)}")
+        logger.error(
+            f"Error retrieving messages: {str(e)}", conversation_id=conversation_id
+        )
         return JSONResponse(
             status_code=500,
             content={"error": f"Failed to retrieve messages: {str(e)}"},
@@ -407,7 +409,7 @@ async def list_chats(
         return JSONResponse(status_code=200, content={"chats": chats})
 
     except Exception as e:
-        print(f"[/chat/list] Error retrieving chats: {str(e)}")
+        logger.error(f"Error retrieving chats: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={"error": f"Failed to retrieve chats: {str(e)}"},
@@ -460,7 +462,7 @@ async def delete_chat(
         )
 
     except Exception as e:
-        print(f"[/chat/delete] Error deleting chat: {str(e)}")
+        logger.error(f"Error deleting chat: {str(e)}", conversation_id=conversation_id)
         return JSONResponse(
             status_code=500,
             content={"error": f"Failed to delete chat: {str(e)}"},
@@ -530,7 +532,7 @@ async def upload_document(
         )
 
     except Exception as e:
-        print(f"[/upload] Error processing file: {str(e)}")
+        logger.error(f"Error processing file: {str(e)}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
@@ -554,7 +556,7 @@ async def get_user_files(
         return JSONResponse(status_code=200, content={"documents": files})
 
     except Exception as e:
-        print(f"[/files] Error retrieving files: {str(e)}")
+        logger.error(f"Error retrieving files: {str(e)}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
@@ -591,7 +593,7 @@ async def get_file(
         )
 
     except Exception as e:
-        print(f"[/files/get] Error serving file: {str(e)}")
+        logger.error(f"Error serving file: {str(e)}", file_id=file_id)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
@@ -623,7 +625,7 @@ async def delete_file(
         )
 
     except Exception as e:
-        print(f"[/files/delete] Error deleting file: {str(e)}")
+        logger.error(f"Error deleting file: {str(e)}", file_id=file_id)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
@@ -655,7 +657,7 @@ async def set_api_keys(
         )
 
     except Exception as e:
-        print(f"[/set_api_keys] Error storing API keys: {str(e)}")
+        logger.error(f"Error storing API keys: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={"error": f"Failed to store API keys: {str(e)}"},
@@ -701,7 +703,7 @@ async def get_api_keys(
         )
 
     except Exception as e:
-        print(f"[/get_api_keys] Error retrieving API keys: {str(e)}")
+        logger.error(f"Error retrieving API keys: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={"error": f"Failed to retrieve API keys: {str(e)}"},
@@ -771,7 +773,7 @@ async def delete_user_data(
         )
 
     except Exception as e:
-        print(f"[/user/data] Error deleting user data: {str(e)}")
+        logger.error(f"Error deleting user data: {str(e)}")
         return JSONResponse(
             status_code=500,
             content={"error": f"Failed to delete user data: {str(e)}"},
