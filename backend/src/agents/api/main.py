@@ -526,12 +526,18 @@ class LeadGenerationAPI:
                     file_blobs = await convert_ingestion_input_to_blob(
                         content, file.filename
                     )
-                    api_keys = await self.app.state.redis_storage_service.get_user_api_key(
-                        user_id
+                    api_keys = (
+                        await self.app.state.redis_storage_service.get_user_api_key(
+                            user_id
+                        )
                     )
                     await ingest_runnable.ainvoke(
                         file_blobs,
-                        {"user_id": user_id, "document_id": file_id, "api_key": api_keys.sambanova_key},
+                        {
+                            "user_id": user_id,
+                            "document_id": file_id,
+                            "api_key": api_keys.sambanova_key,
+                        },
                     )
                     logger.info(f"Indexed file successfully: {file_id}")
                     indexed = True
@@ -540,10 +546,11 @@ class LeadGenerationAPI:
                     user_id,
                     file_id,
                     data=content,
-                    title=file.filename,
+                    filename=file.filename,
                     format=file.content_type,
                     upload_timestamp=upload_time,
                     indexed=indexed,
+                    source="upload",
                 )
 
                 return JSONResponse(
@@ -619,7 +626,7 @@ class LeadGenerationAPI:
                     content=file_data,
                     media_type=file_metadata["format"],
                     headers={
-                        "Content-Disposition": f"inline; filename={file_metadata['title']}"
+                        "Content-Disposition": f"inline; filename={file_metadata['filename']}"
                     },
                 )
 

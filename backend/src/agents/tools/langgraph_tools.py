@@ -359,7 +359,7 @@ def _get_daytona(user_id: str):
         "application/pdf",
         "application/msword",
         "text/plain",
-        "test/csv",
+        "text/csv",
     ]
     images_formats = ["image/png", "image/jpg", "image/jpeg", "image/gif", "image/svg"]
 
@@ -410,10 +410,11 @@ def _get_daytona(user_id: str):
                             user_id,
                             file_id,
                             data=content,
-                            title=filename,
+                            filename=filename,
                             format=mime_type,
                             upload_timestamp=generation_timestamp,
                             indexed=False,
+                            source="daytona",
                         )
 
                     # For image files, use compact Redis references instead of data URLs
@@ -443,10 +444,11 @@ def _get_daytona(user_id: str):
                             user_id,
                             file_id,
                             data=content,
-                            title=file.name,
+                            filename=file.name,
                             format=mime_type,
                             upload_timestamp=generation_timestamp,
                             indexed=False,
+                            source="daytona",
                         )
 
                     # For image files, use compact Redis references instead of data URLs
@@ -480,10 +482,11 @@ def _get_daytona(user_id: str):
                                     user_id,
                                     image_id,
                                     data=chart_data,
-                                    title=title,
+                                    filename=title,
                                     format="png",
                                     upload_timestamp=generation_timestamp,
                                     indexed=False,
+                                    source="daytona",
                                 )
 
                             # Use compact Redis reference instead of data URL to save context
