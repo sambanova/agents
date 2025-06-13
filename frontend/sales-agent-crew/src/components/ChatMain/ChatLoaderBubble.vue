@@ -1,6 +1,6 @@
 <template>
        <li  
-      class="px-4 items-start gap-x-2 sm:gap-x-4">
+      class="px-4 hidden items-start gap-x-2 sm:gap-x-4">
       <div class="w-full flex items-center ">
       
 

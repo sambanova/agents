@@ -3,12 +3,22 @@
     <!-- Content -->
     <div
       ref="container"
-      class="relative h-full flex flex-col overflow-x-hidden overflow-y-auto"
+      class="relative h-full flex  overflow-x-hidden overflow-y-auto"
+       :class="
+          (messagesData.length == 0&&streamData.length==0 )? 'justify-center align-center flex-col' : 'flex-col'
+        "
     >
-      <!-- Sticky Top Component -->
+     
+      <div
+        class=" w-full flex mx-auto"
+        :class="
+          messagesData.length == 0&&streamData.length==0 ? 'justify-center align-center flex-col' : 'flex-1'
+        "
+      >
+       <!-- Sticky Top Component -->
       <div
         v-if="chatName"
-        class="sticky h-[62px] top-0 z-10 bg-white dark:bg-gray-800 p-4 shadow"
+        class="sticky hidden h-[62px] top-0 z-10 bg-white dark:bg-gray-800 p-4 shadow"
       >
         <div class="flex items-center justify-between">
           <!-- Left text -->
@@ -33,15 +43,8 @@
           </div>
         </div>
       </div>
-
-      <div
-        class="flex-1 w-full flex mx-auto"
-        :class="
-          messagesData.length == 0 ? 'justify-center align-center flex-col' : ''
-        "
-      >
         <!-- Title -->
-        <div v-if="messagesData.length == 0" class="w-full text-center">
+        <div v-if="messagesData.length == 0&&streamData.length==0" class="w-full text-center">
           <h1 v-if="!initialLoading" class="text-3xl font-bold sm:text-3xl">
             <span class="bg-clip-text text-primary-brandTextSecondary dark:text-primary-brandTextSecondary-dark">
               What can I help you with?
@@ -49,35 +52,58 @@
           </h1>
         </div>
         <!-- End Title -->
-
+        
         <transition-group
           name="chat"
           tag="ul"
           class="mt-16 max-w-4xl w-full mx-auto space-y-5"
         >
+          
           <!-- Chat Bubble -->
           <ChatBubble
+          
             v-for="msgItem in filteredMessages"
-            :metadata="completionMetaData || {}"
+            :metadata="completionMetaData"
             :workflowData="
               workflowData.filter(
-                (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
+                (item) => item.message_id === msgItem.message_id
               )
             "
+            
+             :streamData="streamData"  
             :plannerText="
               plannerTextData.filter(
-                (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
-              )[0]?.data || ''
+                (item) => item.message_id === msgItem.message_id
+              )[0]?.data
             "
-            :key="msgItem.conversation_id || msgItem.message_id || msgItem.timestamp || Math.random()"
-            :event="msgItem.event || 'unknown'"
-            :data="formatMessageData(msgItem)"
-            :messageId="msgItem.message_id || msgItem.messageId || ''"
+            :key="msgItem.conversation_id"
+            :event="msgItem.event"
+            :data="msgItem.data"
+            :messageId="msgItem.message_id"
             :provider="provider"
-            :currentMsgId="currentMsgId || ''"
-            :streamingEvents="msgItem.type === 'streaming_group' ? msgItem.events : null"
+            :currentMsgId="currentMsgId"
+            :isLoading="true"
           />
-          <ChatLoaderBubble
+         <li 
+            v-if="streamData.length>0"
+            key="loading" class="px-4">
+        <StatusBox
+          :isLoading="isLoading"
+          :streamData="streamData"
+        />
+      </li>
+       <!-- <li 
+            v-if="streamData.length>0"
+            key="loading" class="px-4">
+        <StatusAnimationBox
+          :isLoading="isLoading"
+          :title="toolName?toolName:'Loading...'"
+          :content="combinedContent"
+          :streamData="streamData"
+        />
+      </li> -->
+
+          <!-- <ChatLoaderBubble
             :workflowData="
               workflowData.filter((item) => item.message_id === currentMsgId)
             "
@@ -91,10 +117,10 @@
             "
             :provider="provider"
             :messageId="currentMsgId"
-          />
-
+          /> -->
           <!-- End Chat Bubble -->
         </transition-group>
+        
       </div>
 
       <!-- Documents Section -->
@@ -364,6 +390,10 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import ChatBubble from '@/components/ChatMain/ChatBubble.vue';
 import ChatLoaderBubble from '@/components/ChatMain/ChatLoaderBubble.vue';
+import StatusAnimationBox from '@/components/ChatMain/StatusAnimationBox.vue';
+import StatusBox from '@/components/ChatMain/StatusBox.vue';
+
+
 const router = useRouter();
 const route = useRoute();
 import { useAuth } from '@clerk/vue';
@@ -476,18 +506,18 @@ function handleKeydownScroll(event) {
 // }
 
 function AutoScrollToBottom(smoothScrollOff = false) {
-  nextTick(() => {
-    setTimeout(() => {
-      if (container.value) {
-        const targetScroll =
-          container.value.scrollHeight - container.value.clientHeight;
-        container.value.scrollTo({
-          top: targetScroll,
-          behavior: smoothScrollOff ? 'auto' : 'smooth',
-        });
-      }
-    }, 100); // Adjust timeout as needed
-  });
+  // nextTick(() => {
+  //   setTimeout(() => {
+  //     if (container.value) {
+  //       const targetScroll =
+  //         container.value.scrollHeight - container.value.clientHeight;
+  //       container.value.scrollTo({
+  //         top: targetScroll,
+  //         behavior: smoothScrollOff ? 'auto' : 'smooth',
+  //       });
+  //     }
+  //   }, 100); // Adjust timeout as needed
+  // });
 }
 
 const emit = defineEmits([
@@ -527,6 +557,7 @@ const assistantThinking = ref(false);
 const isLoading = ref(false);
 const initialLoading = ref(false);
 const messagesContainer = ref(null);
+const streamData = ref([]);
 
 // Conversation change watcher:
 watch(
@@ -540,6 +571,7 @@ watch(
       messagesData.value = [];
       agentThoughtsData.value = [];
       workflowData.value = [];
+       streamData.value = [];
       plannerTextData.value = [];
       searchQuery.value = '';
       chatName.value = '';
@@ -646,7 +678,86 @@ const workflowData = ref([]);
 const completionMetaData = ref(null);
 const agentThoughtsData = ref([]);
 
+
+
 async function filterChat(msgData) {
+ 
+ messagesData.value = msgData.messages
+    .map(message => {
+      // For agent_completion events, preserve the full data structure
+      if (
+        message.event === 'agent_completion' &&
+        (
+          message.type === 'HumanMessage' ||
+          message.additional_kwargs?.agent_type.includes('_end') ||
+          message.additional_kwargs?.agent_type.includes('_interrupt')
+        )
+      ) {
+        return {
+          event: 'agent_completion',
+          data: message,  // Pass the entire message object as data
+          timestamp: message.timestamp || new Date().toISOString()
+        };
+      }
+      // For user_message events, keep existing behavior
+      else if (message.event === 'user_message') {
+        return message;
+      }
+      return null;
+    })
+    .filter(Boolean)  // Remove nulls
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  let plannerData = msgData.messages.filter(
+    (message) => message.event === 'planner'
+  );
+  plannerData.forEach((planner) => {
+    addOrUpdateModel(JSON.parse(planner.data).metadata, planner.message_id);
+  });
+  let workData = msgData.messages.filter(
+    (message) => message.event === 'think'
+  );
+  workData.forEach((work) => {
+    addOrUpdateModel(JSON.parse(work.data).metadata, work.message_id);
+  });
+
+  AutoScrollToBottom();
+
+  agentThoughtsData.value = msgData.messages
+    .filter((message) => message.event === 'think')
+    .sort(
+      (a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    )
+    .reduce((acc, message) => {
+      try {
+        const parsed = JSON.parse(message.data);
+        acc.push(parsed);
+      } catch (error) {
+        console.error('Failed to parse JSON for message:', message, error);
+      }
+      return acc;
+    }, []);
+  emit('agentThoughtsDataChanged', agentThoughtsData.value);
+
+  let userMessages = messagesData.value
+    .filter((message) => message.event === 'user_message')
+    .sort(
+      (a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+  console.log('userMessages', userMessages);
+
+  if (userMessages[0]?.data) {
+    chatName.value = userMessages[0].data;
+  }
+
+  AutoScrollToBottom();
+  await nextTick();
+}
+
+async function filterChatOld(msgData) {
   messagesData.value = msgData.messages
     .map(message => {
       // For agent_completion events, handle LangGraph format
@@ -737,7 +848,7 @@ async function filterChat(msgData) {
             timestamp: message.timestamp || new Date().toISOString()
           };
         }
-        alert(message.additional_kwargs?.agent_type)
+        
         // For final responses, keep as agent_completion
         const messageContent = {
           content: message.content || '',
@@ -745,7 +856,7 @@ async function filterChat(msgData) {
           response_metadata: message.response_metadata || {},
           type: message.type || 'AIMessage',
           id: message.id || message.message_id,
-          agent_type: message.additional_kwargs?.agent_type || 'assistant'
+          agent_type: message.additional_kwargs?.agent_type 
         };
         
         return {
@@ -1070,9 +1181,9 @@ async function sendMessage() {
 }
 
 function scrollToBottom() {
-  if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
-  }
+  // if (messagesContainer.value) {
+  //   messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+  // }
 }
 
 // Reactive state for voice and file uploads
@@ -1643,77 +1754,93 @@ async function connectWebSocket() {
         })
       );
     };
-    socket.value.onmessage = (event) => {
+
+ socket.value.onmessage = (event) => {
       try {
         const receivedData = JSON.parse(event.data);
         
         // Handle new streaming events
-        if (receivedData.event === 'stream_start') {
-          console.log('Stream started:', receivedData);
-          // Add to messages for display
-          messagesData.value.push({
-            event: 'stream_start',
-            data: receivedData,
-            message_id: currentMsgId.value,
-            conversation_id: currentId.value,
-            timestamp: new Date().toISOString()
-          });
-        } else if (receivedData.event === 'agent_completion') {
-          console.log('Agent message stream:', receivedData);
+        // if (receivedData.event === 'stream_start') {
+        //   console.log('Stream started:', receivedData);
+        //   // Add to messages for display
+        //   messagesData.value.push({
+        //     event: 'stream_start',
+        //     data: receivedData,
+        //     timestamp: new Date().toISOString()
+        //   });
+        // } else 
+        
+if ((receivedData.event === 'agent_completion')
+&&(receivedData.type==="HumanMessage"||
+(receivedData.additional_kwargs?.agent_type.includes("_end")||
+receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {    
+        console.log('Agent message stream:', receivedData);
           messagesData.value.push({
             event: 'agent_completion', 
             data: receivedData,
-            message_id: currentMsgId.value,
-            conversation_id: currentId.value,
             timestamp: receivedData.timestamp || new Date().toISOString()
           });
-        } else if (receivedData.event === 'llm_stream_chunk') {
+            isLoading.value = false;
+        } 
+         else if (receivedData.event === 'llm_stream_chunk'||receivedData.event === 'agent_completion') {
           console.log('LLM stream chunk:', receivedData);
           const chunkId = receivedData.id;
           
-          if (chunkId) {
-            // Find existing message with the same ID
-            const existingIndex = messagesData.value.findIndex(
-              (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
-            );
+          streamData.value.push(receivedData)
+
+           streamData.value.sort(
+    (a, b) =>
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  )
+
+  console.log("streamData",streamData)
+          // if (chunkId) {
+          //   // Find existing message with the same ID
+          //   const existingIndex = messagesData.value.findIndex(
+          //     (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
+          //   );
             
-            if (existingIndex !== -1) {
-              // Accumulate content for existing message
-              const existingContent = messagesData.value[existingIndex].data?.content || '';
-              const newContent = receivedData.content || '';
-              messagesData.value[existingIndex].data.content = existingContent + newContent;
-            } else {
-              // Create new message for new ID
-              messagesData.value.push({
-                event: 'llm_stream_chunk',
-                data: receivedData,
-                message_id: currentMsgId.value,
-                conversation_id: currentId.value,
-                timestamp: new Date().toISOString()
-              });
-            }
-          } else {
-            // No ID, just add as new message
-            messagesData.value.push({
-              event: 'llm_stream_chunk',
-              data: receivedData,
-              message_id: currentMsgId.value,
-              conversation_id: currentId.value,
-              timestamp: new Date().toISOString()
-            });
-          }
+          //   if (existingIndex !== -1) {
+          //     // Accumulate content for existing message
+          //     const existingContent = messagesData.value[existingIndex].data?.content || '';
+          //     const newContent = receivedData.content || '';
+          //     messagesData.value[existingIndex].data.content = existingContent + newContent;
+          //   } else {
+          //     // Create new message for new ID
+          //     messagesData.value.push({
+          //       event: 'llm_stream_chunk',
+          //       data: receivedData, 
+          //       timestamp: new Date().toISOString()
+          //     });
+          //   }
+
+
+          // } else {
+          //   // No ID, just add as new message
+          //   messagesData.value.push({
+          //     event: 'llm_stream_chunk',
+          //     data: receivedData, 
+          //     timestamp: new Date().toISOString()
+          //   });
+          
         } else if (receivedData.event === 'stream_complete') {
           console.log('Stream complete:', receivedData);
-          messagesData.value.push({
-            event: 'stream_complete',
-            data: receivedData,
-            message_id: currentMsgId.value,
-            conversation_id: currentId.value,
-            timestamp: new Date().toISOString()
-          });
-          isLoading.value = false;
-        }
+          // messagesData.value.push({
+          //   event: 'stream_complete',
+          //   data: receivedData,
+          //   timestamp: new Date().toISOString()
+          // });
+                   streamData.value.push(receivedData)
+
+           streamData.value.sort(
+    (a, b) =>
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  )
+
         
+        }
+
+
         // Handle legacy events
         else if (
           receivedData.event == 'user_message' ||
@@ -1731,17 +1858,7 @@ async function connectWebSocket() {
             console.log('completionMetaData.value', error);
             isLoading.value = false;
           }
-          
-          // Ensure legacy messages have proper structure
-          const legacyMessage = {
-            event: receivedData.event,
-            data: receivedData.data,
-            message_id: receivedData.message_id || currentMsgId.value,
-            conversation_id: receivedData.conversation_id || currentId.value,
-            timestamp: receivedData.timestamp || new Date().toISOString()
-          };
-          
-          messagesData.value.push(legacyMessage);
+          messagesData.value.push(receivedData);
           isLoading.value = false;
         } else if (receivedData.event === 'think') {
           let dataParsed = JSON.parse(receivedData.data);
@@ -1751,15 +1868,6 @@ async function connectWebSocket() {
           emit('agentThoughtsDataChanged', agentThoughtsData.value);
           try {
             addOrUpdateModel(dataParsed.metadata);
-            
-            // Add think event to messages for persistence
-            messagesData.value.push({
-              event: 'think',
-              data: receivedData.data,
-              message_id: receivedData.message_id || currentMsgId.value,
-              conversation_id: receivedData.conversation_id || currentId.value,
-              timestamp: receivedData.timestamp || new Date().toISOString()
-            });
 
             AutoScrollToBottom();
           } catch (e) {
@@ -1774,15 +1882,6 @@ async function connectWebSocket() {
         } else if (receivedData.event === 'planner') {
           let dataParsed = JSON.parse(receivedData.data);
           addOrUpdateModel(dataParsed.metadata);
-          
-          // Add planner event to messages for persistence
-          messagesData.value.push({
-            event: 'planner',
-            data: receivedData.data,
-            message_id: receivedData.message_id || currentMsgId.value,
-            conversation_id: receivedData.conversation_id || currentId.value,
-            timestamp: receivedData.timestamp || new Date().toISOString()
-          });
 
           AutoScrollToBottom();
         } else {
@@ -1796,6 +1895,161 @@ async function connectWebSocket() {
         isLoading.value = false;
       }
     };
+
+
+    // socket.value.onmessage = (event) => {
+    //   try {
+    //     const receivedData = JSON.parse(event.data);
+        
+    //     // Handle new streaming events
+    //     if (receivedData.event === 'stream_start') {
+    //       console.log('Stream started:', receivedData);
+    //       // Add to messages for display
+    //       messagesData.value.push({
+    //         event: 'stream_start',
+    //         data: receivedData,
+    //         message_id: currentMsgId.value,
+    //         conversation_id: currentId.value,
+    //         timestamp: new Date().toISOString()
+    //       });
+    //     } else if (receivedData.event === 'agent_completion') {
+    //       console.log('Agent message stream:', receivedData);
+    //       messagesData.value.push({
+    //         event: 'agent_completion', 
+    //         data: receivedData,
+    //         message_id: currentMsgId.value,
+    //         conversation_id: currentId.value,
+    //         timestamp: receivedData.timestamp || new Date().toISOString()
+    //       });
+    //     } else if (receivedData.event === 'llm_stream_chunk') {
+    //       console.log('LLM stream chunk:', receivedData);
+    //       const chunkId = receivedData.id;
+          
+    //       if (chunkId) {
+    //         // Find existing message with the same ID
+    //         const existingIndex = messagesData.value.findIndex(
+    //           (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
+    //         );
+            
+    //         if (existingIndex !== -1) {
+    //           // Accumulate content for existing message
+    //           const existingContent = messagesData.value[existingIndex].data?.content || '';
+    //           const newContent = receivedData.content || '';
+    //           messagesData.value[existingIndex].data.content = existingContent + newContent;
+    //         } else {
+    //           // Create new message for new ID
+    //           messagesData.value.push({
+    //             event: 'llm_stream_chunk',
+    //             data: receivedData,
+    //             message_id: currentMsgId.value,
+    //             conversation_id: currentId.value,
+    //             timestamp: new Date().toISOString()
+    //           });
+    //         }
+    //       } else {
+    //         // No ID, just add as new message
+    //         messagesData.value.push({
+    //           event: 'llm_stream_chunk',
+    //           data: receivedData,
+    //           message_id: currentMsgId.value,
+    //           conversation_id: currentId.value,
+    //           timestamp: new Date().toISOString()
+    //         });
+    //       }
+    //     } else if (receivedData.event === 'stream_complete') {
+    //       console.log('Stream complete:', receivedData);
+    //       messagesData.value.push({
+    //         event: 'stream_complete',
+    //         data: receivedData,
+    //         message_id: currentMsgId.value,
+    //         conversation_id: currentId.value,
+    //         timestamp: new Date().toISOString()
+    //       });
+    //       isLoading.value = false;
+    //     }
+        
+    //     // Handle legacy events
+    //     else if (
+    //       receivedData.event == 'user_message' ||
+    //       receivedData.event == 'completion'
+    //     ) {
+    //       try {
+    //         if (receivedData.event == 'completion') {
+    //           let metaDataComplettion = JSON.parse(receivedData.data);
+    //           completionMetaData.value = metaDataComplettion.metadata;
+    //           emit('metadataChanged', completionMetaData.value);
+    //         } else {
+    //           AutoScrollToBottom();
+    //         }
+    //       } catch (error) {
+    //         console.log('completionMetaData.value', error);
+    //         isLoading.value = false;
+    //       }
+          
+    //       // Ensure legacy messages have proper structure
+    //       const legacyMessage = {
+    //         event: receivedData.event,
+    //         data: receivedData.data,
+    //         message_id: receivedData.message_id || currentMsgId.value,
+    //         conversation_id: receivedData.conversation_id || currentId.value,
+    //         timestamp: receivedData.timestamp || new Date().toISOString()
+    //       };
+          
+    //       messagesData.value.push(legacyMessage);
+    //       isLoading.value = false;
+    //     } else if (receivedData.event === 'think') {
+    //       let dataParsed = JSON.parse(receivedData.data);
+    //       agentThoughtsData.value.push(dataParsed);
+
+    //       statusText.value = dataParsed.agent_name;
+    //       emit('agentThoughtsDataChanged', agentThoughtsData.value);
+    //       try {
+    //         addOrUpdateModel(dataParsed.metadata);
+            
+    //         // Add think event to messages for persistence
+    //         messagesData.value.push({
+    //           event: 'think',
+    //           data: receivedData.data,
+    //           message_id: receivedData.message_id || currentMsgId.value,
+    //           conversation_id: receivedData.conversation_id || currentId.value,
+    //           timestamp: receivedData.timestamp || new Date().toISOString()
+    //         });
+
+    //         AutoScrollToBottom();
+    //       } catch (e) {
+    //         console.log('model error', e);
+    //         isLoading.value = false;
+    //       }
+    //     } else if (receivedData.event === 'planner_chunk') {
+    //       addOrUpdatePlannerText({
+    //         message_id: currentMsgId.value,
+    //         data: receivedData.data,
+    //       });
+    //     } else if (receivedData.event === 'planner') {
+    //       let dataParsed = JSON.parse(receivedData.data);
+    //       addOrUpdateModel(dataParsed.metadata);
+          
+    //       // Add planner event to messages for persistence
+    //       messagesData.value.push({
+    //         event: 'planner',
+    //         data: receivedData.data,
+    //         message_id: receivedData.message_id || currentMsgId.value,
+    //         conversation_id: receivedData.conversation_id || currentId.value,
+    //         timestamp: receivedData.timestamp || new Date().toISOString()
+    //       });
+
+    //       AutoScrollToBottom();
+    //     } else {
+    //       console.log('ping event fired: ', receivedData.event);
+    //     }
+        
+    //     // Auto scroll after any message
+    //     AutoScrollToBottom();
+    //   } catch (error) {
+    //     console.error('Error parsing WebSocket message:', error);
+    //     isLoading.value = false;
+    //   }
+    // };
     socket.value.onerror = (error) => {
       console.error('WebSocket error:', error);
       if (!manualSocketClose.value)
@@ -1880,13 +2134,12 @@ function formatMessageData(msgItem) {
       case 'agent_completion':
         // agent_completion events from LangGraph have structured data
         if (msgItem.data && typeof msgItem.data === 'object') {
-const rawType = msgItem.data.additional_kwargs?.agent_type
-             ?? msgItem.data.agent_type
-             ?? 'assistant';
+          const rawType = msgItem.data.additional_kwargs?.agent_type
+           
           const formatted = {
             message: msgItem.data.content || '',
-  agent_type: rawType.includes('_interrupt') ? 'interrupt' : rawType,      
-        metadata: msgItem.data.response_metadata || null,
+          agent_type: rawType.includes('_interrupt') ? 'interrupt' : rawType,      
+         metadata: msgItem.data.response_metadata || null,
             additional_kwargs: msgItem.data.additional_kwargs || {},
             timestamp: msgItem.timestamp || new Date().toISOString(),
             type: msgItem.data.type || 'AIMessage',
@@ -1897,7 +2150,7 @@ const rawType = msgItem.data.additional_kwargs?.agent_type
         // Fallback for unexpected format
         return JSON.stringify({
           message: msgItem.data || '',
-          agent_type: 'assistant',
+          agent_type: msgItem.data.additional_kwargs?.agent_type,
           timestamp: msgItem.timestamp || new Date().toISOString()
         });
       
@@ -2080,6 +2333,50 @@ const filteredMessages = computed(() => {
     return messagesData.value || [];
   }
 });
+
+// 1) Combine all streaming chunks
+const combinedContent = computed(() =>
+  streamData.value
+    .filter(e => e.event === 'llm_stream_chunk')
+    .sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp))
+    .map(e => e.content)
+    .join('')
+)
+
+// 2) Extract <tool>…</tool> for title
+const rawToolName = computed(() => {
+  const m = combinedContent.value.match(/<tool>([^<]+)<\/tool>/i)
+  return m ? m[1] : ''
+})
+
+const toolName = computed(() => {
+  const ev = streamData.value.find(
+    e =>
+      e.event === 'agent_completion' &&
+      e.additional_kwargs?.agent_type === 'react_tool' &&
+      typeof e.content === 'string'
+  )
+  if (!ev) return ''
+  const m = ev.content.match(/<tool>([^<]+)<\/tool>/i)
+  if (!m) return ''
+
+  // Strip "search_" prefix (case‐insensitive)
+  const raw = m[1].replace(/^search_/i, '')
+  // Upper-case it
+  const upper = raw.toUpperCase()
+
+  // Guarantee the space
+  return `Calling: ${upper}`
+})
+
+
+
+
+const title = computed(() =>
+  rawToolName.value
+    ? `Searching ${rawToolName.value.replace(/[_-]/g,' ')}`
+    : 'Loading…'
+)
 </script>
 
 <style scoped>

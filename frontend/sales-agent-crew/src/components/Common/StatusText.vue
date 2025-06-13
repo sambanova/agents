@@ -1,6 +1,8 @@
 <template>
   <div class="flex justify-start    items-start">
-    <h1 class="capitalize box-progress" :data-text="text">{{ text }}</h1>
+    <h1 class="capitalize"
+    :class="{ 'box-progress': props.isLoading }"
+    :data-text="text">{{ text }}</h1>
     <!-- <span class="box-text">{{ number }}%</span> -->
   </div>
 </template>
@@ -14,6 +16,10 @@ const props = defineProps({
   text: {
     type: String,
     default: ''
+  },
+   isLoading: {
+    type: Boolean,
+    default: false
   }
 })
 
