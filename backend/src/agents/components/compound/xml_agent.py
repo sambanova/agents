@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
@@ -204,6 +205,14 @@ def get_xml_agent_executor(
         subgraphs: Dictionary of subgraphs {name: compiled_graph}
         checkpointer: Optional checkpointer, if None will use global checkpointer
     """
+    logger.info(
+        "Creating XML agent executor",
+        tool_names=[t.name for t in tools],
+        llm_type=llm_type.value if hasattr(llm_type, "value") else str(llm_type),
+        has_subgraphs=bool(subgraphs),
+        subgraph_names=list(subgraphs.keys()) if subgraphs else [],
+        has_checkpointer=checkpointer is not None,
+    )
     # Use provided checkpointer or fall back to global checkpointer
     if checkpointer is None:
         checkpointer = get_global_checkpointer()
@@ -280,7 +289,16 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             processed_messages = await _get_messages(messages)
 
         try:
+            start_time = time.time()
+            logger.info("Invoking LLM", node="agent")
             response = await llm_with_stop.ainvoke(processed_messages, config)
+            duration = time.time() - start_time
+            logger.info(
+                "LLM invocation completed",
+                node="agent",
+                duration_ms=round(duration * 1000, 2),
+                model=llm_with_stop.model
+            )
 
             # Post-process response to catch potential formatting issues
             if hasattr(response, "content") and isinstance(response.content, str):
@@ -299,6 +317,13 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             return response
 
         except Exception as e:
+            logger.error(
+                "LLM invocation failed",
+                node="agent",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                exc_info=True,
+            )
             # If LLM call fails, return an error message that the system can handle
             error_msg = f"Agent error: {str(e)}"
             return AIMessage(
@@ -361,6 +386,12 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             if "</tool>" not in content:
                 # Malformed tool call - missing closing tool tag
                 error_msg = "Error: Malformed tool call - missing </tool> tag"
+                logger.warning(
+                    "Malformed tool call",
+                    node="tool_action",
+                    error=error_msg,
+                    content=content,
+                )
                 return LiberalFunctionMessage(
                     content=error_msg,
                     name="system_error",
@@ -375,6 +406,12 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             tool_parts = content.split("</tool>", 1)
             if len(tool_parts) < 2:
                 error_msg = "Error: Could not parse tool call - invalid format"
+                logger.warning(
+                    "Could not parse tool call",
+                    node="tool_action",
+                    error=error_msg,
+                    content=content,
+                )
                 return LiberalFunctionMessage(
                     content=error_msg,
                     name="system_error",
@@ -390,6 +427,12 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             # Extract tool name
             if "<tool>" not in tool_part:
                 error_msg = "Error: Missing <tool> tag in tool call"
+                logger.warning(
+                    "Missing tool tag",
+                    node="tool_action",
+                    error=error_msg,
+                    content=content,
+                )
                 return LiberalFunctionMessage(
                     content=error_msg,
                     name="system_error",
@@ -417,6 +460,12 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             # Validate tool name
             if not _tool:
                 error_msg = "Error: Empty tool name provided"
+                logger.warning(
+                    "Empty tool name",
+                    node="tool_action",
+                    error=error_msg,
+                    content=content,
+                )
                 return LiberalFunctionMessage(
                     content=error_msg,
                     name="system_error",
@@ -431,10 +480,23 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 tool=_tool,
                 tool_input=_tool_input,
             )
-
+            logger.info(
+                "Executing tool",
+                node="tool_action",
+                tool_name=_tool,
+                tool_input=_tool_input,
+            )
             # Execute tool with error handling
+            start_time = time.time()
             try:
                 response = await tool_executor.ainvoke(action)
+                duration = time.time() - start_time
+                logger.info(
+                    "Tool execution completed",
+                    node="tool_action",
+                    tool_name=_tool,
+                    duration_ms=round(duration * 1000, 2),
+                )
 
                 # Handle cases where response might be malformed or too large
                 if isinstance(response, str) and len(response) > 50000:
@@ -443,7 +505,18 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                     )
 
             except Exception as e:
+                duration = time.time() - start_time
                 error_msg = f"Error executing tool '{_tool}': {str(e)}"
+                logger.error(
+                    "Tool execution failed",
+                    node="tool_action",
+                    tool_name=_tool,
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    duration_ms=round(duration * 1000, 2),
+                    success=False,
+                    exc_info=True,
+                )
                 return LiberalFunctionMessage(
                     content=error_msg,
                     name=_tool,
@@ -468,6 +541,13 @@ Make sure to include both opening and closing tags for both tool and tool_input.
         except Exception as e:
             # Catch-all error handler for unexpected parsing issues
             error_msg = f"Unexpected error parsing tool call: {str(e)}"
+            logger.error(
+                "Unexpected error parsing tool call",
+                node="tool_action",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                exc_info=True,
+            )
             return LiberalFunctionMessage(
                 content=error_msg,
                 name="system_error",
@@ -500,9 +580,37 @@ Make sure to include both opening and closing tags for both tool and tool_input.
 
             subgraph_messages = state_input_mapper(subgraph_input)
 
+            logger.info(
+                "Invoking subgraph",
+                node=f"subgraph_{subgraph_name}",
+                subgraph_name=subgraph_name,
+            )
             # Execute subgraph with the same config (for proper state management)
             # For MessageGraph, pass messages directly, not wrapped in a dict
-            result = await subgraph.ainvoke(subgraph_messages, config)
+            start_time = time.time()
+            try:
+                result = await subgraph.ainvoke(subgraph_messages, config)
+                duration = time.time() - start_time
+                logger.info(
+                    "Subgraph invocation completed",
+                    node=f"subgraph_{subgraph_name}",
+                    subgraph_name=subgraph_name,
+                    duration_ms=round(duration * 1000, 2),
+                    success=True,
+                )
+            except Exception as e:
+                duration = time.time() - start_time
+                logger.error(
+                    "Subgraph invocation failed",
+                    node=f"subgraph_{subgraph_name}",
+                    subgraph_name=subgraph_name,
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    duration_ms=round(duration * 1000, 2),
+                    success=False,
+                    exc_info=True,
+                )
+                raise
 
             return state_output_mapper(result)
 

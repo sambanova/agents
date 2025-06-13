@@ -58,7 +58,7 @@ def configure_logging(environment: str = "prod"):
         cache_logger_on_first_use=True,
     )
 
-    # Intercept uvicorn logs and render them with structlog
+    # Intercept logs and render them with structlog
     for name in ["uvicorn", "uvicorn.error", "LiteLLM"]:
         logger = logging.getLogger(name)
         logger.handlers.clear()

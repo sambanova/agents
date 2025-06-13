@@ -1,7 +1,3 @@
-"""
-Main FastAPI application entry point.
-"""
-
 import json
 import os
 import time
