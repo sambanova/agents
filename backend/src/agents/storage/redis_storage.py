@@ -192,7 +192,7 @@ class RedisStorage:
             )
 
         except Exception as e:
-            print(f"Error storing file {file_id} in Redis: {e}")
+            logger.error(f"Error storing file {file_id} in Redis: {e}")
             raise
 
     async def get_file(
@@ -219,7 +219,7 @@ class RedisStorage:
             return file_data, file_metadata
 
         except Exception as e:
-            print(f"Error retrieving file {file_id} from Redis: {e}")
+            logger.error(f"Error retrieving file {file_id} from Redis: {e}")
             return None
 
     async def get_file_metadata(self, user_id: str, file_id: str) -> Optional[dict]:
@@ -238,7 +238,7 @@ class RedisStorage:
             return json.loads(metadata_str)
 
         except Exception as e:
-            print(f"Error retrieving file metadata {file_id} from Redis: {e}")
+            logger.error(f"Error retrieving file metadata {file_id} from Redis: {e}")
             return None
 
     async def get_file_as_base64(self, user_id: str, file_id: str) -> Optional[str]:
@@ -277,7 +277,7 @@ class RedisStorage:
             return f"data:{mime_type};base64,{base64_data}"
 
         except Exception as e:
-            print(f"Error creating data URL for {file_id}: {e}")
+            logger.error(f"Error creating data URL for {file_id}: {e}")
             return None
 
     async def delete_file(self, user_id: str, file_id: str) -> bool:
@@ -301,7 +301,7 @@ class RedisStorage:
             return True
 
         except Exception as e:
-            print(f"Error deleting file {file_id} from Redis: {e}")
+            logger.error(f"Error deleting file {file_id} from Redis: {e}")
             return False
 
     async def list_user_files(self, user_id: str) -> list:
@@ -327,7 +327,7 @@ class RedisStorage:
             return files
 
         except Exception as e:
-            print(f"Error listing files for user {user_id}: {e}")
+            logger.error(f"Error listing files for user {user_id}: {e}")
             return []
 
     # Document storage methods

@@ -2,8 +2,11 @@ import json
 from typing import List, Type
 
 import requests
+import structlog
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
+
+logger = structlog.get_logger(__name__)
 
 
 class CompetitorLLMInput(BaseModel):
@@ -82,5 +85,5 @@ class CompetitorLLMTool(BaseTool):
                     final_list.append(item.upper())
             return final_list[:3]
         except Exception as e:
-            print(f"[competitor_llm_tool] LLM call error: {e}")
+            logger.error(f"[competitor_llm_tool] LLM call error: {e}")
             return []

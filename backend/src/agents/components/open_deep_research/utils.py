@@ -100,7 +100,9 @@ def deduplicate_and_format_sources(
             raw_content = source.get("raw_content", "")
             if raw_content is None:
                 raw_content = ""
-                print(f"Warning: No raw_content found for source {source['url']}")
+                logger.warning(
+                    f"Warning: No raw_content found for source {source['url']}"
+                )
             if len(raw_content) > char_limit:
                 raw_content = raw_content[:char_limit] + "... [truncated]"
             formatted_text += f"Full source content limited to {max_tokens_per_source} tokens: {raw_content}\n\n"

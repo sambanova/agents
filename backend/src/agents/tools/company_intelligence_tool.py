@@ -1,19 +1,9 @@
-# file: tools/company_intelligence_tool.py
-
 import json
-import os
-import sys
 from typing import Any, Dict, Optional
 
+from agents.services.company_research_service import CompanyIntelligenceService
 from crewai.tools import BaseTool
 from pydantic import ConfigDict, Field
-
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
-
-# Now referencing the new Exa-based service
-from agents.services.company_research_service import CompanyIntelligenceService
 
 
 class CompanyIntelligenceTool(BaseTool):
@@ -89,18 +79,3 @@ class CompanyIntelligenceTool(BaseTool):
                 "error": f"Error formatting result: {str(ex)}",
                 "raw_result": result,
             }
-
-
-if __name__ == "__main__":
-    # Example usage:
-    tool = CompanyIntelligenceTool()
-
-    # For a quick test:
-    test_params = {
-        "industry": "hardware",
-        "company_stage": "startup",
-        "geography": "bay area",
-        "funding_stage": None,
-    }
-    results = tool._run(**test_params)
-    print(json.dumps(results, indent=2))

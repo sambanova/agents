@@ -58,6 +58,17 @@ def configure_logging(environment: str = "prod"):
         cache_logger_on_first_use=True,
     )
 
+    # Intercept uvicorn logs and render them with structlog
+    for name in ["uvicorn", "uvicorn.error", "LiteLLM"]:
+        logger = logging.getLogger(name)
+        logger.handlers.clear()
+        logger.propagate = True
+
+    # Silence uvicorn access logs
+    access_logger = logging.getLogger("uvicorn.access")
+    access_logger.handlers.clear()
+    access_logger.propagate = False
+
 
 def get_logger(name: str = None):
     """Get a structlog logger."""

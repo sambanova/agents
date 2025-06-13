@@ -113,7 +113,6 @@ class ConfigurableAgent(RunnableBinding):
                 validated_config = validate_tool_config(tool_type, tool_config)
             except ValueError as e:
                 logger.error(f"Tool validation failed: {e}")
-                raise e
 
             _returned_tools = TOOL_REGISTRY[tool_type]["factory"](**validated_config)
             if isinstance(_returned_tools, list):
@@ -163,11 +162,7 @@ class ConfigurableAgent(RunnableBinding):
                 message_id=message_id,
             )
         except Exception as e:
-            import traceback
-
-            print(f"Error: {str(e)}")
-            print("Stacktrace:")
-            traceback.print_exc()
+            logger.error(f"Error in astream_websocket: {str(e)}")
             raise e
 
 
@@ -193,18 +188,3 @@ agent: Pregel = (
         output_type=Sequence[AnyMessage],
     )
 )
-
-if __name__ == "__main__":
-    import asyncio
-
-    from langchain.schema.messages import HumanMessage
-
-    async def run():
-        async for m in agent.astream_events(
-            HumanMessage(content="whats your name"),
-            config={"configurable": {"user_id": "2", "thread_id": "test1"}},
-            version="v2",
-        ):
-            print(m)
-
-    asyncio.run(run())

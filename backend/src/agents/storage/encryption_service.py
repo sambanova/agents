@@ -3,9 +3,12 @@ import hmac
 import os
 from typing import Any, Dict, Optional, TypeVar
 
+import structlog
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+logger = structlog.get_logger(__name__)
 
 T = TypeVar("T")
 
@@ -17,7 +20,7 @@ class EncryptionService:
         self.master_salt = os.getenv("REDIS_MASTER_SALT")
         if not self.master_salt:
             self.master_salt = base64.b64encode(os.urandom(16)).decode("utf-8")
-            print(
+            logger.warning(
                 "WARNING: No REDIS_MASTER_SALT found in environment. Generated new salt."
             )
 

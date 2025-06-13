@@ -46,6 +46,7 @@ dependencies = [
     { name = "structlog" },
     { name = "tavily-python" },
     { name = "uvicorn" },
+    { name = "websockets" },
     { name = "wikipedia" },
     { name = "yfinance" },
 ]
@@ -87,6 +88,7 @@ requires-dist = [
     { name = "tavily-python", specifier = "==0.5.1" },
     { name = "tavily-python", specifier = ">=0.5.0" },
     { name = "uvicorn", specifier = "==0.34.3" },
+    { name = "websockets", specifier = "==14.2" },
     { name = "wikipedia", specifier = "==1.4.0" },
     { name = "yfinance", specifier = "==0.2.62" },
 ]

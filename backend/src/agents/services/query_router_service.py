@@ -392,7 +392,7 @@ class QueryRouterService:
             return content.replace("```json", "").replace("```", "").strip()
 
         except Exception as e:
-            print(f"Error calling LLM: {str(e)}")
+            logger.error(f"Error calling LLM: {str(e)}")
             return self._get_default_response(self._detect_query_type(user_message))
 
     def route_query(self, query: str) -> QueryType:
@@ -569,7 +569,7 @@ class QueryRouterService:
             return QueryType(**parsed_result)
 
         except json.JSONDecodeError as e:
-            print(f"[route_query] JSON decode error: {str(e)}")
+            logger.error(f"[route_query] JSON decode error: {str(e)}")
             # fallback if LLM fails
             fallback_json = self._get_default_response(detected_type)
             fallback_dict = json.loads(fallback_json)

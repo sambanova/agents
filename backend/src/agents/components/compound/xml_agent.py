@@ -50,13 +50,13 @@ try:
 
     # Apply the patch
     AsyncRedisSaver._aload_pending_sends = patched_aload_pending_sends
-    print("Applied Redis checkpoint bug workaround")
+    logger.info("Applied Redis checkpoint bug workaround")
 
 except ImportError:
     # Redis checkpoint not available, no patch needed
     pass
 except Exception as e:
-    print(f"Warning: Could not apply Redis checkpoint patch: {e}")
+    logger.error(f"Warning: Could not apply Redis checkpoint patch: {e}")
 
 # Global checkpointer variable
 _global_checkpointer = None
