@@ -1,12 +1,16 @@
-from agents.storage.redis_service import SecureRedisService
-import redis.asyncio as redis
-import json
-import time
 import asyncio
-import threading
-from typing import Any
+import json
 import os
-from crewai.agents.parser import AgentFinish, AgentAction
+import threading
+import time
+from typing import Any
+
+import redis.asyncio as redis
+import structlog
+from agents.storage.redis_service import SecureRedisService
+from crewai.agents.parser import AgentAction, AgentFinish
+
+logger = structlog.get_logger(__name__)
 
 
 class RedisConversationLogger:
@@ -103,8 +107,8 @@ class RedisConversationLogger:
                 # Handle async Redis publish safely
                 self._safe_async_publish(channel, message)
         except Exception as e:
-            print(f"Error publishing to Redis: {e}")
-            print(
+            logger.error(f"Error publishing to Redis: {e}")
+            logger.error(
                 f"Message attempted: {message if 'message' in locals() else 'No message created'}"
             )
 

@@ -1,39 +1,34 @@
-from datetime import datetime, timedelta, timezone
+import asyncio
+import json
 import os
+from datetime import datetime, timedelta, timezone
+from typing import Dict, Optional
+
+import redis
+import structlog
+from agents.api.data_types import (
+    AgentEnum,
+    AgentStructuredResponse,
+    APIKeys,
+    EndUserMessage,
+    ErrorResponse,
+)
+from agents.api.utils import DocumentContextLengthError, load_documents
+from agents.api.websocket_interface import WebSocketInterface
+from agents.components.compound.agent import agent
 from agents.components.compound.assistant import get_assistant
 from agents.components.compound.financial_analysis_subgraph import (
     create_financial_analysis_graph,
 )
 from agents.components.open_deep_research.graph import create_deep_research_graph
-from autogen_core import DefaultTopicId
-from fastapi import WebSocket, WebSocketDisconnect
-import json
-import asyncio
-from typing import Optional, Dict
-import redis
-from starlette.websockets import WebSocketState
-from langchain_core.messages import AIMessage
-
-from agents.api.data_types import (
-    APIKeys,
-    EndUserMessage,
-    AgentEnum,
-    AgentStructuredResponse,
-    ErrorResponse,
-)
-from agents.api.utils import (
-    load_documents,
-    DocumentContextLengthError,
-)
-
-from agents.components.compound.agent import agent
-from agents.api.websocket_interface import WebSocketInterface
 from agents.storage.redis_service import SecureRedisService
 from agents.storage.redis_storage import RedisStorage
-from langchain_core.messages import HumanMessage
+from autogen_core import DefaultTopicId
+from fastapi import WebSocket, WebSocketDisconnect
+from langchain_core.messages import AIMessage, HumanMessage
+from starlette.websockets import WebSocketState
 
-from agents.utils.logging import logger
-import mimetypes
+logger = structlog.get_logger(__name__)
 
 
 class WebSocketConnectionManager(WebSocketInterface):

@@ -336,36 +336,3 @@ class ResearchCrew:
         )
         results = crew.kickoff(inputs=inputs)
         return results.pydantic.model_dump_json(), dict(results.token_usage)
-
-
-def main():
-    # Example usage with dummy keys
-    example_samba_key = "test_samba_key"
-    example_exa_key = "test_exa_key"
-
-    # Random run_id
-    example_run_id = str(uuid.uuid4())
-    # Hard-coded user for demonstration
-    example_user_id = "test_user_123"
-
-    crew = ResearchCrew(
-        sambanova_key=example_samba_key,
-        exa_key=example_exa_key,
-        user_id=example_user_id,
-        run_id=example_run_id,
-    )
-    example_inputs = {
-        "industry": "ai hardware chip",
-        "geography": "silicon valley",
-        "funding_stage": "series d",
-        "company_stage": "",
-        "product": "",
-    }
-
-    final_output, _ = crew.execute_research(example_inputs)
-    print("Crew Output:")
-    print(final_output)
-
-
-if __name__ == "__main__":
-    main()

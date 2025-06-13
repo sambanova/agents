@@ -1,5 +1,6 @@
-import redis.asyncio as redis
 from typing import Any, Dict, List
+
+import redis.asyncio as redis
 from agents.storage.encryption_service import EncryptionService
 
 

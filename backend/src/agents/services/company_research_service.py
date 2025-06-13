@@ -9,8 +9,8 @@ parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from utils.envutils import EnvUtils
-from tools.exa_dev_tool import ExaDevTool
+from agents.utils.envutils import EnvUtils
+from agents.tools.exa_dev_tool import ExaDevTool
 
 class CompanyIntelligenceService:
     """

@@ -1,4 +1,3 @@
-# TODO: Remove this
 from datetime import datetime
 from agents.components.compound.datatypes import Assistant
 from agents.tools.langgraph_tools import RETRIEVAL_DESCRIPTION

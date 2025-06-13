@@ -1,11 +1,14 @@
 import os
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 from dotenv import load_dotenv
+
 
 class EnvUtils:
     """
     Utility class for managing non-sensitive environment variables and configuration
     """
+
     _instance = None
     _env_loaded = False
 
@@ -31,33 +34,4 @@ class EnvUtils:
 
     def get_config(self, config_map: Dict[str, Any]) -> Dict[str, Any]:
         """Get multiple non-sensitive configurations with defaults"""
-        return {
-            key: self.get_env(key, default) 
-            for key, default in config_map.items()
-        }
-
-# Example usage
-def main():
-    # Initialize EnvUtils (will load .env)
-    env_utils = EnvUtils()
-
-    # Get a specific environment variable
-    api_key = env_utils.get_env('PERPLEXITY_API_KEY')
-    print(f"Perplexity API Key: {api_key}")
-
-    # Get a required environment variable (will raise ValueError if not set)
-    try:
-        required_key = env_utils.get_env('REQUIRED_KEY')
-    except ValueError as e:
-        print(e)
-
-    # Get multiple configurations with defaults
-    config = env_utils.get_config({
-        'DATABASE_URL': 'localhost',
-        'PORT': 8000,
-        'DEBUG': False
-    })
-    print("Configuration:", config)
-
-if __name__ == "__main__":
-    main()
+        return {key: self.get_env(key, default) for key, default in config_map.items()}

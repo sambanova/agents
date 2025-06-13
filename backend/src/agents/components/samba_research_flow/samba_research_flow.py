@@ -7,24 +7,23 @@ multiple specialized AI crews. It handles the coordination between research
 and content creation phases.
 """
 
-import os
 import asyncio
-from typing import List, Dict, Any, Tuple
-
-from crewai.flow.flow import Flow, listen, start
-from dotenv import load_dotenv
+import json
+import os
+from typing import Any, Dict, List, Tuple
 
 from agents.components.samba_research_flow.crews.edu_content_writer.edu_content_writer_crew import (
     EduContentWriterCrew,
+)
+from agents.components.samba_research_flow.crews.edu_doc_summariser.edu_doc_summariser_crew import (
+    EduDocSummariserCrew,
 )
 from agents.components.samba_research_flow.crews.edu_research.edu_research_crew import (
     EducationalPlan,
     EduResearchCrew,
 )
-from agents.components.samba_research_flow.crews.edu_doc_summariser.edu_doc_summariser_crew import (
-    EduDocSummariserCrew,
-)
-import json
+from crewai.flow.flow import Flow, listen, start
+from dotenv import load_dotenv
 
 
 class SambaResearchFlow(Flow):
@@ -194,8 +193,3 @@ def test_flow() -> List[Dict]:
     }
 
     return edu_flow.kickoff()
-
-
-if __name__ == "__main__":
-    result = test_flow()
-    print(result)

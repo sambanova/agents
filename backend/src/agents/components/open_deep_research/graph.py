@@ -1,57 +1,51 @@
 import functools
-import time
-from typing import Literal, List, Optional, Tuple, Any
 import re
+import time
+from typing import Any, List, Literal, Optional, Tuple
+
 import requests
+import structlog
 
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-from langchain_core.runnables import RunnableConfig
-from langchain_fireworks import ChatFireworks
-
-from langgraph.constants import Send
-from langgraph.graph import START, END, StateGraph
-from langgraph.types import interrupt, Command
-
-from agents.utils.custom_sambanova import CustomChatSambaNovaCloud
-from agents.registry.model_registry import model_registry
-
+# We import our data models
+from agents.api.data_types import DeepCitation, DeepResearchReport, DeepResearchSection
+from agents.components.open_deep_research.configuration import Configuration, SearchAPI
+from agents.components.open_deep_research.prompts import (
+    final_section_writer_instructions,
+    query_writer_instructions,
+    report_planner_instructions,
+    report_planner_query_writer_instructions,
+    section_grader_instructions,
+    section_writer_instructions,
+)
 from agents.components.open_deep_research.state import (
+    Feedback,
+    Queries,
+    ReportState,
     ReportStateInput,
     ReportStateOutput,
-    Sections,
-    ReportState,
-    SectionState,
-    SectionOutputState,
-    Queries,
-    Feedback,
     Section,
+    SectionOutputState,
+    Sections,
+    SectionState,
 )
-from .prompts import (
-    report_planner_query_writer_instructions,
-    report_planner_instructions,
-    query_writer_instructions,
-    section_writer_instructions,
-    final_section_writer_instructions,
-    section_grader_instructions,
-)
-from .configuration import Configuration, SearchAPI
-from .utils import (
-    tavily_search_async,
+from agents.components.open_deep_research.utils import (
     deduplicate_and_format_sources,
     format_sections,
     perplexity_search,
+    tavily_search_async,
 )
+from agents.registry.model_registry import model_registry
+from agents.utils.custom_sambanova import CustomChatSambaNovaCloud
+from agents.utils.logging_utils import setup_logging_context
+from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig, RunnableLambda
+from langchain_fireworks import ChatFireworks
+from langgraph.constants import Send
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command, interrupt
 
-# We import our data models
-from agents.api.data_types import DeepResearchReport, DeepResearchSection, DeepCitation
-
-from langchain.output_parsers import (
-    OutputFixingParser,
-    PydanticOutputParser,
-)
-
-from agents.utils.logging import logger
-from langchain_core.runnables import RunnableLambda
+logger = structlog.get_logger(__name__)
 
 
 class MessageInterceptor:
@@ -190,25 +184,20 @@ def get_session_id_from_config(config: Configuration) -> Optional[str]:
 async def generate_report_plan(
     writer_model, planner_model, state: ReportState, config: RunnableConfig
 ):
+    configurable = Configuration.from_runnable_config(config)
+    session_id = get_session_id_from_config(configurable)
+    setup_logging_context(config, node="generate_report_plan", session_id=session_id)
     topic = state["topic"]
     feedback = state.get("feedback_on_report_plan", None)
 
-    configurable = Configuration.from_runnable_config(config)
-
-    report_structure = configurable.report_structure
-    number_of_queries = configurable.number_of_queries
-    session_id = get_session_id_from_config(configurable)
-
-    logger.info(
-        logger.format_message(session_id, f"Generating report plan for topic: {topic}")
-    )
+    logger.info("Generating report plan", topic=topic)
     if feedback:
-        logger.info(
-            logger.format_message(session_id, f"Incorporating feedback: {feedback}")
-        )
+        logger.info("Incorporating feedback on report plan", feedback=feedback)
 
-    if isinstance(report_structure, dict):
-        report_structure = str(report_structure)
+    if isinstance(configurable.report_structure, dict):
+        report_structure = str(configurable.report_structure)
+    else:
+        report_structure = configurable.report_structure
 
     search_queries_interceptor = MessageInterceptor()
     fixing_interceptor = MessageInterceptor()
@@ -230,14 +219,10 @@ async def generate_report_plan(
     system_instructions_query = report_planner_query_writer_instructions.format(
         topic=topic,
         report_organization=report_structure,
-        number_of_queries=number_of_queries,
+        number_of_queries=configurable.number_of_queries,
     )
 
-    logger.info(
-        logger.format_message(
-            session_id, "Generating initial search queries for planning"
-        )
-    )
+    logger.info("Generating initial search queries for planning")
 
     results = await invoke_llm_with_tracking(
         llm=structured_llm,
@@ -253,22 +238,12 @@ async def generate_report_plan(
     )
 
     query_list = [q.search_query for q in results.queries]
-    logger.info(
-        logger.format_message(session_id, f"Generated {len(query_list)} search queries")
-    )
+    logger.info("Generated initial search queries", num_queries=len(query_list))
 
-    logger.info(
-        logger.format_message(
-            session_id, f"Using search API: {configurable.search_api}"
-        )
-    )
+    logger.info("Starting web search for planning", search_api=configurable.search_api)
+    start_time = time.time()
     if configurable.search_api == SearchAPI.TAVILY:
-        logger.info(
-            logger.format_message(
-                session_id,
-                f"Using Tavily API with key rotation for {len(query_list)} queries",
-            )
-        )
+        logger.info("Using Tavily API for search", num_queries=len(query_list))
         search_results = await tavily_search_async(
             query_list, configurable.api_key_rotator
         )
@@ -281,16 +256,15 @@ async def generate_report_plan(
             search_results, max_tokens_per_source=1000, include_raw_content=False
         )
     else:
-        logger.error(
-            logger.format_message(
-                session_id, f"Unsupported search API: {configurable.search_api}"
-            )
-        )
+        logger.error("Unsupported search API", search_api=configurable.search_api)
         raise ValueError(f"Unsupported search API: {configurable.search_api}")
 
+    duration = time.time() - start_time
     logger.info(
-        logger.format_message(session_id, "Generating final report sections plan")
+        "Web search for planning completed", duration_ms=round(duration * 1000, 2)
     )
+
+    logger.info("Generating final report sections plan")
     system_instructions_sections = report_planner_instructions.format(
         topic=topic,
         report_organization=report_structure,
@@ -317,16 +291,11 @@ async def generate_report_plan(
         ],
         task="Generate report sections plan",
         config=configurable,
-        session_id=session_id,
         llm_name=get_model_name(planner_model),
     )
 
     sections = report_sections.sections
-    logger.info(
-        logger.format_message(
-            session_id, f"Generated plan with {len(sections)} sections"
-        )
-    )
+    logger.info("Generated report plan", num_sections=len(sections))
 
     # tag and concatenate the captured messages
     captured_messages = []
@@ -358,6 +327,7 @@ async def human_feedback(
         f"<b>Section {i+1}:</b> {s.name} - {s.description}\n"
         for i, s in enumerate(sections)
     )
+    logger.info("Interrupting for human feedback", sections=sec_str)
     fb = interrupt(sec_str)
     if isinstance(fb, bool):
         if state.get("document"):
@@ -382,13 +352,17 @@ async def human_feedback(
 
 
 async def generate_queries(writer_model, state: SectionState, config: RunnableConfig):
-    sec = state["section"]
     configurable = Configuration.from_runnable_config(config)
+    sec = state["section"]
     session_id = get_session_id_from_config(configurable)
-
-    logger.info(
-        logger.format_message(session_id, f"Generating queries for section: {sec.name}")
+    setup_logging_context(
+        config,
+        node="generate_queries",
+        session_id=session_id,
+        section_name=sec.name,
     )
+
+    logger.info("Generating queries for section")
 
     search_queries_interceptor = MessageInterceptor()
     fixing_interceptor = MessageInterceptor()
@@ -418,17 +392,11 @@ async def generate_queries(writer_model, state: SectionState, config: RunnableCo
             HumanMessage(content="Generate search queries."),
         ],
         task="Generate search queries",
-        session_id=session_id,
         config=configurable,
         llm_name=get_model_name(writer_model),
     )
 
-    logger.info(
-        logger.format_message(
-            session_id,
-            f"Generated {len(queries.queries)} queries for section {sec.name}.",
-        )
-    )
+    logger.info("Generated queries", num_queries=len(queries.queries))
 
     captured_message = []
     for m in search_queries_interceptor.captured_messages:
@@ -443,29 +411,24 @@ async def generate_queries(writer_model, state: SectionState, config: RunnableCo
 
 
 async def search_web(state: SectionState, config: RunnableConfig):
-    sq = state["search_queries"]
     configurable = Configuration.from_runnable_config(config)
+    sq = state["search_queries"]
     session_id = get_session_id_from_config(configurable)
+    section_name = state["section"].name if state.get("section") else "N/A"
+    setup_logging_context(
+        config,
+        node="search_web",
+        session_id=session_id,
+        section_name=section_name,
+    )
 
     query_list = [q.search_query for q in sq]
-    logger.info(
-        logger.format_message(
-            session_id, f"Executing web search with {len(query_list)} queries"
-        )
-    )
+    logger.info("Executing web search", num_queries=len(query_list))
 
-    logger.info(
-        logger.format_message(
-            session_id, f"Using search API: {configurable.search_api}"
-        )
-    )
+    logger.info("Starting web search", search_api=configurable.search_api)
+    start_time = time.time()
     if configurable.search_api == SearchAPI.TAVILY:
-        logger.info(
-            logger.format_message(
-                session_id,
-                f"Using Tavily API with key rotation for {len(query_list)} queries",
-            )
-        )
+        logger.info("Using Tavily API for search", num_queries=len(query_list))
         search_results = await tavily_search_async(
             query_list, configurable.api_key_rotator
         )
@@ -478,14 +441,11 @@ async def search_web(state: SectionState, config: RunnableConfig):
             search_results, max_tokens_per_source=5000, include_raw_content=False
         )
     else:
-        logger.error(
-            logger.format_message(
-                session_id, f"Unsupported search API: {configurable.search_api}"
-            )
-        )
+        logger.error("Unsupported search API", search_api=configurable.search_api)
         raise ValueError(f"Unsupported search API: {configurable.search_api}")
 
-    logger.info(logger.format_message(session_id, "Successfully completed web search"))
+    duration = time.time() - start_time
+    logger.info("Web search completed", duration_ms=round(duration * 1000, 2))
     return {"source_str": src_str, "search_iterations": state["search_iterations"] + 1}
 
 
@@ -495,7 +455,6 @@ async def invoke_llm_with_tracking(
     task: str,
     llm_name: str,
     config: RunnableConfig,
-    session_id: Optional[str] = None,
 ) -> Any:
     """Helper function to invoke LLM with timing and usage tracking.
 
@@ -506,7 +465,6 @@ async def invoke_llm_with_tracking(
         config: RunnableConfig for the LLM
         usage_handler: UsageCallback instance to track usage
         configurable: Configuration instance
-        session_id: Optional session ID for logging
         timeout_seconds: Maximum time in seconds to wait for LLM response
 
     Returns:
@@ -514,40 +472,39 @@ async def invoke_llm_with_tracking(
     Raises:
         LLMTimeoutError: If the LLM request exceeds the timeout duration
     """
+    logger.info("Invoking LLM", task=task, llm_name=llm_name)
     start_time = time.time()
     try:
         response = await llm.ainvoke(messages)
     except requests.exceptions.ReadTimeout as e:
-        logger.error(logger.format_message(session_id, f"ReadTimeout error: {str(e)}"))
+        logger.error("LLM invocation ReadTimeout", error=str(e), exc_info=True)
         raise LLMTimeoutError(f"Request timed out: {str(e)}") from e
 
     duration = time.time() - start_time
 
-    if duration > 10:
-        logger.warning(
-            logger.format_message(
-                session_id,
-                f"Deep Research - LLM {llm_name} took {duration:.2f} seconds to complete task {task}",
-            )
-        )
-    else:
-        logger.info(
-            logger.format_message(
-                session_id,
-                f"Deep Research - LLM {llm_name} took {duration:.2f} seconds to complete task {task}",
-            )
-        )
+    logger.info(
+        "LLM invocation completed",
+        task=task,
+        duration_ms=round(duration * 1000, 2),
+        model=llm_name,
+    )
     return response
 
 
 async def write_section(
     writer_model, state: SectionState, config: RunnableConfig
 ) -> Command[Literal["__end__", "search_web"]]:
-    sec = state["section"]
     configurable = Configuration.from_runnable_config(config)
+    sec = state["section"]
     session_id = get_session_id_from_config(configurable)
+    setup_logging_context(
+        config,
+        node="write_section",
+        session_id=session_id,
+        section_name=sec.name,
+    )
 
-    logger.info(logger.format_message(session_id, f"Writing section: {sec.name}"))
+    logger.info("Writing section")
     src = state["source_str"]
     doc_summary = state.get("document_summary", "")
     sys_inst = section_writer_instructions.format(
@@ -570,17 +527,14 @@ async def write_section(
         ],
         task=f"Write section - {sec.name}",
         config=configurable,
-        session_id=session_id,
         llm_name=get_model_name(writer_model),
     )
 
     sec.content = content.content
-    logger.info(
-        logger.format_message(session_id, f"Generated content for section: {sec.name}")
-    )
+    logger.info("Generated content for section", section_name=sec.name)
 
     # now we grade
-    logger.info(logger.format_message(session_id, f"Grading section: {sec.name}"))
+    logger.info("Grading section", section_name=sec.name)
     grader_inst = section_grader_instructions.format(
         section_topic=sec.description, section=sec.content
     )
@@ -599,7 +553,6 @@ async def write_section(
         messages=[SystemMessage(content=grader_inst), HumanMessage(content="Grade it")],
         task=f"Grade section - {sec.name}",
         config=configurable,
-        session_id=session_id,
         llm_name=get_model_name(writer_model),
     )
 
@@ -613,9 +566,7 @@ async def write_section(
         captured_messages.append(m)
 
     if fb.grade == "pass":
-        logger.info(
-            logger.format_message(session_id, f"Section {sec.name} passed grading")
-        )
+        logger.info("Section passed grading", section_name=sec.name)
         return Command(
             update={"completed_sections": [sec], "messages": captured_messages},
             goto=END,
@@ -625,9 +576,9 @@ async def write_section(
         >= Configuration.from_runnable_config(config).max_search_depth
     ):
         logger.warning(
-            logger.format_message(
-                session_id, f"Section {sec.name} reached max iterations, moving on"
-            )
+            "Section reached max search iterations, moving on",
+            section_name=sec.name,
+            max_iterations=state["search_iterations"],
         )
         return Command(
             update={"completed_sections": [sec], "messages": captured_messages},
@@ -635,10 +586,10 @@ async def write_section(
         )
     else:
         logger.info(
-            logger.format_message(
-                session_id,
-                f"Section {sec.name} needs revision, doing another search iteration",
-            )
+            "Section needs revision, doing another search iteration",
+            section_name=sec.name,
+            feedback=fb.feedback,
+            queries=fb.follow_up_queries,
         )
         return Command(
             update={
@@ -653,11 +604,17 @@ async def write_section(
 async def write_final_sections(
     writer_model, state: SectionState, config: RunnableConfig
 ):
-    sec = state["section"]
     configurable = Configuration.from_runnable_config(config)
+    sec = state["section"]
     session_id = get_session_id_from_config(configurable)
+    setup_logging_context(
+        config,
+        node="write_final_sections",
+        session_id=session_id,
+        section_name=sec.name,
+    )
 
-    logger.info(logger.format_message(session_id, f"Writing final section: {sec.name}"))
+    logger.info("Writing final section")
     rep = state["report_sections_from_research"]
 
     sys_inst = final_section_writer_instructions.format(
@@ -677,14 +634,11 @@ async def write_final_sections(
         ],
         task="Write final section",
         config=configurable,
-        session_id=session_id,
         llm_name=get_model_name(writer_model),
     )
 
     sec.content = content.content
-    logger.info(
-        logger.format_message(session_id, f"Completed final section: {sec.name}")
-    )
+    logger.info("Completed final section", section_name=sec.name)
 
     captured_messages = []
     for m in writer_interceptor.captured_messages:
@@ -695,13 +649,14 @@ async def write_final_sections(
 
 
 async def gather_completed_sections(state: ReportState, config: RunnableConfig):
-    comps = state["completed_sections"]
     configurable = Configuration.from_runnable_config(config)
     session_id = get_session_id_from_config(configurable)
-
-    logger.info(
-        logger.format_message(session_id, f"Gathering {len(comps)} completed sections")
+    setup_logging_context(
+        config, node="gather_completed_sections", session_id=session_id
     )
+    comps = state["completed_sections"]
+
+    logger.info("Gathering completed sections", num_sections=len(comps))
     rep = format_sections(comps)
     return {"report_sections_from_research": rep}
 
@@ -709,13 +664,13 @@ async def gather_completed_sections(state: ReportState, config: RunnableConfig):
 async def initiate_final_section_writing(state: ReportState, config: RunnableConfig):
     configurable = Configuration.from_runnable_config(config)
     session_id = get_session_id_from_config(configurable)
-
+    setup_logging_context(
+        config, node="initiate_final_section_writing", session_id=session_id
+    )
     non_research_sections = [s for s in state["sections"] if not s.research]
     logger.info(
-        logger.format_message(
-            session_id,
-            f"Initiating writing of {len(non_research_sections)} final sections",
-        )
+        "Initiating writing of final sections",
+        num_sections=len(non_research_sections),
     )
     return [
         Send(
@@ -732,9 +687,10 @@ async def initiate_final_section_writing(state: ReportState, config: RunnableCon
 async def compile_final_report(state: ReportState, config: RunnableConfig):
     configurable = Configuration.from_runnable_config(config)
     session_id = get_session_id_from_config(configurable)
+    setup_logging_context(config, node="compile_final_report", session_id=session_id)
 
     sections = state["sections"]
-    logger.info(logger.format_message(session_id, "Compiling final report"))
+    logger.info("Compiling final report", num_sections=len(sections))
     completed_map = {s.name: s.content for s in state["completed_sections"]}
 
     deep_sections: List[DeepResearchSection] = []
@@ -781,10 +737,9 @@ async def compile_final_report(state: ReportState, config: RunnableConfig):
     final_text = "\n".join(lines).strip()
 
     logger.info(
-        logger.format_message(
-            session_id,
-            f"Completed report compilation with {len(deep_sections)} sections and {len(all_citations)} citations",
-        )
+        "Completed report compilation",
+        num_sections=len(deep_sections),
+        num_citations=len(all_citations),
     )
     report = DeepResearchReport(
         sections=deep_sections, final_report=final_text, citations=all_citations
@@ -799,8 +754,13 @@ async def summarize_documents(
     Summarize provided documents if they exist.
     """
     configurable = Configuration.from_runnable_config(config)
+    session_id = get_session_id_from_config(configurable)
+    setup_logging_context(config, node="summarize_documents", session_id=session_id)
 
     document = state.get("document", None)
+
+    if not document:
+        logger.warning("No document found to summarize.")
 
     sys_inst = """You are a document summarizer. Your task is to:
     1. Read through the provided documents
@@ -851,6 +811,11 @@ def create_deep_research_graph(api_key: str, provider: str, request_timeout: int
         provider: The LLM provider to use (fireworks or sambanova)
         documents: Optional list of documents to process
     """
+    logger.info(
+        "Creating deep research graph",
+        provider=provider,
+        request_timeout=request_timeout,
+    )
     model_name = "llama-3.3-70b"
     planner_model_config: str = model_registry.get_model_info(
         model_key=model_name, provider=provider

@@ -121,7 +121,7 @@ Follow the steps below to install the backend for the Agents application.
 1. Run the application.
 
    ```bash
-   uvicorn agents.api.main:create_app --reload --host 127.0.0.1 --port 8000
+   uvicorn agents.api.main:app --reload --host 127.0.0.1 --port 8000
    ```
 
 ### Environment variables setup

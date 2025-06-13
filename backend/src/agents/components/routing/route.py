@@ -1,37 +1,37 @@
-from datetime import datetime, timezone
 import json
 import re
 import time
+from datetime import datetime, timezone
 
-from autogen_core import MessageContext
-from autogen_core import (
-    DefaultTopicId,
-    RoutedAgent,
-    message_handler,
-    type_subscription,
-)
-from autogen_core.models import SystemMessage, UserMessage, CreateResult
-from autogen_ext.models.openai import OpenAIChatCompletionClient
 import redis
-
-from agents.api.websocket_interface import WebSocketInterface
-from agents.registry.model_registry import model_registry
-from agents.services.query_router_service import QueryRouterServiceChat, QueryType
-
+import structlog
 from agents.api.data_types import (
-    APIKeys,
+    AgentEnum,
     AgentRequest,
     AgentStructuredResponse,
+    APIKeys,
     AssistantMessage,
     DeepResearch,
     EndUserMessage,
     ErrorResponse,
-    AgentEnum,
 )
 from agents.api.registry import AgentRegistry
 from agents.api.session_state import SessionStateManager
-from agents.utils.logging import logger
+from agents.api.websocket_interface import WebSocketInterface
+from agents.registry.model_registry import model_registry
+from agents.services.query_router_service import QueryRouterServiceChat, QueryType
 from agents.utils.error_utils import format_api_error_message
+from autogen_core import (
+    DefaultTopicId,
+    MessageContext,
+    RoutedAgent,
+    message_handler,
+    type_subscription,
+)
+from autogen_core.models import CreateResult, SystemMessage, UserMessage
+from autogen_ext.models.openai import OpenAIChatCompletionClient
+
+logger = structlog.get_logger(__name__)
 
 agent_registry = AgentRegistry()
 
