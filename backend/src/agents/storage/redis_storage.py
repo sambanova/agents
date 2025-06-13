@@ -163,6 +163,7 @@ class RedisStorage:
         upload_timestamp: float,
         indexed: bool,
         source: str,
+        vector_ids: Optional[List[str]] = None,
     ):
         """Put a file in Redis storage."""
         try:
@@ -183,6 +184,7 @@ class RedisStorage:
                 file_size=len(data),
                 indexed=indexed,
                 source=source,
+                vector_ids=vector_ids,
             )
 
             await self.add_file_to_user_list(user_id, file_id)
@@ -342,6 +344,7 @@ class RedisStorage:
         file_size: int,
         indexed: bool,
         source: str,
+        vector_ids: Optional[List[str]] = None,
     ) -> None:
         """Store document metadata in Redis."""
         metadata = {
@@ -353,6 +356,8 @@ class RedisStorage:
             "indexed": indexed,
             "source": source,
         }
+        if vector_ids:
+            metadata["vector_ids"] = vector_ids
         file_metadata_key = self._get_file_metadata_key(user_id, file_id)
         await self.redis_client.set(file_metadata_key, json.dumps(metadata), user_id)
 
@@ -407,3 +412,18 @@ class RedisStorage:
                     await self.redis_client.set(meta_key, json.dumps(metadata), user_id)
         except Exception as e:
             logger.error(f"Error updating metadata: {str(e)}")
+
+    async def delete_vectors(self, vector_ids: List[str]) -> None:
+        """Delete vectors from the vector store."""
+        if not vector_ids:
+            return
+        try:
+            await self.redis_client.delete(*vector_ids)
+            logger.info(
+                f"Successfully deleted all vectors.", num_deleted=len(vector_ids)
+            )
+        except Exception as e:
+            logger.error(
+                f"Error deleting vectors: {e}",
+                exc_info=True,
+            )

@@ -10,14 +10,16 @@ For the time being, upload and ingestion are coupled
 from __future__ import annotations
 
 import asyncio
-from functools import lru_cache
 import mimetypes
-from typing import BinaryIO, List, Optional
 import os
+from functools import lru_cache
+from typing import BinaryIO, List, Optional
 
+import structlog
+from agents.rag.ingest import ingest_blob
+from agents.rag.parsing import MIMETYPE_BASED_PARSER
+from agents.storage.global_services import get_sync_redis_client
 from fastapi import UploadFile
-from langchain_redis import RedisVectorStore
-
 from langchain_core.document_loaders.blob_loaders import Blob
 from langchain_core.runnables import (
     ConfigurableField,
@@ -26,13 +28,12 @@ from langchain_core.runnables import (
 )
 from langchain_core.vectorstores import VectorStore
 from langchain_openai import OpenAIEmbeddings
+from langchain_redis import RedisVectorStore
 from langchain_sambanova import SambaNovaCloudEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter, TextSplitter
 from pydantic import ConfigDict
 
-from agents.rag.parsing import MIMETYPE_BASED_PARSER
-from agents.rag.ingest import ingest_blob
-from agents.storage.global_services import get_sync_redis_client
+logger = structlog.get_logger(__name__)
 
 
 @lru_cache(maxsize=100)
