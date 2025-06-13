@@ -33,7 +33,7 @@
         <div
           class="flex items-start justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-t-lg border-b dark:border-gray-600"
         >
-          <div class="flex hidden items-center space-x-2 flex-1">
+          <div class="flex  items-center space-x-2 flex-1">
             <div :class="currentStatusDot" class="w-2 h-2 rounded-full mt-1"></div>
             <svg
               v-if="showStatusAnimation"
@@ -110,48 +110,89 @@
           v-if="showAuditLog && hasCompletedEvents"
           class="p-3 bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600 max-h-96 overflow-y-auto"
         >
-          <div class="text-xs font-medium text-gray-600 dark:text-gray-300 mb-3">
-            Comprehensive Audit Log
-          </div>
-          <div class="space-y-3">
-            <div
-              v-for="event in auditLogEvents"
-              :key="event.id"
-              class="border-l-2 border-gray-200 dark:border-gray-600 pl-3"
+       <template>
+  <div class="max-w-2xl mx-auto py-8">
+    <!-- Timeline container -->
+    <div class="relative">
+      <div
+        v-for="(event, idx) in auditLogEvents"
+        :key="event.id"
+        class="relative flex"
+      >
+        <!-- Left column: dot + connecting line -->
+        <div class="flex flex-col items-center">
+          <!-- Dot -->
+          <div class="w-4 h-4 rounded-full bg-[#667085] border-2 border-white z-10"></div>
+          <!-- Line to next dot -->
+          <div
+            v-if="idx < auditLogEvents.length - 1"
+            class="flex-1 w-px bg-gray-200 dark:bg-gray-600"
+          ></div>
+        </div>
+
+        <!-- Right column: title + content -->
+        <div class="ml-4 flex-1">
+          <!-- Title -->
+          <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            {{ event.title }}
+          </h3>
+
+          <!-- Details box between dots -->
+          <div class="mt-2 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+            <!-- Timestamp -->
+            <time class="block text-xs text-gray-400 dark:text-gray-500 mb-1">
+              {{ formatEventTime(event.timestamp) }}
+            </time>
+
+            <!-- Main details -->
+            <p
+              v-if="event.details"
+              class="text-xs text-gray-600 dark:text-gray-400 mb-2"
             >
-              <div class="flex items-start space-x-2">
-                <div :class="event.dotClass"></div>
-                <div class="flex-1">
-                  <div class="flex justify-between">
-                    <span class="text-xs font-medium text-gray-900 dark:text-gray-100">{{ event.title }}</span>
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ formatEventTime(event.timestamp) }}</span>
-                  </div>
-                  <div v-if="event.details" class="text-xs text-gray-600 dark:text-gray-400 mt-1">{{ event.details }}</div>
-                  <div
-                    v-if="event.subItems?.length"
-                    class="mt-2 ml-4 space-y-1 text-xs text-gray-600 dark:text-gray-400"
-                  >
-                    <div v-for="sub in event.subItems" :key="sub.id" class="flex items-start space-x-1">
-                      <span>•</span>
-                      <span>{{ sub.title }}<span v-if="sub.domain"> ({{ sub.domain }})</span></span>
-                    </div>
-                  </div>
-                  <div class="text-xs text-gray-400 dark:text-gray-600 mt-1">
-                    <span class="bg-gray-100 dark:bg-gray-600 px-1 rounded">{{ event.event }}</span>
-                    <span v-if="event.type" class="bg-blue-100 dark:bg-blue-600 px-1 rounded ml-1">{{ event.type }}</span>
-                  </div>
-                </div>
-              </div>
+              {{ event.details }}
+            </p>
+
+            <!-- Sub-items -->
+            <ul
+              v-if="event.subItems?.length"
+              class="list-disc list-inside text-xs text-gray-600 dark:text-gray-400 space-y-1 mb-2"
+            >
+              <li v-for="sub in event.subItems" :key="sub.id">
+                {{ sub.title }}
+                <span v-if="sub.domain" class="font-medium">({{ sub.domain }})</span>
+              </li>
+            </ul>
+
+            <!-- Event/type tags -->
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span
+                class="bg-gray-100 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-2 py-0.5 rounded-full"
+              >
+                {{ event.event }}
+              </span>
+              <span
+                v-if="event.type"
+                class="bg-blue-100 dark:bg-blue-600 text-blue-800 dark:text-blue-200 px-2 py-0.5 rounded-full"
+              >
+                {{ event.type }}
+              </span>
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+        </div>
 <StatusAnimationBox
 :title="currentStreamingStatus"
+showTimeline="!currentStreamingStatus"
 :content="renderMarkdown(streamingResponseContent)"
 
 />
         <!-- Streaming response -->
-        <div class="p-4 hidden bg-white dark:bg-gray-800">
+        <div class="p-4  bg-white dark:bg-gray-800">
           <div v-if="streamingResponseContent" class="prose prose-sm dark:prose-invert" v-html="renderMarkdown(streamingResponseContent)"/>
           <div
             v-else-if="isCurrentlyStreaming"
@@ -178,7 +219,9 @@
             </a>
           </div>
         </div>
+                  <div v-if="streamingResponseContent" class="prose prose-sm dark:prose-invert" v-html="renderMarkdown(props.meesage)"/>
 
+ <component :id="'chat-'+messageId" :is="selectedComponent" :parsed="parsedData" />
         <!-- Artifacts (fallback) -->
         <div v-if="hasArtifacts && !isDaytonaActive" class="px-4 py-2">
           <div class="flex flex-wrap gap-2">
@@ -222,7 +265,8 @@
   import UserProxyComponent from '@/components/ChatMain/ResponseTypes/UserProxyComponent.vue'
   import SalesLeadComponent from '@/components/ChatMain/ResponseTypes/SalesLeadsComponent.vue'
   import EducationalComponent from '@/components/ChatMain/EducationalComponent.vue'
-    import StatusAnimationBox from '@/components/ChatMain/StatusAnimationBox.vue'
+  import StatusAnimationBox from '@/components/ChatMain/StatusAnimationBox.vue'
+  import AssistantEndComponent from '@/components/ChatMain/ResponseTypes/AssistantEndComponent.vue'
 
   
   import UnknownTypeComponent from '@/components/ChatMain/ResponseTypes/UnknownTypeComponent.vue'
@@ -232,6 +276,8 @@
   import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'
 import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue'
 import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue'
+  import FinancialAnalysisEndComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisEndComponent.vue'
+
 
 // Icons for streaming timeline
 import {
@@ -356,9 +402,18 @@ return parsedData.metadata;
   
   // Choose which sub-component to display based on agent_type
   const selectedComponent = computed(() => {
+
+
+    console.log("parsedData.value.agent_type",parsedData.value.agent_type)
     switch (parsedData.value.agent_type) {
+        case 'interrupt':
+        return AssistantEndComponent
+        //    case 'assistant':
+        // return AssistantEndComponent
       case 'assistant':
         return AssistantComponent
+          case 'react_end':
+        return AssistantEndComponent
       case 'educational_content':
         return EducationalComponent
       case 'user_proxy':
@@ -366,7 +421,11 @@ return parsedData.metadata;
       case 'sales_leads':
         return SalesLeadComponent
       case 'financial_analysis':
+
         return FinancialAnalysisComponent
+      case 'financial_analysis_end':
+          alert("financial_analysis_end")
+        return FinancialAnalysisEndComponent
       case 'deep_research':
         return DeepResearchComponent
       case 'error':
@@ -517,9 +576,9 @@ const currentStreamingStatus = computed(() => {
   if (!props.streamingEvents || props.streamingEvents.length === 0) {
     // For loaded conversations, show completion status if we have workflow data
     if (props.workflowData && props.workflowData.length > 0) {
-      return '✅ Response complete';
+      return 'Response complete';
     }
-    return '⏳ Starting...';
+    return 'Starting...';
   }
   
   const events = props.streamingEvents

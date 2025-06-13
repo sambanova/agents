@@ -657,7 +657,9 @@ async function filterChat(msgData) {
               return{
                 data:message.content,
                 event:"user_message",
-                agent_type:"user_message"
+                agent_type:"user_message",
+                  conversation_id: message.conversation_id,
+    timestamp:    message.timestamp || new Date().toISOString()
                 
               }
           //      return {
@@ -675,7 +677,12 @@ async function filterChat(msgData) {
         const isToolCall = message.content && typeof message.content === 'string' && message.content.includes('<tool>');
         const isToolResult = Array.isArray(message.content) || (message.additional_kwargs?.agent_type === 'react_tool');
         const isToolResponse = message.additional_kwargs?.agent_type === 'tool_response';
-        
+        const isFinalResponse =
+                        (message.additional_kwargs?.agent_type ?? "")
+                          .includes("_end")
+                        || (message.additional_kwargs?.agent_type ?? "")
+                          .includes("_interrupt");
+                              console.log("isFinalResponse",isFinalResponse);
         // For Daytona sandbox tool calls/results, always preserve them for sidebar processing
         const isDaytonaRelated = (isToolCall && message.content.includes('DaytonaCodeSandbox')) ||
                                  (message.type === 'LiberalFunctionMessage' && message.name === 'DaytonaCodeSandbox');
@@ -695,6 +702,10 @@ async function filterChat(msgData) {
             agent_type: message.additional_kwargs?.agent_type || 'tool'
           };
           
+        
+        if(isFinalResponse){
+          isLoading.value=false
+        }
           return {
             event: 'agent_completion',
             data: toolData,
@@ -708,17 +719,7 @@ async function filterChat(msgData) {
         
         // Only show user messages and final responses in main chat bubbles
         const isUserMessage = message.additional_kwargs?.agent_type === 'human';
-       const isFinalResponse =
-                        (message.additional_kwargs?.agent_type ?? "")
-                          .includes("_end")
-                        || (message.additional_kwargs?.agent_type ?? "")
-                          .includes("_interrupt");
-                              console.log("isFinalResponse",isFinalResponse);
-        
-
-                              if(isFinalResponse){
-                                isLoading.value=false
-                              }
+       
         
         if (!isUserMessage && !isFinalResponse) {
           // alert(message.content)
@@ -736,7 +737,7 @@ async function filterChat(msgData) {
             timestamp: message.timestamp || new Date().toISOString()
           };
         }
-        
+        alert(message.additional_kwargs?.agent_type)
         // For final responses, keep as agent_completion
         const messageContent = {
           content: message.content || '',
@@ -1879,10 +1880,13 @@ function formatMessageData(msgItem) {
       case 'agent_completion':
         // agent_completion events from LangGraph have structured data
         if (msgItem.data && typeof msgItem.data === 'object') {
+const rawType = msgItem.data.additional_kwargs?.agent_type
+             ?? msgItem.data.agent_type
+             ?? 'assistant';
           const formatted = {
             message: msgItem.data.content || '',
-            agent_type: msgItem.data.agent_type || 'assistant',
-            metadata: msgItem.data.response_metadata || null,
+  agent_type: rawType.includes('_interrupt') ? 'interrupt' : rawType,      
+        metadata: msgItem.data.response_metadata || null,
             additional_kwargs: msgItem.data.additional_kwargs || {},
             timestamp: msgItem.timestamp || new Date().toISOString(),
             type: msgItem.data.type || 'AIMessage',

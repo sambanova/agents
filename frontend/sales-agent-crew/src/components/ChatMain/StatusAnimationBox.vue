@@ -5,7 +5,8 @@
   >
     <!-- Top: sliding two-letter window over the title -->
     <div class="py-4 h-10 flex items-center overflow-hidden dark:text-white">
-      <span
+      <StatusText :text="title"/>
+      <!-- <span
         v-for="(char, idx) in textChars"
         :key="idx"
         :class="[
@@ -19,7 +20,7 @@
         ]"
       >
         {{ char }}
-      </span>
+      </span> -->
     </div>
 
  <div
@@ -42,7 +43,8 @@
 
 <script setup>
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
-
+import StatusText from '@/components/Common/StatusText.vue'
+ 
 const props = defineProps({
   title: {
     type: String,
@@ -59,7 +61,7 @@ const props = defineProps({
 })
 
 // Split title into characters
-const textChars = computed(() => props.title.split(''))
+// const textChars = computed(() => props.title.split(''))
 
 // Index for the two-letter window
 const pairIndex = ref(0)
