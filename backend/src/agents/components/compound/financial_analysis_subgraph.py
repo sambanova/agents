@@ -11,6 +11,7 @@ from agents.services.financial_user_prompt_extractor_service import (
     FinancialPromptExtractor,
 )
 from agents.storage.redis_service import SecureRedisService
+from agents.utils.logging_utils import setup_logging_context
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END
@@ -24,13 +25,12 @@ def create_financial_analysis_graph(redis_client: SecureRedisService):
     logger.info("Creating financial analysis subgraph")
 
     async def financial_analysis_node(messages, *, config: RunnableConfig = None):
+        setup_logging_context(config, node="financial_analysis")
 
         try:
             api_key = extract_api_key(config)
 
-            logger.info(
-                "Extracting financial info from prompt", node="financial_analysis"
-            )
+            logger.info("Extracting financial info from prompt")
             start_time = time.time()
             fextractor = FinancialPromptExtractor(
                 llm_api_key=api_key, provider="sambanova"
@@ -41,14 +41,13 @@ def create_financial_analysis_graph(redis_client: SecureRedisService):
             duration = time.time() - start_time
             logger.info(
                 "Financial info extraction completed",
-                node="financial_analysis",
                 duration_ms=round(duration * 1000, 2),
                 extracted_ticker=extracted_ticker,
                 extracted_company=extracted_company,
             )
 
             # Initialize crew
-            logger.info("Initializing FinancialAnalysisCrew", node="financial_analysis")
+            logger.info("Initializing FinancialAnalysisCrew")
             crew = FinancialAnalysisCrew(
                 llm_api_key=api_key,
                 provider="sambanova",
@@ -64,7 +63,6 @@ def create_financial_analysis_graph(redis_client: SecureRedisService):
 
             logger.info(
                 "Executing financial analysis crew",
-                node="financial_analysis",
                 inputs=inputs,
             )
             start_time = time.time()
@@ -72,7 +70,6 @@ def create_financial_analysis_graph(redis_client: SecureRedisService):
             duration = time.time() - start_time
             logger.info(
                 "Financial analysis crew execution completed",
-                node="financial_analysis",
                 duration_ms=round(duration * 1000, 2),
                 success=True,
             )
@@ -88,7 +85,6 @@ def create_financial_analysis_graph(redis_client: SecureRedisService):
         except Exception as e:
             logger.error(
                 "Financial analysis node failed",
-                node="financial_analysis",
                 error_type=type(e).__name__,
                 error_message=str(e),
                 exc_info=True,

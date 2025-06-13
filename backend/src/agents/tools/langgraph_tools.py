@@ -380,12 +380,20 @@ def _get_daytona(user_id: str):
                 # Ensure error detail is a string
                 daytona.remove(sandbox)
                 error_detail = result_str
+                logger.error(
+                    "Daytona code execution failed",
+                    exit_code=response.exit_code,
+                    error_detail=error_detail,
+                )
                 return f"Error (Exit Code {response.exit_code}): {error_detail}"
 
             # Debug: Check what we got from the response
-            logger.info(f"Response exit code: {response.exit_code}")
-            logger.info(f"Response result: {str(response.result)[:500]}...")
-            logger.info(f"Response artifacts: {response.artifacts}")
+            logger.info(
+                "Daytona response",
+                exit_code=response.exit_code,
+                result_preview=str(response.result)[:500],
+                artifacts=response.artifacts,
+            )
 
             # Use consistent timestamp for all generated files
             generation_timestamp = time.time()
@@ -396,7 +404,11 @@ def _get_daytona(user_id: str):
                 try:
                     file_id = str(uuid.uuid4())
                     content = sandbox.fs.download_file(filename)
-                    logger.info(f"Downloaded file {filename}: {len(content)} bytes")
+                    logger.info(
+                        "Downloaded file from sandbox",
+                        filename=filename,
+                        size_bytes=len(content),
+                    )
 
                     # Store in Redis for backup/download purposes
                     storage_service = get_global_redis_storage_service()
@@ -421,7 +433,12 @@ def _get_daytona(user_id: str):
                         # For non-image files, still use attachment reference
                         result_str += f"\n\n![{filename}](attachment:{file_id})"
                 except Exception as e:
-                    logger.error(f"Error downloading file {filename}: {e}")
+                    logger.error(
+                        "Error downloading file from sandbox",
+                        filename=filename,
+                        error=str(e),
+                        exc_info=True,
+                    )
 
             # Download all new files
             list_of_files_after_execution = sandbox.fs.list_files(".")
@@ -430,7 +447,11 @@ def _get_daytona(user_id: str):
                 if file.name not in list_of_files and mime_type in supported_extensions:
                     file_id = str(uuid.uuid4())
                     content = sandbox.fs.download_file(file.name)
-                    logger.info(f"Downloaded file {file.name}: {len(content)} bytes")
+                    logger.info(
+                        "Downloaded file from sandbox",
+                        filename=file.name,
+                        size_bytes=len(content),
+                    )
 
                     # Store in Redis for backup/download purposes
                     storage_service = get_global_redis_storage_service()
@@ -458,7 +479,8 @@ def _get_daytona(user_id: str):
             # Process charts from artifacts
             if hasattr(response.artifacts, "charts") and response.artifacts.charts:
                 logger.info(
-                    f"Processing {len(response.artifacts.charts)} charts from artifacts"
+                    "Processing charts from artifacts",
+                    num_charts=len(response.artifacts.charts),
                 )
                 for i, chart in enumerate(response.artifacts.charts):
                     image_id = str(uuid.uuid4())
@@ -489,23 +511,32 @@ def _get_daytona(user_id: str):
                                 f"\n\n![{title}](redis-chart:{image_id}:{user_id})"
                             )
                             logger.info(
-                                f"Successfully stored chart {i}: {title} with ID: {image_id}"
+                                "Successfully stored chart",
+                                chart_index=i,
+                                chart_title=title,
+                                image_id=image_id,
                             )
                         else:
-                            logger.info(f"Chart {i} has no PNG data")
+                            logger.info("Chart has no PNG data", chart_index=i)
                             result_str += f"\n\n**Chart Generated:** {title}"
                     except Exception as e:
-                        logger.error(f"Error storing chart {i}: {e}")
+                        logger.error(
+                            "Error storing chart",
+                            chart_index=i,
+                            error=str(e),
+                            exc_info=True,
+                        )
                         # Fallback to generic message
                         result_str += f"\n\n**Chart Generated:** {title}"
             else:
-                logger.info("No charts found in response.artifacts.charts")
+                logger.info("No charts found in response artifacts")
 
             # Clean up sandbox after processing everything
             daytona.remove(sandbox)
 
             return result_str
         except Exception as e:
+            logger.error("Daytona code execution failed", error=str(e), exc_info=True)
             return f"Error during Daytona code execution: {str(e)}"
 
     def sync_run_daytona_code_wrapper(code_to_run: str) -> str:

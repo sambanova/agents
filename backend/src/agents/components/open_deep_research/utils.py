@@ -100,9 +100,7 @@ def deduplicate_and_format_sources(
             raw_content = source.get("raw_content", "")
             if raw_content is None:
                 raw_content = ""
-                logger.warning(
-                    f"Warning: No raw_content found for source {source['url']}"
-                )
+                logger.warning("No raw_content found for source", url=source["url"])
             if len(raw_content) > char_limit:
                 raw_content = raw_content[:char_limit] + "... [truncated]"
             formatted_text += f"Full source content limited to {max_tokens_per_source} tokens: {raw_content}\n\n"
@@ -163,12 +161,14 @@ async def tavily_search_async(
     processed_results = []
     for i, result in enumerate(search_docs):
         if isinstance(result, Exception):
-            logger.error(f"Error in search query {i}: {str(result)}")
+            logger.error(
+                "Error in Tavily search query",
+                query=search_queries[i],
+                error=str(result),
+            )
             # Try fallback to perplexity if tavily fails
             try:
-                logger.info(
-                    f"Falling back to Perplexity for query: {search_queries[i]}"
-                )
+                logger.info("Falling back to Perplexity", query=search_queries[i])
                 perplexity_result = perplexity_search([search_queries[i]], key_rotator)[
                     0
                 ]
@@ -203,15 +203,12 @@ async def _tavily_search_with_retry(
             result = await client.search(
                 query, max_results=5, include_raw_content=True, topic="general"
             )
-            elapsed_time = time.time() - start_time
-            if elapsed_time > 10:
-                logger.warning(
-                    f"Deep Research - Tavily search took {elapsed_time:.2f} seconds for query: {query}"
-                )
-            else:
-                logger.info(
-                    f"Deep Research - Tavily search took {elapsed_time:.2f} seconds for query: {query}"
-                )
+            duration = time.time() - start_time
+            logger.info(
+                "Tavily search completed",
+                duration_ms=round(duration * 1000, 2),
+                query=query,
+            )
 
             return result
 
@@ -220,7 +217,10 @@ async def _tavily_search_with_retry(
             status_code = e.response.status_code
             if status_code == 502 and attempt < max_retries:
                 logger.warning(
-                    f"Tavily 502 Bad Gateway error (attempt {attempt+1}/{max_retries+1}): {e}"
+                    "Tavily 502 Bad Gateway error, retrying...",
+                    attempt=attempt + 1,
+                    max_retries=max_retries,
+                    error=str(e),
                 )
                 await asyncio.sleep(attempt + 1)
                 # Try with a different API key
@@ -228,11 +228,16 @@ async def _tavily_search_with_retry(
                 client = AsyncTavilyClient(api_key=api_key)
             else:
                 # For other status codes or if we've exhausted retries, raise the exception
-                logger.error(f"Tavily HTTP error: {status_code} - {e}")
+                logger.error(
+                    "Tavily HTTP error",
+                    status_code=status_code,
+                    error=str(e),
+                    exc_info=True,
+                )
                 raise
         except Exception as e:
             # For all other exceptions, log and raise immediately without retry
-            logger.error(f"Tavily error (non-HTTP status error): {str(e)}")
+            logger.error("Tavily search error", error=str(e), exc_info=True)
             raise
 
 

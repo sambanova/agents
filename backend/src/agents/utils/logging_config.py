@@ -45,6 +45,7 @@ def configure_logging(environment: str = "prod"):
     # === Configure structlog ===
     structlog.configure(
         processors=[
+            structlog.contextvars.merge_contextvars,
             structlog.stdlib.add_log_level,
             structlog.processors.TimeStamper(fmt="iso", key="@timestamp"),
             structlog.processors.StackInfoRenderer(),

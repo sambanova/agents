@@ -8,6 +8,7 @@ import structlog
 from agents.components.compound.data_types import LiberalFunctionMessage, LLMType
 from agents.components.compound.prompts import xml_template
 from agents.components.compound.util import extract_api_key
+from agents.utils.logging_utils import setup_logging_context
 from langchain.tools import BaseTool
 from langchain.tools.render import render_text_description
 from langchain_core.language_models.base import LanguageModelLike
@@ -249,6 +250,8 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
 
     # Create agent node that extracts api_key from config
     async def agent_node(messages, *, config: RunnableConfig = None):
+        setup_logging_context(config, node="agent")
+        logger.info("Agent node execution started", num_messages=len(messages))
         api_key = extract_api_key(config)
 
         # Call your LLM partial with api_key
@@ -290,14 +293,13 @@ Make sure to include both opening and closing tags for both tool and tool_input.
 
         try:
             start_time = time.time()
-            logger.info("Invoking LLM", node="agent")
+            logger.info("Invoking LLM")
             response = await llm_with_stop.ainvoke(processed_messages, config)
             duration = time.time() - start_time
             logger.info(
                 "LLM invocation completed",
-                node="agent",
                 duration_ms=round(duration * 1000, 2),
-                model=llm_with_stop.model
+                model=llm_with_stop.model,
             )
 
             # Post-process response to catch potential formatting issues
@@ -377,7 +379,9 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             return "end"
 
     # Define the function to execute tools
-    async def call_tool(messages):
+    async def call_tool(messages, *, config: RunnableConfig = None):
+        setup_logging_context(config, node="tool_action")
+        logger.info("Tool action started")
         last_message = messages[-1]
         content = last_message.content
 
@@ -388,7 +392,6 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 error_msg = "Error: Malformed tool call - missing </tool> tag"
                 logger.warning(
                     "Malformed tool call",
-                    node="tool_action",
                     error=error_msg,
                     content=content,
                 )
@@ -408,7 +411,6 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 error_msg = "Error: Could not parse tool call - invalid format"
                 logger.warning(
                     "Could not parse tool call",
-                    node="tool_action",
                     error=error_msg,
                     content=content,
                 )
@@ -429,7 +431,6 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 error_msg = "Error: Missing <tool> tag in tool call"
                 logger.warning(
                     "Missing tool tag",
-                    node="tool_action",
                     error=error_msg,
                     content=content,
                 )
@@ -462,7 +463,6 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 error_msg = "Error: Empty tool name provided"
                 logger.warning(
                     "Empty tool name",
-                    node="tool_action",
                     error=error_msg,
                     content=content,
                 )
@@ -482,7 +482,6 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             )
             logger.info(
                 "Executing tool",
-                node="tool_action",
                 tool_name=_tool,
                 tool_input=_tool_input,
             )
@@ -493,9 +492,9 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 duration = time.time() - start_time
                 logger.info(
                     "Tool execution completed",
-                    node="tool_action",
                     tool_name=_tool,
                     duration_ms=round(duration * 1000, 2),
+                    success=True,
                 )
 
                 # Handle cases where response might be malformed or too large
@@ -509,7 +508,6 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 error_msg = f"Error executing tool '{_tool}': {str(e)}"
                 logger.error(
                     "Tool execution failed",
-                    node="tool_action",
                     tool_name=_tool,
                     error_type=type(e).__name__,
                     error_message=str(e),
@@ -543,7 +541,6 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             error_msg = f"Unexpected error parsing tool call: {str(e)}"
             logger.error(
                 "Unexpected error parsing tool call",
-                node="tool_action",
                 error_type=type(e).__name__,
                 error_message=str(e),
                 exc_info=True,
@@ -566,6 +563,10 @@ Make sure to include both opening and closing tags for both tool and tool_input.
         subgraph,
     ):
         async def subgraph_entry_node(messages, *, config: RunnableConfig = None):
+            setup_logging_context(
+                config, node=f"subgraph_{subgraph_name}", subgraph_name=subgraph_name
+            )
+            logger.info("Subgraph node started")
             last_message = messages[-1]
             # Parse subgraph input
             content = last_message.content
@@ -579,38 +580,19 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                     subgraph_input = subgraph_input_part
 
             subgraph_messages = state_input_mapper(subgraph_input)
-
             logger.info(
                 "Invoking subgraph",
-                node=f"subgraph_{subgraph_name}",
-                subgraph_name=subgraph_name,
             )
             # Execute subgraph with the same config (for proper state management)
             # For MessageGraph, pass messages directly, not wrapped in a dict
             start_time = time.time()
-            try:
-                result = await subgraph.ainvoke(subgraph_messages, config)
-                duration = time.time() - start_time
-                logger.info(
-                    "Subgraph invocation completed",
-                    node=f"subgraph_{subgraph_name}",
-                    subgraph_name=subgraph_name,
-                    duration_ms=round(duration * 1000, 2),
-                    success=True,
-                )
-            except Exception as e:
-                duration = time.time() - start_time
-                logger.error(
-                    "Subgraph invocation failed",
-                    node=f"subgraph_{subgraph_name}",
-                    subgraph_name=subgraph_name,
-                    error_type=type(e).__name__,
-                    error_message=str(e),
-                    duration_ms=round(duration * 1000, 2),
-                    success=False,
-                    exc_info=True,
-                )
-                raise
+            result = await subgraph.ainvoke(subgraph_messages, config)
+            duration = time.time() - start_time
+            logger.info(
+                "Subgraph invocation completed",
+                duration_ms=round(duration * 1000, 2),
+                success=True,
+            )
 
             return state_output_mapper(result)
 
