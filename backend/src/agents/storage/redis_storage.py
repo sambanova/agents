@@ -1,13 +1,13 @@
 import base64
-from datetime import datetime, timezone
 import json
-import asyncio
 import time
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
+import structlog
 from agents.api.data_types import APIKeys
 from agents.storage.redis_service import SecureRedisService
-from agents.utils.logging import logger
+
+logger = structlog.get_logger(__name__)
 
 
 class RedisStorage:

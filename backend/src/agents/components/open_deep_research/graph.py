@@ -1,57 +1,50 @@
 import functools
-import time
-from typing import Literal, List, Optional, Tuple, Any
 import re
+import time
+from typing import Any, List, Literal, Optional, Tuple
+
 import requests
+import structlog
 
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-from langchain_core.runnables import RunnableConfig
-from langchain_fireworks import ChatFireworks
-
-from langgraph.constants import Send
-from langgraph.graph import START, END, StateGraph
-from langgraph.types import interrupt, Command
-
-from agents.utils.custom_sambanova import CustomChatSambaNovaCloud
-from agents.registry.model_registry import model_registry
-
+# We import our data models
+from agents.api.data_types import DeepCitation, DeepResearchReport, DeepResearchSection
+from agents.components.open_deep_research.configuration import Configuration, SearchAPI
+from agents.components.open_deep_research.prompts import (
+    final_section_writer_instructions,
+    query_writer_instructions,
+    report_planner_instructions,
+    report_planner_query_writer_instructions,
+    section_grader_instructions,
+    section_writer_instructions,
+)
 from agents.components.open_deep_research.state import (
+    Feedback,
+    Queries,
+    ReportState,
     ReportStateInput,
     ReportStateOutput,
-    Sections,
-    ReportState,
-    SectionState,
-    SectionOutputState,
-    Queries,
-    Feedback,
     Section,
+    SectionOutputState,
+    Sections,
+    SectionState,
 )
-from .prompts import (
-    report_planner_query_writer_instructions,
-    report_planner_instructions,
-    query_writer_instructions,
-    section_writer_instructions,
-    final_section_writer_instructions,
-    section_grader_instructions,
-)
-from .configuration import Configuration, SearchAPI
-from .utils import (
-    tavily_search_async,
+from agents.components.open_deep_research.utils import (
     deduplicate_and_format_sources,
     format_sections,
     perplexity_search,
+    tavily_search_async,
 )
+from agents.registry.model_registry import model_registry
+from agents.utils.custom_sambanova import CustomChatSambaNovaCloud
+from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig, RunnableLambda
+from langchain_fireworks import ChatFireworks
+from langgraph.constants import Send
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command, interrupt
 
-# We import our data models
-from agents.api.data_types import DeepResearchReport, DeepResearchSection, DeepCitation
-
-from langchain.output_parsers import (
-    OutputFixingParser,
-    PydanticOutputParser,
-)
-
-from agents.utils.logging import logger
-from langchain_core.runnables import RunnableLambda
+logger = structlog.get_logger(__name__)
 
 
 class MessageInterceptor:

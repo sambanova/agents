@@ -1,24 +1,19 @@
-import os
-from typing import Dict, Any, List, Optional, Tuple, Union
-from agents.storage.redis_service import SecureRedisService
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from agents.components.crewai_llm import CustomLLM
+from agents.registry.model_registry import model_registry
 from agents.services.structured_output_parser import CustomConverter
-
-# crewai imports
-from crewai import Agent, Task, Crew, Process
-from agents.utils.agent_thought import RedisConversationLogger
-from crewai_tools import SerperDevTool
+from agents.storage.redis_service import SecureRedisService
 from agents.tools.competitor_analysis_tool import competitor_analysis_tool
 from agents.tools.fundamental_analysis_tool import fundamental_analysis_tool
-from agents.tools.technical_analysis_tool import yf_tech_analysis
 from agents.tools.risk_assessment_tool import risk_assessment_tool
-from agents.registry.model_registry import model_registry
+from agents.tools.technical_analysis_tool import yf_tech_analysis
+from agents.utils.agent_thought import RedisConversationLogger
 
-
-###################### NEWS MODELS & (SERPER) WRAPPER ######################
-from pydantic import BaseModel, Field
-from pydantic import field_validator
+# crewai imports
+from crewai import Agent, Crew, Process, Task
+from crewai_tools import SerperDevTool
+from pydantic import BaseModel, Field, field_validator
 
 
 class NewsItem(BaseModel):

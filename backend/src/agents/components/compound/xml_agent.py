@@ -1,6 +1,11 @@
+import asyncio
+import os
 from datetime import datetime, timezone
-from typing import Callable, Any, Dict, List, Optional
-from agents.components.compound.data_types import LLMType
+from typing import Any, Callable, Dict, List, Optional
+
+import structlog
+from agents.components.compound.data_types import LiberalFunctionMessage, LLMType
+from agents.components.compound.prompts import xml_template
 from agents.components.compound.util import extract_api_key
 from langchain.tools import BaseTool
 from langchain.tools.render import render_text_description
@@ -11,19 +16,15 @@ from langchain_core.messages import (
     HumanMessage,
     SystemMessage,
 )
+from langchain_core.runnables import Runnable, RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.redis import AsyncRedisSaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import END
 from langgraph.graph.message import MessageGraph
-from agents.components.compound.prompts import xml_template
-from agents.components.compound.data_types import LiberalFunctionMessage
-from langchain_core.runnables import RunnableConfig, Runnable
-import os
-import asyncio
-from langgraph.checkpoint.redis import AsyncRedisSaver
-from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
-from agents.utils.logging import logger
+logger = structlog.get_logger(__name__)
 
 
 # TODO: This is a temporary fix to get the checkpoint working. Remove this once we have a proper fix.

@@ -1,128 +1,206 @@
 import asyncio
-from datetime import datetime, timezone
-import time
-from typing import Dict, Any, Optional
 import json
-from fastapi import WebSocket
+import re  # Added for quick pattern matching to detect multiple companies
+import time
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
+
 import aiohttp
-from pydantic import BaseModel
 import redis
 import requests
-from fastapi.websockets import WebSocketState
-import re  # Added for quick pattern matching to detect multiple companies
-
+import structlog
 from agents.api.websocket_interface import WebSocketInterface
-from agents.utils.json_utils import extract_json_from_string
 from agents.registry.model_registry import model_registry
-from agents.utils.logging import logger
+from agents.utils.json_utils import extract_json_from_string
+from fastapi import WebSocket
+from fastapi.websockets import WebSocketState
+from pydantic import BaseModel
+
+logger = structlog.get_logger(__name__)
+
 
 class QueryType(BaseModel):
     # Possible types: "sales_leads", "educational_content", "financial_analysis", or "deep_research"
     type: str
     parameters: Dict[str, Any]
 
+
 # Keep this for backwards compatibility
 class QueryRouterService:
     def __init__(self, sambanova_key: str):
         self.sambanova_key = sambanova_key
         self.api_url = "https://api.sambanova.ai/v1/chat/completions"
-        
+
         # Expanded / refined keywords for educational content (including some "report", "compare", etc.)
         self.edu_keywords = [
-            "explain", "guide", "learn", "teach", "understand", "what is",
-            "how does", "tutorial", "course", "education", "training",
-            "concepts", "fundamentals", "basics", "advanced", "intermediate",
-            "beginner", "introduction", "deep dive", "overview", "study",
-            "technology", "architecture", "design", "implementation",
-            "comparison", "compare", "comparing", "performance", "methodology",
-            "framework", "system", "protocol", "algorithm", "mechanism",
-            "theory", "principle", "structure", "process",
+            "explain",
+            "guide",
+            "learn",
+            "teach",
+            "understand",
+            "what is",
+            "how does",
+            "tutorial",
+            "course",
+            "education",
+            "training",
+            "concepts",
+            "fundamentals",
+            "basics",
+            "advanced",
+            "intermediate",
+            "beginner",
+            "introduction",
+            "deep dive",
+            "overview",
+            "study",
+            "technology",
+            "architecture",
+            "design",
+            "implementation",
+            "comparison",
+            "compare",
+            "comparing",
+            "performance",
+            "methodology",
+            "framework",
+            "system",
+            "protocol",
+            "algorithm",
+            "mechanism",
+            "theory",
+            "principle",
+            "structure",
+            "process",
             # Newly added cues for research/educational style requests:
-            "report", "tell me about", "describe", "differences", "similarities"
+            "report",
+            "tell me about",
+            "describe",
+            "differences",
+            "similarities",
         ]
-        
+
         # Sales leads keywords
         self.sales_keywords = [
-            "find", "search", "companies", "startups", "leads", "vendors",
-            "identify", "discover", "list", "funding", "funded", "investors",
-            "market research", "competitors", "industry", "geography",
-            "series", "seed", "venture", "investment", "firm", "corporation",
-            "business", "enterprise", "provider", "supplier", "manufacturer"
+            "find",
+            "search",
+            "companies",
+            "startups",
+            "leads",
+            "vendors",
+            "identify",
+            "discover",
+            "list",
+            "funding",
+            "funded",
+            "investors",
+            "market research",
+            "competitors",
+            "industry",
+            "geography",
+            "series",
+            "seed",
+            "venture",
+            "investment",
+            "firm",
+            "corporation",
+            "business",
+            "enterprise",
+            "provider",
+            "supplier",
+            "manufacturer",
         ]
 
         # Financial keywords - removing generic "analysis" to avoid over-triggering
         self.financial_keywords = [
             "stock",
-            "fundamental analysis", 
-            "technical analysis", 
-            "price target", 
-            "investment strategy", 
+            "fundamental analysis",
+            "technical analysis",
+            "price target",
+            "investment strategy",
             "ticker",
             "financial analysis",
-            "ratios", 
-            "eps", 
-            "balance sheet", 
+            "ratios",
+            "eps",
+            "balance sheet",
             "income statement",
             "market cap",
-            "valuation"
+            "valuation",
         ]
 
         # Additional phrases for override
         self.override_phrases = [
             "fundamental analysis",
             "technical analysis",
-            "fundamental & technical analysis"
+            "fundamental & technical analysis",
         ]
 
         # A small set of known big company names to help push "analysis" queries to financial
         self.known_big_companies = [
-            "google", "amazon", "apple", "tesla", "microsoft", "netflix",
-            "meta", "alphabet", "nvidia", "amd", "intel"
+            "google",
+            "amazon",
+            "apple",
+            "tesla",
+            "microsoft",
+            "netflix",
+            "meta",
+            "alphabet",
+            "nvidia",
+            "amd",
+            "intel",
         ]
         # Tickers for some known big companies
         self.known_tickers = [
-            "goog", "googl", "amzn", "aapl", "tsla", "msft",
-            "nflx", "meta", "nvda", "amd", "intc"
+            "goog",
+            "googl",
+            "amzn",
+            "aapl",
+            "tsla",
+            "msft",
+            "nflx",
+            "meta",
+            "nvda",
+            "amd",
+            "intc",
         ]
 
     def _get_default_response(self, detected_type: str) -> str:
         """Return a default structured JSON string based on the detected type."""
         if detected_type == "educational_content":
-            return json.dumps({
-                "type": "educational_content",
-                "parameters": {
-                    "topic": "",
-                    "audience_level": "intermediate",
-                    "focus_areas": ["key concepts", "practical applications"]
+            return json.dumps(
+                {
+                    "type": "educational_content",
+                    "parameters": {
+                        "topic": "",
+                        "audience_level": "intermediate",
+                        "focus_areas": ["key concepts", "practical applications"],
+                    },
                 }
-            })
+            )
         elif detected_type == "financial_analysis":
-            return json.dumps({
-                "type": "financial_analysis",
-                "parameters": {
-                    "query_text": "",
-                    "ticker": "",
-                    "company_name": ""
+            return json.dumps(
+                {
+                    "type": "financial_analysis",
+                    "parameters": {"query_text": "", "ticker": "", "company_name": ""},
                 }
-            })
+            )
         elif detected_type == "deep_research":
-            return json.dumps({
-                "type": "deep_research",
-                "parameters": {
-                    "deep_research_topic": ""
-                }
-            })
+            return json.dumps(
+                {"type": "deep_research", "parameters": {"deep_research_topic": ""}}
+            )
         # else, fallback => sales
-        return json.dumps({
-            "type": "sales_leads",
-            "parameters": {
-                "industry": "",
-                "company_stage": "",
-                "geography": "",
-                "funding_stage": "",
-                "product": ""
+        return json.dumps(
+            {
+                "type": "sales_leads",
+                "parameters": {
+                    "industry": "",
+                    "company_stage": "",
+                    "geography": "",
+                    "funding_stage": "",
+                    "product": "",
+                },
             }
-        })
+        )
 
     def _normalize_educational_params(self, params: Dict) -> Dict:
         """Normalize educational content parameters with safe defaults."""
@@ -140,7 +218,7 @@ class QueryRouterService:
         return {
             "topic": params.get("topic", ""),
             "audience_level": audience_level,
-            "focus_areas": focus_areas
+            "focus_areas": focus_areas,
         }
 
     def _normalize_sales_params(self, params: Dict) -> Dict:
@@ -150,22 +228,20 @@ class QueryRouterService:
             "company_stage": params.get("company_stage", ""),
             "geography": params.get("geography", ""),
             "funding_stage": params.get("funding_stage", ""),
-            "product": params.get("product", "")
+            "product": params.get("product", ""),
         }
 
     def _normalize_financial_params(self, params: Dict) -> Dict:
         """Normalize financial analysis parameters with safe defaults."""
         return {
-            "query_text": params.get("query_text",""),
-            "ticker": params.get("ticker",""),
-            "company_name": params.get("company_name","")
+            "query_text": params.get("query_text", ""),
+            "ticker": params.get("ticker", ""),
+            "company_name": params.get("company_name", ""),
         }
 
     def _normalize_deep_research_params(self, params: Dict) -> Dict:
         """Normalize deep research parameters with safe defaults."""
-        return {
-            "deep_research_topic": params.get("deep_research_topic", "")
-        }
+        return {"deep_research_topic": params.get("deep_research_topic", "")}
 
     def _detect_query_type(self, query: str) -> str:
         """
@@ -188,12 +264,16 @@ class QueryRouterService:
             return "deep_research"
 
         # Also check if the user specifically requests "X companies" => deep_research
-        num_companies_match = re.search(r'(\d+)\s+companies', query_lower)
+        num_companies_match = re.search(r"(\d+)\s+companies", query_lower)
         if num_companies_match:
             return "deep_research"
 
         # Quick check if the user explicitly references multiple known big companies/tickers
-        count_known_cos = sum(1 for co in self.known_big_companies + self.known_tickers if co in query_lower)
+        count_known_cos = sum(
+            1
+            for co in self.known_big_companies + self.known_tickers
+            if co in query_lower
+        )
         # If more than 1 recognized => deep_research
         if count_known_cos > 1:
             return "deep_research"
@@ -204,17 +284,27 @@ class QueryRouterService:
 
         # 2) Tally normal keywords (but remove "analysis" from direct financial scoring)
         edu_score = sum(1 for keyword in self.edu_keywords if keyword in query_lower)
-        sales_score = sum(1 for keyword in self.sales_keywords if keyword in query_lower)
-        fin_score = sum(1 for keyword in self.financial_keywords if keyword in query_lower)
+        sales_score = sum(
+            1 for keyword in self.sales_keywords if keyword in query_lower
+        )
+        fin_score = sum(
+            1 for keyword in self.financial_keywords if keyword in query_lower
+        )
 
-        # 3) Special logic for the words 'analysis' or 'analyze' 
+        # 3) Special logic for the words 'analysis' or 'analyze'
         #    => check if they appear alongside strong finance signals
-        if ("analysis" in query_lower or "analyze" in query_lower):
+        if "analysis" in query_lower or "analyze" in query_lower:
             # If user also mentions known big cos, tickers, or finance words like 'stock'
             # or explicit finance terms, treat as finance:
-            if any(big_co in query_lower for big_co in self.known_big_companies + self.known_tickers):
+            if any(
+                big_co in query_lower
+                for big_co in self.known_big_companies + self.known_tickers
+            ):
                 fin_score += 5  # strongly finance
-            elif any(x in query_lower for x in ["stock", "price target", "investment strategy"]):
+            elif any(
+                x in query_lower
+                for x in ["stock", "price target", "investment strategy"]
+            ):
                 fin_score += 5  # strongly finance
             # If none of these appear, do NOT boost finance
 
@@ -227,7 +317,7 @@ class QueryRouterService:
 
     def _final_override(self, user_query: str, chosen_type: str) -> str:
         """
-        If user query explicitly mentions certain override phrases 
+        If user query explicitly mentions certain override phrases
         (like 'fundamental analysis' or 'technical analysis'),
         we force 'financial_analysis'.
 
@@ -256,12 +346,16 @@ class QueryRouterService:
                 return "deep_research"
 
             # Also check if user says "X companies"
-            num_companies_match = re.search(r'(\d+)\s+companies', qlower)
+            num_companies_match = re.search(r"(\d+)\s+companies", qlower)
             if num_companies_match:
                 return "deep_research"
 
             # If multiple known big cos are recognized
-            count_known_cos = sum(1 for co in self.known_big_companies + self.known_tickers if co in qlower)
+            count_known_cos = sum(
+                1
+                for co in self.known_big_companies + self.known_tickers
+                if co in qlower
+            )
             if count_known_cos > 1:
                 return "deep_research"
 
@@ -273,30 +367,30 @@ class QueryRouterService:
         """
         headers = {
             "Authorization": f"Bearer {self.sambanova_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
-        
+
         payload = {
             "model": "Meta-Llama-3.1-8B-Instruct",
             "messages": [
                 {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message}
+                {"role": "user", "content": user_message},
             ],
             "temperature": 0.0,
-            "stream": False
+            "stream": False,
         }
 
         try:
             response = requests.post(self.api_url, headers=headers, json=payload)
             response.raise_for_status()
             json_response = response.json()
-            
+
             if "choices" not in json_response or len(json_response["choices"]) == 0:
                 return self._get_default_response(self._detect_query_type(user_message))
 
             content = json_response["choices"][0]["message"]["content"].strip()
             return content.replace("```json", "").replace("```", "").strip()
-            
+
         except Exception as e:
             print(f"Error calling LLM: {str(e)}")
             return self._get_default_response(self._detect_query_type(user_message))
@@ -311,7 +405,7 @@ class QueryRouterService:
           5) Final override check
         """
         detected_type = self._detect_query_type(query)
-        
+
         system_message = f"""
         You are a query routing expert that categorizes queries and extracts structured information.
         Always return a valid JSON object with 'type' and 'parameters'.
@@ -473,7 +567,7 @@ class QueryRouterService:
             parsed_result["type"] = final_type
 
             return QueryType(**parsed_result)
-            
+
         except json.JSONDecodeError as e:
             print(f"[route_query] JSON decode error: {str(e)}")
             # fallback if LLM fails
@@ -508,60 +602,135 @@ class QueryRouterServiceChat:
 
         # Expanded / refined keywords for educational content (including some "report", "compare", etc.)
         self.edu_keywords = [
-            "explain", "guide", "learn", "teach", "understand", "what is",
-            "how does", "tutorial", "course", "education", "training",
-            "concepts", "fundamentals", "basics", "advanced", "intermediate",
-            "beginner", "introduction", "deep dive", "overview", "study",
-            "technology", "architecture", "design", "implementation",
-            "comparison", "compare", "comparing", "performance", "methodology",
-            "framework", "system", "protocol", "algorithm", "mechanism",
-            "theory", "principle", "structure", "process",
+            "explain",
+            "guide",
+            "learn",
+            "teach",
+            "understand",
+            "what is",
+            "how does",
+            "tutorial",
+            "course",
+            "education",
+            "training",
+            "concepts",
+            "fundamentals",
+            "basics",
+            "advanced",
+            "intermediate",
+            "beginner",
+            "introduction",
+            "deep dive",
+            "overview",
+            "study",
+            "technology",
+            "architecture",
+            "design",
+            "implementation",
+            "comparison",
+            "compare",
+            "comparing",
+            "performance",
+            "methodology",
+            "framework",
+            "system",
+            "protocol",
+            "algorithm",
+            "mechanism",
+            "theory",
+            "principle",
+            "structure",
+            "process",
             # Newly added cues for research/educational style requests:
-            "report", "tell me about", "describe", "differences", "similarities"
+            "report",
+            "tell me about",
+            "describe",
+            "differences",
+            "similarities",
         ]
 
         # Sales leads keywords
         self.sales_keywords = [
-            "find", "search", "companies", "startups", "leads", "vendors",
-            "identify", "discover", "list", "funding", "funded", "investors",
-            "market research", "competitors", "industry", "geography",
-            "series", "seed", "venture", "investment", "firm", "corporation",
-            "business", "enterprise", "provider", "supplier", "manufacturer"
+            "find",
+            "search",
+            "companies",
+            "startups",
+            "leads",
+            "vendors",
+            "identify",
+            "discover",
+            "list",
+            "funding",
+            "funded",
+            "investors",
+            "market research",
+            "competitors",
+            "industry",
+            "geography",
+            "series",
+            "seed",
+            "venture",
+            "investment",
+            "firm",
+            "corporation",
+            "business",
+            "enterprise",
+            "provider",
+            "supplier",
+            "manufacturer",
         ]
 
         # Financial keywords - removing generic "analysis" to avoid over-triggering
         self.financial_keywords = [
             "stock",
-            "fundamental analysis", 
-            "technical analysis", 
-            "price target", 
-            "investment strategy", 
+            "fundamental analysis",
+            "technical analysis",
+            "price target",
+            "investment strategy",
             "ticker",
             "financial analysis",
-            "ratios", 
-            "eps", 
-            "balance sheet", 
+            "ratios",
+            "eps",
+            "balance sheet",
             "income statement",
             "market cap",
-            "valuation"
+            "valuation",
         ]
 
         # Additional phrases for override
         self.override_phrases = [
             "fundamental analysis",
             "technical analysis",
-            "fundamental & technical analysis"
+            "fundamental & technical analysis",
         ]
 
         # A small set of known big company names to help push "analysis" queries to financial
         self.known_big_companies = [
-            "google", "amazon", "apple", "tesla", "microsoft", "netflix",
-            "meta", "alphabet", "nvidia", "amd", "intel"
+            "google",
+            "amazon",
+            "apple",
+            "tesla",
+            "microsoft",
+            "netflix",
+            "meta",
+            "alphabet",
+            "nvidia",
+            "amd",
+            "intel",
         ]
         # Tickers for some known big companies
         self.known_tickers = [
-            "goog", "googl", "amzn", "aapl", "tsla", "msft",
-            "nflx", "meta", "nvda", "amd", "intc"
+            "goog",
+            "googl",
+            "amzn",
+            "aapl",
+            "tsla",
+            "msft",
+            "nflx",
+            "meta",
+            "nvda",
+            "amd",
+            "intc",
         ]
 
     @staticmethod
@@ -576,7 +745,7 @@ class QueryRouterServiceChat:
 
     def _detect_query_type(self, query: str) -> str:
         """
-        Score-based approach for edu, sales, finance, with some logic 
+        Score-based approach for edu, sales, finance, with some logic
         for multi-company or specialized triggers => deep_research,
         but this short version is typically overshadowed by the LLM route in practice.
         """
@@ -588,14 +757,24 @@ class QueryRouterServiceChat:
 
         # Tally normal keywords
         edu_score = sum(1 for keyword in self.edu_keywords if keyword in query_lower)
-        sales_score = sum(1 for keyword in self.sales_keywords if keyword in query_lower)
-        fin_score = sum(1 for keyword in self.financial_keywords if keyword in query_lower)
+        sales_score = sum(
+            1 for keyword in self.sales_keywords if keyword in query_lower
+        )
+        fin_score = sum(
+            1 for keyword in self.financial_keywords if keyword in query_lower
+        )
 
         # Additional check if "analysis"/"analyze" plus big co/ticker => finance
-        if ("analysis" in query_lower or "analyze" in query_lower):
-            if any(big_co in query_lower for big_co in self.known_big_companies + self.known_tickers):
+        if "analysis" in query_lower or "analyze" in query_lower:
+            if any(
+                big_co in query_lower
+                for big_co in self.known_big_companies + self.known_tickers
+            ):
                 fin_score += 5
-            elif any(x in query_lower for x in ["stock", "price target", "investment strategy"]):
+            elif any(
+                x in query_lower
+                for x in ["stock", "price target", "investment strategy"]
+            ):
                 fin_score += 5
 
         # Basic fallback
@@ -611,17 +790,19 @@ class QueryRouterServiceChat:
         """
         headers = {
             "Authorization": f"Bearer {self.llm_api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
         payload = {
-            "model": model_registry.get_model_info(model_key=self.model_name, provider=self.provider)["model"],
+            "model": model_registry.get_model_info(
+                model_key=self.model_name, provider=self.provider
+            )["model"],
             "messages": [
                 {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message}
+                {"role": "user", "content": user_message},
             ],
             "temperature": 0.0,
-            "stream": True
+            "stream": True,
         }
 
         # If we have a websocket, send the response to the client
@@ -629,7 +810,7 @@ class QueryRouterServiceChat:
             "llm_name": payload["model"],
             "llm_provider": self.provider,
             "task": "planning",
-        }   
+        }
         planner_event = {
             "event": "planner",
             "data": json.dumps({"metadata": planner_metadata}),
@@ -638,11 +819,20 @@ class QueryRouterServiceChat:
             "message_id": self.message_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-        await self.websocket_manager.send_message(self.user_id, self.conversation_id, planner_event)
+        await self.websocket_manager.send_message(
+            self.user_id, self.conversation_id, planner_event
+        )
 
-        api_url = model_registry.get_model_info(model_key=self.model_name, provider=self.provider)["long_url"]
+        api_url = model_registry.get_model_info(
+            model_key=self.model_name, provider=self.provider
+        )["long_url"]
 
-        logger.info(logger.format_message(f"{self.user_id}:{self.conversation_id}", f"QueryRouterServiceChat calling {api_url}"))
+        logger.info(
+            logger.format_message(
+                f"{self.user_id}:{self.conversation_id}",
+                f"QueryRouterServiceChat calling {api_url}",
+            )
+        )
 
         start_time = time.time()
         async with aiohttp.ClientSession() as session:
@@ -650,12 +840,16 @@ class QueryRouterServiceChat:
             async with session.post(api_url, headers=headers, json=payload) as response:
                 response.raise_for_status()
                 async for line in response.content:
-                    line = line.decode('utf-8').strip()
-                    if line.startswith('data: '):
+                    line = line.decode("utf-8").strip()
+                    if line.startswith("data: "):
                         try:
-                            json_response = json.loads(line.removeprefix('data: '))
-                            if json_response.get("choices") and json_response["choices"][0].get("delta", {}).get("content"):
-                                content = json_response["choices"][0]["delta"]["content"]
+                            json_response = json.loads(line.removeprefix("data: "))
+                            if json_response.get("choices") and json_response[
+                                "choices"
+                            ][0].get("delta", {}).get("content"):
+                                content = json_response["choices"][0]["delta"][
+                                    "content"
+                                ]
                                 accumulated_content += content
                                 # Send streaming update
                                 stream_data = {
@@ -663,16 +857,28 @@ class QueryRouterServiceChat:
                                     "data": content,
                                     "message_id": self.message_id,
                                 }
-                                await self.websocket_manager.send_message(self.user_id, self.conversation_id, stream_data)
+                                await self.websocket_manager.send_message(
+                                    self.user_id, self.conversation_id, stream_data
+                                )
                         except json.JSONDecodeError:
                             continue
 
         end_time = time.time()
         processing_time = end_time - start_time
         if processing_time > 10:
-            logger.warning(logger.format_message(f"{self.user_id}:{self.conversation_id}", f"QueryRouterServiceChat processing time: {processing_time:.2f} seconds"))
+            logger.warning(
+                logger.format_message(
+                    f"{self.user_id}:{self.conversation_id}",
+                    f"QueryRouterServiceChat processing time: {processing_time:.2f} seconds",
+                )
+            )
         else:
-            logger.info(logger.format_message(f"{self.user_id}:{self.conversation_id}", f"QueryRouterServiceChat processing time: {processing_time:.2f} seconds"))
+            logger.info(
+                logger.format_message(
+                    f"{self.user_id}:{self.conversation_id}",
+                    f"QueryRouterServiceChat processing time: {processing_time:.2f} seconds",
+                )
+            )
 
         parsed_content = extract_json_from_string(accumulated_content)
         planner_metadata["duration"] = processing_time
@@ -680,15 +886,21 @@ class QueryRouterServiceChat:
         # Send final message
         final_message_data = {
             "event": "planner",
-            "data": json.dumps({"response": parsed_content, "metadata": planner_metadata}),
+            "data": json.dumps(
+                {"response": parsed_content, "metadata": planner_metadata}
+            ),
             "user_id": self.user_id,
             "conversation_id": self.conversation_id,
             "message_id": self.message_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         message_key = f"messages:{self.user_id}:{self.conversation_id}"
-        self.redis_client.rpush(message_key, json.dumps(final_message_data), self.user_id)
-        await self.websocket_manager.send_message(self.user_id, self.conversation_id, final_message_data)
+        self.redis_client.rpush(
+            message_key, json.dumps(final_message_data), self.user_id
+        )
+        await self.websocket_manager.send_message(
+            self.user_id, self.conversation_id, final_message_data
+        )
         return parsed_content
 
     def _normalize_educational_params(self, params: Dict) -> Dict:
@@ -707,7 +919,7 @@ class QueryRouterServiceChat:
         return {
             "topic": params.get("topic", ""),
             "audience_level": audience_level,
-            "focus_areas": focus_areas
+            "focus_areas": focus_areas,
         }
 
     def _normalize_sales_params(self, params: Dict) -> Dict:
@@ -717,38 +929,32 @@ class QueryRouterServiceChat:
             "company_stage": params.get("company_stage", ""),
             "geography": params.get("geography", ""),
             "funding_stage": params.get("funding_stage", ""),
-            "product": params.get("product", "")
+            "product": params.get("product", ""),
         }
 
     def _normalize_financial_params(self, params: Dict) -> Dict:
         """Normalize financial analysis parameters with safe defaults."""
         return {
-            "query_text": params.get("query_text",""),
-            "ticker": params.get("ticker",""),
-            "company_name": params.get("company_name","")
+            "query_text": params.get("query_text", ""),
+            "ticker": params.get("ticker", ""),
+            "company_name": params.get("company_name", ""),
         }
 
     def _normalize_deep_research_params(self, params: Dict) -> Dict:
         """Normalize deep research parameters with safe defaults."""
-        return {
-            "deep_research_topic": params.get("deep_research_topic", "")
-        }
+        return {"deep_research_topic": params.get("deep_research_topic", "")}
 
     def _normalize_user_proxy_params(self, params: Dict) -> Dict:
         """Normalize user proxy parameters with safe defaults."""
-        return {
-            "agent_question": params.get("agent_question", "")
-        }
+        return {"agent_question": params.get("agent_question", "")}
 
     def _normalize_assistant_params(self, params: Dict) -> Dict:
         """Normalize assistant parameters with safe defaults."""
-        return {
-            "query": params.get("query", "")
-        }
+        return {"query": params.get("query", "")}
 
     def _final_override(self, user_query: str, chosen_type: str) -> str:
         """
-        If user query explicitly mentions certain override phrases 
+        If user query explicitly mentions certain override phrases
         (like 'fundamental analysis' or 'technical analysis'),
         we force 'financial_analysis'.
         """
@@ -760,7 +966,9 @@ class QueryRouterServiceChat:
 
         return chosen_type
 
-    async def route_query(self, query: str, context_summary: str = "", num_docs: int = 0) -> QueryType:
+    async def route_query(
+        self, query: str, context_summary: str = "", num_docs: int = 0
+    ) -> QueryType:
         """
         Main routing method:
           1) Detect type using _detect_query_type

@@ -1,4 +1,6 @@
-from agents.utils.logging import logger
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 
 def configure_oltp_tracing(

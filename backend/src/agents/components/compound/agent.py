@@ -1,31 +1,12 @@
-from enum import Enum
 import functools
+from enum import Enum
 from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Union
 
+import structlog
 from agents.api.stream import astream_state_websocket
 from agents.api.websocket_interface import WebSocketInterface
 from agents.components.compound.data_types import LLMType
 from agents.components.compound.xml_agent import get_xml_agent_executor
-from langchain_core.messages import AnyMessage
-from langchain_core.runnables import (
-    ConfigurableField,
-    RunnableBinding,
-)
-from langgraph.graph.message import Messages
-from langgraph.pregel import Pregel
-from langchain.tools import BaseTool
-
-from langchain_core.language_models.base import LanguageModelLike
-from langgraph.checkpoint.redis import RedisSaver
-from langchain_core.runnables import RunnableConfig
-
-from agents.utils.llms import (
-    get_fireworks_llm,
-    get_sambanova_llm,
-)
-
-from agents.utils.logging import logger
-
 from agents.tools.langgraph_tools import (
     RETRIEVAL_DESCRIPTION,
     TOOL_REGISTRY,
@@ -34,6 +15,7 @@ from agents.tools.langgraph_tools import (
     AvailableTools,
     Connery,
     DallE,
+    Daytona,
     DDGSearch,
     PressReleases,
     PubMed,
@@ -43,9 +25,18 @@ from agents.tools.langgraph_tools import (
     TavilyAnswer,
     Wikipedia,
     YouSearch,
-    Daytona,
     validate_tool_config,
 )
+from agents.utils.llms import get_fireworks_llm, get_sambanova_llm
+from langchain.tools import BaseTool
+from langchain_core.language_models.base import LanguageModelLike
+from langchain_core.messages import AnyMessage
+from langchain_core.runnables import ConfigurableField, RunnableBinding, RunnableConfig
+from langgraph.checkpoint.redis import RedisSaver
+from langgraph.graph.message import Messages
+from langgraph.pregel import Pregel
+
+logger = structlog.get_logger(__name__)
 
 Tool = Union[
     ActionServer,

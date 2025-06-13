@@ -1,12 +1,18 @@
 import asyncio
+import mimetypes
 import os
 import time
+import uuid
 from enum import Enum
 from functools import lru_cache
 from typing import Annotated, List, Literal
-import uuid
 
-from agents.utils.logging import logger
+import structlog
+from agents.storage.global_services import get_global_redis_storage_service
+from agents.utils.code_patcher import patch_plot_code_str
+from daytona_sdk import CreateSandboxParams
+from daytona_sdk import Daytona as DaytonaClient
+from daytona_sdk import DaytonaConfig as DaytonaSDKConfig
 from langchain.tools.retriever import create_retriever_tool
 from langchain_community.agent_toolkits.connery import ConneryToolkit
 from langchain_community.retrievers.kay import KayAiRetriever
@@ -16,27 +22,16 @@ from langchain_community.retrievers.you import YouRetriever
 from langchain_community.tools.arxiv.tool import ArxivQueryRun
 from langchain_community.tools.connery import ConneryService
 from langchain_community.tools.ddg_search.tool import DuckDuckGoSearchRun
-from langchain_community.tools.tavily_search import (
-    TavilyAnswer as _TavilyAnswer,
-)
-from langchain_community.tools.tavily_search import (
-    TavilySearchResults,
-)
+from langchain_community.tools.tavily_search import TavilyAnswer as _TavilyAnswer
+from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_community.utilities.arxiv import ArxivAPIWrapper
 from langchain_community.utilities.dalle_image_generator import DallEAPIWrapper
 from langchain_community.utilities.tavily_search import TavilySearchAPIWrapper
 from langchain_core.tools import Tool
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
-from daytona_sdk import (
-    CreateSandboxParams,
-    Daytona as DaytonaClient,
-    DaytonaConfig as DaytonaSDKConfig,
-)
 
-from agents.utils.code_patcher import patch_plot_code_str
-from agents.storage.global_services import get_global_redis_storage_service
-import mimetypes
+logger = structlog.get_logger(__name__)
 
 
 class DDGInput(BaseModel):
@@ -246,8 +241,8 @@ If the user asks a vague question, they are likely meaning to look up info from 
 
 @lru_cache(maxsize=5)
 def _get_retrieval_tool(user_id: str, doc_ids: tuple, api_key: str, description: str):
-    from redisvl.query.filter import Tag
     from agents.rag.upload import create_user_vector_store
+    from redisvl.query.filter import Tag
 
     user_filter = Tag("user_id") == user_id
     doc_filter = Tag("document_id") == list(doc_ids)

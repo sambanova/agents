@@ -1,41 +1,39 @@
-########## deep_research_agent.py (NEW CODE) ##########
-import asyncio
 import json
 import time
-from typing import Any, Callable, Union
 import uuid
-from agents.storage.redis_service import SecureRedisService
+from typing import Any, Callable, Union
 
-from autogen_core import MessageContext
-from autogen_core import (
-    DefaultTopicId,
-    RoutedAgent,
-    message_handler,
-    type_subscription,
-)
-
-from fastapi import WebSocket
-from langgraph.types import Command
-from langgraph.checkpoint.memory import MemorySaver
-
+import structlog
 from agents.api.data_types import (
+    AgentEnum,
     AgentRequest,
     AgentStructuredResponse,
     APIKeys,
-    AgentEnum,
-    DeepResearchUserQuestion,
     DeepResearchReport,
+    DeepResearchUserQuestion,
     ErrorResponse,
 )
 from agents.components.open_deep_research.configuration import SearchAPI
-from agents.components.open_deep_research.utils import APIKeyRotator
-from agents.registry.model_registry import model_registry
-from agents.utils.logging import logger
 from agents.components.open_deep_research.graph import (
     LLMTimeoutError,
     create_deep_research_graph,
 )
+from agents.components.open_deep_research.utils import APIKeyRotator
+from agents.registry.model_registry import model_registry
+from agents.storage.redis_service import SecureRedisService
 from agents.utils.error_utils import format_api_error_message
+from autogen_core import (
+    DefaultTopicId,
+    MessageContext,
+    RoutedAgent,
+    message_handler,
+    type_subscription,
+)
+from fastapi import WebSocket
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import Command
+
+logger = structlog.get_logger(__name__)
 
 
 def create_publish_callback(

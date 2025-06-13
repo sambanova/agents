@@ -1,15 +1,18 @@
 from enum import Enum
+from typing import Optional, get_args, get_origin, get_type_hints
+
+import structlog
 from agents.api.data_types import (
     AssistantMessage,
+    DeepResearch,
     EducationalContent,
     FinancialAnalysis,
     SalesLeads,
     UserQuestion,
-    DeepResearch,
 )
-from .otlp_tracing import logger
 from pydantic import BaseModel
-from typing import Optional, get_origin, get_args, get_type_hints
+
+logger = structlog.get_logger(__name__)
 
 
 def generate_type_string(model: BaseModel) -> str:
