@@ -486,12 +486,13 @@ async def upload_document(
         # Read file content
         content = await file.read()
         indexed = False
+        vector_ids = []
 
         upload_time = time.time()
         if file.content_type == "application/pdf":
             file_blobs = await convert_ingestion_input_to_blob(content, file.filename)
             api_keys = await app.state.redis_storage_service.get_user_api_key(user_id)
-            await ingest_runnable.ainvoke(
+            vector_ids = await ingest_runnable.ainvoke(
                 file_blobs,
                 {
                     "user_id": user_id,
@@ -499,7 +500,7 @@ async def upload_document(
                     "api_key": api_keys.sambanova_key,
                 },
             )
-            logger.info(f"Indexed file successfully: {file_id}")
+            logger.info("Indexed file successfully", file_id=file_id)
             indexed = True
 
         await app.state.redis_storage_service.put_file(
@@ -511,6 +512,14 @@ async def upload_document(
             upload_timestamp=upload_time,
             indexed=indexed,
             source="upload",
+            vector_ids=vector_ids,
+        )
+
+        duration = time.time() - upload_time
+        logger.info(
+            "File uploaded successfully",
+            file_id=file_id,
+            duration_ms=round(duration * 1000, 2),
         )
 
         return JSONResponse(
@@ -606,6 +615,27 @@ async def delete_file(
                 status_code=401,
                 content={"error": "Invalid authentication token"},
             )
+
+        # If the file is indexed, delete its vectors from the vector store
+        metadata = await app.state.redis_storage_service.get_file_metadata(
+            user_id, file_id
+        )
+
+        if not metadata:
+            logger.error("File metadata not found", file_id=file_id)
+            return JSONResponse(
+                status_code=404,
+                content={"error": "File not found"},
+            )
+
+        if metadata and metadata.get("indexed"):
+            vector_ids = metadata.get("vector_ids")
+            if vector_ids:
+                api_keys = await app.state.redis_storage_service.get_user_api_key(
+                    user_id
+                )
+                if api_keys and api_keys.sambanova_key:
+                    await app.state.redis_storage_service.delete_vectors(vector_ids)
 
         result = await app.state.redis_storage_service.delete_file(user_id, file_id)
 

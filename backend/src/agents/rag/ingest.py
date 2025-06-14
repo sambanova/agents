@@ -8,8 +8,10 @@ know about server/uploading etc.
 """
 
 import asyncio
+import re
 from typing import List
 
+import ftfy
 from langchain.text_splitter import TextSplitter
 from langchain_community.document_loaders import Blob
 from langchain_community.document_loaders.base import BaseBlobParser
@@ -25,11 +27,16 @@ def _update_document_metadata(
     document.metadata["document_id"] = document_id
 
 
-def _sanitize_document_content(document: Document) -> Document:
+def _sanitize_document_content(document: Document):
     """Sanitize the document."""
     # Without this, PDF ingestion fails with
     # "A string literal cannot contain NUL (0x00) characters".
     document.page_content = document.page_content.replace("\x00", "x")
+
+
+def _clean_text(document: Document):
+    document.page_content = ftfy.fix_text(document.page_content)
+    document.page_content = re.sub(r"\s+", " ", document.page_content).strip()
 
 
 async def ingest_blob(
@@ -56,6 +63,7 @@ async def ingest_blob(
         for doc in docs:
             _sanitize_document_content(doc)
             _update_document_metadata(doc, user_id, document_id)
+            _clean_text(doc)
         docs_to_index.extend(docs)
 
         if len(docs_to_index) >= batch_size:

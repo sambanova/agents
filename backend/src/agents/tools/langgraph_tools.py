@@ -1,13 +1,15 @@
 import asyncio
 import mimetypes
 import os
+import re
 import time
 import uuid
 from enum import Enum
 from functools import lru_cache
-from typing import Annotated, List, Literal
+from typing import Annotated, List, Literal, Tuple
 
 import structlog
+from agents.rag.upload import RedisHybridRetriever, create_user_vector_store
 from agents.storage.global_services import get_global_redis_storage_service
 from agents.utils.code_patcher import patch_plot_code_str
 from daytona_sdk import CreateSandboxParams
@@ -28,7 +30,9 @@ from langchain_community.utilities.arxiv import ArxivAPIWrapper
 from langchain_community.utilities.dalle_image_generator import DallEAPIWrapper
 from langchain_community.utilities.tavily_search import TavilySearchAPIWrapper
 from langchain_core.tools import Tool
+from langchain_sambanova import SambaNovaCloudEmbeddings
 from pydantic import BaseModel, Field
+from redisvl.query.filter import Tag
 from typing_extensions import TypedDict
 
 logger = structlog.get_logger(__name__)
@@ -239,8 +243,37 @@ If the user is referencing particular files, that is often a good hint that info
 If the user asks a vague question, they are likely meaning to look up info from this retriever, and you should call it!"""
 
 
+def _get_retrieval_tool(
+    user_id: str, doc_ids: Tuple[str, ...], api_key: str, description: str
+):
+    """
+    Returns a LangChain Tool that does true hybrid (keyword + vector) search
+    filtered by user_id and document_id tags.
+    """
+
+    vector_store = create_user_vector_store(api_key)
+
+    user_filter = Tag("user_id") == user_id
+    doc_filter = Tag("document_id") == list(doc_ids)
+    filter_expr = str(user_filter & doc_filter)
+
+    retriever = RedisHybridRetriever(
+        search_index=vector_store._index,
+        embedding_model=vector_store._embeddings,
+        filter_expr=filter_expr,
+    )
+
+    return create_retriever_tool(
+        retriever=retriever,
+        name="Retriever",
+        description=description,
+    )
+
+
 @lru_cache(maxsize=5)
-def _get_retrieval_tool(user_id: str, doc_ids: tuple, api_key: str, description: str):
+def _get_retrieval_tool_mmr(
+    user_id: str, doc_ids: tuple, api_key: str, description: str
+):
     from agents.rag.upload import create_user_vector_store
     from redisvl.query.filter import Tag
 
@@ -250,7 +283,13 @@ def _get_retrieval_tool(user_id: str, doc_ids: tuple, api_key: str, description:
 
     return create_retriever_tool(
         create_user_vector_store(api_key).as_retriever(
-            search_kwargs={"filter": filter_expr}
+            search_type="mmr",
+            search_kwargs={
+                "filter": filter_expr,
+                "k": 10,
+                "fetch_k": 50,
+                "lambda_mult": 0.3,
+            },
         ),
         "Retriever",
         description,
@@ -395,9 +434,7 @@ def _get_daytona(user_id: str):
                 artifacts=response.artifacts,
             )
 
-            # Use consistent timestamp for all generated files
             generation_timestamp = time.time()
-
             # Process expected filenames first
             for filename in expected_filenames:
                 mime_type, _ = mimetypes.guess_type(filename)
