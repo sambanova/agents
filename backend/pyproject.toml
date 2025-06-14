@@ -41,6 +41,8 @@ dependencies = [
   "wikipedia==1.4.0",
   "langgraph-checkpoint-redis==0.0.6",
   "structlog>=24.1.0",
+  "ftfy==6.3.1",
+  "nltk==3.9.1",
 ]
 
 [build-system]

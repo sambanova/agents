@@ -93,7 +93,7 @@ class RedisStorage:
             try:
                 messages.append(json.loads(msg_json))
             except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse message JSON: {e}")
+                logger.error("Failed to parse message JSON", error=str(e))
                 continue
 
         return messages
@@ -190,11 +190,19 @@ class RedisStorage:
             await self.add_file_to_user_list(user_id, file_id)
 
             logger.info(
-                f"File stored in Redis: {file_id} -> {len(data)} bytes for user {user_id}"
+                "File stored in Redis",
+                file_id=file_id,
+                size_bytes=len(data),
+                user_id=user_id,
             )
 
         except Exception as e:
-            logger.error(f"Error storing file {file_id} in Redis: {e}")
+            logger.error(
+                "Error storing file in Redis",
+                file_id=file_id,
+                error=str(e),
+                exc_info=True,
+            )
             raise
 
     async def get_file(
@@ -221,7 +229,12 @@ class RedisStorage:
             return file_data, file_metadata
 
         except Exception as e:
-            logger.error(f"Error retrieving file {file_id} from Redis: {e}")
+            logger.error(
+                "Error retrieving file from Redis",
+                file_id=file_id,
+                error=str(e),
+                exc_info=True,
+            )
             return None
 
     async def get_file_metadata(self, user_id: str, file_id: str) -> Optional[dict]:
@@ -240,7 +253,12 @@ class RedisStorage:
             return json.loads(metadata_str)
 
         except Exception as e:
-            logger.error(f"Error retrieving file metadata {file_id} from Redis: {e}")
+            logger.error(
+                "Error retrieving file metadata from Redis",
+                file_id=file_id,
+                error=str(e),
+                exc_info=True,
+            )
             return None
 
     async def get_file_as_base64(self, user_id: str, file_id: str) -> Optional[str]:
@@ -279,7 +297,9 @@ class RedisStorage:
             return f"data:{mime_type};base64,{base64_data}"
 
         except Exception as e:
-            logger.error(f"Error creating data URL for {file_id}: {e}")
+            logger.error(
+                "Error creating data URL", file_id=file_id, error=str(e), exc_info=True
+            )
             return None
 
     async def delete_file(self, user_id: str, file_id: str) -> bool:
@@ -299,11 +319,16 @@ class RedisStorage:
             await self.redis_client.delete(file_metadata_key)
             await self.redis_client.srem(user_files_key, file_id)
 
-            logger.info(f"File deleted from Redis: {file_id} for user {user_id}")
+            logger.info("File deleted from Redis", file_id=file_id, user_id=user_id)
             return True
 
         except Exception as e:
-            logger.error(f"Error deleting file {file_id} from Redis: {e}")
+            logger.error(
+                "Error deleting file from Redis",
+                file_id=file_id,
+                error=str(e),
+                exc_info=True,
+            )
             return False
 
     async def list_user_files(self, user_id: str) -> list:
@@ -329,7 +354,12 @@ class RedisStorage:
             return files
 
         except Exception as e:
-            logger.error(f"Error listing files for user {user_id}: {e}")
+            logger.error(
+                "Error listing files for user",
+                user_id=user_id,
+                error=str(e),
+                exc_info=True,
+            )
             return []
 
     # Document storage methods
@@ -411,7 +441,7 @@ class RedisStorage:
                     metadata["name"] = message_data
                     await self.redis_client.set(meta_key, json.dumps(metadata), user_id)
         except Exception as e:
-            logger.error(f"Error updating metadata: {str(e)}")
+            logger.error("Error updating metadata", error=str(e), exc_info=True)
 
     async def delete_vectors(self, vector_ids: List[str]) -> None:
         """Delete vectors from the vector store."""
@@ -419,11 +449,10 @@ class RedisStorage:
             return
         try:
             await self.redis_client.delete(*vector_ids)
-            logger.info(
-                f"Successfully deleted all vectors.", num_deleted=len(vector_ids)
-            )
+            logger.info("Successfully deleted vectors", num_deleted=len(vector_ids))
         except Exception as e:
             logger.error(
-                f"Error deleting vectors: {e}",
+                "Error deleting vectors",
+                error=str(e),
                 exc_info=True,
             )

@@ -515,6 +515,13 @@ async def upload_document(
             vector_ids=vector_ids,
         )
 
+        duration = time.time() - upload_time
+        logger.info(
+            "File uploaded successfully",
+            file_id=file_id,
+            duration_ms=round(duration * 1000, 2),
+        )
+
         return JSONResponse(
             status_code=200,
             content={

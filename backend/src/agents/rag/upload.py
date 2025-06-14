@@ -1,39 +1,71 @@
-"""API to deal with file uploads via a runnable.
-
-For now this code assumes that the content is a base64 encoded string.
-
-The details here might change in the future.
-
-For the time being, upload and ingestion are coupled
-"""
-
 from __future__ import annotations
 
-import asyncio
 import mimetypes
-import os
 from functools import lru_cache
 from typing import BinaryIO, List, Optional
 
+import numpy as np
 import structlog
 from agents.rag.ingest import ingest_blob
 from agents.rag.parsing import MIMETYPE_BASED_PARSER
 from agents.storage.global_services import get_sync_redis_client
-from fastapi import UploadFile
+from langchain.schema import Document
 from langchain_core.document_loaders.blob_loaders import Blob
+from langchain_core.retrievers import BaseRetriever
 from langchain_core.runnables import (
     ConfigurableField,
     RunnableConfig,
     RunnableSerializable,
 )
-from langchain_core.vectorstores import VectorStore
-from langchain_openai import OpenAIEmbeddings
 from langchain_redis import RedisVectorStore
 from langchain_sambanova import SambaNovaCloudEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter, TextSplitter
-from pydantic import ConfigDict
+from langchain_text_splitters import (
+    TextSplitter,
+    TokenTextSplitter,
+)
+from pydantic import BaseModel, ConfigDict
+from redisvl.index import SearchIndex
+from redisvl.query import HybridQuery
 
 logger = structlog.get_logger(__name__)
+
+
+class RedisHybridRetriever(BaseRetriever, BaseModel):
+    """
+    Hybrid retriever combining vector similarity with keyword filtering
+    via RediSearch KNN + BM25 keyword search.
+    """
+
+    search_index: SearchIndex
+    embedding_model: SambaNovaCloudEmbeddings
+    filter_expr: str
+
+    class Config:
+        arbitrary_types_allowed = True
+
+    def get_relevant_documents(self, query: str) -> List[Document]:
+        # 1) Embed the query
+        embedding = self.embedding_model.embed_query(query)
+        vector = np.array(embedding, dtype=np.float32).tobytes()
+
+        hybrid_query = HybridQuery(
+            text=query,
+            text_field_name="text",
+            vector=vector,
+            vector_field_name="embedding",
+            return_fields=["text", "user_id", "document_id"],
+            filter_expression=self.filter_expr,
+        )
+
+        results = self.search_index.query(hybrid_query)
+
+        # 4) Convert to LangChain Documents
+        docs: List[Document] = []
+        for doc in results:
+            content = doc.get("text", "")
+            metadata = {k: v for k, v in doc.items() if k not in ("text",)}
+            docs.append(Document(page_content=content, metadata=metadata))
+        return docs
 
 
 @lru_cache(maxsize=100)
@@ -43,6 +75,7 @@ def create_user_vector_store(api_key: str) -> RedisVectorStore:
         embeddings=SambaNovaCloudEmbeddings(
             model="E5-Mistral-7B-Instruct",
             sambanova_api_key=api_key,
+            batch_size=32,
         ),
         redis_client=get_sync_redis_client(),
         index_name="sambanova-rag-index",
@@ -149,7 +182,7 @@ class IngestRunnable(RunnableSerializable[BinaryIO, List[str]]):
 
 
 ingest_runnable = IngestRunnable(
-    text_splitter=RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200),
+    text_splitter=TokenTextSplitter(chunk_size=512, chunk_overlap=128),
 ).configurable_fields(
     user_id=ConfigurableField(
         id="user_id",
