@@ -1,5 +1,5 @@
 <template>
-{{ props.streamData }}
+
   <!-- isLoading {{ props.streamData }} -->
   <div class="flex flex-col p-4 border rounded">
     <!-- 1) Heading, updates to last tool name -->
@@ -513,6 +513,15 @@ const auditLogEvents = computed(() => {
     })
     .filter(event => event.title) // Only include events with titles
 })
+
+
+function formatEventTime(timestamp) {
+  return new Date(timestamp).toLocaleTimeString([], { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
 </script>
 
 <style scoped>

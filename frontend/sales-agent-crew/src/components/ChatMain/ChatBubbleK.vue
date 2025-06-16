@@ -235,7 +235,7 @@
           </div>
         </div>
 
-        <!-- Daytona sidebar -->
+       <!-- Daytona sidebar -->
         <DaytonaSidebar
           v-if="showDaytonaSidebar"
           :isOpen="showDaytonaSidebar"
@@ -265,7 +265,7 @@
   import SalesLeadComponent from '@/components/ChatMain/ResponseTypes/SalesLeadsComponent.vue'
   import EducationalComponent from '@/components/ChatMain/EducationalComponent.vue'
   import UnknownTypeComponent from '@/components/ChatMain/ResponseTypes/UnknownTypeComponent.vue'
-  import FinancialAnalysisComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisComponent.vue'
+  import Financia lAnalysisComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisComponent.vue'
   import DeepResearchComponent from '@/components/ChatMain/ResponseTypes//DeepResearchComponent.vue'
   import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue'
   import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'

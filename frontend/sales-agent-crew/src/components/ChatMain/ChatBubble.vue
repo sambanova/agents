@@ -4,7 +4,7 @@
   {{props}} -->
    <!-- {{props.data.content}} -->
   <!-- Handle streaming and agent_completion events -->
-    
+    <!-- {{ props.streamData }} -->
   
    <li
     v-if="props.data.agent_type === 'human'"
@@ -182,11 +182,71 @@
       </div>
       </div>
     </div>
- 
-  </li>
     
+      <!-- Artifacts -->
+        <div v-if="hasArtifacts && !isDaytonaActive" class="p-3 bg-purple-50 dark:bg-purple-900 border-b dark:border-purple-700">
+          <div class="text-xs font-medium text-purple-800 dark:text-purple-200 mb-2">Generated Artifacts</div>
+          <div class="grid grid-cols-2 gap-2">
+            <div
+              v-for="artifact in artifacts"
+              :key="artifact.id"
+              @click="openArtifact(artifact)"
+              class="p-2 bg-white dark:bg-gray-800 rounded border border-purple-200 dark:border-purple-700 cursor-pointer hover:border-purple-400 transition"
+            >
+              <div class="flex items-center space-x-2">
+                <div class="w-8 h-8 bg-purple-500 rounded flex items-center justify-center">
+                  <span class="text-xs text-white">📊</span>
+                </div>
+                <div>
+                  <div class="text-xs font-medium text-gray-900 dark:text-gray-100">{{ artifact.title }}</div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">Click to view</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
- 
+
+         <!-- Artifacts -->
+        <div v-if="hasArtifacts && !isDaytonaActive" class="p-3 bg-purple-50 dark:bg-purple-900 border-b dark:border-purple-700">
+          <div class="text-xs font-medium text-purple-800 dark:text-purple-200 mb-2">Generated Artifacts</div>
+          <div class="grid grid-cols-2 gap-2">
+            <div
+              v-for="artifact in artifacts"
+              :key="artifact.id"
+              @click="openArtifact(artifact)"
+              class="p-2 bg-white dark:bg-gray-800 rounded border border-purple-200 dark:border-purple-700 cursor-pointer hover:border-purple-400 transition"
+            >
+              <div class="flex items-center space-x-2">
+                <div class="w-8 h-8 bg-purple-500 rounded flex items-center justify-center">
+                  <span class="text-xs text-white">📊</span>
+                </div>
+                <div>
+                  <div class="text-xs font-medium text-gray-900 dark:text-gray-100">{{ artifact.title }}</div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">Click to view</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+         <!-- Daytona sidebar -->
+        <DaytonaSidebar
+          v-if="showDaytonaSidebar"
+          :isOpen="showDaytonaSidebar"
+          :streamingEvents="streamingEvents"
+          @close="closeDaytonaSidebar"
+          @expand-chart="openArtifact"
+        />
+
+        <!-- Artifact canvas modal -->
+        <ArtifactCanvas
+          v-if="showArtifactCanvas"
+          :isOpen="showArtifactCanvas"
+          :artifact="selectedArtifact"
+          @close="closeArtifactCanvas"
+        />
+  </li>
+  
  
 </template>
 
@@ -214,6 +274,8 @@ import html2pdf from 'html2pdf.js'
 import { formattedText } from '@/utils/formatText'
 import { marked } from 'marked'
 import StatusAnimationBox from './StatusAnimationBox.vue'
+import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue'
+import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue'
 function fetchProvider() {
   if (!props.workflowData || !Array.isArray(props.workflowData)) {
     return null
@@ -225,6 +287,53 @@ function fetchProvider() {
   }
   return null
 }
+
+const hasArtifacts = computed(() => {
+
+  
+  if (!props.streamData) return false
+  
+  return props.streamData.some(event => 
+    event.event === 'agent_completion' && 
+    event.name === 'DaytonaCodeSandbox' &&
+    event.content &&
+    event.content.includes('![Chart')
+  )
+})
+
+const artifacts = computed(() => {
+
+  alert("checking")
+  if (!props.streamData) return []
+  
+  const charts = []
+  
+  props.streamData.forEach(event => {
+    if (event.event === 'agent_completion' && 
+        event.name === 'DaytonaCodeSandbox' &&
+        event.content) {
+      
+      const content = event.content
+      const chartMatches = content.match(/!\[Chart \d+\]\(attachment:([^)]+)\)/g)
+      
+      if (chartMatches) {
+        chartMatches.forEach((match, index) => {
+          const idMatch = match.match(/attachment:([^)]+)/)
+          if (idMatch) {
+            charts.push({
+              id: idMatch[1],
+              title: `Chart ${index + 1}`,
+              type: 'chart',
+              details: 'Generated from data analysis'
+            })
+          }
+        })
+      }
+    }
+  })
+  
+  return charts
+})
 
 const formattedDuration = (duration) => {
   return duration?.toFixed(2)
@@ -275,6 +384,48 @@ const props = defineProps({
 
 })
 
+// Detect Daytona usage and automatically open sidebar - ENHANCED FOR LOADED CONVERSATIONS
+const isDaytonaActive = computed(() => {
+  if (!props.streamData || !Array.isArray(props.streamData)) {
+    // For loaded conversations, check if any workflow data indicates Daytona usage
+    if (props.workflowData && props.workflowData.length > 0) {
+      return props.workflowData.some(item => 
+        item.tool_name === 'DaytonaCodeSandbox' || 
+        item.task === 'code_execution' ||
+        item.agent_name === 'Daytona Sandbox'
+      );
+    }
+    return false;
+  }
+  
+  return props.streamData.some(event => {
+    // Check for Daytona tool calls in streaming content
+    if (event.event === 'llm_stream_chunk' && event?.content) {
+      return event.content.includes('<tool>DaytonaCodeSandbox</tool>')
+    }
+    
+    // Check for Daytona tool results
+    if (event === 'agent_completion' && event?.name === 'DaytonaCodeSandbox') {
+      return true
+    }
+    
+    // Check our custom flag for loaded conversations
+    if (event.isDaytonaRelated) {
+      return true
+    }
+    
+    return false
+  })
+})
+
+// Watch for Daytona activity and automatically open sidebar
+watch(isDaytonaActive, (isActive) => {
+  if (isActive && !daytonaSidebarClosed.value) {
+    showDaytonaSidebar.value = true
+    // Close artifact canvas if it's open since we're using sidebar now
+    showArtifactCanvas.value = false
+  }
+}, { immediate: true })
 const parsedData = computed(() => {
     if (typeof props?.data === 'object') 
     return props.data

@@ -61,7 +61,7 @@
           
           <!-- Chat Bubble -->
           <ChatBubble
-             
+            
             v-for="msgItem in messagesData"
             :metadata="completionMetaData"
             :workflowData="
@@ -83,6 +83,8 @@
             :provider="provider"
             :currentMsgId="currentMsgId"
             :isLoading="isLoading"
+            :streamData="streamData"
+            
           />
            <!-- <ChatBubble
              v-if="isLoading"
@@ -714,18 +716,39 @@ const agentThoughtsData = ref([]);
 
 async function filterChat(msgData) {
  
- messagesData.value = msgData.messages
+ streamData.value = msgData.messages
     .map(message => {
 
       const agent_type=( message.additional_kwargs?.agent_type)
       // For agent_completion events, preserve the full data structure
-      if (
-        message.event === 'agent_completion' &&
-        (
+      if (message.event === 'agent_completion'&& message.additional_kwargs?.agent_type !== 'human' &&(
+          
+          !message.additional_kwargs?.agent_type.includes('_end') ||
+          !message.additional_kwargs?.agent_type.includes('_interrupt'))
+      ) {
+
+        // alert(agent_type)
+        message.agent_type=agent_type
+        return message
+         
+        ;
+      }
+      
+      return null;
+    })
+    .filter(Boolean)  // Remove nulls
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+
+     messagesData.value = msgData.messages
+    .map(message => {
+
+      const agent_type=( message.additional_kwargs?.agent_type)
+      // For agent_completion events, preserve the full data structure
+      if (message.event === 'agent_completion' &&(
           message.type === 'HumanMessage' ||
           message.additional_kwargs?.agent_type.includes('_end') ||
-          message.additional_kwargs?.agent_type.includes('_interrupt')
-        )
+          message.additional_kwargs?.agent_type.includes('_interrupt'))
       ) {
 
         // alert(agent_type)
