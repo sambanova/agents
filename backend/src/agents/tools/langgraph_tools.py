@@ -12,8 +12,8 @@ import structlog
 from agents.rag.upload import RedisHybridRetriever, create_user_vector_store
 from agents.storage.global_services import get_global_redis_storage_service
 from agents.utils.code_patcher import patch_plot_code_str
+from daytona_sdk import AsyncDaytona as DaytonaClient
 from daytona_sdk import CreateSandboxFromSnapshotParams, CreateSnapshotParams
-from daytona_sdk import Daytona as DaytonaClient
 from daytona_sdk import DaytonaConfig as DaytonaSDKConfig
 from langchain.tools.retriever import create_retriever_tool
 from langchain_community.agent_toolkits.connery import ConneryToolkit
@@ -408,16 +408,16 @@ def _get_daytona(user_id: str):
             )
 
             patched_code, expected_filenames = patch_plot_code_str(code_to_run)
-            sandbox = daytona.create(params=params)
-            list_of_files = [f.name for f in sandbox.fs.list_files(".")]
-            response = sandbox.process.code_run(patched_code)
+            sandbox = await daytona.create(params=params)
+            list_of_files = [f.name for f in await sandbox.fs.list_files(".")]
+            response = await sandbox.process.code_run(patched_code)
 
             # Ensure result is a string, even if None or other types
             result_str = str(response.result) if response.result is not None else ""
 
             if response.exit_code != 0:
                 # Ensure error detail is a string
-                daytona.delete(sandbox)
+                await daytona.close()
                 error_detail = result_str
                 logger.error(
                     "Daytona code execution failed",
@@ -440,7 +440,7 @@ def _get_daytona(user_id: str):
                 mime_type, _ = mimetypes.guess_type(filename)
                 try:
                     file_id = str(uuid.uuid4())
-                    content = sandbox.fs.download_file(filename)
+                    content = await sandbox.fs.download_file(filename)
                     logger.info(
                         "Downloaded file from sandbox",
                         filename=filename,
@@ -478,12 +478,12 @@ def _get_daytona(user_id: str):
                     )
 
             # Download all new files
-            list_of_files_after_execution = sandbox.fs.list_files(".")
+            list_of_files_after_execution = await sandbox.fs.list_files(".")
             for file in list_of_files_after_execution:
                 mime_type, _ = mimetypes.guess_type(file.name)
                 if file.name not in list_of_files and mime_type in supported_extensions:
                     file_id = str(uuid.uuid4())
-                    content = sandbox.fs.download_file(file.name)
+                    content = await sandbox.fs.download_file(file.name)
                     logger.info(
                         "Downloaded file from sandbox",
                         filename=file.name,
@@ -569,7 +569,7 @@ def _get_daytona(user_id: str):
                 logger.info("No charts found in response artifacts")
 
             # Clean up sandbox after processing everything
-            daytona.delete(sandbox)
+            await daytona.close()
 
             return result_str
         except Exception as e:
