@@ -119,7 +119,9 @@
               )
             "
           :isLoading="isLoading"
-          :streamData="streamData"
+          :streamData=" streamData.filter(
+                (item) => item.message_id === msgItem.message_id
+              )"
         />
       </li>
        <!-- <li 

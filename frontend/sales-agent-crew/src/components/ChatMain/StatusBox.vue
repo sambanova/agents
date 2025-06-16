@@ -1,5 +1,5 @@
 <template>
-{{ props.workflowData }}
+{{ props.streamData }}
   <!-- isLoading {{ props.streamData }} -->
   <div class="flex flex-col p-4 border rounded">
     <!-- 1) Heading, updates to last tool name -->
@@ -192,6 +192,9 @@ watch(description, () => {
 
 
 const toolSources = computed(() => {
+
+    console.log('tool  props.streamData' , props.streamData)
+
   if (!props.streamData || !Array.isArray(props.streamData)) return []
   
   const sources = []
@@ -268,6 +271,8 @@ const toolSources = computed(() => {
 
 
 const auditLogEvents = computed(() => {
+
+  console.log('audit props.streamData' , props.streamData)
   // if (!props.streamData || props.streamData.length === 0) {
    
     // For loaded conversations without streaming events, create synthetic audit log from workflow data
