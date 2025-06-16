@@ -2,7 +2,7 @@
   
   <!-- 1) If no streaming data, show placeholder -->
   <div
-    v-if="!streamData || streamData.length === 0"
+    v-if="!streamingEvents || streamingEvents.length === 0"
     class="p-6 text-center text-gray-500 dark:text-gray-400"
   >
     No streaming events to display.
@@ -132,6 +132,7 @@ import LoadingText from '@/components/ChatMain/LoadingText.vue';
 
 const props = defineProps({
   streamData: { type: Array, default: () => [] },
+  streamingEvents: { type: Array, default: () => [] },
   workflowData: { type: Array, default: () => [] },
   isLoading: { type: Boolean, default: false },
 })
@@ -144,7 +145,7 @@ function extractToolName(content) {
 
 // 1) tool timeline
 const toolTimeline = computed(() =>
-  props.streamData
+  props.streamingEvents
     .filter(
       i =>
         i.event === 'agent_completion' &&
@@ -162,7 +163,7 @@ const currentToolName = computed(() =>
 
 // 3) description
 const description = computed(() =>
-  props.streamData
+  props.streamingEvents
     .filter(i =>
       ['stream_start', 'llm_stream_chunk', 'stream_complete'].includes(
         i.event
@@ -185,7 +186,7 @@ watch(description, () => {
 // 4) tool sources
 const toolSources = computed(() => {
   const sources = []
-  props.streamData.forEach(event => {
+  props.streamingEvents.forEach(event => {
     if (event.name === 'search_tavily' && Array.isArray(event.content)) {
       event.content.forEach(src => {
         let title = src.title?.trim() || ''
@@ -212,7 +213,7 @@ const toolSources = computed(() => {
 // 5) audit log (with safe `.details`)
 const auditLogEvents = computed(() => {
   // synthetic if no streamData but we have workflowData
-  if ((!props.streamData || !props.streamData.length) && props.workflowData.length) {
+  if ((!props.streamingEvents || !props.streamingEvents.length) && props.workflowData.length) {
     const unique = []
     const seen = new Set()
     props.workflowData.forEach((w, i) => {
@@ -236,7 +237,7 @@ const auditLogEvents = computed(() => {
   // otherwise from streamData
   const out = []
   const seenKeys = new Set()
-  props.streamData.forEach((evt, idx) => {
+  props.streamingEvents.forEach((evt, idx) => {
     const key = `${evt.event}-${evt.timestamp}`
     if (!seenKeys.has(key)) {
       seenKeys.add(key)

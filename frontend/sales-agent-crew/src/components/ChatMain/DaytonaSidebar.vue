@@ -1,5 +1,4 @@
 <template>
-  {{ props }}
   <div v-if="isOpen" class="fixed inset-y-0 right-0 bg-white border-l border-gray-200 shadow-2xl z-50 overflow-hidden transition-all duration-300" 
        :class="{ 'w-1/2': !isCollapsed, 'w-16': isCollapsed }">
     
