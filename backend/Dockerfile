@@ -1,66 +1,49 @@
-# Build stage
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim-bookworm AS dependencies
 
-# Set the working directory in the container
-WORKDIR /app
-
-# Install necessary system dependencies
+# Install system dependencies for uv
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
     build-essential \
-    gcc \
-    g++ \
-    make \
-    libffi-dev \
-    libssl-dev \
-    libxml2-dev \
-    libxslt1-dev \
-    zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy only requirements first to leverage Docker cache
-COPY requirements.txt .
-
-# Upgrade pip and install requirements
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# Final stage
-FROM python:3.11-slim
+# Install UV
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 WORKDIR /app
 
-# Copy installed packages and binaries from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
-COPY --from=builder /usr/local/bin/ /usr/local/bin/
+# Copy ONLY dependency files (not source code yet)
+COPY pyproject.toml uv.lock* ./
 
-# Install vim in the final image and ensure it's accessible
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    vim \
-    && rm -rf /var/lib/apt/lists/* \
-    && which vim
+# Install all dependencies (external + project)
+RUN /root/.local/bin/uv sync --no-dev --no-install-project
 
-# Create non-root user
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
+FROM python:3.11-slim-bookworm
 
-# Copy source code
-COPY --chown=appuser:appuser api ./api
-COPY --chown=appuser:appuser agent ./agent
-COPY --chown=appuser:appuser services ./services
-COPY --chown=appuser:appuser utils ./utils
-COPY --chown=appuser:appuser tools ./tools
-COPY --chown=appuser:appuser config ./config
+WORKDIR /app
 
-# Switch to non-root user
-USER appuser
+# Copy the large venv from dependencies stage (CACHED LAYER - 275MB)
+COPY --from=dependencies /app/.venv ./.venv
 
-# Environment variables for configuration
+# Copy UV binary (CACHED LAYER - 36MB) 
+COPY --from=dependencies /root/.local/bin/uv /usr/local/bin/uv
+
+# Copy project config (needed for local package install)
+COPY pyproject.toml ./
+
+# Copy source code LAST (SMALL LAYER - only ~360KB - rebuilds on code changes)
+COPY src/ ./src/
+
+# Install the local package into the existing venv (TINY operation)
+RUN /usr/local/bin/uv pip install --no-deps -e .
+
+# Clean up
+RUN find /app/src -name "*.pyc" -delete \
+    && find /app/src -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true \
+    && rm -rf /app/src/*.egg-info 2>/dev/null || true
+
+# Set PATH to use the venv
+ENV PATH="/app/.venv/bin:$PATH"
 ENV PORT=8000
-ENV WORKERS=1
-ENV HOST=0.0.0.0
-
-# Expose port
 EXPOSE ${PORT}
 
-# Command to run the application
-CMD ["sh", "-c", "uvicorn api.main:create_app --host ${HOST} --port ${PORT} --workers ${WORKERS}"] 
+ENTRYPOINT ["sh", "-c", "uvicorn src.agents.api.main:app --host 0.0.0.0 --port $PORT --no-access-log"]
