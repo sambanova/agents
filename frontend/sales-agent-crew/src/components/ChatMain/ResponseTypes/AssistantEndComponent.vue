@@ -1,16 +1,16 @@
 <template>
- Parsed message {{ parsed?.message }}
+ <!-- Parsed message {{ parsed?.content }} -->
   <div class="assistant-message">
     
     <!-- Wrap generated HTML in a container so our styles apply -->
     <!-- <div class="markdown-content" v-html="formattedText(parsed?.message||'')"></div> -->
-         <div class="markdown-content" v-html="formattedText(parsed?.message||'No Data')"></div>
+         <div class="markdown-content" v-html="renderMarkdown(parsed?.content||'No Data')"></div>
 
   </div>
 </template>
 
 <script>
-
+import { marked } from 'marked'
 import { formattedText } from '@/utils/formatText'
 
 export default {
@@ -23,6 +23,10 @@ export default {
   },
   methods: {
     formattedText,  // Register the imported function here.
+     renderMarkdown(mdText) {
+  // marked.parse(...) converts Markdown → safe-ish HTML
+  return marked.parse(mdText)
+}
   },
   computed: {
     formattedTextOld() {
@@ -68,6 +72,7 @@ export default {
     }
   }
 };
+
 
 
 

@@ -1,10 +1,13 @@
 <template>
-  {{props.data}}
+  <!-- {{ (props.isLoading) }} -->
+  <!-- {{props.agent_type}}
+  {{props}} -->
+   <!-- {{props.data.content}} -->
   <!-- Handle streaming and agent_completion events -->
-    <template v-if="isStreamingEvent">
+    
   
    <li
-    v-if="props.data.type === 'HumanMessage'"
+    v-if="props.data.agent_type === 'human'"
     class="flex px-4 items-start gap-x-2 sm:gap-x-4"
   >
     <div class="grow text-end space-y-3">
@@ -19,9 +22,88 @@
     <UserAvatar :type="'user'" />
   </li>
       <li v-else class="px-4 items-start gap-x-2 sm:gap-x-4">
-    <div class="w-full flex ">
+
+    <div class="w-full flex flex-col ">
+        <AnalysisTimeline
+        :isLoading="isLoading"
+        :parsedData="parsedData"
+        :workflowData="workflowData"
+        :presentMetadata="props.data.usage_metadata"
+        :plannerText="plannerText"
+      />
+      <!-- download pdf -->
+      <!-- <div class="grow relative text-start space-y-3">
+        
+        <div class="inline-block">
+          <div
+            class="relative p-4 flex items-center capitalize space-y-3 font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center capitalize text-gray-800 dark:text-gray-100"
+          >
+            {{ provider === 'sambanova' ? 'SambaNova' : provider }} Agent
+        
+            <button
+              v-if="
+                parsedData?.agent_type === 'sales_leads' ||
+                parsedData?.agent_type === 'financial_analysis' ||
+                parsedData?.agent_type === 'deep_research'
+              "
+              type="button"
+              class="ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+              @click.stop="toggleMenu"
+              @mousedown.stop
+              aria-label="Open menu"
+            >
+              <svg
+                class="w-5 h-5 text-gray-600 dark:text-gray-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="5" r="1" />
+                <circle cx="12" cy="12" r="1" />
+                <circle cx="12" cy="19" r="1" />
+              </svg>
+            </button>
+
+           
+            <div
+              v-if="activeMenu"
+              class="absolute right-1 top-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-lg rounded z-30"
+              @click.stop
+            >
+              <button
+                class="flex items-center w-full px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-100 text-left"
+                @click="generatePDFFromHtml"
+              >
+                <svg
+                  class="w-5 h-5 mr-2 text-gray-600 dark:text-gray-400"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Download PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      </div> -->
+      <!-- download pdf end -->
       <!-- <UserAvatar :type="provider" /> -->
-      
+       
+        <!-- <StatusBox
+          :isLoading="isLoading"
+          :streamData="props.streamData"
+        /> -->
+       
       <div>
         <!-- <StatusAnimationBox
         isLoading="props.isLoading"
@@ -54,9 +136,13 @@
           </div>
         <div class="prose prose-sm  prose prose-sm dark:prose-invert mb-2 text-gray-800 dark:text-gray-100 mb-2">
               <!-- Render Markdown → HTML here -->
-              <div v-html="renderMarkdown((props.data.content) || '')"></div>
+              <!-- <div v-html="renderMarkdown((props.data.content) || '')"></div> -->
               <!-- {{ props.data.content }} -->
             </div>
+                    <div class="prose prose-sm  prose prose-sm dark:prose-invert mb-2 text-gray-800 dark:text-gray-100 mb-2">
+
+             <component :id="'chat-' + messageId" :is="selectedComponent" :agent_type="props.agent_type" :parsed="props.data"  />
+             </div>
           <!-- Message metadata -->
           <div class="text-xs text-gray-500 dark:text-gray-400 hidden">
             <div v-if="props.data.type">Type: {{ props.data.type }}</div>
@@ -99,107 +185,9 @@
  
   </li>
     
-</template>
-  <!-- Check if event is 'user_message' -->
-  <li
-    v-else-if="props.type === 'user_message'"
-    class="flex hidden px-4 items-start gap-x-2 sm:gap-x-4"
-  >
-    <div class="grow text-end space-y-3">
-      <!-- Card -->
-      <div class="inline-block flex justify-end">
-        <p class="text-[16px] text-left color-primary-brandGray dark:text-gray-100 max-w-[80%] w-auto">
-          {{ props.data }}
-        </p>
-      </div>
-      <!-- End Card -->
-    </div>
-    <UserAvatar :type="'user'" />
-  </li>
 
-  <!-- For all other cases -->
-  <li
-    v-else
-    class="relative px-4 hidden items-start gap-x-2 sm:gap-x-4 group"
-  >
-    <div class="w-full relative flex items-center">
-      <UserAvatar :type="provider" />
-      <div class="grow relative text-start space-y-3">
-        <!-- Card -->
-        <div class="inline-block">
-          <div
-            class="relative p-4 flex items-center capitalize space-y-3 font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center capitalize text-gray-800 dark:text-gray-100"
-          >
-            {{ provider === 'sambanova' ? 'SambaNova' : provider }} Agent
-            <!-- Menu button: visible on hover -->
-            <button
-              v-if="
-                parsedData?.agent_type === 'sales_leads' ||
-                parsedData?.agent_type === 'financial_analysis' ||
-                parsedData?.agent_type === 'deep_research'
-              "
-              type="button"
-              class="ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-              @click.stop="toggleMenu"
-              @mousedown.stop
-              aria-label="Open menu"
-            >
-              <svg
-                class="w-5 h-5 text-gray-600 dark:text-gray-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <circle cx="12" cy="5" r="1" />
-                <circle cx="12" cy="12" r="1" />
-                <circle cx="12" cy="19" r="1" />
-              </svg>
-            </button>
-
-            <!-- Popover menu -->
-            <div
-              v-if="activeMenu"
-              class="absolute right-1 top-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-lg rounded z-30"
-              @click.stop
-            >
-              <button
-                class="flex items-center w-full px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-100 text-left"
-                @click="generatePDFFromHtml"
-              >
-                <svg
-                  class="w-5 h-5 mr-2 text-gray-600 dark:text-gray-400"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                Download PDF
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="w-full bg-white dark:bg-gray-800">
-      <AnalysisTimeline
-        :isLoading="isLoading"
-        :parsedData="parsedData"
-        :workflowData="workflowData"
-        :presentMetadata="parsedData?.metadata"
-        :plannerText="plannerText"
-      />
-      <component :id="'chat-' + messageId" :is="selectedComponent" :parsed="parsedData" />
-    </div>
-  </li>
+ 
+ 
 </template>
 
 <script setup>
@@ -207,15 +195,19 @@ import { computed, defineProps, ref, watch, nextTick } from 'vue'
 
 import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
 import AssistantComponent from '@/components/ChatMain/ResponseTypes/AssistantComponent.vue'
+import AssistantEndComponent from '@/components/ChatMain/ResponseTypes/AssistantEndComponent.vue'
+
 import UserProxyComponent from '@/components/ChatMain/ResponseTypes/UserProxyComponent.vue'
 import SalesLeadComponent from '@/components/ChatMain/ResponseTypes/SalesLeadsComponent.vue'
 import EducationalComponent from '@/components/ChatMain/EducationalComponent.vue'
 import UnknownTypeComponent from '@/components/ChatMain/ResponseTypes/UnknownTypeComponent.vue'
 import FinancialAnalysisComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisComponent.vue'
+import FinancialAnalysisEndComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisEndComponent.vue'
+
 import DeepResearchComponent from '@/components/ChatMain/ResponseTypes/DeepResearchComponent.vue'
 import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue'
 import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'
-
+import StatusBox from '@/components/ChatMain/StatusBox.vue';
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import html2pdf from 'html2pdf.js'
@@ -247,6 +239,10 @@ const props = defineProps({
     type: String,
     required: true,
   },
+   agent_type: {
+    type: String,
+    required: true,
+  },
   plannerText: {
     type: String,
     required: true,
@@ -267,11 +263,15 @@ const props = defineProps({
     type: Array,
     required: false,
   },
-     streamData: {
+  streamData: {
     type: Array,
     required: false,
     default: () => []
   },
+   isLoading: {
+    type: Boolean,
+    default: false
+  }
 
 })
 
@@ -287,15 +287,23 @@ const parsedData = computed(() => {
 })
 
 const selectedComponent = computed(() => {
-  switch (parsedData?.value?.agent_type) {
+
+  // alert(props.agent_type)
+  switch (props?.agent_type) {
+      case 'react_end':
+      return AssistantEndComponent
+     case undefined:
+      return AssistantEndComponent
     case 'assistant':
-      return AssistantComponent
+      return AssistantEndComponent
     case 'educational_content':
       return EducationalComponent
     case 'user_proxy':
       return UserProxyComponent
     case 'sales_leads':
       return SalesLeadComponent
+         case 'financial_analysis_end':
+      return FinancialAnalysisEndComponent
     case 'financial_analysis':
       return FinancialAnalysisComponent
     case 'deep_research':

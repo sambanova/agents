@@ -61,16 +61,15 @@
           
           <!-- Chat Bubble -->
           <ChatBubble
-          
-            v-for="msgItem in filteredMessages"
+             
+            v-for="msgItem in messagesData"
             :metadata="completionMetaData"
             :workflowData="
               workflowData.filter(
                 (item) => item.message_id === msgItem.message_id
               )
             "
-            
-             :streamData="streamData"  
+            :streamData="streamData"  
             :plannerText="
               plannerTextData.filter(
                 (item) => item.message_id === msgItem.message_id
@@ -78,12 +77,37 @@
             "
             :key="msgItem.conversation_id"
             :event="msgItem.event"
+            :agent_type="msgItem.agent_type"
+            :data="msgItem"
+            :messageId="msgItem.message_id"
+            :provider="provider"
+            :currentMsgId="currentMsgId"
+            :isLoading="isLoading"
+          />
+           <!-- <ChatBubble
+             v-if="isLoading"
+            v-for="msgItem in filteredMessages"
+            :metadata="completionMetaData"
+            :workflowData="
+              workflowData.filter(
+                (item) => item.message_id === msgItem.message_id
+              )
+            "
+            :streamData="streamData"  
+            :plannerText="
+              plannerTextData.filter(
+                (item) => item.message_id === msgItem.message_id
+              )[0]?.data
+            "
+            :key="msgItem.conversation_id"
+            :event="msgItem.event"
+            :agent_type="msgItem.agent_type"
             :data="msgItem.data"
             :messageId="msgItem.message_id"
             :provider="provider"
             :currentMsgId="currentMsgId"
-            :isLoading="true"
-          />
+            :isLoading="isLoading"
+          /> -->
          <li 
             v-if="streamData.length>0"
             key="loading" class="px-4">
@@ -684,6 +708,8 @@ async function filterChat(msgData) {
  
  messagesData.value = msgData.messages
     .map(message => {
+
+      const agent_type=( message.additional_kwargs?.agent_type)
       // For agent_completion events, preserve the full data structure
       if (
         message.event === 'agent_completion' &&
@@ -693,11 +719,12 @@ async function filterChat(msgData) {
           message.additional_kwargs?.agent_type.includes('_interrupt')
         )
       ) {
-        return {
-          event: 'agent_completion',
-          data: message,  // Pass the entire message object as data
-          timestamp: message.timestamp || new Date().toISOString()
-        };
+
+        // alert(agent_type)
+        message.agent_type=agent_type
+        return message
+         
+        ;
       }
       // For user_message events, keep existing behavior
       else if (message.event === 'user_message') {
@@ -1591,6 +1618,21 @@ function waitForSocketOpen(timeout = 5000) {
 }
 
 const currentMsgId = ref('');
+function addLoadingMessageEvent(){
+
+
+            messagesData.value.push({
+  event: 'loading',
+  data: {},                      // empty payload
+  agent_type: 'loading',      // anything that satisfies your isStreamingEvent test
+  message_id: currentMsgId.value,
+  conversation_id: currentId.value,
+    timestamp: new Date(Date.now() + 1).toISOString()
+  })
+
+          
+
+}
 const addMessage = async () => {
   isLoading.value = true;
   errorMessage.value = '';
@@ -1646,7 +1688,8 @@ const addMessage = async () => {
     }
   }
   
-  const messagePayload = {
+  
+  const serverPayload = {
     event: 'user_message',
     data: searchQuery.value,
     timestamp: new Date().toISOString(),
@@ -1656,13 +1699,25 @@ const addMessage = async () => {
     conversation_id: currentId.value,
     resume: shouldResume,
   };
+    const messagePayload = {
+    
+     event: 'agent_completion',
+    type: 'HumanMessage', agent_type:"human",
+    content: searchQuery.value,
+    timestamp: new Date().toISOString(),
+    provider: provider.value,
+    planner_model: localStorage.getItem(`selected_model_${userId.value}`) || '',
+    message_id: currentMsgId.value,
+    conversation_id: currentId.value,
+    resume: shouldResume,
+  };
 
   if (selectedDocuments.value && selectedDocuments.value.length > 0) {
-    messagePayload.document_ids = selectedDocuments.value.map((doc) => {
+    serverPayload.document_ids = selectedDocuments.value.map((doc) => {
       return typeof doc === 'string' ? doc : doc.id;
     });
   } else {
-    messagePayload.document_ids = [];
+    serverPayload.document_ids = [];
   }
 
   if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
@@ -1671,9 +1726,13 @@ const addMessage = async () => {
       connectWebSocket();
       await waitForSocketOpen();
 
-      socket.value.send(JSON.stringify(messagePayload));
+      socket.value.send(JSON.stringify(serverPayload));
+      
+    
       messagesData.value.push(messagePayload);
 
+      // await nextTick()
+      // addLoadingMessageEvent()
       console.log('Message sent after connecting:', messagePayload);
     } catch (error) {
       errorMessage.value = 'WebSocket connection error occurred.';
@@ -1683,9 +1742,12 @@ const addMessage = async () => {
   } else {
     try {
       isLoading.value = true;
-      socket.value.send(JSON.stringify(messagePayload));
+      socket.value.send(JSON.stringify(serverPayload));
       messagesData.value.push(messagePayload);
+      console.log(messagesData)
       searchQuery.value = '';
+       await nextTick()
+        // addLoadingMessageEvent()
     } catch (e) {
       console.error('ChatView error', e);
       isLoading.value = false;
@@ -1770,17 +1832,25 @@ async function connectWebSocket() {
         //   });
         // } else 
         
-if ((receivedData.event === 'agent_completion')
-&&(receivedData.type==="HumanMessage"||
+if ((receivedData.event === 'agent_completion'&&(receivedData.type!=="HumanMessage")&&
 (receivedData.additional_kwargs?.agent_type.includes("_end")||
-receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {    
+receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {   
+  
+  
         console.log('Agent message stream:', receivedData);
-          messagesData.value.push({
-            event: 'agent_completion', 
-            data: receivedData,
-            timestamp: receivedData.timestamp || new Date().toISOString()
-          });
-            isLoading.value = false;
+        receivedData.agent_type=receivedData.additional_kwargs?.agent_type
+        messagesData.value.push(receivedData)
+          // messagesData.value.push({
+          //   event: 'agent_completion', 
+          //   data: receivedData,
+          //   agent_type:receivedData.additional_kwargs?.agent_type,
+          //   timestamp: receivedData.timestamp || new Date().toISOString()
+          // });
+
+
+          
+      console.log(messagesData)
+            // isLoading.value = false;
         } 
          else if (receivedData.event === 'llm_stream_chunk'||receivedData.event === 'agent_completion') {
           console.log('LLM stream chunk:', receivedData);
@@ -1824,6 +1894,7 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
           //   });
           
         } else if (receivedData.event === 'stream_complete') {
+          isLoading.value=false
           console.log('Stream complete:', receivedData);
           // messagesData.value.push({
           //   event: 'stream_complete',

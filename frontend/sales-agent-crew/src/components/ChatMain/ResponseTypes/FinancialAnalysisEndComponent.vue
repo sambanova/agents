@@ -1,4 +1,5 @@
 <template>
+
   <!-- The root container for your chat-based financial report -->
   <div
     id="financial-analysis-report-root"
@@ -8,7 +9,7 @@
     <div class="flex items-center space-x-3 mb-4 pdf-section">
       <PresentationChartLineIcon class="w-6 h-6 text-purple-600" />
       <h2 class="text-[20px] text-[#101828] font-bold">
-        Financial Analysis: {{ parsed.message.company_name }}
+        Financial Analysis: {{ parsed.content.company_name }}
       </h2>
     </div>
 
@@ -24,13 +25,13 @@
         {{ error }}
       </div>
       <p v-else class="text-[16px] text-primary-brandTextPrimary">
-        <strong>Ticker:</strong> {{ parsed.message.ticker }} |
-        <strong>Company Name:</strong> {{ parsed.message.company_name }}
+        <strong>Ticker:</strong> {{ parsed.content.ticker }} |
+        <strong>Company Name:</strong> {{ parsed.content.company_name }}
       </p>
     </section>
 
     <!-- FUNDAMENTALS -->
-    <section v-if="parsed.message.fundamental" class="pdf-section">
+    <section v-if="parsed.content.fundamental" class="pdf-section">
       <h3
         class="text-lg font-semibold text-primary-brandTextPrimary mb-2 flex items-center space-x-2"
       >
@@ -49,7 +50,7 @@
             {{
               formatMetric(
                 'profit_margins',
-                parsed.message.fundamental.profit_margins
+                parsed.content.fundamental.profit_margins
               )
             }}
           </div>
@@ -63,7 +64,7 @@
             {{
               formatMetric(
                 'operating_margins',
-                parsed.message.fundamental.operating_margins
+                parsed.content.fundamental.operating_margins
               )
             }}
           </div>
@@ -77,7 +78,7 @@
             {{
               formatMetric(
                 'ebitda_margins',
-                parsed.message.fundamental.ebitda_margins
+                parsed.content.fundamental.ebitda_margins
               )
             }}
           </div>
@@ -92,7 +93,7 @@
             <span>Market Cap</span>
           </div>
           <div :class="textClasses.value">
-            {{ formatMetric('market_cap', parsed.message.fundamental.market_cap) }}
+            {{ formatMetric('market_cap', parsed.content.fundamental.market_cap) }}
           </div>
         </div>
         <div :class="sectionClasses">
@@ -101,7 +102,7 @@
             <span>PE Ratio</span>
           </div>
           <div :class="textClasses.value">
-            {{ formatMetric('pe_ratio', parsed.message.fundamental.pe_ratio) }}
+            {{ formatMetric('pe_ratio', parsed.content.fundamental.pe_ratio) }}
           </div>
         </div>
         <div :class="sectionClasses">
@@ -110,7 +111,7 @@
             <span>Forward PE</span>
           </div>
           <div :class="textClasses.value">
-            {{ formatMetric('forward_pe', parsed.message.fundamental.forward_pe) }}
+            {{ formatMetric('forward_pe', parsed.content.fundamental.forward_pe) }}
           </div>
         </div>
         <div :class="sectionClasses">
@@ -119,7 +120,7 @@
             <span>PEG Ratio</span>
           </div>
           <div :class="textClasses.value">
-            {{ formatMetric('peg_ratio', parsed.message.fundamental.peg_ratio) }}
+            {{ formatMetric('peg_ratio', parsed.content.fundamental.peg_ratio) }}
           </div>
         </div>
         <div :class="sectionClasses">
@@ -131,7 +132,7 @@
             {{
               formatMetric(
                 'price_to_book',
-                parsed.message.fundamental.price_to_book
+                parsed.content.fundamental.price_to_book
               )
             }}
           </div>
@@ -145,7 +146,7 @@
             {{
               formatMetric(
                 'dividend_yield',
-                parseFloat(parsed.message.fundamental.dividend_yield / 100)
+                parseFloat(parsed.content.fundamental.dividend_yield / 100)
               )
             }}
           </div>
@@ -156,7 +157,7 @@
             <span>Beta</span>
           </div>
           <div :class="textClasses.value">
-            {{ formatMetric('beta', parsed.message.fundamental.beta) }}
+            {{ formatMetric('beta', parsed.content.fundamental.beta) }}
           </div>
         </div>
         <div class="p-4 border rounded-md bg-white col-span-1 sm:col-span-2">
@@ -165,8 +166,8 @@
             <span>52wk Range</span>
           </div>
           <div :class="textClasses.value">
-            High: {{ parsed.message.fundamental.year_high || '-' }} / Low:
-            {{ parsed.message.fundamental.year_low || '-' }}
+            High: {{ parsed.content.fundamental.year_high || '-' }} / Low:
+            {{ parsed.content.fundamental.year_low || '-' }}
           </div>
         </div>
         <div :class="sectionClasses">
@@ -175,7 +176,7 @@
             <span>Analyst Rec</span>
           </div>
           <div class="text-lg font-bold text-gray-900 capitalize">
-            {{ parsed.message.fundamental.analyst_recommendation || '-' }}
+            {{ parsed.content.fundamental.analyst_recommendation || '-' }}
           </div>
         </div>
         <div :class="sectionClasses">
@@ -185,7 +186,7 @@
           </div>
           <div :class="textClasses.value">
             {{
-              formatMetric('target_price', parsed.message.fundamental.target_price)
+              formatMetric('target_price', parsed.content.fundamental.target_price)
             }}
           </div>
         </div>
@@ -198,7 +199,7 @@
             {{
               formatMetric(
                 'earnings_per_share',
-                parsed.message.fundamental.earnings_per_share
+                parsed.content.fundamental.earnings_per_share
               )
             }}
           </div>
@@ -211,12 +212,12 @@
           </div>
           <div
             :class="textClasses.value"
-            :title="parsed.message.fundamental.return_on_assets"
+            :title="parsed.content.fundamental.return_on_assets"
           >
             {{
               formatMetric(
                 'return_on_assets',
-                parsed.message.fundamental.return_on_assets
+                parsed.content.fundamental.return_on_assets
               )
             }}
           </div>
@@ -231,7 +232,7 @@
             {{
               formatMetric(
                 'return_on_equity',
-                parsed.message.fundamental.return_on_equity
+                parsed.content.fundamental.return_on_equity
               )
             }}
           </div>
@@ -246,7 +247,7 @@
             {{
               formatMetric(
                 'current_ratio',
-                parsed.message.fundamental.current_ratio
+                parsed.content.fundamental.current_ratio
               )
             }}
           </div>
@@ -261,7 +262,7 @@
             {{
               formatMetric(
                 'debt_to_equity',
-                parsed.message.fundamental.debt_to_equity
+                parsed.content.fundamental.debt_to_equity
               )
             }}
           </div>
@@ -296,7 +297,7 @@
         <!-- advanced_fundamentals as a list -->
         <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
           <div
-            v-for="(val, key) in parsed.message.fundamental
+            v-for="(val, key) in parsed.content.fundamental
               .advanced_fundamentals || {}"
             :key="key"
             class="p-2 border rounded-md bg-white text-[14px] min-w-[160px]"
@@ -307,7 +308,7 @@
         </div>
         <!-- dividend_history as a table -->
         <div
-          v-if="(parsed.message.fundamental.dividend_history || []).length > 0"
+          v-if="(parsed.content.fundamental.dividend_history || []).length > 0"
           class="overflow-x-auto"
         >
           <table class="min-w-full border text-[16px]">
@@ -319,7 +320,7 @@
             </thead>
             <tbody>
               <tr
-                v-for="(divItem, index) in parsed.message.fundamental
+                v-for="(divItem, index) in parsed.content.fundamental
                   .dividend_history"
                 :key="index"
                 class="border-b"
@@ -337,7 +338,7 @@
     </section>
 
     <!-- RISK & AVG MONTHLY RETURNS -->
-    <section v-if="parsed.message.risk" class="pdf-section">
+    <section v-if="parsed.content.risk" class="pdf-section">
       <h3
         class="text-lg font-semibold text-primary-brandTextPrimary mb-2 flex items-center space-x-2"
       >
@@ -354,7 +355,7 @@
             <span class="overflow-hidden text-ellipsis" title="Beta">Beta</span>
           </div>
           <div :class="textClasses.value">
-            {{ formatFloat(parsed.message.risk.beta, 2) }}
+            {{ formatFloat(parsed.content.risk.beta, 2) }}
           </div>
         </div>
         <!-- Sharpe -->
@@ -366,7 +367,7 @@
             </span>
           </div>
           <div :class="textClasses.value">
-            {{ formatFloat(parsed.message.risk.sharpe_ratio, 2) }}
+            {{ formatFloat(parsed.content.risk.sharpe_ratio, 2) }}
           </div>
         </div>
         <!-- VaR 95% -->
@@ -380,7 +381,7 @@
             </span>
           </div>
           <div :class="textClasses.value">
-            {{ formatFloat(parsed.message.risk.value_at_risk_95, 4) }}
+            {{ formatFloat(parsed.content.risk.value_at_risk_95, 4) }}
           </div>
         </div>
         <!-- Max Drawdown -->
@@ -392,7 +393,7 @@
             </span>
           </div>
           <div :class="textClasses.value">
-            {{ formatPercentage(parsed.message.risk.max_drawdown, 2) }}
+            {{ formatPercentage(parsed.content.risk.max_drawdown, 2) }}
           </div>
         </div>
         <!-- Volatility -->
@@ -406,7 +407,7 @@
             </span>
           </div>
           <div :class="textClasses.value">
-            {{ formatPercentage(parsed.message.risk.volatility, 2) }}
+            {{ formatPercentage(parsed.content.risk.volatility, 2) }}
           </div>
         </div>
       </div>
@@ -421,7 +422,7 @@
     </section>
 
     <!-- 6-MONTH WEEKLY STOCK PRICE -->
-    <section v-if="parsed.message.stock_price_data" class="pdf-section">
+    <section v-if="parsed.content.stock_price_data" class="pdf-section">
       <h3
         class="text-lg font-semibold text-primary-brandTextPrimary mb-2 flex items-center space-x-2"
       >
@@ -440,7 +441,7 @@
     <!-- NEWS SECTION -->
     <section
       v-if="
-        parsed.message?.news?.news_items && parsed.message.news.news_items.length > 0
+        parsed.content?.news?.news_items && parsed.content.news.news_items.length > 0
       "
       class="pdf-section"
     >
@@ -496,7 +497,7 @@
       </div>
     </section>
     <!-- COMPETITOR ANALYSIS -->
-    <section v-if="parsed.message.competitor" class="pdf-section">
+    <section v-if="parsed.content.competitor" class="pdf-section">
       <h3
         class="text-lg font-semibold text-primary-brandTextPrimary mb-2 flex items-center space-x-2"
       >
@@ -515,11 +516,11 @@
 
       <!-- Competitor List -->
       <div
-        v-if="parsed.message.competitor?.competitor_details?.length"
+        v-if="parsed.content.competitor?.competitor_details?.length"
         class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
       >
         <div
-          v-for="(comp, idx) in parsed.message.competitor.competitor_details"
+          v-for="(comp, idx) in parsed.content.competitor.competitor_details"
           :key="idx"
           class="p-4 border rounded-lg bg-white"
         >
@@ -706,16 +707,16 @@ function breakLargeBlocks(text) {
 }
 
 const comprehensiveSummaryHtml = computed(() => {
-  let raw = props.parsed.message?.comprehensive_summary || '';
+  let raw = props.parsed.content?.comprehensive_summary || '';
   let splitted = breakLargeBlocks(raw);
   return DOMPurify.sanitize(marked(splitted));
 });
 
 const uniqueNewsItems = computed(() => {
-  if (!props.parsed.message?.news?.news_items) return [];
+  if (!props.parsed.content?.news?.news_items) return [];
 
   const seen = new Set();
-  return props.parsed.message.news.news_items.filter((item) => {
+  return props.parsed.content.news.news_items.filter((item) => {
     if (seen.has(item.link)) return false;
     seen.add(item.link);
     return true;
@@ -723,7 +724,7 @@ const uniqueNewsItems = computed(() => {
 });
 
 const newsSummaryHtml = computed(() => {
-  let raw = props.parsed.message?.news?.news_summary || '';
+  let raw = props.parsed.content?.news?.news_summary || '';
   if (!raw) return '';
 
   let splitted = breakLargeBlocks(raw);
@@ -831,9 +832,9 @@ async function createOrUpdateCharts() {
   // #1 Competitor Chart
   if (
     competitorCanvasRef.value &&
-    props.parsed.message?.competitor?.competitor_details?.length
+    props.parsed.content?.competitor?.competitor_details?.length
   ) {
-    const competitorDetails = props.parsed.message.competitor.competitor_details;
+    const competitorDetails = props.parsed.content.competitor.competitor_details;
     const competitorNames = competitorDetails.map((c) => c.name);
     const marketCaps = competitorDetails.map(
       (c) => parseFloat(c.market_cap || '0') / 1e9
@@ -886,9 +887,9 @@ async function createOrUpdateCharts() {
   // #2 Monthly Returns Chart
   if (
     monthlyReturnsCanvasRef.value &&
-    props.parsed.message?.risk?.daily_returns?.length
+    props.parsed.content?.risk?.daily_returns?.length
   ) {
-    const dailyData = props.parsed.message.risk.daily_returns;
+    const dailyData = props.parsed.content.risk.daily_returns;
     const xLabels = dailyData.map((d) => d.date);
     const returnsData = dailyData.map(
       (d) => parseFloat(d.daily_return || '0') * 100
@@ -925,9 +926,9 @@ async function createOrUpdateCharts() {
   // #3 Quarterly Fundamentals Chart
   if (
     quarterlyFundCanvasRef.value &&
-    props.parsed.message?.fundamental?.quarterly_fundamentals?.length
+    props.parsed.content?.fundamental?.quarterly_fundamentals?.length
   ) {
-    const qData = props.parsed.message.fundamental.quarterly_fundamentals.filter(
+    const qData = props.parsed.content.fundamental.quarterly_fundamentals.filter(
       (q) => q.total_revenue != null && q.net_income != null
     );
     if (qData.length > 0) {
@@ -984,9 +985,9 @@ async function createOrUpdateCharts() {
   // #4 Stock Price Chart
   if (
     stockPriceCanvasRef.value &&
-    props.parsed.message?.stock_price_data?.length
+    props.parsed.content?.stock_price_data?.length
   ) {
-    const spData = props.parsed.message.stock_price_data;
+    const spData = props.parsed.content.stock_price_data;
     const xLabels = spData.map((d) => d.date);
     const closePrices = spData.map((d) => parseFloat(d.close || '0'));
 
@@ -1058,7 +1059,7 @@ async function downloadPDF() {
  * Computed error (like original chat)
  * -------------------------------------- */
 const error = computed(() => {
-  return props.parsed.message?.error || '';
+  return props.parsed.content?.error || '';
 });
 </script>
 
