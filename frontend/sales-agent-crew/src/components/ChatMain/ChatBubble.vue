@@ -362,10 +362,16 @@ const props = defineProps({
     required: false,
     default: () => []
   },
+    streamingEvents: {
+    type: Array,
+    required: false,
+    default: () => []
+  },
    isLoading: {
     type: Boolean,
     default: false
-  }
+  },
+  
 
 })
 

@@ -92,7 +92,9 @@
          
           <!-- Chat Bubble -->
           <ChatBubble
-            
+            :streamingEvents=" messagesData.filter(
+                (item) => item.msgType ===  'stream'
+              )"
          v-if="messagesData.find(item =>
     item.message_id === msgItem.message_id &&
     item.agent_type !== 'human' &&
@@ -839,7 +841,44 @@ async function filterChatCombo(msgData) {
 
       const agent_type=( message.additional_kwargs?.agent_type)
       // For agent_completion events, preserve the full data structure
-      if (message.event === 'agent_completion' &&(
+
+      if(message.event === 'agent_completion'){
+          const isToolCall = message.content && typeof message.content === 'string' && message.content.includes('<tool>');
+        const isToolResult = Array.isArray(message.content) || (message.additional_kwargs?.agent_type === 'react_tool');
+        const isToolResponse = message.additional_kwargs?.agent_type === 'tool_response';
+        
+        // For Daytona sandbox tool calls/results, always preserve them for sidebar processing
+        const isDaytonaRelated = (isToolCall && message.content.includes('DaytonaCodeSandbox')) ||
+                                 (message.type === 'LiberalFunctionMessage' && message.name === 'DaytonaCodeSandbox');
+        
+        if (isToolCall || isToolResult || isToolResponse || isDaytonaRelated) {
+          // Preserve tool-related messages for comprehensive audit log and Daytona processing
+          console.log('Preserving tool-related message for audit log and Daytona processing:', message.additional_kwargs?.agent_type, message.name);
+          
+          // Create structured data for tool events matching the live streaming format
+          const toolData = {
+            content: message.content || '',
+            additional_kwargs: message.additional_kwargs || {},
+            response_metadata: message.response_metadata || {},
+            type: message.type || 'AIMessage',
+            id: message.id || message.message_id,
+            name: message.name || null,
+            agent_type: message.additional_kwargs?.agent_type || 'tool'
+          };
+          
+          // alert( message.additional_kwargs?.agent_type)
+          // return {
+          //   event: 'agent_completion',
+          //   data: toolData,
+          //   message_id: message.message_id,
+          //   conversation_id: message.conversation_id,
+          //   timestamp: message.timestamp || new Date().toISOString(),
+          //   isToolRelated: true, // Flag for filtering in chat display but preserving for audit
+          //   isDaytonaRelated: isDaytonaRelated
+          // };
+        }
+
+         if ((
           message.type === 'HumanMessage' ||
           message.additional_kwargs?.agent_type.includes('_end') ||
           message.additional_kwargs?.agent_type.includes('_interrupt'))
@@ -855,7 +894,7 @@ async function filterChatCombo(msgData) {
         return message;
 
        
-      }else if (message.event === 'agent_completion'  ||message.event === 'llm_stream_chunk') {
+      }else if (message.event === 'llm_stream_chunk') {
 
         // alert(agent_type)
         message.agent_type=agent_type
@@ -864,6 +903,9 @@ async function filterChatCombo(msgData) {
          
         ;
       }
+      }
+
+     
       // For user_message events, keep existing behavior
       else if (message.event === 'user_message') {
         return message;

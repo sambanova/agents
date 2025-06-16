@@ -677,6 +677,7 @@ async function filterChat(msgData) {
           };
           
           return {
+            agent_type:"toolData"
             event: 'agent_completion',
             data: toolData,
             message_id: message.message_id,
