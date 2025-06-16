@@ -5,7 +5,7 @@
    <!-- {{props?.data.content}} -->
   <!-- Handle streaming and agent_completion events -->
     <!-- {{ props.streamData }} -->
-  <!-- {{ props }} -->
+  {{ props?.data }}
   
 
     <div class="w-full flex flex-col ">
@@ -126,15 +126,15 @@
             </div>
                     <div class="prose prose-sm  prose prose-sm dark:prose-invert mb-2 text-gray-800 dark:text-gray-100 mb-2">
 
-             <component :id="'chat-' + messageId" :is="selectedComponent" :agent_type="props.agent_type" :parsed="props?.data"  />
+             <!-- <component :id="'chat-' + messageId" :is="selectedComponent" :agent_type="props.agent_type" :parsed="props?.data"  /> -->
              </div>
           <!-- Message metadata -->
-          <!-- <div class="text-xs text-gray-500 dark:text-gray-400 hidden">
+          <div class="text-xs text-gray-500 dark:text-gray-400 hidden">
             <div v-if="props?.data.type">Type: {{ props?.data.type }}</div>
             <div v-if="props?.data.additional_kwargs?.agent_type">
               Agent Type: {{ props?.data.additional_kwargs.agent_type }}
             </div>
-          </div> -->
+          </div>
 
           <!-- Dropdown for full message details -->
           <div class="mt-2">
@@ -288,7 +288,7 @@ const hasArtifacts = computed(() => {
 
 const artifacts = computed(() => {
 
-  // alert("checking")
+  alert("checking")
   if (!props.streamData) return []
   
   const charts = []
@@ -449,7 +449,7 @@ const parsedData = computed(() => {
 
 const selectedComponent = computed(() => {
 
-  // alert(props?.data.agent_type)
+  alert(props?.data.agent_type)
   switch (props?.data?.agent_type) {
       case 'react_end':
       return AssistantEndComponent

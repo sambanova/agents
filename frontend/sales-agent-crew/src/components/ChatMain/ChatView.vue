@@ -5,14 +5,14 @@
       ref="container"
       class="relative h-full flex  overflow-x-hidden overflow-y-auto"
        :class="
-          (messagesData.length == 0&&streamData.length==0 )? 'justify-center align-center flex-col' : 'flex-col'
+          (messagesData.length == 0 )? 'justify-center align-center flex-col' : 'flex-col'
         "
     >
      
       <div
         class=" w-full flex mx-auto"
         :class="
-          messagesData.length == 0&&streamData.length==0 ? 'justify-center align-center flex-col' : 'flex-1'
+          messagesData.length == 0? 'justify-center align-center flex-col' : 'flex-1'
         "
       >
        <!-- Sticky Top Component -->
@@ -44,7 +44,7 @@
         </div>
       </div>
         <!-- Title -->
-        <div v-if="messagesData.length == 0&&streamData.length==0" class="w-full text-center">
+        <div v-if="messagesData.length == 0" class="w-full text-center">
           <h1 v-if="!initialLoading" class="text-3xl font-bold sm:text-3xl">
             <span class="bg-clip-text text-primary-brandTextSecondary dark:text-primary-brandTextSecondary-dark">
               What can I help you with?
@@ -53,16 +53,47 @@
         </div>
         <!-- End Title -->
         
+
         <transition-group
           name="chat"
           tag="ul"
           class="mt-16 max-w-4xl w-full mx-auto space-y-5"
+             
         >
-          
+          <template v-for="msgItem in messagesData.filter(
+                (item) => item.type === 'HumanMessage'
+              )" :key="msgItem.message_id">
+    <li
+   
+    class="flex px-4 items-start gap-x-2 sm:gap-x-4"
+  >
+    <div class="grow text-end space-y-3">
+      <!-- Card -->
+      <div class="inline-block flex justify-end">
+        <p class="text-[16px] text-left color-primary-brandGray dark:text-gray-100 max-w-[80%] w-auto">
+          {{ msgItem.content }}
+        </p>
+      </div>
+      <!-- End Card -->
+    </div>
+    <UserAvatar :type="'user'" />
+  </li>
+   <li   class="px-4 items-start gap-x-2 sm:gap-x-4">
+
+        <StatusBox
+         :workflowData="
+              workflowData.filter(
+                (item) => item.message_id === msgItem.message_id)"
+          :isLoading="isLoading"
+          :streamData=" messagesData.filter(
+                (item) => item.msgType ===  'stream'
+              )"
+        />
+         
           <!-- Chat Bubble -->
           <ChatBubble
             
-            v-for="msgItem in messagesData"
+         
             :metadata="completionMetaData"
             :workflowData="
               workflowData.filter(
@@ -76,55 +107,27 @@
               )[0]?.data
             "
             :key="msgItem.conversation_id"
-            :event="msgItem.event"
-            :agent_type="msgItem.agent_type"
-            :data="msgItem"
+          
+           :data="
+  messagesData.find(item =>
+    item.message_id === msgItem.message_id &&
+    item.agent_type !== 'human' &&
+    (
+      item.agent_type.includes('_end') ||
+      item.agent_type.includes('_interrupt')
+    )
+  )
+"
+
             :messageId="msgItem.message_id"
             :provider="provider"
             :currentMsgId="currentMsgId"
             :isLoading="isLoading"
-            :streamData="streamData"
+            
             
           />
-           <!-- <ChatBubble
-             v-if="isLoading"
-            v-for="msgItem in filteredMessages"
-            :metadata="completionMetaData"
-            :workflowData="
-              workflowData.filter(
-                (item) => item.message_id === msgItem.message_id
-              )
-            "
-            :streamData="streamData"  
-            :plannerText="
-              plannerTextData.filter(
-                (item) => item.message_id === msgItem.message_id
-              )[0]?.data
-            "
-            :key="msgItem.conversation_id"
-            :event="msgItem.event"
-            :agent_type="msgItem.agent_type"
-            :data="msgItem.data"
-            :messageId="msgItem.message_id"
-            :provider="provider"
-            :currentMsgId="currentMsgId"
-            :isLoading="isLoading"
-          /> -->
-         <li 
-            v-if="streamData.length>0"
-            key="loading" class="px-4">
-        <StatusBox
-         v-for="msgItem in messagesData"
-         :workflowData="
-              workflowData.filter(
-                (item) => item.message_id === msgItem.message_id
-              )
-            "
-          :isLoading="isLoading"
-          :streamData=" streamData.filter(
-                (item) => item.message_id === msgItem.message_id
-              )"
-        />
+          
+         
       </li>
        <!-- <li 
             v-if="streamData.length>0"
@@ -153,6 +156,7 @@
             :messageId="currentMsgId"
           /> -->
           <!-- End Chat Bubble -->
+           </template>
         </transition-group>
         
       </div>
@@ -426,6 +430,7 @@ import ChatBubble from '@/components/ChatMain/ChatBubble.vue';
 import ChatLoaderBubble from '@/components/ChatMain/ChatLoaderBubble.vue';
 import StatusAnimationBox from '@/components/ChatMain/StatusAnimationBox.vue';
 import StatusBox from '@/components/ChatMain/StatusBox.vue';
+import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
 
 
 const router = useRouter();
@@ -591,7 +596,7 @@ const assistantThinking = ref(false);
 const isLoading = ref(false);
 const initialLoading = ref(false);
 const messagesContainer = ref(null);
-const streamData = ref([]);
+// const streamData = ref([]);
 
 // Conversation change watcher:
 watch(
@@ -605,7 +610,7 @@ watch(
       messagesData.value = [];
       agentThoughtsData.value = [];
       workflowData.value = [];
-       streamData.value = [];
+      //  streamData.value = [];
       plannerTextData.value = [];
       searchQuery.value = '';
       chatName.value = '';
@@ -682,7 +687,7 @@ async function loadPreviousChat(convId) {
     console.log('Chat history response:', resp.data);
     
     if (resp.data && resp.data.messages) {
-      await filterChat(resp.data);
+      await filterChatCombo(resp.data);
       console.log('Filtered messages loaded:', messagesData.value.length);
 
     } else {
@@ -716,28 +721,28 @@ const agentThoughtsData = ref([]);
 
 async function filterChat(msgData) {
  
- streamData.value = msgData.messages
-    .map(message => {
+//  streamData.value = msgData.messages
+//     .map(message => {
 
-      const agent_type=( message.additional_kwargs?.agent_type)
-      // For agent_completion events, preserve the full data structure
-      if (message.event === 'agent_completion'&& message.additional_kwargs?.agent_type !== 'human' &&(
+//       const agent_type=( message.additional_kwargs?.agent_type)
+//       // For agent_completion events, preserve the full data structure
+//       if (message.event === 'agent_completion'&& message.additional_kwargs?.agent_type !== 'human' &&(
           
-          !message.additional_kwargs?.agent_type.includes('_end') ||
-          !message.additional_kwargs?.agent_type.includes('_interrupt'))
-      ) {
+//           !message.additional_kwargs?.agent_type.includes('_end') ||
+//           !message.additional_kwargs?.agent_type.includes('_interrupt'))
+//       ) {
 
-        // alert(agent_type)
-        message.agent_type=agent_type
-        return message
+//         // alert(agent_type)
+//         message.agent_type=agent_type
+//         return message
          
-        ;
-      }
+//         ;
+//       }
       
-      return null;
-    })
-    .filter(Boolean)  // Remove nulls
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+//       return null;
+//     })
+//     .filter(Boolean)  // Remove nulls
+//     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
 
      messagesData.value = msgData.messages
@@ -753,6 +758,94 @@ async function filterChat(msgData) {
 
         // alert(agent_type)
         message.agent_type=agent_type
+        return message
+         
+        ;
+      }
+      // For user_message events, keep existing behavior
+      else if (message.event === 'user_message') {
+        return message;
+      }
+      return null;
+    })
+    .filter(Boolean)  // Remove nulls
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  let plannerData = msgData.messages.filter(
+    (message) => message.event === 'planner'
+  );
+  plannerData.forEach((planner) => {
+    addOrUpdateModel(JSON.parse(planner.data).metadata, planner.message_id);
+  });
+  let workData = msgData.messages.filter(
+    (message) => message.event === 'think'
+  );
+  workData.forEach((work) => {
+    addOrUpdateModel(JSON.parse(work.data).metadata, work.message_id);
+  });
+
+  AutoScrollToBottom();
+
+  agentThoughtsData.value = msgData.messages
+    .filter((message) => message.event === 'think')
+    .sort(
+      (a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    )
+    .reduce((acc, message) => {
+      try {
+        const parsed = JSON.parse(message.data);
+        acc.push(parsed);
+      } catch (error) {
+        console.error('Failed to parse JSON for message:', message, error);
+      }
+      return acc;
+    }, []);
+  emit('agentThoughtsDataChanged', agentThoughtsData.value);
+
+  let userMessages = messagesData.value
+    .filter((message) => message.event === 'user_message')
+    .sort(
+      (a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+  console.log('userMessages', userMessages);
+
+  if (userMessages[0]?.data) {
+    chatName.value = userMessages[0].data;
+  }
+
+  AutoScrollToBottom();
+  await nextTick();
+}
+
+async function filterChatCombo(msgData) {
+ 
+
+
+     messagesData.value = msgData.messages
+    .map(message => {
+
+      const agent_type=( message.additional_kwargs?.agent_type)
+      // For agent_completion events, preserve the full data structure
+      if (message.event === 'agent_completion' &&(
+          message.type === 'HumanMessage' ||
+          message.additional_kwargs?.agent_type.includes('_end') ||
+          message.additional_kwargs?.agent_type.includes('_interrupt'))
+      ) {
+
+        // alert(agent_type)
+        message.agent_type=agent_type
+         message.msgType='message'
+        return message;
+
+       
+      }else if (message.event === 'agent_completion'  ||message.event === 'llm_stream_chunk') {
+
+        // alert(agent_type)
+        message.agent_type=agent_type
+        message.msgType='stream'
         return message
          
         ;
@@ -1702,6 +1795,7 @@ const addMessage = async () => {
 
   currentMsgId.value = uuidv4();
   
+  // alert(currentMsgId.value)
   // Check if the last agent_completion message is a deep_research_interrupt and user typed something
   let shouldResume = false;
   if (messagesData.value.length > 0) {
@@ -1733,7 +1827,9 @@ const addMessage = async () => {
     const messagePayload = {
     
      event: 'agent_completion',
-    type: 'HumanMessage', agent_type:"human",
+    type: 'HumanMessage', 
+    agent_type:"human",
+    msgType:"message",
     content: searchQuery.value,
     timestamp: new Date().toISOString(),
     provider: provider.value,
@@ -1870,31 +1966,56 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
   
         console.log('Agent message stream:', receivedData);
         receivedData.agent_type=receivedData.additional_kwargs?.agent_type
-        messagesData.value.push(receivedData)
-          // messagesData.value.push({
-          //   event: 'agent_completion', 
-          //   data: receivedData,
-          //   agent_type:receivedData.additional_kwargs?.agent_type,
-          //   timestamp: receivedData.timestamp || new Date().toISOString()
-          // });
+        // receivedData=receivedData.content
+        // messagesData.value.push(receivedData)
+        console.log("onmessage",{
+            event: 'agent_completion', 
+            content: receivedData.content,
+            agent_type:receivedData.additional_kwargs?.agent_type,
+            timestamp: receivedData.timestamp || new Date().toISOString()
+          })
+          messagesData.value.push({
+            event: 'agent_completion', 
+                        content: receivedData.content,
+
+              message_id: receivedData.message_id,
+            conversation_id: receivedData.conversation_id,
+            content: receivedData.content,
+            agent_type:receivedData.additional_kwargs?.agent_type,
+            timestamp: receivedData.timestamp || new Date().toISOString()
+          });
 
 
           
-      console.log(messagesData)
+      console.log("messagesData",messagesData)
             // isLoading.value = false;
         } 
-         else if (receivedData.agent_type=receivedData.additional_kwargs?.agent_type!=='human'&&(receivedData.event === 'llm_stream_chunk'||receivedData.event === 'agent_completion')) {
+         else if (receivedData.additional_kwargs?.agent_type!=='human'&&
+         (receivedData.event === 'llm_stream_chunk'||receivedData.event === 'agent_completion')) {
           console.log('LLM stream chunk:', receivedData);
           const chunkId = receivedData.id;
-          receivedData.agent_type=receivedData.additional_kwargs?.agent_type
-          streamData.value.push(receivedData)
+          // receivedData.agent_type=receivedData.additional_kwargs?.agent_type
+          
+          // receivedData.content=receivedData.content
 
-           streamData.value.sort(
-    (a, b) =>
-      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  )
+          // streamData.value.push(receivedData)
+            messagesData.value.push({
+            event: receivedData.event , 
+            content: receivedData.content,
+            msgType:"stream",
+                message_id: receivedData.value,
+            conversation_id: receivedData.value,
+            agent_type:receivedData.additional_kwargs?.agent_type,
+            timestamp: receivedData.timestamp || new Date().toISOString()
+          });
+      
 
-  console.log("streamData",streamData)
+  //          streamData.value.sort(
+  //   (a, b) =>
+  //     new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  // )
+
+  // console.log("streamData",streamData)
           // if (chunkId) {
           //   // Find existing message with the same ID
           //   const existingIndex = messagesData.value.findIndex(
@@ -1932,14 +2053,26 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
           //   data: receivedData,
           //   timestamp: new Date().toISOString()
           // });
-                    receivedData.agent_type=receivedData.additional_kwargs?.agent_type
+                    // receivedData.agent_type=receivedData.additional_kwargs?.agent_type
+                  // receivedData.msgType="stream"
+                  //         receivedData.content=receivedData.data.content
 
-                   streamData.value.push(receivedData)
+                  //  streamData.value.push(receivedData)
 
-           streamData.value.sort(
-    (a, b) =>
-      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  )
+                    messagesData.value.push({
+            event: receivedData.event , 
+            content: receivedData.content,
+            msgType:"stream",
+                message_id: receivedData.value,
+            conversation_id: receivedData.value,
+            agent_type:receivedData.additional_kwargs?.agent_type,
+            timestamp: receivedData.timestamp || new Date().toISOString()
+          });
+
+  //          streamData.value.sort(
+  //   (a, b) =>
+  //     new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  // )
 
         
         }

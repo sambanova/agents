@@ -1,78 +1,291 @@
 <template>
-  <div class="flex justify-start    items-start">
-    <h1 class="capitalize"
-    :class="{ 'box-progress': props.isLoading }"
-    :data-text="text">{{ text }}</h1>
-    <!-- <span class="box-text">{{ number }}%</span> -->
+  <!-- 1) If no streaming data, show placeholder -->
+  <div
+    v-if="!streamData?.length"
+    class="p-6 text-center text-gray-500 dark:text-gray-400"
+  >
+    No streaming events to display.
+  </div>
+
+  <!-- 2) Otherwise render full timeline + audit log -->
+  <div v-else>
+    <!-- Tool header & timeline -->
+    <div class="flex flex-col p-4 border rounded mb-6">
+      <!-- animated header -->
+      <h2 
+        class="capitalize text-xl font-bold mb-4 relative"
+        :class="{ 'box-progress': isLoading }"
+        :data-text="currentToolName || '– none –'"
+      >
+        {{ currentToolName || '– none –' }}
+      </h2>
+
+      <!-- static timeline -->
+      <div class="flex space-x-6 mb-4">
+        <div
+          v-for="(tool, idx) in toolTimeline"
+          :key="idx"
+          class="relative pl-4 text-gray-700"
+        >
+          <div
+            class="absolute left-0 top-1/2 w-2 h-2 rounded-full border-2 border-gray-500 bg-white transform -translate-y-1/2"
+          ></div>
+          {{ tool }}
+        </div>
+      </div>
+
+      <!-- description box (auto-scrolls) -->
+      <div
+        ref="descContainer"
+        class="p-3 overflow-y-auto bg-gray-50 dark:bg-gray-800 rounded"
+        style="max-height: 150px;"
+      >
+        {{ description || (isLoading ? 'Waiting for stream…' : '') }}
+      </div>
+    </div>
+
+    <!-- Tool sources -->
+    <div v-if="toolSources.length" class="px-4 py-2 mb-6">
+      <div class="flex flex-wrap gap-2">
+        <a
+          v-for="src in toolSources"
+          :key="src.url || src.title"
+          :href="src.url"
+          target="_blank"
+          class="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 dark:bg-gray-700 border dark:border-gray-600 rounded text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 transition"
+        >
+          <span v-if="src.type === 'web'">🌐</span>
+          <span v-else-if="src.type === 'arxiv'">📚</span>
+          <span class="truncate max-w-[120px]">{{ src.title }}</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Comprehensive Audit Log -->
+    <div class="p-3 dark:bg-gray-700 border-b dark:border-gray-600 max-h-96 overflow-y-auto">
+      <div class="text-xs font-medium text-gray-600 dark:text-gray-300 mb-3">
+        Comprehensive Audit Log
+      </div>
+      <div class="relative space-y-3 pl-6">
+        <div
+          v-for="(event, idx) in auditLogEvents"
+          :key="event.id"
+          class="relative"
+        >
+          <div
+            class="absolute left-0 top-0 w-3 h-3 bg-[#EAECF0] dark:bg-white rounded-full"
+          ></div>
+          <div
+            v-if="idx < auditLogEvents.length - 1"
+            class="absolute left-1.5 top-5 bottom-0 border-l-2 border-gray-200 dark:border-gray-600"
+          ></div>
+          <div class="flex items-start space-x-2 ml-6">
+            <div class="flex-1">
+              <div class="flex justify-between">
+                <span class="text-xs font-medium text-gray-900 dark:text-gray-100">
+                  {{ event.title }}
+                </span>
+                <span class="text-xs text-gray-400 dark:text-gray-500">
+                  {{ formatEventTime(event.timestamp) }}
+                </span>
+              </div>
+              <div
+                v-if="event.details"
+                class="text-xs text-gray-600 dark:text-gray-400 mt-1"
+              >
+                {{ event.details }}
+              </div>
+              <div
+                v-if="event.subItems?.length"
+                class="mt-2 ml-4 space-y-1 text-xs text-gray-600 dark:text-gray-400"
+              >
+                <div
+                  v-for="sub in event.subItems"
+                  :key="sub.id"
+                  class="flex items-start space-x-1"
+                >
+                  <span>•</span>
+                  <span>
+                    {{ sub.title }}
+                    <span v-if="sub.domain">({{ sub.domain }})</span>
+                  </span>
+                </div>
+              </div>
+              <div class="text-xs text-gray-400 dark:text-gray-600 mt-1">
+                <span class="bg-gray-100 dark:bg-gray-600 px-1 rounded">
+                  {{ event.event }}
+                </span>
+                <span
+                  v-if="event.type"
+                  class="bg-blue-100 dark:bg-blue-600 px-1 rounded ml-1"
+                >
+                  {{ event.type }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted ,toRefs} from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 
-
-// Declare the prop using defineProps
 const props = defineProps({
-  text: {
-    type: String,
-    default: ''
-  },
-   isLoading: {
-    type: Boolean,
-    default: false
-  }
+  streamData:   { type: Array,  default: () => [] },
+  workflowData: { type: Array,  default: () => [] },
+  isLoading:    { type: Boolean, default: false },
 })
 
-// You can destructure it for ease of use:
-const { text } = toRefs(props)
+// helper to pull <tool>NAME</tool> from content
+function extractToolName(content) {
+  const m = /<tool>(.*?)<\/tool>/.exec(content)
+  return m ? m[1] : ''
+}
 
-const number = ref(0)
+// 1) all tools used so far
+const toolTimeline = computed(() =>
+  props.streamData
+    .filter(i =>
+      i.event === 'agent_completion' &&
+      i.additional_kwargs?.agent_type === 'react_tool'
+    )
+    .map(i => extractToolName(i.content))
+)
 
-onMounted(() => {
-  const interval = setInterval(() => {
-    number.value += 1
-  }, 10000)
+// 2) current (last) tool
+const currentToolName = computed(() =>
+  toolTimeline.value.length
+    ? toolTimeline.value.slice(-1)[0]
+    : ''
+)
 
-  onUnmounted(() => {
-    clearInterval(interval)
+// 3) accumulated description
+const description = computed(() =>
+  props.streamData
+    .filter(i =>
+      ['stream_start','llm_stream_chunk','stream_complete'].includes(i.event)
+    )
+    .map(i => i.content)
+    .join('')
+)
+
+// auto‐scroll the description box on changes
+const descContainer = ref(null)
+watch(description, () => {
+  nextTick(() => {
+    if (descContainer.value) {
+      descContainer.value.scrollTop = descContainer.value.scrollHeight
+    }
   })
 })
+
+// 4) gather tool sources (e.g. search_tavily results)
+const toolSources = computed(() => {
+  const sources = []
+  props.streamData.forEach(event => {
+    if (event.name === 'search_tavily' && Array.isArray(event.content)) {
+      event.content.forEach(src => {
+        let title = src.title?.trim() || ''
+        let domain = ''
+        if (!title && src.url) {
+          try {
+            domain = new URL(src.url).hostname.replace('www.', '')
+            title = domain
+          } catch {}
+        }
+        sources.push({
+          title: title || 'Untitled',
+          domain,
+          url: src.url || '',
+          type: 'web'
+        })
+      })
+    }
+    // you can add arxiv parsing here too…
+  })
+  return sources.slice(0,5)
+})
+
+// 5) audit log events
+const auditLogEvents = computed(() => {
+  // if no streamData, build synthetic log from workflowData
+  if (!props.streamData.length && props.workflowData.length) {
+    const unique = []
+    const seen = new Set()
+    props.workflowData.forEach((w,i) => {
+      const key = `${w.agent_name}-${w.task}-${w.tool_name}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        unique.push({
+          id: `synthetic-${i}`,
+          title: `✅ ${w.agent_name} – ${w.task}`,
+          details: w.tool_name ? `Tool: ${w.tool_name}` : 'Completed',
+          subItems: [],
+          event: 'workflow_item',
+          type: 'tool_result',
+          timestamp: new Date().toISOString()
+        })
+      }
+    })
+    return unique
+  }
+
+  // otherwise derive from streamData
+  const out = []
+  const seenKeys = new Set()
+  props.streamData.forEach((evt, idx) => {
+    const key = `${evt.event}-${evt.timestamp}`
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key)
+      let raw = evt.content
+      let detail = ''
+      if (typeof raw === 'string') {
+        detail = raw.length > 100 ? raw.slice(0,100)+'…' : raw
+      } else {
+        detail = JSON.stringify(raw).slice(0,100)+'…'
+      }
+      out.push({
+        id: `audit-${idx}`,
+        title: evt.event,
+        details: detail,
+        subItems: [],
+        event: evt.event,
+        type: 'info',
+        timestamp: evt.timestamp
+      })
+    }
+  })
+  return out
+})
+
+function formatEventTime(ts) {
+  return new Date(ts).toLocaleTimeString([], {
+    hour:   '2-digit',
+    minute: '2-digit'
+  })
+}
 </script>
 
 <style scoped>
-.flex-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  font-family: "Titillium Web", sans-serif;
-}
-
-.box-text {
-  color: rgba(31, 41, 55, 0.8);
-}
-
+/* typing “reveal” animation on header when isLoading */
 .box-progress {
   color: #667085;
   position: relative;
 }
-
-.box-progress:before {
+.box-progress::before {
   content: attr(data-text);
   position: absolute;
   overflow: hidden;
-  max-width: 6.5em;
+  max-width: 0;
   white-space: nowrap;
   color: #101828;
   animation: loading 2s linear infinite;
 }
-
 @keyframes loading {
-  0% {
-    max-width: 0;
-  }
-  100% {
-    max-width: 100%;
-  }
+  from { max-width: 0; }
+  to   { max-width: 100%; }
 }
 </style>
