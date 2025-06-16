@@ -85,9 +85,7 @@
               workflowData.filter(
                 (item) => item.message_id === msgItem.message_id)"
           :isLoading="isLoading"
-            :streamingEvents=" messagesData.filter(
-                (item) => item.msgType ===  'toolData'
-              )"
+          
           :streamData=" messagesData.filter(
                 (item) => item.msgType ===  'stream'
               )"
