@@ -1,15 +1,10 @@
-########## configuration.py (NEW FILE) ##########
 import os
+from dataclasses import dataclass, fields
 from enum import Enum
-from dataclasses import dataclass, field, fields
 from typing import Any, Callable, Optional
 
-from langchain_core.runnables import RunnableConfig
-from typing_extensions import Annotated
-from dataclasses import dataclass
-
 from agents.components.open_deep_research.utils import APIKeyRotator
-
+from langchain_core.runnables import RunnableConfig
 
 DEFAULT_REPORT_STRUCTURE = """The report structure should focus on breaking-down the user-provided topic:
 

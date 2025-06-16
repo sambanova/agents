@@ -1,8 +1,8 @@
-########## state.py (NEW FILE) ##########
-from typing import Annotated, List, TypedDict, Literal, Optional
+import operator
+from typing import Annotated, List, Literal, Optional, TypedDict
+
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, Field
-import operator
 
 
 class Section(BaseModel):

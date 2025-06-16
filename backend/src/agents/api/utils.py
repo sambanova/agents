@@ -1,13 +1,9 @@
-########## NEW CODE ##########
 import json
 import os
 import re
 from typing import List
-from autogen_core import SingleThreadedAgentRuntime, TypeSubscription
+from autogen_core import SingleThreadedAgentRuntime
 from autogen_core import DefaultSubscription
-from fastapi import WebSocket
-from fastapi.responses import JSONResponse
-import redis
 
 from agents.components.routing.financial_analysis import FinancialAnalysisAgent
 from agents.components.routing.educational_content import EducationalContentAgent
@@ -15,17 +11,22 @@ from agents.components.routing.route import SemanticRouterAgent
 
 from agents.components.routing.sales_leads import SalesLeadsAgent
 
+
+
+
+
 from agents.api.otlp_tracing import configure_oltp_tracing
 from agents.api.websocket_interface import WebSocketInterface
 from agents.storage.redis_service import SecureRedisService
-from agents.utils.logging import logger
 from agents.api.session_state import SessionStateManager
 from agents.components.routing.user_proxy import UserProxyAgent
-
 from agents.components.routing.assistant import AssistantAgentWrapper
 from agents.api.data_types import APIKeys
-
 from agents.components.routing.deep_research_agent import DeepResearchAgent
+
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 session_state_manager = SessionStateManager()
 

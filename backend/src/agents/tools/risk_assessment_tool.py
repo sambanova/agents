@@ -9,7 +9,9 @@ from agents.tools.financial_data import (
     get_price_data_yfinance,
     get_ticker_yfinance,
 )
-from agents.utils.logging import logger
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 
 ###################### RISK ASSESSMENT TOOL ######################

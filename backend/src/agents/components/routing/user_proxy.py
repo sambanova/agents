@@ -1,26 +1,18 @@
-from datetime import datetime, timezone
+import asyncio
 import json
 import time
-from typing import Dict, List, Any, Optional
-import asyncio
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
-from autogen_core import MessageContext
-from autogen_core import (
-    DefaultTopicId,
-    RoutedAgent,
-    message_handler,
-)
-from autogen_core.models import AssistantMessage
 import redis
-
+import structlog
+from agents.api.data_types import AgentStructuredResponse, EndUserMessage
 from agents.api.session_state import SessionStateManager
 from agents.api.websocket_interface import WebSocketInterface
+from autogen_core import DefaultTopicId, MessageContext, RoutedAgent, message_handler
+from autogen_core.models import AssistantMessage
 
-from agents.api.data_types import (
-    AgentStructuredResponse,
-    EndUserMessage,
-)
-from agents.utils.logging import logger
+logger = structlog.get_logger(__name__)
 
 
 # User Proxy Agent
@@ -29,9 +21,19 @@ class UserProxyAgent(RoutedAgent):
     Acts as a proxy between the user and the routing agent.
     """
 
-    def __init__(self, session_manager: SessionStateManager, websocket_manager: WebSocketInterface, redis_client: redis.Redis) -> None:
+    def __init__(
+        self,
+        session_manager: SessionStateManager,
+        websocket_manager: WebSocketInterface,
+        redis_client: redis.Redis,
+    ) -> None:
         super().__init__("UserProxyAgent")
-        logger.info(logger.format_message(None, f"Initializing UserProxyAgent with ID: {self.id} and WebSocket connection"))
+        logger.info(
+            logger.format_message(
+                None,
+                f"Initializing UserProxyAgent with ID: {self.id} and WebSocket connection",
+            )
+        )
         self.session_manager = session_manager
         self.websocket_manager = websocket_manager
         self.redis_client = redis_client
@@ -40,26 +42,30 @@ class UserProxyAgent(RoutedAgent):
     def _calculate_token_savings(self, data: dict) -> float:
         """
         Calculate token savings based on metadata information.
-        
+
         Args:
             data (dict): The parsed message data containing metadata with token information
-            
+
         Returns:
             dict: Token savings calculations or None if required metadata is missing
         """
         if not (
-            "metadata" in data 
-            and "prompt_tokens" in data["metadata"] 
+            "metadata" in data
+            and "prompt_tokens" in data["metadata"]
             and "completion_tokens" in data["metadata"]
         ):
             return None
-            
+
         metadata = data["metadata"]
         input_token_saving = (2.5 - 0.6) * metadata["prompt_tokens"] / 1e6
         output_token_saving = (10 - 1.2) * metadata["completion_tokens"] / 1e6
         total_saving_per_run = input_token_saving + output_token_saving
-        X = 1e6 / (365 * total_saving_per_run) if total_saving_per_run > 0 else float('inf')
-        
+        X = (
+            1e6 / (365 * total_saving_per_run)
+            if total_saving_per_run > 0
+            else float("inf")
+        )
+
         return X
 
     @message_handler
@@ -82,7 +88,9 @@ class UserProxyAgent(RoutedAgent):
             # Calculate processing time
             start_time = self.message_timings.get(ctx.topic_id.source)
             if start_time is None:
-                logger.error(f"No start time found for message {ctx.topic_id.source}. Processing time calculation skipped.")
+                logger.error(
+                    f"No start time found for message {ctx.topic_id.source}. Processing time calculation skipped."
+                )
                 processing_time = None
             else:
                 processing_time = time.time() - start_time
@@ -113,13 +121,19 @@ class UserProxyAgent(RoutedAgent):
             # Create tasks for Redis operation and WebSocket send
             message_key = f"messages:{user_id}:{conversation_id}"
             tasks = [
-                asyncio.create_task(asyncio.to_thread(
-                    self.redis_client.rpush,
-                    message_key,
-                    json.dumps(message_data),
-                    user_id
-                )),
-                asyncio.create_task(self.websocket_manager.send_message(user_id, conversation_id, message_data))
+                asyncio.create_task(
+                    asyncio.to_thread(
+                        self.redis_client.rpush,
+                        message_key,
+                        json.dumps(message_data),
+                        user_id,
+                    )
+                ),
+                asyncio.create_task(
+                    self.websocket_manager.send_message(
+                        user_id, conversation_id, message_data
+                    )
+                ),
             ]
 
             # Wait for all tasks to complete
@@ -128,18 +142,15 @@ class UserProxyAgent(RoutedAgent):
             log_message = "Stored message in Redis and sent via WebSocket"
             if processing_time is not None:
                 log_message += f". Processing time: {processing_time:.2f} seconds"
-            
-            logger.info(logger.format_message(
-                ctx.topic_id.source,
-                log_message
-            ))
+
+            logger.info(logger.format_message(ctx.topic_id.source, log_message))
 
             # Update conversation history
             self.session_manager.add_to_history(
                 conversation_id,
                 AssistantMessage(
-                    content=message.data.model_dump_json(), 
-                    source=ctx.sender.type if ctx.sender else "assistant"
+                    content=message.data.model_dump_json(),
+                    source=ctx.sender.type if ctx.sender else "assistant",
                 ),
             )
 
@@ -148,10 +159,12 @@ class UserProxyAgent(RoutedAgent):
                 del self.message_timings[ctx.topic_id.source]
 
         except Exception as e:
-            logger.error(logger.format_message(
-                ctx.topic_id.source,
-                f"Failed to send message: {str(e)}"
-            ), exc_info=True)
+            logger.error(
+                logger.format_message(
+                    ctx.topic_id.source, f"Failed to send message: {str(e)}"
+                ),
+                exc_info=True,
+            )
 
     @message_handler
     async def handle_user_message(
@@ -164,14 +177,16 @@ class UserProxyAgent(RoutedAgent):
             message (EndUserMessage): The user's message.
             ctx (MessageContext): The message context.
         """
-        
+
         # Start timing for this conversation
         self.message_timings[ctx.topic_id.source] = time.time()
 
-        logger.info(logger.format_message(
-            ctx.topic_id.source,
-            f"Forwarding user message to router: '{message.content[:100]}...'"
-        ))
+        logger.info(
+            logger.format_message(
+                ctx.topic_id.source,
+                f"Forwarding user message to router: '{message.content[:100]}...'",
+            )
+        )
 
         # Forward the message to the router
         await self.publish_message(

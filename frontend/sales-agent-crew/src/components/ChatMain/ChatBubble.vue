@@ -459,6 +459,8 @@ const selectedComponent = computed(() => {
       return AssistantEndComponent
     case 'educational_content':
       return EducationalComponent
+        case 'deep_research_interrupt':
+      return AssistantEndComponent
     case 'user_proxy':
       return UserProxyComponent
     case 'sales_leads':
@@ -467,6 +469,8 @@ const selectedComponent = computed(() => {
       return FinancialAnalysisEndComponent
     case 'financial_analysis':
       return FinancialAnalysisComponent
+          case 'deep_research_end':
+      return DeepResearchComponent
     case 'deep_research':
       return DeepResearchComponent
     case 'error':

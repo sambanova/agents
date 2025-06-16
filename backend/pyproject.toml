@@ -7,8 +7,8 @@ dependencies = [
   "crewai==0.121.1",
   "langchain-community==0.3.14",
   "langgraph>=0.2.55",
-  "fastapi==0.115.7",
-  "uvicorn==0.34.0",
+  "fastapi==0.115.12",
+  "uvicorn==0.34.3",
   "python-dotenv",
   "pydantic==2.10.5",
   "requests==2.32.3",
@@ -17,17 +17,13 @@ dependencies = [
   "sse-starlette==2.2.1",
   "yfinance==0.2.62",
   "scipy==1.15.1",
-  "langtrace-python-sdk==3.8.18",
   "tavily-python>=0.5.0",
   "langchain-redis==0.2.2",
-
-# Document processing
   "PyMuPDF==1.23.8",
   "python-docx==1.1.0",
   "openpyxl==3.1.5",
   "langchain==0.3.25",
-  "python-multipart==0.0.9",  # For FastAPI file uploads
-
+  "python-multipart==0.0.9",
   "autogen-core==0.4.5",
   "autogen-ext==0.4.5",
   "autogen-agentchat==0.4.5",
@@ -39,13 +35,13 @@ dependencies = [
   "tavily-python==0.5.1",
   "fastapi-clerk-auth==0.0.3",
   "requests-cache==1.2.1",
-
-  # Tools
-  "daytona_sdk==0.17.0",
+  "daytona_sdk==0.21.0",
   "arxiv==2.2.0",
   "wikipedia==1.4.0",
-
   "langgraph-checkpoint-redis==0.0.6",
+  "structlog>=24.1.0",
+  "ftfy==6.3.1",
+  "nltk==3.9.1",
 ]
 
 [build-system]

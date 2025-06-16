@@ -1,19 +1,25 @@
 <template>
+  
   <!-- 1) If no streaming data, show placeholder -->
   <div
     v-if="!streamData || streamData.length === 0"
     class="p-6 text-center text-gray-500 dark:text-gray-400"
   >
     No streaming events to display.
+   
   </div>
 
   <!-- 2) Otherwise render full timeline + audit log -->
   <div v-else>
     <!-- Tool header & timeline -->
     <div class="flex flex-col p-4 border rounded mb-6">
-      <h2 class="text-xl font-bold mb-4">
-        Current Tool: {{ currentToolName || '– none –' }}
-      </h2>
+      <span class="text-md font-bold mb-4">
+         <LoadingText
+    :isLoading="isLoading"
+    text=" Current Tool: {{ currentToolName || '– none –' }}"
+    />
+       
+      </span>
       <div class="flex space-x-6 mb-4">
         <div
           v-for="(tool, idx) in toolTimeline"
@@ -122,6 +128,7 @@
 
 <script setup>
 import { computed, ref, watch, nextTick } from 'vue'
+import LoadingText from '@/components/ChatMain/LoadingText.vue';
 
 const props = defineProps({
   streamData: { type: Array, default: () => [] },

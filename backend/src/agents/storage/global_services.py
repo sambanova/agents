@@ -1,14 +1,10 @@
-"""Global service management for the application."""
-
 import os
-import redis
-import redis.asyncio as aioredis
-from functools import lru_cache
 from typing import Optional
 
-from agents.storage.redis_storage import RedisStorage
+import redis
+import redis.asyncio as aioredis
 from agents.storage.redis_service import SecureRedisService
-
+from agents.storage.redis_storage import RedisStorage
 
 # Global storage for shared services
 _global_redis_storage_service: Optional[RedisStorage] = None

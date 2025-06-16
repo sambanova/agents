@@ -13,7 +13,9 @@ from tenacity import (
 )
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from agents.utils.logging import logger
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 rapidapi_key = os.getenv("RAPIDAPI_KEY")
 insightsentry_api_key = os.getenv("INSIGHTSENTRY_API_KEY")

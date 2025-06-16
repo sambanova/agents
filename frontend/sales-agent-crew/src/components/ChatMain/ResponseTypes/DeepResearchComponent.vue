@@ -1,4 +1,5 @@
 <template>
+  {{ props }}
   <div class="deep-research max-w-4xl mx-auto px-0 py-0">
     <!-- If there's no finalReport, show a placeholder -->
     <div v-if="!finalReport">
@@ -149,7 +150,7 @@ function renderMarkdown(text) {
 
 // ---- GET final_report (larger text for main body) ----
 const finalReport = computed(() => {
-  const raw = props.parsed?.data?.final_report || '';
+  const raw = props.parsed?.content?.final_report || '';
   if (!raw) return '';
 
   // Remove the "## Citations" section from the main body
@@ -165,7 +166,7 @@ const finalReport = computed(() => {
 const citationsBlockFound = ref(false);
 
 const citations = computed(() => {
-  const text = props.parsed?.data?.final_report || '';
+  const text = props.parsed?.content?.final_report || '';
   if (!text) return [];
 
   // Find "## Citations"

@@ -93,7 +93,14 @@
           <!-- Chat Bubble -->
           <ChatBubble
             
-         
+         v-if="messagesData.find(item =>
+    item.message_id === msgItem.message_id &&
+    item.agent_type !== 'human' &&
+    (
+      item.agent_type.includes('_end') ||
+      item.agent_type.includes('_interrupt')
+    )
+  )"
             :metadata="completionMetaData"
             :workflowData="
               workflowData.filter(
@@ -592,6 +599,7 @@ const props = defineProps({
 
 const messages = ref([]);
 const draftMessage = ref('');
+const shouldResume = ref(false);
 const assistantThinking = ref(false);
 const isLoading = ref(false);
 const initialLoading = ref(false);
@@ -756,6 +764,8 @@ async function filterChat(msgData) {
           message.additional_kwargs?.agent_type.includes('_interrupt'))
       ) {
 
+
+        
         // alert(agent_type)
         message.agent_type=agent_type
         return message
@@ -835,6 +845,10 @@ async function filterChatCombo(msgData) {
           message.additional_kwargs?.agent_type.includes('_interrupt'))
       ) {
 
+
+        if( message.additional_kwargs?.agent_type.includes('_interrupt')){
+          shouldResume.value=true
+        }
         // alert(agent_type)
         message.agent_type=agent_type
          message.msgType='message'
@@ -1822,8 +1836,10 @@ const addMessage = async () => {
     planner_model: localStorage.getItem(`selected_model_${userId.value}`) || '',
     message_id: currentMsgId.value,
     conversation_id: currentId.value,
-    resume: shouldResume,
   };
+  if(shouldResume.value){
+    serverPayload.resume=true
+  }
     const messagePayload = {
     
      event: 'agent_completion',
@@ -1963,6 +1979,9 @@ if ((receivedData.event === 'agent_completion'&&(receivedData.type!=="HumanMessa
 (receivedData.additional_kwargs?.agent_type.includes("_end")||
 receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {   
   
+  if(receivedData.additional_kwargs?.agent_type.includes("_interrupt")){
+    shouldResume.value=true
+  }
   
         console.log('Agent message stream:', receivedData);
         receivedData.agent_type=receivedData.additional_kwargs?.agent_type

@@ -1,7 +1,14 @@
+import asyncio
+import os
+import time
 from datetime import datetime, timezone
-from typing import Callable, Any, Dict, List, Optional
-from agents.components.compound.data_types import LLMType
+from typing import Any, Callable, Dict, List, Optional
+
+import structlog
+from agents.components.compound.data_types import LiberalFunctionMessage, LLMType
+from agents.components.compound.prompts import xml_template
 from agents.components.compound.util import extract_api_key
+from agents.utils.logging_utils import setup_logging_context
 from langchain.tools import BaseTool
 from langchain.tools.render import render_text_description
 from langchain_core.language_models.base import LanguageModelLike
@@ -11,19 +18,15 @@ from langchain_core.messages import (
     HumanMessage,
     SystemMessage,
 )
+from langchain_core.runnables import Runnable, RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.redis import AsyncRedisSaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import END
 from langgraph.graph.message import MessageGraph
-from agents.components.compound.prompts import xml_template
-from agents.components.compound.data_types import LiberalFunctionMessage
-from langchain_core.runnables import RunnableConfig, Runnable
-import os
-import asyncio
-from langgraph.checkpoint.redis import AsyncRedisSaver
-from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
-from agents.utils.logging import logger
+logger = structlog.get_logger(__name__)
 
 
 # TODO: This is a temporary fix to get the checkpoint working. Remove this once we have a proper fix.
@@ -49,13 +52,13 @@ try:
 
     # Apply the patch
     AsyncRedisSaver._aload_pending_sends = patched_aload_pending_sends
-    print("Applied Redis checkpoint bug workaround")
+    logger.info("Applied Redis checkpoint bug workaround")
 
 except ImportError:
     # Redis checkpoint not available, no patch needed
     pass
 except Exception as e:
-    print(f"Warning: Could not apply Redis checkpoint patch: {e}")
+    logger.error(f"Warning: Could not apply Redis checkpoint patch: {e}")
 
 # Global checkpointer variable
 _global_checkpointer = None
@@ -203,6 +206,14 @@ def get_xml_agent_executor(
         subgraphs: Dictionary of subgraphs {name: compiled_graph}
         checkpointer: Optional checkpointer, if None will use global checkpointer
     """
+    logger.info(
+        "Creating XML agent executor",
+        tool_names=[t.name for t in tools],
+        llm_type=llm_type.value if hasattr(llm_type, "value") else str(llm_type),
+        has_subgraphs=bool(subgraphs),
+        subgraph_names=list(subgraphs.keys()) if subgraphs else [],
+        has_checkpointer=checkpointer is not None,
+    )
     # Use provided checkpointer or fall back to global checkpointer
     if checkpointer is None:
         checkpointer = get_global_checkpointer()
@@ -239,6 +250,8 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
 
     # Create agent node that extracts api_key from config
     async def agent_node(messages, *, config: RunnableConfig = None):
+        setup_logging_context(config, node="agent")
+        logger.info("Agent node execution started", num_messages=len(messages))
         api_key = extract_api_key(config)
 
         # Call your LLM partial with api_key
@@ -279,7 +292,15 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             processed_messages = await _get_messages(messages)
 
         try:
+            start_time = time.time()
+            logger.info("Invoking LLM")
             response = await llm_with_stop.ainvoke(processed_messages, config)
+            duration = time.time() - start_time
+            logger.info(
+                "LLM invocation completed",
+                duration_ms=round(duration * 1000, 2),
+                model=llm_with_stop.model,
+            )
 
             # Post-process response to catch potential formatting issues
             if hasattr(response, "content") and isinstance(response.content, str):
@@ -298,6 +319,13 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             return response
 
         except Exception as e:
+            logger.error(
+                "LLM invocation failed",
+                node="agent",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                exc_info=True,
+            )
             # If LLM call fails, return an error message that the system can handle
             error_msg = f"Agent error: {str(e)}"
             return AIMessage(
@@ -351,7 +379,9 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             return "end"
 
     # Define the function to execute tools
-    async def call_tool(messages):
+    async def call_tool(messages, *, config: RunnableConfig = None):
+        setup_logging_context(config, node="tool_action")
+        logger.info("Tool action started")
         last_message = messages[-1]
         content = last_message.content
 
@@ -360,6 +390,11 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             if "</tool>" not in content:
                 # Malformed tool call - missing closing tool tag
                 error_msg = "Error: Malformed tool call - missing </tool> tag"
+                logger.warning(
+                    "Malformed tool call",
+                    error=error_msg,
+                    content=content,
+                )
                 return LiberalFunctionMessage(
                     content=error_msg,
                     name="system_error",
@@ -374,6 +409,11 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             tool_parts = content.split("</tool>", 1)
             if len(tool_parts) < 2:
                 error_msg = "Error: Could not parse tool call - invalid format"
+                logger.warning(
+                    "Could not parse tool call",
+                    error=error_msg,
+                    content=content,
+                )
                 return LiberalFunctionMessage(
                     content=error_msg,
                     name="system_error",
@@ -389,6 +429,11 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             # Extract tool name
             if "<tool>" not in tool_part:
                 error_msg = "Error: Missing <tool> tag in tool call"
+                logger.warning(
+                    "Missing tool tag",
+                    error=error_msg,
+                    content=content,
+                )
                 return LiberalFunctionMessage(
                     content=error_msg,
                     name="system_error",
@@ -416,6 +461,11 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             # Validate tool name
             if not _tool:
                 error_msg = "Error: Empty tool name provided"
+                logger.warning(
+                    "Empty tool name",
+                    error=error_msg,
+                    content=content,
+                )
                 return LiberalFunctionMessage(
                     content=error_msg,
                     name="system_error",
@@ -430,10 +480,22 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 tool=_tool,
                 tool_input=_tool_input,
             )
-
+            logger.info(
+                "Executing tool",
+                tool_name=_tool,
+                tool_input=_tool_input,
+            )
             # Execute tool with error handling
+            start_time = time.time()
             try:
                 response = await tool_executor.ainvoke(action)
+                duration = time.time() - start_time
+                logger.info(
+                    "Tool execution completed",
+                    tool_name=_tool,
+                    duration_ms=round(duration * 1000, 2),
+                    success=True,
+                )
 
                 # Handle cases where response might be malformed or too large
                 if isinstance(response, str) and len(response) > 50000:
@@ -442,7 +504,17 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                     )
 
             except Exception as e:
+                duration = time.time() - start_time
                 error_msg = f"Error executing tool '{_tool}': {str(e)}"
+                logger.error(
+                    "Tool execution failed",
+                    tool_name=_tool,
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    duration_ms=round(duration * 1000, 2),
+                    success=False,
+                    exc_info=True,
+                )
                 return LiberalFunctionMessage(
                     content=error_msg,
                     name=_tool,
@@ -467,6 +539,12 @@ Make sure to include both opening and closing tags for both tool and tool_input.
         except Exception as e:
             # Catch-all error handler for unexpected parsing issues
             error_msg = f"Unexpected error parsing tool call: {str(e)}"
+            logger.error(
+                "Unexpected error parsing tool call",
+                error_type=type(e).__name__,
+                error_message=str(e),
+                exc_info=True,
+            )
             return LiberalFunctionMessage(
                 content=error_msg,
                 name="system_error",
@@ -485,6 +563,10 @@ Make sure to include both opening and closing tags for both tool and tool_input.
         subgraph,
     ):
         async def subgraph_entry_node(messages, *, config: RunnableConfig = None):
+            setup_logging_context(
+                config, node=f"subgraph_{subgraph_name}", subgraph_name=subgraph_name
+            )
+            logger.info("Subgraph node started")
             last_message = messages[-1]
             # Parse subgraph input
             content = last_message.content
@@ -498,10 +580,19 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                     subgraph_input = subgraph_input_part
 
             subgraph_messages = state_input_mapper(subgraph_input)
-
+            logger.info(
+                "Invoking subgraph",
+            )
             # Execute subgraph with the same config (for proper state management)
             # For MessageGraph, pass messages directly, not wrapped in a dict
+            start_time = time.time()
             result = await subgraph.ainvoke(subgraph_messages, config)
+            duration = time.time() - start_time
+            logger.info(
+                "Subgraph invocation completed",
+                duration_ms=round(duration * 1000, 2),
+                success=True,
+            )
 
             return state_output_mapper(result)
 

@@ -5,6 +5,8 @@ import time
 import warnings
 from typing import Any, Dict, List, Optional, Union, cast
 
+import structlog
+
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", UserWarning)
     import litellm
@@ -22,7 +24,7 @@ from crewai.utilities.exceptions.context_window_exceeding_exception import (
 )
 from crewai import LLM
 
-from agents.utils.logging import logger
+logger = structlog.get_logger(__name__)
 
 
 class CustomLLM(LLM):

@@ -1,28 +1,30 @@
-import os
 import json
-import requests
+import os
 import re
 import sys
 
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
-
+import requests
+import structlog
 from agents.registry.model_registry import model_registry
 from agents.utils.envutils import EnvUtils
 
+logger = structlog.get_logger(__name__)
+
+
 class FinancialPromptExtractor:
     """
-    We use a SambaNova ChatCompletion endpoint to parse user prompt, 
-    extracting 'company_name' and 'ticker'. 
+    We use a SambaNova ChatCompletion endpoint to parse user prompt,
+    extracting 'company_name' and 'ticker'.
     If LLM fails, fallback to a naive regex approach.
     """
 
     def __init__(self, llm_api_key: str, provider: str):
         self.env_utils = EnvUtils()
         self.api_key = llm_api_key
-        # Example model name 
-        model_info = model_registry.get_model_info(model_key="llama-3.1-8b", provider=provider)
+        # Example model name
+        model_info = model_registry.get_model_info(
+            model_key="llama-3.1-8b", provider=provider
+        )
         self.model_name = model_info["model"]
         self.url = model_info["long_url"]
 
@@ -56,7 +58,7 @@ class FinancialPromptExtractor:
 
     def _call_sambanova_llm(self, prompt: str):
         """
-        Attempt to parse user prompt for JSON with keys {company_name, ticker} 
+        Attempt to parse user prompt for JSON with keys {company_name, ticker}
         via SambaNova ChatCompletion.
         """
         system_msg = (
@@ -89,27 +91,29 @@ class FinancialPromptExtractor:
             "model": self.model_name,
             "messages": [
                 {"role": "system", "content": system_msg},
-                {"role": "user", "content": user_msg}
+                {"role": "user", "content": user_msg},
             ],
             "temperature": 0.0,
-            "stream": False
+            "stream": False,
         }
         headers = {
             "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
         try:
-            resp = requests.post(self.url, headers=headers, data=json.dumps(payload), timeout=30)
+            resp = requests.post(
+                self.url, headers=headers, data=json.dumps(payload), timeout=30
+            )
             resp.raise_for_status()
             jr = resp.json()
             if "choices" not in jr or len(jr["choices"]) == 0:
-                return ("","")
+                return ("", "")
             content = jr["choices"][0]["message"]["content"].strip()
-            content = content.replace("```json","").replace("```","").strip()
+            content = content.replace("```json", "").replace("```", "").strip()
             parsed = json.loads(content)
-            company_name = parsed.get("company_name","")
-            ticker = parsed.get("ticker","").upper()
+            company_name = parsed.get("company_name", "")
+            ticker = parsed.get("ticker", "").upper()
             return (ticker, company_name)
         except Exception as e:
-            print(f"[FinancialPromptExtractor] LLM call failed: {e}")
-            return ("","")
+            logger.error(f"[FinancialPromptExtractor] LLM call failed: {e}")
+            return ("", "")

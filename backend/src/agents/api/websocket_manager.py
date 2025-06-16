@@ -1,39 +1,34 @@
-from datetime import datetime, timedelta, timezone
+import asyncio
+import json
 import os
+from datetime import datetime, timedelta, timezone
+from typing import Dict, Optional
+
+import redis
+import structlog
+from agents.api.data_types import (
+    AgentEnum,
+    AgentStructuredResponse,
+    APIKeys,
+    EndUserMessage,
+    ErrorResponse,
+)
+from agents.api.utils import DocumentContextLengthError, load_documents
+from agents.api.websocket_interface import WebSocketInterface
+from agents.components.compound.agent import agent
 from agents.components.compound.assistant import get_assistant
 from agents.components.compound.financial_analysis_subgraph import (
     create_financial_analysis_graph,
 )
 from agents.components.open_deep_research.graph import create_deep_research_graph
-from autogen_core import DefaultTopicId
-from fastapi import WebSocket, WebSocketDisconnect
-import json
-import asyncio
-from typing import Optional, Dict
-import redis
-from starlette.websockets import WebSocketState
-from langchain_core.messages import AIMessage
-
-from agents.api.data_types import (
-    APIKeys,
-    EndUserMessage,
-    AgentEnum,
-    AgentStructuredResponse,
-    ErrorResponse,
-)
-from agents.api.utils import (
-    load_documents,
-    DocumentContextLengthError,
-)
-
-from agents.components.compound.agent import agent
-from agents.api.websocket_interface import WebSocketInterface
 from agents.storage.redis_service import SecureRedisService
 from agents.storage.redis_storage import RedisStorage
-from langchain_core.messages import HumanMessage
+from autogen_core import DefaultTopicId
+from fastapi import WebSocket, WebSocketDisconnect
+from langchain_core.messages import AIMessage, HumanMessage
+from starlette.websockets import WebSocketState
 
-from agents.utils.logging import logger
-import mimetypes
+logger = structlog.get_logger(__name__)
 
 
 class WebSocketConnectionManager(WebSocketInterface):
@@ -114,12 +109,15 @@ class WebSocketConnectionManager(WebSocketInterface):
                 if session is not None and not session.get("is_active", False):
                     sessions_to_cleanup.append(session_key)
                     logger.info(
-                        f"Session {session_key} marked for cleanup: last_active={last_active}, is_active={session.get('is_active', False)}"
+                        "Session marked for cleanup",
+                        session_key=session_key,
+                        last_active=last_active,
+                        is_active=session.get("is_active", False),
                     )
 
         for session_key in sessions_to_cleanup:
             await self._cleanup_session(session_key)
-            logger.info(f"Cleaned up inactive session: {session_key}")
+            logger.info("Cleaned up inactive session", session_key=session_key)
 
     async def _cleanup_session(self, session_key: str):
         """Clean up a specific session and its resources"""
@@ -263,6 +261,13 @@ class WebSocketConnectionManager(WebSocketInterface):
                     break
 
                 user_message_text = await websocket.receive_text()
+
+                logger.info(
+                    "Received message from user",
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                )
+
                 # Update session activity time on each message
                 self.session_last_active[session_key] = datetime.now(timezone.utc)
 
@@ -302,10 +307,6 @@ class WebSocketConnectionManager(WebSocketInterface):
 
                 await self.message_storage.update_metadata(
                     user_message_input["data"], user_id, conversation_id
-                )
-
-                logger.info(
-                    f"Received message from user: {user_id} in conversation: {conversation_id}"
                 )
 
                 input_, model = await self.create_user_message_input(
@@ -353,16 +354,16 @@ class WebSocketConnectionManager(WebSocketInterface):
                 )
 
         except WebSocketDisconnect:
-            logger.info(
-                f"WebSocket connection closed for conversation: {conversation_id}"
-            )
+            logger.info("WebSocket connection closed", conversation_id=conversation_id)
             if session_key in self.active_sessions:
                 # Only mark the connection as inactive, don't terminate the session
                 self.active_sessions[session_key]["is_active"] = False
             self.remove_connection(user_id, conversation_id)
         except Exception as e:
             logger.info(
-                f"WebSocket connection for conversation {conversation_id} closed: {str(e)}"
+                "WebSocket connection closed with error",
+                conversation_id=conversation_id,
+                error=str(e),
             )
             if session_key in self.active_sessions:
                 self.active_sessions[session_key]["is_active"] = False
@@ -377,7 +378,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                 ):
                     await websocket.close()
             except Exception as e:
-                logger.error(f"Error closing websocket: {str(e)}")
+                logger.error("Error closing websocket", error=str(e))
 
             # Update last active time on disconnect
             if session_key in self.session_last_active:
@@ -450,7 +451,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                         if not message:
                             break
                     except Exception as e:
-                        logger.error(f"Error getting Redis message: {str(e)}")
+                        logger.error("Error getting Redis message", error=str(e))
                         break
 
                 if messages:
@@ -486,13 +487,13 @@ class WebSocketConnectionManager(WebSocketInterface):
                                 await self._safe_send(websocket, message_data)
 
                         except Exception as e:
-                            logger.error(f"Error processing Redis message: {str(e)}")
+                            logger.error("Error processing Redis message", error=str(e))
                             continue
 
                 await asyncio.sleep(0.2)
 
         except Exception as e:
-            logger.error(f"Error in Redis message handler: {str(e)}")
+            logger.error("Error in Redis message handler", error=str(e))
         finally:
             # Update session activity time before exiting
             self.session_last_active[session_key] = datetime.now(timezone.utc)
@@ -517,7 +518,10 @@ class WebSocketConnectionManager(WebSocketInterface):
             for key, session in self.active_sessions.items():
                 if session.get("websocket") == websocket:
                     self.active_sessions[key]["is_active"] = False
-                    logger.info(f"Marked session {key} as inactive due to send failure")
+                    logger.info(
+                        "Marked session as inactive due to send failure",
+                        session_key=key,
+                    )
                     break
 
             return False
@@ -539,13 +543,15 @@ class WebSocketConnectionManager(WebSocketInterface):
                     return True  # Still successful, just skipped duplicate
 
             if not websocket:
-                logger.info(f"No WebSocket connection found for {session_key}")
+                logger.info(
+                    "No WebSocket connection found for session", session_key=session_key
+                )
                 return False
 
             # Just try to send - most reliable way to detect if connection is still active
             return await self._safe_send(websocket, data)
         except Exception as e:
-            logger.error(f"Error sending WebSocket message: {str(e)}")
+            logger.error("Error sending WebSocket message", error=str(e))
             return False
 
 

@@ -1,9 +1,25 @@
-from datetime import datetime
 import functools
 import json
 import time
-from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
+from datetime import datetime
+from typing import Any, Dict, List
 
+import aiohttp
+import redis
+import structlog
+from agents.api.data_types import (
+    AgentEnum,
+    AgentRequest,
+    AgentStructuredResponse,
+    APIKeys,
+    AssistantResponse,
+    ErrorResponse,
+)
+from agents.registry.model_registry import model_registry
+from agents.utils.error_utils import format_api_error_message
+from autogen_agentchat.agents import AssistantAgent
+from autogen_agentchat.base import Response
+from autogen_agentchat.messages import TextMessage
 from autogen_core import (
     DefaultTopicId,
     MessageContext,
@@ -12,27 +28,10 @@ from autogen_core import (
     type_subscription,
 )
 from autogen_ext.models.openai import OpenAIChatCompletionClient
-from autogen_agentchat.messages import TextMessage
-from autogen_agentchat.base import Response
-
-import redis
-from agents.api.data_types import (
-    APIKeys,
-    AgentEnum,
-    AgentRequest,
-    AgentStructuredResponse,
-    AssistantResponse,
-    ErrorResponse,
-)
 from exa_py import Exa
 from tavily import AsyncTavilyClient
 
-from agents.registry.model_registry import model_registry
-from agents.utils.logging import logger
-from agents.utils.error_utils import format_api_error_message
-
-from typing import Any, Dict, List, Literal, Optional
-import aiohttp
+logger = structlog.get_logger(__name__)
 
 tavily_async_client = AsyncTavilyClient()
 
@@ -41,26 +40,22 @@ async def get_current_time() -> str:
     """Get the current time."""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+
 async def tavily_search(search_query: str) -> List[Dict[str, Any]]:
     """
     Performs a web search using the Tavily API.
     """
     logger.info(f"Using Tavily to search for {search_query}")
     response = await tavily_async_client.search(
-            search_query,
-            max_results=5,
-            include_raw_content=False,
-            topic="general"
-        )
-    
+        search_query, max_results=5, include_raw_content=False, topic="general"
+    )
+
     search_results = []
     for result in response["results"]:
-        search_results.append({
-            "title": result["title"],
-            "content": result["content"]
-        })
-    
+        search_results.append({"title": result["title"], "content": result["content"]})
+
     return search_results
+
 
 async def yahoo_finance_search(symbol: str) -> Dict[str, Any]:
     """Get current stock information for a given symbol."""
@@ -94,7 +89,8 @@ async def yahoo_finance_search(symbol: str) -> Dict[str, Any]:
 
 
 def exa_news_search(
-    api_key: str, query: str, answer: bool = False) -> List[Dict[str, str]]:
+    api_key: str, query: str, answer: bool = False
+) -> List[Dict[str, str]]:
     """Search for news articles or answer questions using Exa API."""
     if not api_key:
         raise ValueError("EXA_API_KEY is missing.")
@@ -143,13 +139,13 @@ class AssistantAgentWrapper(RoutedAgent):
     def get_assistant(self, provider: str) -> AssistantAgent:
         """Get or create an AssistantAgent instance for the given provider.
         Only creates a new instance if the provider changes.
-        
+
         Args:
             provider: The model provider to use
-            
+
         Returns:
             AssistantAgent: The current or new assistant instance
-            
+
         Raises:
             ValueError: If the provider or model configuration is invalid
         """
@@ -159,11 +155,15 @@ class AssistantAgentWrapper(RoutedAgent):
         try:
             # Get model configuration
             model_info = model_registry.get_model_info(
-                model_key="llama-3.1-70b" if provider == "fireworks" else "llama-3.3-70b", 
-                provider=provider
+                model_key=(
+                    "llama-3.1-70b" if provider == "fireworks" else "llama-3.3-70b"
+                ),
+                provider=provider,
             )
             if not model_info:
-                raise ValueError(f"No model configuration found for provider {provider}")
+                raise ValueError(
+                    f"No model configuration found for provider {provider}"
+                )
 
             self._current_provider = provider
             self._assistant_instance = AssistantAgent(
@@ -171,7 +171,9 @@ class AssistantAgentWrapper(RoutedAgent):
                 model_client=OpenAIChatCompletionClient(
                     model=model_info["model"],
                     base_url=model_info["url"],
-                    api_key=getattr(self.api_keys, model_registry.get_api_key_env(provider=provider)),
+                    api_key=getattr(
+                        self.api_keys, model_registry.get_api_key_env(provider=provider)
+                    ),
                     temperature=0.0,
                     model_info={
                         "json_output": False,
@@ -192,7 +194,9 @@ class AssistantAgentWrapper(RoutedAgent):
             return self._assistant_instance
 
         except Exception as e:
-            logger.error(f"Failed to create assistant for provider {provider}: {str(e)}")
+            logger.error(
+                f"Failed to create assistant for provider {provider}: {str(e)}"
+            )
             raise ValueError(f"Failed to initialize assistant: {str(e)}")
 
     @message_handler
@@ -208,10 +212,21 @@ class AssistantAgentWrapper(RoutedAgent):
             )
             user_messages = []
             if message.docs:
-                user_messages.append(TextMessage(content="These are my uploaded documents:\n\n" + "\n\n".join(
-                    [f"Document {i+1}:\n{doc}" for i, doc in enumerate(message.docs)]
-                ), source="user"))
-            user_messages.append(TextMessage(content=message.parameters.query, source="user"))
+                user_messages.append(
+                    TextMessage(
+                        content="These are my uploaded documents:\n\n"
+                        + "\n\n".join(
+                            [
+                                f"Document {i+1}:\n{doc}"
+                                for i, doc in enumerate(message.docs)
+                            ]
+                        ),
+                        source="user",
+                    )
+                )
+            user_messages.append(
+                TextMessage(content=message.parameters.query, source="user")
+            )
 
             start_time = time.time()
             response = await self.get_assistant(message.provider).on_messages(
@@ -230,17 +245,27 @@ class AssistantAgentWrapper(RoutedAgent):
             if isinstance(response, Response):
                 response_content = response.chat_message.content
                 if hasattr(response, "chat_message"):
-                    if hasattr(response.chat_message, "models_usage") and response.chat_message.models_usage:
+                    if (
+                        hasattr(response.chat_message, "models_usage")
+                        and response.chat_message.models_usage
+                    ):
                         models_usage.append(response.chat_message.models_usage)
                 if hasattr(response, "inner_messages"):
                     for inner_message in response.inner_messages:
-                        if hasattr(inner_message, "models_usage") and inner_message.models_usage:
+                        if (
+                            hasattr(inner_message, "models_usage")
+                            and inner_message.models_usage
+                        ):
                             models_usage.append(inner_message.models_usage)
             else:
-                response_content = "Unable to assist with this request. Please try again."
+                response_content = (
+                    "Unable to assist with this request. Please try again."
+                )
             if models_usage:
                 prompt_tokens = sum(usage.prompt_tokens for usage in models_usage)
-                completion_tokens = sum(usage.completion_tokens for usage in models_usage)
+                completion_tokens = sum(
+                    usage.completion_tokens for usage in models_usage
+                )
                 total_tokens = prompt_tokens + completion_tokens
             else:
                 prompt_tokens = 0
@@ -254,7 +279,9 @@ class AssistantAgentWrapper(RoutedAgent):
 
             assistant_metadata = {
                 "duration": processing_time,
-                "llm_name": self.get_assistant(message.provider)._model_client._resolved_model,
+                "llm_name": self.get_assistant(
+                    message.provider
+                )._model_client._resolved_model,
                 "llm_provider": message.provider,
                 "workflow": "General Assistant",
                 "agent_name": "General Assistant",
@@ -284,7 +311,7 @@ class AssistantAgentWrapper(RoutedAgent):
                 data=AssistantResponse(response=response_content),
                 message=message.parameters.model_dump_json(),
                 metadata=assistant_metadata,
-                message_id=message.message_id
+                message_id=message.message_id,
             )
             logger.info(
                 logger.format_message(
@@ -302,14 +329,14 @@ class AssistantAgentWrapper(RoutedAgent):
                 ),
                 exc_info=True,
             )
-            
+
             error_response = format_api_error_message(e)
 
             response = AgentStructuredResponse(
                 agent_type=AgentEnum.Error,
                 data=ErrorResponse(error=error_response),
                 message=f"Error processing assistant request: {str(e)}",
-                message_id=message.message_id
+                message_id=message.message_id,
             )
             await self.publish_message(
                 response,
@@ -318,7 +345,7 @@ class AssistantAgentWrapper(RoutedAgent):
 
     async def reset_model_usage(self, assistant: AssistantAgent) -> None:
         """Reset the model usage statistics for the assistant.
-        
+
         Args:
             assistant: The AssistantAgent instance to reset
         """
@@ -332,7 +359,10 @@ class AssistantAgentWrapper(RoutedAgent):
 
             # Reset usage in any response objects if they exist
             if hasattr(assistant, "_last_response") and assistant._last_response:
-                if hasattr(assistant._last_response, "chat_message") and assistant._last_response.chat_message:
+                if (
+                    hasattr(assistant._last_response, "chat_message")
+                    and assistant._last_response.chat_message
+                ):
                     if hasattr(assistant._last_response.chat_message, "models_usage"):
                         assistant._last_response.chat_message.models_usage = []
 
