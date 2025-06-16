@@ -1,5 +1,5 @@
 <template>
-
+{{ props.workflowData }}
   <!-- isLoading {{ props.streamData }} -->
   <div class="flex flex-col p-4 border rounded">
     <!-- 1) Heading, updates to last tool name -->
@@ -134,6 +134,10 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+   workflowData: {
+    type: Array,
+    default: () => []
+  },
    isLoading: {
     type: Boolean,
     default: true
@@ -193,9 +197,7 @@ const toolSources = computed(() => {
   const sources = []
   
   props.streamData.forEach(event => {
-    if (event.event === 'agent_completion' && 
-        event.type === 'LiberalFunctionMessage' && 
-        event.name === 'search_tavily' &&
+    if (event.name === 'search_tavily' &&
         Array.isArray(event.content)) {
       
       event.content.forEach(source => {
@@ -266,7 +268,7 @@ const toolSources = computed(() => {
 
 
 const auditLogEvents = computed(() => {
-  if (!props.streamData || props.streamData.length === 0) {
+  // if (!props.streamData || props.streamData.length === 0) {
    
     // For loaded conversations without streaming events, create synthetic audit log from workflow data
     if (props.workflowData && props.workflowData.length > 0) {
@@ -285,6 +287,7 @@ const auditLogEvents = computed(() => {
         }
       });
       
+      
       return uniqueWorkflows.map((workflow, index) => ({
         id: `synthetic-audit-${index}`,
         title: `✅ ${workflow.agent_name || 'Agent'} - ${workflow.task || 'Task'}`,
@@ -296,7 +299,7 @@ const auditLogEvents = computed(() => {
         timestamp: new Date().toISOString(),
         fullData: workflow
       }));
-    }
+    // }
     return [];
   }
   

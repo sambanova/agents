@@ -112,6 +112,12 @@
             v-if="streamData.length>0"
             key="loading" class="px-4">
         <StatusBox
+         v-for="msgItem in messagesData"
+         :workflowData="
+              workflowData.filter(
+                (item) => item.message_id === msgItem.message_id
+              )
+            "
           :isLoading="isLoading"
           :streamData="streamData"
         />
