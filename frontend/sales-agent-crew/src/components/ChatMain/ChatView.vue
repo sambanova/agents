@@ -1855,7 +1855,7 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
          else if (receivedData.event === 'llm_stream_chunk'||receivedData.event === 'agent_completion') {
           console.log('LLM stream chunk:', receivedData);
           const chunkId = receivedData.id;
-          
+          receivedData.agent_type=receivedData.additional_kwargs?.agent_type
           streamData.value.push(receivedData)
 
            streamData.value.sort(
@@ -1901,6 +1901,8 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
           //   data: receivedData,
           //   timestamp: new Date().toISOString()
           // });
+                    receivedData.agent_type=receivedData.additional_kwargs?.agent_type
+
                    streamData.value.push(receivedData)
 
            streamData.value.sort(
