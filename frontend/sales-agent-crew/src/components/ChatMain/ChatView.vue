@@ -93,11 +93,11 @@
           <!-- Chat Bubble -->
           <ChatBubble
             :streamingEvents=" messagesData.filter(
-                (item) => item.msgType ===  'stream'
+                (item) => item.msgType ===  'toolData'
               )"
          v-if="messagesData.find(item =>
     item.message_id === msgItem.message_id &&
-    item.agent_type !== 'human' &&
+    item.agent_type !== 'human' &&item.msgType !=  'toolData'&&
     (
       item.agent_type.includes('_end') ||
       item.agent_type.includes('_interrupt')
@@ -866,16 +866,18 @@ async function filterChatCombo(msgData) {
             agent_type: message.additional_kwargs?.agent_type || 'tool'
           };
           
-          // alert( message.additional_kwargs?.agent_type)
-          // return {
-          //   event: 'agent_completion',
-          //   data: toolData,
-          //   message_id: message.message_id,
-          //   conversation_id: message.conversation_id,
-          //   timestamp: message.timestamp || new Date().toISOString(),
-          //   isToolRelated: true, // Flag for filtering in chat display but preserving for audit
-          //   isDaytonaRelated: isDaytonaRelated
-          // };
+          
+          return {
+            event: 'agent_completion',
+            agent_type:"tool_response",
+            msgType:"toolData",
+            data: toolData,
+            message_id: message.message_id,
+            conversation_id: message.conversation_id,
+            timestamp: message.timestamp || new Date().toISOString(),
+            isToolRelated: true, // Flag for filtering in chat display but preserving for audit
+            isDaytonaRelated: isDaytonaRelated
+          };
         }
 
          if ((
