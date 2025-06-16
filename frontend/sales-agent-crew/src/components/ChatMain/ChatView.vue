@@ -69,7 +69,7 @@
                 (item) => item.message_id === msgItem.message_id
               )
             "
-            :streamData="streamData"  
+            
             :plannerText="
               plannerTextData.filter(
                 (item) => item.message_id === msgItem.message_id
@@ -1852,7 +1852,7 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
       console.log(messagesData)
             // isLoading.value = false;
         } 
-         else if (receivedData.event === 'llm_stream_chunk'||receivedData.event === 'agent_completion') {
+         else if (receivedData.agent_type=receivedData.additional_kwargs?.agent_type!=='human'&&(receivedData.event === 'llm_stream_chunk'||receivedData.event === 'agent_completion')) {
           console.log('LLM stream chunk:', receivedData);
           const chunkId = receivedData.id;
           receivedData.agent_type=receivedData.additional_kwargs?.agent_type
@@ -2408,48 +2408,11 @@ const filteredMessages = computed(() => {
 });
 
 // 1) Combine all streaming chunks
-const combinedContent = computed(() =>
-  streamData.value
-    .filter(e => e.event === 'llm_stream_chunk')
-    .sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp))
-    .map(e => e.content)
-    .join('')
-)
-
-// 2) Extract <tool>…</tool> for title
-const rawToolName = computed(() => {
-  const m = combinedContent.value.match(/<tool>([^<]+)<\/tool>/i)
-  return m ? m[1] : ''
-})
-
-const toolName = computed(() => {
-  const ev = streamData.value.find(
-    e =>
-      e.event === 'agent_completion' &&
-      e.additional_kwargs?.agent_type === 'react_tool' &&
-      typeof e.content === 'string'
-  )
-  if (!ev) return ''
-  const m = ev.content.match(/<tool>([^<]+)<\/tool>/i)
-  if (!m) return ''
-
-  // Strip "search_" prefix (case‐insensitive)
-  const raw = m[1].replace(/^search_/i, '')
-  // Upper-case it
-  const upper = raw.toUpperCase()
-
-  // Guarantee the space
-  return `Calling: ${upper}`
-})
 
 
 
 
-const title = computed(() =>
-  rawToolName.value
-    ? `Searching ${rawToolName.value.replace(/[_-]/g,' ')}`
-    : 'Loading…'
-)
+
 </script>
 
 <style scoped>
