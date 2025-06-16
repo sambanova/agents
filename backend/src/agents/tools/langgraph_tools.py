@@ -12,7 +12,7 @@ import structlog
 from agents.rag.upload import RedisHybridRetriever, create_user_vector_store
 from agents.storage.global_services import get_global_redis_storage_service
 from agents.utils.code_patcher import patch_plot_code_str
-from daytona_sdk import CreateSandboxParams
+from daytona_sdk import CreateSandboxFromSnapshotParams, CreateSnapshotParams
 from daytona_sdk import Daytona as DaytonaClient
 from daytona_sdk import DaytonaConfig as DaytonaSDKConfig
 from langchain.tools.retriever import create_retriever_tool
@@ -399,12 +399,12 @@ def _get_daytona(user_id: str):
 
     async def async_run_daytona_code(code_to_run: str) -> str:
         try:
+
             config = DaytonaSDKConfig(api_key=api_key)
             daytona = DaytonaClient(config)
 
-            params = CreateSandboxParams(
-                language="python",
-                image="cr.app.daytona.io/sbox-transient/data-analysis:0.0.7",
+            params = CreateSandboxFromSnapshotParams(
+                snapshot="cr.app.daytona.io/sbox-transient/data-analysis:0.0.7",
             )
 
             patched_code, expected_filenames = patch_plot_code_str(code_to_run)
@@ -417,7 +417,7 @@ def _get_daytona(user_id: str):
 
             if response.exit_code != 0:
                 # Ensure error detail is a string
-                daytona.remove(sandbox)
+                daytona.delete(sandbox)
                 error_detail = result_str
                 logger.error(
                     "Daytona code execution failed",
@@ -569,7 +569,7 @@ def _get_daytona(user_id: str):
                 logger.info("No charts found in response artifacts")
 
             # Clean up sandbox after processing everything
-            daytona.remove(sandbox)
+            daytona.delete(sandbox)
 
             return result_str
         except Exception as e:

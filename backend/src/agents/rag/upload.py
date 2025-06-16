@@ -19,10 +19,7 @@ from langchain_core.runnables import (
 )
 from langchain_redis import RedisVectorStore
 from langchain_sambanova import SambaNovaCloudEmbeddings
-from langchain_text_splitters import (
-    TextSplitter,
-    TokenTextSplitter,
-)
+from langchain_text_splitters import TextSplitter, TokenTextSplitter
 from pydantic import BaseModel, ConfigDict
 from redisvl.index import SearchIndex
 from redisvl.query import HybridQuery
@@ -44,7 +41,6 @@ class RedisHybridRetriever(BaseRetriever, BaseModel):
         arbitrary_types_allowed = True
 
     def get_relevant_documents(self, query: str) -> List[Document]:
-        # 1) Embed the query
         embedding = self.embedding_model.embed_query(query)
         vector = np.array(embedding, dtype=np.float32).tobytes()
 
@@ -59,7 +55,6 @@ class RedisHybridRetriever(BaseRetriever, BaseModel):
 
         results = self.search_index.query(hybrid_query)
 
-        # 4) Convert to LangChain Documents
         docs: List[Document] = []
         for doc in results:
             content = doc.get("text", "")
