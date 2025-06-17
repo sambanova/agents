@@ -37,6 +37,14 @@ CHART_PATH = ./aiskagents
 BACKEND_BASE_URL = $(shell echo $(BACKEND_REPO) | cut -d/ -f1)
 FRONTEND_BASE_URL = $(shell echo $(FRONTEND_REPO) | cut -d/ -f1)
 
+# MLflow-related variables
+MLFLOW_HELM_REPO_NAME = community-charts
+MLFLOW_HELM_REPO_URL = https://community-charts.github.io/helm-charts
+MLFLOW_CHART_NAME = mlflow
+MLFLOW_RELEASE_NAME = mlflow-$(ENV)
+MLFLOW_NAMESPACE = mlflow-$(ENV)
+MLFLOW_VALUES_FILE = ./mlflow/values.$(ENV).yaml
+
 # Phony targets
 .PHONY: build-backend build-frontend push-backend push-frontend build push deploy install upgrade uninstall clean help
 
@@ -100,6 +108,22 @@ uninstall:
 # Deploy to Kubernetes using Helm
 deploy: push install
 
+# Install mlflow
+install-mlflow: 
+	@helm repo add $(MLFLOW_HELM_REPO_NAME) $(MLFLOW_HELM_REPO_URL) || echo "Repo already exists."
+	@helm repo update
+	@echo "Installing mlflow..."
+	@helm upgrade $(MLFLOW_RELEASE_NAME) $(MLFLOW_HELM_REPO_NAME)/$(MLFLOW_CHART_NAME) \
+		--install \
+		--namespace $(MLFLOW_NAMESPACE) \
+		--create-namespace \
+		-f $(MLFLOW_VALUES_FILE)
+
+# Uninstall mlflow
+uninstall-mlflow:
+	@echo "Uninstalling mlflow..."
+	@helm uninstall $(MLFLOW_RELEASE_NAME) --namespace $(MLFLOW_NAMESPACE)
+
 # Clean up
 clean:
 	@echo "Cleaning up ($(ENV) environment)..."
@@ -129,6 +153,9 @@ help:
 	@echo "  upgrade         Upgrade the Helm chart"
 	@echo "  uninstall       Uninstall the Helm chart"
 	@echo "  deploy          Build, push, and deploy using Helm"
+	@echo "  install-mlflow  Install the mlflow chart"
+	@echo "  uninstall-mlflow Uninstall the mlflow chart"
+	@echo "  upgrade-mlflow  Upgrade the mlflow chart"
 	@echo "  clean           Clean up Docker images"
 	@echo "  help            Display this help message"
 	@echo ""
