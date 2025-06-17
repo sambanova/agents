@@ -37,6 +37,12 @@
                     "crewai_prefix": "sambanova",
                     "url": "https://api.sambanova.ai/v1",
                     "long_url": "https://api.sambanova.ai/v1/chat/completions"
+                },
+                "llama-4-maverick": {
+                    "model": "Llama-4-Maverick-17B-128E-Instruct",
+                    "crewai_prefix": "sambanova",
+                    "url": "https://api.sambanova.ai/v1",
+                    "long_url": "https://api.sambanova.ai/v1/chat/completions"
                 }
             },
             "api_key_env": "sambanova_key"
@@ -78,6 +84,12 @@
                     "crewai_prefix": "fireworks_ai",
                     "url": "https://api.fireworks.ai/inference/v1",
                     "long_url": "https://api.fireworks.ai/inference/v1/chat/completions"
+                },
+                "llama-4-maverick": {
+                    "model": "accounts/fireworks/models/llama-v3p3-70b-instruct",
+                    "crewai_prefix": "sambanova",
+                    "url": "https://api.sambanova.ai/v1",
+                    "long_url": "https://api.sambanova.ai/v1/chat/completions"
                 }
             },
             "api_key_env": "fireworks_key"
