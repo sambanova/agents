@@ -54,123 +54,98 @@
         <!-- End Title -->
         
 
-        <transition-group
+        <div
           name="chat"
           tag="ul"
           class="mt-16 max-w-4xl w-full mx-auto space-y-5"
              
         >
-          <template v-for="msgItem in messagesData.filter(
-                (item) => item.type === 'HumanMessage'
-              )" :key="msgItem.message_id">
-    <li
-   
-    class="flex px-4 items-start gap-x-2 sm:gap-x-4"
-  >
-    <div class="grow text-end space-y-3">
-      <!-- Card -->
-      <div class="inline-block flex justify-end">
-        <p class="text-[16px] text-left color-primary-brandGray dark:text-gray-100 max-w-[80%] w-auto">
-          {{ msgItem.content }}
-        </p>
-      </div>
-      <!-- End Card -->
-    </div>
-    <UserAvatar :type="'user'" />
-  </li>
-   <li   class="px-4 items-start gap-x-2 sm:gap-x-4">
+                  <div v-for="msgItem in messagesData.filter(
+                        (item) => item.type === 'HumanMessage'
+                      )" :key="msgItem.message_id">
 
-        <StatusBox
-
-        
-         :workflowData="
-              workflowData.filter(
-                (item) => item.message_id === msgItem.message_id)"
-          :isLoading="isLoading"
+            <div
           
-          :streamData=" messagesData.filter(
-                (item) => item.msgType ===  'stream'
-              )"
-               :streamingEvents=" messagesData.filter(
-                (item) => item.msgType ===  'toolData'
-              )"
-        />
-         
-          <!-- Chat Bubble -->
-          <ChatBubble
-            :streamingEvents=" messagesData.filter(
-                (item) => item.msgType ===  'toolData'
-              )"
-         v-if="messagesData.find(item =>
-    item.message_id === msgItem.message_id &&
-    item.agent_type !== 'human' &&item.msgType !=  'toolData'&&
-    ( item.agent_type.includes('_end') || item.agent_type.includes('_interrupt')
-    )
-  )"
-            :metadata="completionMetaData"
-            :workflowData="
-              workflowData.filter(
-                (item) => item.message_id === msgItem.message_id
-              )
-            "
-            
-            :plannerText="
-              plannerTextData.filter(
-                (item) => item.message_id === msgItem.message_id
-              )[0]?.data
-            "
-            :key="msgItem.conversation_id"
-          
-           :data="
-  messagesData.find(item =>
-    item.message_id === msgItem.message_id &&
-    item.agent_type !== 'human' &&
-    (
-      item.agent_type.includes('_end') ||
-      item.agent_type.includes('_interrupt')
-    )
-  )
-"
+            class="flex px-4 items-start gap-x-2 sm:gap-x-4"
+          >
+            <div class="grow text-end space-y-3">
+              <!-- Card -->
+              <div class="inline-block flex justify-end">
+                <p class="text-[16px] text-left color-primary-brandGray dark:text-gray-100 max-w-[80%] w-auto">
+                  {{ msgItem.content }}
+                </p>
+              </div>
+              <!-- End Card -->
+            </div>
+            <UserAvatar :type="'user'" />
+          </div>
+          <div   class="px-4 items-start gap-x-2 sm:gap-x-4">
 
-            :messageId="msgItem.message_id"
-            :provider="provider"
-            :currentMsgId="currentMsgId"
-            :isLoading="isLoading"
-            
-            
-          />
-          
-         
-      </li>
-       <!-- <li 
-            v-if="streamData.length>0"
-            key="loading" class="px-4">
-        <StatusAnimationBox
-          :isLoading="isLoading"
-          :title="toolName?toolName:'Loading...'"
-          :content="combinedContent"
-          :streamData="streamData"
-        />
-      </li> -->
+                <StatusBox
 
-          <!-- <ChatLoaderBubble
-            :workflowData="
-              workflowData.filter((item) => item.message_id === currentMsgId)
-            "
-            v-if="isLoading"
-            :isLoading="isLoading"
-            :statusText="'Planning...'"
-            :plannerText="
-              plannerTextData.filter(
-                (item) => item.message_id === currentMsgId
-              )[0]?.data
-            "
-            :provider="provider"
-            :messageId="currentMsgId"
-          /> -->
-          <!-- End Chat Bubble -->
-           </template>
-        </transition-group>
+                 v-if="isLoading"
+                :workflowData="
+                      workflowData.filter(
+                        (item) => item.message_id === msgItem.message_id)"
+                  :isLoading="isLoading"
+                  
+                  :streamData=" messagesData.filter(
+                        (item) => item.msgType ===  'stream'
+                      )"
+                      :streamingEvents=" messagesData.filter(
+                        (item) => item.msgType ===  'toolData'
+                      )"
+                />
+                
+                  <!-- Chat Bubble -->
+                  <ChatBubble
+                    :streamingEvents=" messagesData.filter(
+                        (item) => item.msgType ===  'toolData'
+                      )"
+                v-if="messagesData.find(item =>
+            item.message_id === msgItem.message_id &&
+            item.agent_type !== 'human' &&item.msgType !=  'toolData'&&
+            ( item.agent_type.includes('_end') || item.agent_type.includes('_interrupt')
+            )
+          )"
+                    :metadata="completionMetaData"
+                    :workflowData="
+                      workflowData.filter(
+                        (item) => item.message_id === msgItem.message_id
+                      )
+                    "
+                    
+                    :plannerText="
+                      plannerTextData.filter(
+                        (item) => item.message_id === msgItem.message_id
+                      )[0]?.data
+                    "
+                    :key="msgItem.conversation_id"
+                  
+                  :data="
+          messagesData.find(item =>
+            item.message_id === msgItem.message_id &&
+            item.agent_type !== 'human' &&
+            (
+              item.agent_type.includes('_end') ||
+              item.agent_type.includes('_interrupt')
+            )
+          )
+        "
+
+                    :messageId="msgItem.message_id"
+                    :provider="provider"
+                    :currentMsgId="currentMsgId"
+                    :isLoading="isLoading"
+                    
+                    
+                  />
+                  
+                
+          </div>
+      
+           </div>
+          </div>
         
       </div>
 

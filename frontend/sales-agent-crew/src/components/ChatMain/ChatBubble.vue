@@ -1,4 +1,5 @@
 <template>
+  <!-- {{ props }} -->
   <!-- {{ (props.isLoading) }} -->
   <!-- {{props.agent_type}}
   {{props}} -->
@@ -6,7 +7,12 @@
   <!-- Handle streaming and agent_completion events -->
     <!-- {{ props.streamData }} -->
   <!-- {{ props }} -->
-  
+    <MetaData 
+    :presentMetadata="props.data.usage_metadata"
+    />
+    <!-- <AnalysisTimeline
+    :workflowData="props.data.usage_metadata"
+    /> -->
     <div class="w-full flex flex-col ">
         <!-- <AnalysisTimeline
         :isLoading="isLoading"
@@ -214,6 +220,7 @@
 
 <script setup>
 import { computed, defineProps, ref, watch, nextTick } from 'vue'
+import MetaData from '@/components/ChatMain/MetaData.vue'
 
 import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
 import AssistantComponent from '@/components/ChatMain/ResponseTypes/AssistantComponent.vue'

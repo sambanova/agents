@@ -1,5 +1,6 @@
 <template>
-  
+  <!-- {{ props }}
+   -->
   <!-- 1) If no streaming data, show placeholder -->
   <!-- <div
    
@@ -14,9 +15,9 @@
     <div class="flex flex-col p-4 border rounded mb-2">
       <span class="text-md flex inline-flex ">
         <LoadingText
-          v-if="props.isLoading"
-        :key="props.isLoading"
-          :isLoading="props.isLoading"
+          v-if="isLoading"
+        :key="isLoading"
+          :isLoading="isLoading"
          :text="latestToolAction?.toolName || 'Thinking'"  
         />: {{latestToolAction?.explanation}}
       </span>
@@ -34,11 +35,11 @@
       </div>
       <div
         ref="descContainer"
-        class=" overflow-y-auto bg-white text-gray-700 dark:text-gray-300 dark:bg-gray-800 rounded"
+        class=" overflow-y-auto text-sm bg-white text-gray-700 dark:text-gray-300 dark:bg-gray-800 rounded"
         style="max-height: 150px;"
       >
         <!-- {{ description || 'Waiting for stream…' }} -->
-                   <div class="markdown-content" v-html="renderMarkdown(description||'')"></div>
+                   <div class="markdown-content text-sm" v-html="renderMarkdown(description||'')"></div>
 
       </div>
     </div>
@@ -59,83 +60,91 @@
         </a>
       </div>
     </div>
- <AnalysisTimeline
-        :isLoading="isLoading"
-        :parsedData="parsedData"
-        :workflowData="workflowData"
-        :presentMetadata="props?.data?.usage_metadata"
-        :plannerText="plannerText"
-      />
+ 
     <!-- Comprehensive Audit Log -->
-    <div class="p-3 dark:bg-gray-700 border-b dark:border-gray-600 max-h-96 overflow-y-auto">
-      <div class="text-xs font-medium text-gray-600 dark:text-gray-300 mb-3">
-        Comprehensive Audit Log
-      </div>
-      <div class="relative space-y-3 pl-6">
+     <div
+    v-if="showAuditLog && hasCompletedEvents && auditLogEvents.length"
+    class="p-3 dark:bg-gray-700 border-b dark:border-gray-600 max-h-96 overflow-y-auto"
+  >
+    <div class="text-xs font-medium text-gray-600 dark:text-gray-300 mb-3">
+      Comprehensive Audit Log
+    </div>
+
+    <!-- wrap everything in a relative container with left padding for dots -->
+    <div class="relative space-y-3 pl-6">
+      <div
+        v-for="(event, idx) in auditLogEvents"
+        :key="event.id"
+        class="relative"
+      >
+        <!-- dot -->
         <div
-          v-for="(event, idx) in auditLogEvents"
-          :key="event.id"
-          class="relative"
-        >
-          <div
-            class="absolute left-0 top-0 w-3 h-3 bg-[#EAECF0] dark:bg-white rounded-full"
-          ></div>
-          <div
-            v-if="idx < auditLogEvents.length - 1"
-            class="absolute left-1.5 top-5 bottom-0 border-l-2 border-gray-200 dark:border-gray-600"
-          ></div>
-          <div class="flex items-start space-x-2 ml-6">
-            <div class="flex-1">
-              <div class="flex justify-between">
-                <span class="text-xs font-medium text-gray-900 dark:text-gray-100">
-                  {{ event.title }}
-                </span>
-                <span class="text-xs text-gray-400 dark:text-gray-500">
-                  {{ formatEventTime(event.timestamp) }}
-                </span>
-              </div>
-              <div
-                v-if="event.details"
-                class="text-xs text-gray-600 dark:text-gray-400 mt-1"
+          class="absolute left-0 top-0 w-3 h-3 bg-[#EAECF0] dark:bg-white rounded-full  "
+        ></div>
+        <!-- connector line (all but last) -->
+        <div
+          v-if="idx < auditLogEvents.length - 1"
+          class="absolute left-1.5 top-5 bottom-0 border-l-2 border-gray-200 dark:border-gray-600"
+        ></div>
+
+        <!-- your existing content, indented to the right of the dot -->
+        <div class="flex items-start space-x-2 ml-6">
+          <div class="flex-1">
+            <div class="flex justify-between">
+              <span
+                class="text-xs font-medium text-gray-900 dark:text-gray-100"
               >
-                {{ event.details }}
-              </div>
+                {{ event.title }}
+              </span>
+              <span class="text-xs text-gray-400 dark:text-gray-500">
+                {{ formatEventTime(event.timestamp) }}
+              </span>
+            </div>
+
+            <div
+              v-if="event.details"
+              class="text-xs text-gray-600 dark:text-gray-400 mt-1"
+            >
+              {{ event.details }}
+            </div>
+
+            <div
+              v-if="event.subItems?.length"
+              class="mt-2 ml-4 space-y-1 text-xs text-gray-600 dark:text-gray-400"
+            >
               <div
-                v-if="event.subItems?.length"
-                class="mt-2 ml-4 space-y-1 text-xs text-gray-600 dark:text-gray-400"
+                v-for="sub in event.subItems"
+                :key="sub.id"
+                class="flex items-start space-x-1"
               >
-                <div
-                  v-for="sub in event.subItems"
-                  :key="sub.id"
-                  class="flex items-start space-x-1"
-                >
-                  <span>•</span>
-                  <span>
-                    {{ sub.title }}
-                    <span v-if="sub.domain">({{ sub.domain }})</span>
-                  </span>
-                </div>
+                <span>•</span>
+                <span>
+                  {{ sub.title }}
+                  <span v-if="sub.domain">({{ sub.domain }})</span>
+                </span>
               </div>
-              <div class="text-xs text-gray-400 dark:text-gray-600 mt-1">
-                <span class="bg-gray-100 dark:bg-gray-600 px-1 rounded"
-                  >{{ event.event }}</span
-                >
-                <span
-                  v-if="event.type"
-                  class="bg-blue-100 dark:bg-blue-600 px-1 rounded ml-1"
-                  >{{ event.type }}</span
-                >
-              </div>
+            </div>
+
+            <div class="text-xs text-gray-400 dark:text-gray-600 mt-1">
+              <span
+                class="bg-gray-100 dark:bg-gray-600 px-1 rounded"
+              >{{ event.event }}</span>
+              <span
+                v-if="event.type"
+                class="bg-blue-100 dark:bg-blue-600 px-1 rounded ml-1"
+              >{{ event.type }}</span>
             </div>
           </div>
         </div>
       </div>
     </div>
   </div>
+
+  </div>
 </template>
 
 <script setup>
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick, watchEffect } from 'vue'
 import LoadingText from '@/components/ChatMain/LoadingText.vue'
 import { marked } from 'marked'
 import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'
@@ -171,6 +180,35 @@ const props = defineProps({
   return marked.parse(mdText)
 }
   
+
+const isCurrentlyStreaming = computed(() => {
+  if (!props.streamingEvents || props.streamingEvents.length === 0) return true
+  
+  const lastEvent = props.streamingEvents[props.streamingEvents.length - 1]
+  return lastEvent.event !== 'stream_complete'
+})
+
+const hasCompletedEvents = computed(() => {
+  if (!props.streamingEvents || props.streamingEvents.length === 0) {
+    // For loaded conversations, check if we have any tool-related or completion events
+    if (props.workflowData && props.workflowData.length > 0) return true;
+    if (props.metadata && Object.keys(props.metadata).length > 0) return true;
+    return false;
+  }
+  
+  // Check for any completed tool executions, final responses, or tool-related events
+  return props.streamingEvents.some(event => 
+    (event.event === 'agent_completion' && event.data.type === 'LiberalFunctionMessage') ||
+    (event.event === 'agent_completion' && event.data.name === 'DaytonaCodeSandbox') ||
+    (event.event === 'agent_completion' && event.data.name === 'search_tavily') ||
+    (event.event === 'agent_completion' && event.data.name === 'arxiv') ||
+    (event.event === 'stream_complete') ||
+    (event.event === 'agent_completion' && event.data.agent_type === 'react_end') ||
+    (event.isToolRelated || event.isDaytonaRelated) || // Check our custom flags
+    event.event === 'agent_completion' || event.event === 'stream_complete'
+  )
+})
+
 
 // helper to pull <tool>NAME</tool>
 function extractToolName(content) {
@@ -273,6 +311,9 @@ const auditLogEvents = computed(() => {
     return unique
   }
 
+
+
+
   // otherwise from streamingEvents
   const out = []
   const seenKeys = new Set()
@@ -313,6 +354,13 @@ function formatEventTime(ts) {
     minute: '2-digit'
   })
 }
+
+watch(
+  () => props.isLoading,
+  (newVal, oldVal) => {
+    console.log('⚡ isLoading changed:', oldVal, '→', newVal)
+  }
+)
 
 const latestToolAction = computed(() => {
   // 1) Grab only the react_tool completions
@@ -408,5 +456,7 @@ const latestToolAction = computed(() => {
 p{
   line-height: 24px;
 }
+
+
 
 </style>
