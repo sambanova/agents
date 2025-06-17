@@ -81,6 +81,7 @@
    <li   class="px-4 items-start gap-x-2 sm:gap-x-4">
 
         <StatusBox
+           v-if="isLoading"
          :workflowData="
               workflowData.filter(
                 (item) => item.message_id === msgItem.message_id)"
@@ -88,6 +89,9 @@
           
           :streamData=" messagesData.filter(
                 (item) => item.msgType ===  'stream'
+              )"
+               :streamingEvents=" messagesData.filter(
+                (item) => item.msgType ===  'toolData'
               )"
         />
          
@@ -100,7 +104,9 @@
     item.message_id === msgItem.message_id &&
     item.agent_type !== 'human' &&item.msgType !=  'toolData'&&
     (
+      
       item.agent_type.includes('_end') ||
+        item.agent_type.includes('_search_sections') ||
       item.agent_type.includes('_interrupt')
     )
   )"
@@ -844,6 +850,7 @@ async function filterChatCombo(msgData) {
       // For agent_completion events, preserve the full data structure
 
       if(message.event === 'agent_completion'){
+         
           const isToolCall = message.content && typeof message.content === 'string' && message.content.includes('<tool>');
         const isToolResult = Array.isArray(message.content) || (message.additional_kwargs?.agent_type === 'react_tool');
         const isToolResponse = message.additional_kwargs?.agent_type === 'tool_response';
@@ -881,17 +888,19 @@ async function filterChatCombo(msgData) {
           };
         }
 
-         if ((
+         else if ((
           message.type === 'HumanMessage' ||
           message.additional_kwargs?.agent_type.includes('_end') ||
+           message.additional_kwargs?.agent_type.includes('_search_sections') ||
           message.additional_kwargs?.agent_type.includes('_interrupt'))
+          
       ) {
 
-
+  //  alert(agent_type)
         if( message.additional_kwargs?.agent_type.includes('_interrupt')){
           shouldResume.value=true
         }
-        // alert(agent_type)
+       
         message.agent_type=agent_type
          message.msgType='message'
         return message;
@@ -1856,21 +1865,21 @@ const addMessage = async () => {
   
   // alert(currentMsgId.value)
   // Check if the last agent_completion message is a deep_research_interrupt and user typed something
-  let shouldResume = false;
-  if (messagesData.value.length > 0) {
-    // Find the last agent_completion message (not stream_complete)
-    for (let i = messagesData.value.length - 1; i >= 0; i--) {
-      const message = messagesData.value[i];
-      if (message.event === 'agent_completion') {
-        // Check if this agent_completion has deep_research_interrupt agent_type
-        if (message.data && message.data.agent_type === 'deep_research_interrupt') {
-          // If user typed something, set resume to true
-          shouldResume = searchQuery.value.trim().length > 0;
-        }
-        break; // Found the last agent_completion, stop looking
-      }
-    }
-  }
+  // let shouldResume = false;
+  // if (messagesData.value.length > 0) {
+  //   // Find the last agent_completion message (not stream_complete)
+  //   for (let i = messagesData.value.length - 1; i >= 0; i--) {
+  //     const message = messagesData.value[i];
+  //     if (message.event === 'agent_completion') {
+  //       // Check if this agent_completion has deep_research_interrupt agent_type
+  //       if (message.data && message.data.agent_type === 'deep_research_interrupt') {
+  //         // If user typed something, set resume to true
+  //         shouldResume = searchQuery.value.trim().length > 0;
+  //       }
+  //       break; // Found the last agent_completion, stop looking
+  //     }
+  //   }
+  // }
   
   
   const serverPayload = {
@@ -1884,6 +1893,8 @@ const addMessage = async () => {
   };
   if(shouldResume.value){
     serverPayload.resume=true
+  }else{
+    serverPayload.resume=false
   }
     const messagePayload = {
     
@@ -2022,7 +2033,7 @@ async function connectWebSocket() {
         
 if ((receivedData.event === 'agent_completion'&&(receivedData.type!=="HumanMessage")&&
 (receivedData.additional_kwargs?.agent_type.includes("_end")||
-receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {   
+receivedData.additional_kwargs?.agent_type.includes("_interrupt")||receivedData.additional_kwargs?.agent_type.includes("deep_research_search_queries_section")))) {   
   
   if(receivedData.additional_kwargs?.agent_type.includes("_interrupt")){
     shouldResume.value=true

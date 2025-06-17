@@ -518,6 +518,8 @@ const selectedComponent = computed(() => {
       return AssistantEndComponent
     case 'educational_content':
       return EducationalComponent
+          case 'deep_research_search_sections':
+      return AssistantEndComponent
         case 'deep_research_interrupt':
       return AssistantEndComponent
     case 'user_proxy':

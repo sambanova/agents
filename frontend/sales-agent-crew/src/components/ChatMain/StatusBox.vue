@@ -1,24 +1,21 @@
 <template>
-  
   <!-- 1) If no streaming data, show placeholder -->
-  <div
-    v-if="!streamingEvents || streamingEvents.length === 0"
+  <!-- <div
+   
     class="p-6 text-center text-gray-500 dark:text-gray-400"
   >
     No streaming events to display.
-   
-  </div>
+  </div> -->
 
   <!-- 2) Otherwise render full timeline + audit log -->
-  <div v-else>
+  <div  v-if="!streamData || streamData.length === 0">
     <!-- Tool header & timeline -->
     <div class="flex flex-col p-4 border rounded mb-6">
       <span class="text-md font-bold mb-4">
-         <LoadingText
-    :isLoading="isLoading"
-    text=" Current Tool: {{ currentToolName || '– none –' }}"
-    />
-       
+        <LoadingText
+          :isLoading="true"
+          text="'Thinking'"
+        />:{{currentToolName}}
       </span>
       <div class="flex space-x-6 mb-4">
         <div
@@ -128,7 +125,7 @@
 
 <script setup>
 import { computed, ref, watch, nextTick } from 'vue'
-import LoadingText from '@/components/ChatMain/LoadingText.vue';
+import LoadingText from '@/components/ChatMain/LoadingText.vue'
 
 const props = defineProps({
   streamData: { type: Array, default: () => [] },
@@ -145,7 +142,7 @@ function extractToolName(content) {
 
 // 1) tool timeline
 const toolTimeline = computed(() =>
-  props.streamingEvents
+  props.streamData
     .filter(
       i =>
         i.event === 'agent_completion' &&
@@ -163,7 +160,7 @@ const currentToolName = computed(() =>
 
 // 3) description
 const description = computed(() =>
-  props.streamingEvents
+  props.streamData
     .filter(i =>
       ['stream_start', 'llm_stream_chunk', 'stream_complete'].includes(
         i.event
@@ -210,9 +207,9 @@ const toolSources = computed(() => {
   return sources.slice(0, 5)
 })
 
-// 5) audit log (with safe `.details`)
+// 5) audit log with safe stringify
 const auditLogEvents = computed(() => {
-  // synthetic if no streamData but we have workflowData
+  // synthetic if no streamingEvents but we have workflowData
   if ((!props.streamingEvents || !props.streamingEvents.length) && props.workflowData.length) {
     const unique = []
     const seen = new Set()
@@ -234,22 +231,26 @@ const auditLogEvents = computed(() => {
     return unique
   }
 
-  // otherwise from streamData
+  // otherwise from streamingEvents
   const out = []
   const seenKeys = new Set()
   props.streamingEvents.forEach((evt, idx) => {
     const key = `${evt.event}-${evt.timestamp}`
     if (!seenKeys.has(key)) {
       seenKeys.add(key)
-      // safe stringify of content
+
+      // SAFELY stringify or fallback
       let raw = evt.content
-      let detail = ''
-      if (typeof raw === 'string') {
-        detail = raw.length > 100 ? raw.slice(0, 100) + '…' : raw
-      } else {
-        // object or primitive fallback
-        detail = JSON.stringify(raw).slice(0, 100) + '…'
+      let serialized = JSON.stringify(raw)
+      if (serialized === undefined) {
+        serialized = String(raw ?? '')
       }
+
+      // truncate to 100 chars
+      const detail = serialized.length > 100
+        ? serialized.slice(0, 100) + '…'
+        : serialized
+
       out.push({
         id: `audit-${idx}`,
         title: evt.event,
@@ -273,5 +274,5 @@ function formatEventTime(ts) {
 </script>
 
 <style scoped>
-/* optional styling tweaks */
+/* Optional styling tweaks */
 </style>
