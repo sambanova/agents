@@ -1,18 +1,20 @@
 <template>
-  <div class="flex whitespace-pre">
+  <span
+    class="flex whitespace-pre text-gray-900 dark:text-gray-100"
+  >
     <span
       v-for="(char, idx) in chars"
       :key="idx"
       :class="[
         'transition-opacity duration-200 ease-in-out',
-        isLoading
+        props.isLoading
           ? (isInWindow(idx) ? 'opacity-100' : 'opacity-30')
           : 'opacity-100'
       ]"
     >
       {{ char }}
     </span>
-  </div>
+</span>
 </template>
 
 <script setup>
@@ -29,9 +31,8 @@ const props = defineProps({
   },
   speed: {
     type: Number,
-    default: 25
+    default: 150
   },
-  // how many chars to highlight at once
   windowSize: {
     type: Number,
     default: 10
@@ -43,15 +44,13 @@ const activeIndex = ref(0)
 let intervalId = null
 
 function isInWindow(idx) {
-  // build a wrapping window [activeIndex, activeIndex+windowSize)
   const start = activeIndex.value
-  const end = (start + props.windowSize) % chars.value.length
+  const size = props.windowSize
+  const end = (start + size) % chars.value.length
 
-  if (start + props.windowSize <= chars.value.length) {
-    // non-wrapping
-    return idx >= start && idx < start + props.windowSize
+  if (start + size <= chars.value.length) {
+    return idx >= start && idx < start + size
   } else {
-    // wraps around end of array
     return idx >= start || idx < end
   }
 }
@@ -69,8 +68,8 @@ function stopAnimation() {
   activeIndex.value = 0
 }
 
-watch(() => props.isLoading, loading => {
-  loading ? startAnimation() : stopAnimation()
+watch(() => props.isLoading, val => {
+  val ? startAnimation() : stopAnimation()
 })
 
 onMounted(() => {

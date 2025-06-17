@@ -35,6 +35,7 @@
         style="max-height: 150px;"
       >
         {{ description || (isLoading ? 'Waiting for stream…' : '') }}
+        <div class="markdown-content" v-html="renderMarkdown(description||'')"></div>
       </div>
     </div>
 

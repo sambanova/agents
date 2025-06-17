@@ -1,4 +1,5 @@
 <template>
+  
   <!-- 1) If no streaming data, show placeholder -->
   <!-- <div
    
@@ -8,16 +9,18 @@
   </div> -->
 
   <!-- 2) Otherwise render full timeline + audit log -->
-  <div  v-if="!streamData || streamData.length === 0">
+  <div>
     <!-- Tool header & timeline -->
-    <div class="flex flex-col p-4 border rounded mb-6">
-      <span class="text-md font-bold mb-4">
+    <div class="flex flex-col p-4 border rounded mb-2">
+      <span class="text-md  mb-2">
         <LoadingText
-          :isLoading="true"
-          text="'Thinking'"
-        />:{{currentToolName}}
+          v-if="props.isLoading"
+        :key="props.isLoading"
+          :isLoading="props.isLoading"
+         :text="latestToolAction?.toolName || 'Thinking'"  
+        />{{latestToolAction?.explanation}}
       </span>
-      <div class="flex space-x-6 mb-4">
+      <div class="flex space-x-6 mb-2">
         <div
           v-for="(tool, idx) in toolTimeline"
           :key="idx"
@@ -31,10 +34,12 @@
       </div>
       <div
         ref="descContainer"
-        class="p-3 overflow-y-auto bg-gray-50 dark:bg-gray-800 rounded"
+        class="p-2 overflow-y-auto bg-white dark:bg-gray-800 rounded"
         style="max-height: 150px;"
       >
-        {{ description || 'Waiting for stream…' }}
+        <!-- {{ description || 'Waiting for stream…' }} -->
+                   <div class="markdown-content" v-html="renderMarkdown(description||'')"></div>
+
       </div>
     </div>
 
@@ -126,13 +131,22 @@
 <script setup>
 import { computed, ref, watch, nextTick } from 'vue'
 import LoadingText from '@/components/ChatMain/LoadingText.vue'
+import { marked } from 'marked'
 
 const props = defineProps({
   streamData: { type: Array, default: () => [] },
   streamingEvents: { type: Array, default: () => [] },
   workflowData: { type: Array, default: () => [] },
   isLoading: { type: Boolean, default: false },
+   
 })
+
+
+  function   renderMarkdown(mdText) {
+  // marked.parse(...) converts Markdown → safe-ish HTML
+  return marked.parse(mdText)
+}
+  
 
 // helper to pull <tool>NAME</tool>
 function extractToolName(content) {
@@ -159,16 +173,20 @@ const currentToolName = computed(() =>
 )
 
 // 3) description
-const description = computed(() =>
-  props.streamData
+
+
+const description = computed(() => {
+ return props.streamData
     .filter(i =>
       ['stream_start', 'llm_stream_chunk', 'stream_complete'].includes(
         i.event
-      )
+      )&&!(i?.content.includes('<tool>')||i?.content.includes('< tool>'))
     )
     .map(i => i.content)
-    .join('')
-)
+    .join(' ')
+})
+
+
 
 // auto‐scroll description
 const descContainer = ref(null)
@@ -271,8 +289,100 @@ function formatEventTime(ts) {
     minute: '2-digit'
   })
 }
+
+const latestToolAction = computed(() => {
+  // 1) Grab only the react_tool completions
+  const calls = props.streamData.filter(i =>
+    i.event === 'agent_completion' &&
+    i.agent_type === 'react_tool' &&
+    typeof i.content === 'string'
+  )
+  if (!calls.length) return ''
+
+  // 2) Take the very last one
+  const lastContent = calls[calls.length - 1].content
+
+  // 3) Extract <tool>…</tool>
+  const toolMatch  = lastContent.match(/<\s*tool>([\s\S]*?)<\/\s*tool>/i)
+  // 4) Extract <tool_input>…</tool_input>
+  const inputMatch = lastContent.match(/<\s*tool_input>([\s\S]*?)<\/\s*tool_input>/i)
+
+  if (!toolMatch) return ''   // no tool tag → bail
+
+  // 5) Normalize the name: replace underscores with spaces
+  const rawName  = toolMatch[1].trim()              // e.g. "search_tavily"
+  const toolName = rawName.replace(/_/g, ' ')       // → "search tavily"
+
+  // 6) Pull out the explanation
+  const explanation = inputMatch ? inputMatch[1].trim() : ''
+
+  // 7) Format as "Tool Name: Explanation"
+  return {toolName:toolName,explanation: explanation}
+})
 </script>
 
 <style scoped>
-/* Optional styling tweaks */
+/* Styling for headings (lines ending with a colon) */
+.md-heading {
+  color: #101828;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600; /* Semibold */
+  font-size: 16px;
+  line-height: 24px;
+  letter-spacing: 0;
+  margin-bottom: 1rem;
+  text-align: left;
+}
+
+/* Styling for normal paragraphs */
+.md-paragraph {
+  color: #101828;
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 24px;
+  letter-spacing: 0;
+  /* margin-bottom: 1rem; */
+}
+
+/* Remove default list styles */
+.markdown-content ul {
+  list-style: none;
+  padding: 0;
+  margin-bottom: 1rem;
+}
+
+/* Styling for bullet list items */
+.custom-bullet {
+  display: flex;
+  align-items: center;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 24px;
+  letter-spacing: 0;
+  color: #101828;
+  margin-bottom: 0.5rem;
+  position: relative;
+  padding-right: 1.5rem; /* Reserve space for the inline bullet marker */
+}
+
+/* Inline bullet marker positioned on the right */
+.bullet-marker {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #101828;
+  font-weight: 600;
+  font-size: 32px;
+  line-height: 24px;
+  letter-spacing: 0;
+  margin-left: 0.5rem;
+}
+
+p{
+  line-height: 24px;
+}
+
 </style>

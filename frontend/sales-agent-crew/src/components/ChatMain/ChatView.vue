@@ -81,7 +81,8 @@
    <li   class="px-4 items-start gap-x-2 sm:gap-x-4">
 
         <StatusBox
-           v-if="isLoading"
+
+        v-if="isLoading"
          :workflowData="
               workflowData.filter(
                 (item) => item.message_id === msgItem.message_id)"
@@ -103,11 +104,7 @@
          v-if="messagesData.find(item =>
     item.message_id === msgItem.message_id &&
     item.agent_type !== 'human' &&item.msgType !=  'toolData'&&
-    (
-      
-      item.agent_type.includes('_end') ||
-        item.agent_type.includes('_search_sections') ||
-      item.agent_type.includes('_interrupt')
+    ( item.agent_type.includes('_end') || item.agent_type.includes('_interrupt')
     )
   )"
             :metadata="completionMetaData"
@@ -632,7 +629,7 @@ watch(
       searchQuery.value = '';
       chatName.value = '';
       isLoading.value = false;
-
+shouldResume.value=false
       // Load new conversation data
       if (newId) {
         loadPreviousChat(newId);
@@ -891,7 +888,7 @@ async function filterChatCombo(msgData) {
          else if ((
           message.type === 'HumanMessage' ||
           message.additional_kwargs?.agent_type.includes('_end') ||
-           message.additional_kwargs?.agent_type.includes('_search_sections') ||
+           
           message.additional_kwargs?.agent_type.includes('_interrupt'))
           
       ) {
@@ -1896,6 +1893,7 @@ const addMessage = async () => {
   }else{
     serverPayload.resume=false
   }
+  shouldResume.value=false
     const messagePayload = {
     
      event: 'agent_completion',
@@ -2033,7 +2031,7 @@ async function connectWebSocket() {
         
 if ((receivedData.event === 'agent_completion'&&(receivedData.type!=="HumanMessage")&&
 (receivedData.additional_kwargs?.agent_type.includes("_end")||
-receivedData.additional_kwargs?.agent_type.includes("_interrupt")||receivedData.additional_kwargs?.agent_type.includes("deep_research_search_queries_section")))) {   
+receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {   
   
   if(receivedData.additional_kwargs?.agent_type.includes("_interrupt")){
     shouldResume.value=true
@@ -2121,6 +2119,7 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")||receivedData.
           //   });
           
         } else if (receivedData.event === 'stream_complete') {
+          
           isLoading.value=false
           console.log('Stream complete:', receivedData);
           // messagesData.value.push({

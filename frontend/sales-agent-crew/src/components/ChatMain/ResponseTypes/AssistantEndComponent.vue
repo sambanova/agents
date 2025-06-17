@@ -1,10 +1,11 @@
 <template>
  <!-- Parsed message {{ parsed?.content }} -->
+  
   <div class="assistant-message">
     
     <!-- Wrap generated HTML in a container so our styles apply -->
     <!-- <div class="markdown-content" v-html="formattedText(parsed?.message||'')"></div> -->
-         <div class="markdown-content" v-html="renderMarkdown(parsed?.content||'No Data')"></div>
+         <div class="markdown-content" v-html="renderMarkdown(parsed?.content||'')"></div>
 
   </div>
 </template>
