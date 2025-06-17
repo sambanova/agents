@@ -214,7 +214,7 @@ class FinancialAnalysisCrew:
             base_url=model_info["url"],
         )
         aggregator_model_info = model_registry.get_model_info(
-            model_key="llama-3.3-70b", provider=provider
+            model_key="llama-4-maverick", provider=provider
         )
         self.aggregator_llm = CustomLLM(
             model=aggregator_model_info["crewai_prefix"]

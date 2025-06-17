@@ -113,8 +113,8 @@ redis:
   enabled: true
   namespace: redis
   image:
-    repository: redis
-    tag: "7.2-alpine"
+    repository: redis/redis-stack
+    tag: "7.2.0-v17"
     pullPolicy: IfNotPresent
   replicas: 1
   resources:
@@ -129,6 +129,7 @@ redis:
     port: 6379
     targetPort: 6379
   args:
+    - "redis-stack-server"
     - "--appendonly"
     - "yes"
   volumes:
