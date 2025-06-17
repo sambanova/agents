@@ -1,16 +1,13 @@
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Sequence, Union
 
 from agents.api.data_types import AgentEnum, AgentStructuredResponse
 from agents.api.websocket_interface import WebSocketInterface
-from langchain_core.messages import (
-    AnyMessage,
-    BaseMessage,
-)
+from langchain.schema.messages import AIMessage, HumanMessage
+from langchain_core.messages import AnyMessage, BaseMessage
 from langchain_core.runnables import Runnable, RunnableConfig
-from langchain.schema.messages import HumanMessage, AIMessage
-from langgraph.types import Interrupt
-from langgraph.types import Command
+from langgraph.types import Command, Interrupt
 
 
 async def astream_state_websocket(
@@ -35,6 +32,23 @@ async def astream_state_websocket(
         elif input.content and (not message.parameters.deep_research_topic):
             # user typed some text, treat it as feedback
             graph_input = Command(resume=input.content)
+
+        msg = {
+            "event": "agent_completion",
+            "run_id": root_run_id,
+            "type": "HumanMessage",
+            **input.model_dump(),
+            "user_id": user_id,
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        msg["id"] = str(uuid.uuid4())
+        await websocket_manager.send_message(
+            user_id,
+            conversation_id,
+            msg,
+        )
     else:
         graph_input = input
 
