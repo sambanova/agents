@@ -12,13 +12,13 @@
   <div>
     <!-- Tool header & timeline -->
     <div class="flex flex-col p-4 border rounded mb-2">
-      <span class="text-md  mb-2">
+      <span class="text-md flex inline-flex ">
         <LoadingText
           v-if="props.isLoading"
         :key="props.isLoading"
           :isLoading="props.isLoading"
          :text="latestToolAction?.toolName || 'Thinking'"  
-        />{{latestToolAction?.explanation}}
+        />: {{latestToolAction?.explanation}}
       </span>
       <div class="flex space-x-6 mb-2">
         <div
@@ -34,7 +34,7 @@
       </div>
       <div
         ref="descContainer"
-        class="p-2 overflow-y-auto bg-white dark:bg-gray-800 rounded"
+        class=" overflow-y-auto bg-white text-gray-700 dark:text-gray-300 dark:bg-gray-800 rounded"
         style="max-height: 150px;"
       >
         <!-- {{ description || 'Waiting for stream…' }} -->
@@ -59,7 +59,13 @@
         </a>
       </div>
     </div>
-
+ <AnalysisTimeline
+        :isLoading="isLoading"
+        :parsedData="parsedData"
+        :workflowData="workflowData"
+        :presentMetadata="props?.data?.usage_metadata"
+        :plannerText="plannerText"
+      />
     <!-- Comprehensive Audit Log -->
     <div class="p-3 dark:bg-gray-700 border-b dark:border-gray-600 max-h-96 overflow-y-auto">
       <div class="text-xs font-medium text-gray-600 dark:text-gray-300 mb-3">
@@ -132,12 +138,30 @@
 import { computed, ref, watch, nextTick } from 'vue'
 import LoadingText from '@/components/ChatMain/LoadingText.vue'
 import { marked } from 'marked'
+import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'
 
 const props = defineProps({
   streamData: { type: Array, default: () => [] },
   streamingEvents: { type: Array, default: () => [] },
   workflowData: { type: Array, default: () => [] },
   isLoading: { type: Boolean, default: false },
+    plannerText: {
+    type: String,
+    required: true,
+  },
+  metadata: {
+    type: Object,
+    required: true,
+  },
+  provider: {
+    type: String,
+    required: true,
+  },
+  messageId: {
+    type: String,
+    required: true,
+  },
+
    
 })
 

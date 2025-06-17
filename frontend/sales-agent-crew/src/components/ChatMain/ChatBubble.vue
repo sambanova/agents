@@ -8,13 +8,13 @@
   <!-- {{ props }} -->
   
     <div class="w-full flex flex-col ">
-        <AnalysisTimeline
+        <!-- <AnalysisTimeline
         :isLoading="isLoading"
         :parsedData="parsedData"
         :workflowData="workflowData"
         :presentMetadata="props?.data?.usage_metadata"
         :plannerText="plannerText"
-      />
+      /> -->
       <!-- download pdf -->
       <!-- <div class="grow relative text-start space-y-3">
         

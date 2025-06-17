@@ -82,7 +82,7 @@
 
         <StatusBox
 
-        v-if="isLoading"
+        
          :workflowData="
               workflowData.filter(
                 (item) => item.message_id === msgItem.message_id)"
