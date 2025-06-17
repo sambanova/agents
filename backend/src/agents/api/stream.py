@@ -29,14 +29,13 @@ async def astream_state_websocket(
             graph_input = Command(resume=True)
         elif input.content.lower() == "false":
             graph_input = Command(resume=False)
-        elif input.content and (not message.parameters.deep_research_topic):
+        elif input.content:
             # user typed some text, treat it as feedback
             graph_input = Command(resume=input.content)
 
         msg = {
             "event": "agent_completion",
             "run_id": root_run_id,
-            "type": "HumanMessage",
             **input.model_dump(),
             "user_id": user_id,
             "conversation_id": conversation_id,
@@ -44,6 +43,7 @@ async def astream_state_websocket(
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         msg["id"] = str(uuid.uuid4())
+        msg["type"] = "HumanMessage"
         await websocket_manager.send_message(
             user_id,
             conversation_id,
