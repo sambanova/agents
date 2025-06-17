@@ -3,61 +3,55 @@
   <div
     ref="agentContainer"
     v-if="agentThoughtsData.length"
-    class="flex flex-col p-1 overflow-y-auto overflow-x-hidden border border-primary-brandFrame bg-white rounded-lg h-full border-l transition-all duration-300"
-    :class="collapsed ? 'w-[64px]  ' : 'w-[280px]'"
+    :class="[
+      'flex flex-col p-1 overflow-y-auto overflow-x-hidden border rounded-lg h-full border-l transition-all duration-300 bg-white dark:bg-gray-800',
+      collapsed ? 'w-[64px]' : 'w-[280px]',
+      'border-primary-brandFrame dark:border-gray-600'
+    ]"
   >
     <!-- Collapse/Expand Button -->
     <button
-      :class="collapsed ? 'w-100 h-[36px]  mx-auto' : ' '"
-      class="p-2 border-primary-brandFrame mb-2 border flex items-center justify-between w-full text-center bg-primary-brandGray text-primary-bodyText rounded text-sm"
       @click="collapsed = !collapsed"
-      :title="
-        collapsed
-          ? 'Expand Agent Reasoning sidebar'
-          : 'Collapse Agent Reasoning sidebar'
-      "
+      :title="collapsed ? 'Expand Agent Reasoning sidebar' : 'Collapse Agent Reasoning sidebar'"
+      :class="[
+        'p-2 mb-2 border flex items-center justify-between w-full text-center rounded text-sm bg-primary-brandGray text-primary-bodyText dark:bg-gray-700 dark:text-gray-200',
+        'border-primary-brandFrame dark:border-gray-600',
+        collapsed ? 'w-100 h-[36px] mx-auto' : ''
+      ]"
     >
-      <span :class="collapsed ? 'mx-auto' : ''" class="flex items-center">
+      <span :class="[ 'flex items-center', collapsed ? 'mx-auto' : '' ]">
         <span v-if="!collapsed">
           <!-- Expand icon -->
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            class="h-5 w-5 text-gray-700"
+            class="h-5 w-5 text-gray-700 dark:text-gray-300"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M9 5l7 7-7 7"
-            />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 5l7 7-7 7" />
           </svg>
         </span>
 
-        <span v-else :class="collapsed ? 'mx-auto' : ''">
+        <span v-else>
           <!-- Collapse icon -->
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            class="h-5 w-5 text-gray-700"
+            class="h-5 w-5 text-gray-700 dark:text-gray-300"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M15 19l-7-7 7-7"
-            />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M15 19l-7-7 7-7" />
           </svg>
         </span>
+
         <span v-if="!collapsed" class="ml-2">Agent Reasoning</span>
       </span>
       <span class="hidden" v-if="!collapsed">26 sources</span>
     </button>
-    <div></div>
 
     <div class="mx-2">
       <ol class="relative pl-2">
@@ -87,10 +81,13 @@
 
       <template v-if="metadata && !collapsed">
         <!-- Render only available metadata fields -->
-        <MetaData :presentMetadata="presentMetadata" />
+        <MetaData :presentMetadata="presentMetadata" class="dark:bg-gray-800" />
 
-        <Fastest />
-        <MaximizeBox :token_savings="presentMetadata?.token_savings" />
+        <Fastest class="dark:bg-gray-800" />
+        <MaximizeBox
+          :token_savings="presentMetadata?.token_savings"
+          class="dark:bg-gray-800"
+        />
       </template>
     </div>
   </div>

@@ -3,22 +3,12 @@
     <!-- Content -->
     <div
       ref="container"
-      class="relative h-full flex  overflow-x-hidden overflow-y-auto"
-       :class="
-          (messagesData.length == 0 )? 'justify-center align-center flex-col' : 'flex-col'
-        "
+      class="relative h-full flex flex-col overflow-x-hidden overflow-y-auto"
     >
-     
-      <div
-        class=" w-full flex mx-auto"
-        :class="
-          messagesData.length == 0? 'justify-center align-center flex-col' : 'flex-1'
-        "
-      >
-       <!-- Sticky Top Component -->
+      <!-- Sticky Top Component -->
       <div
         v-if="chatName"
-        class="sticky hidden h-[62px] top-0 z-10 bg-white dark:bg-gray-800 p-4 shadow"
+        class="sticky h-[62px] top-0 z-10 bg-white dark:bg-gray-800 p-4 shadow"
       >
         <div class="flex items-center justify-between">
           <!-- Left text -->
@@ -43,6 +33,13 @@
           </div>
         </div>
       </div>
+
+      <div
+        class="flex-1 w-full flex mx-auto"
+        :class="
+          messagesData.length == 0 ? 'justify-center align-center flex-col' : ''
+        "
+      >
         <!-- Title -->
         <div v-if="messagesData.length == 0" class="w-full text-center">
           <h1 v-if="!initialLoading" class="text-3xl font-bold sm:text-3xl">
@@ -52,101 +49,52 @@
           </h1>
         </div>
         <!-- End Title -->
-        
 
-        <div
+        <transition-group
           name="chat"
           tag="ul"
           class="mt-16 max-w-4xl w-full mx-auto space-y-5"
-             
         >
-                  <div v-for="msgItem in messagesData.filter(
-                        (item) => item.type === 'HumanMessage'
-                      )" :key="msgItem.message_id">
+          <!-- Chat Bubble -->
+          <ChatBubble
+            v-for="msgItem in filteredMessages"
+            :metadata="completionMetaData || {}"
+            :workflowData="
+              workflowData.filter(
+                (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
+              )
+            "
+            :plannerText="
+              plannerTextData.filter(
+                (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
+              )[0]?.data || ''
+            "
+            :key="msgItem.conversation_id || msgItem.message_id || msgItem.timestamp || Math.random()"
+            :event="msgItem.event || 'unknown'"
+            :data="formatMessageData(msgItem)"
+            :messageId="msgItem.message_id || msgItem.messageId || ''"
+            :provider="provider"
+            :currentMsgId="currentMsgId || ''"
+            :streamingEvents="msgItem.type === 'streaming_group' ? msgItem.events : null"
+          />
+          <ChatLoaderBubble
+            :workflowData="
+              workflowData.filter((item) => item.message_id === currentMsgId)
+            "
+            v-if="isLoading"
+            :isLoading="isLoading"
+            :statusText="'Planning...'"
+            :plannerText="
+              plannerTextData.filter(
+                (item) => item.message_id === currentMsgId
+              )[0]?.data
+            "
+            :provider="provider"
+            :messageId="currentMsgId"
+          />
 
-            <div
-          
-            class="flex px-4 items-start gap-x-2 sm:gap-x-4"
-          >
-            <div class="grow text-end space-y-3">
-              <!-- Card -->
-              <div class="inline-block flex justify-end">
-                <p class="text-[16px] text-left color-primary-brandGray dark:text-gray-100 max-w-[80%] w-auto">
-                  {{ msgItem.content }}
-                </p>
-              </div>
-              <!-- End Card -->
-            </div>
-            <UserAvatar :type="'user'" />
-          </div>
-          <div   class="px-4 items-start gap-x-2 sm:gap-x-4">
-
-                <StatusBox
-
-                 v-if="isLoading"
-                :workflowData="
-                      workflowData.filter(
-                        (item) => item.message_id === msgItem.message_id)"
-                  :isLoading="isLoading"
-                  
-                  :streamData=" messagesData.filter(
-                        (item) => item.msgType ===  'stream'
-                      )"
-                      :streamingEvents=" messagesData.filter(
-                        (item) => item.msgType ===  'toolData'
-                      )"
-                />
-                
-                  <!-- Chat Bubble -->
-                  <ChatBubble
-                    :streamingEvents=" messagesData.filter(
-                        (item) => item.msgType ===  'toolData'
-                      )"
-                v-if="messagesData.find(item =>
-            item.message_id === msgItem.message_id &&
-            item.agent_type !== 'human' &&item.msgType !=  'toolData'&&
-            ( item.agent_type.includes('_end') || item.agent_type.includes('_interrupt')
-            )
-          )"
-                    :metadata="completionMetaData"
-                    :workflowData="
-                      workflowData.filter(
-                        (item) => item.message_id === msgItem.message_id
-                      )
-                    "
-                    
-                    :plannerText="
-                      plannerTextData.filter(
-                        (item) => item.message_id === msgItem.message_id
-                      )[0]?.data
-                    "
-                    :key="msgItem.conversation_id"
-                  
-                  :data="
-          messagesData.find(item =>
-            item.message_id === msgItem.message_id &&
-            item.agent_type !== 'human' &&
-            (
-              item.agent_type.includes('_end') ||
-              item.agent_type.includes('_interrupt')
-            )
-          )
-        "
-
-                    :messageId="msgItem.message_id"
-                    :provider="provider"
-                    :currentMsgId="currentMsgId"
-                    :isLoading="isLoading"
-                    
-                    
-                  />
-                  
-                
-          </div>
-      
-           </div>
-          </div>
-        
+          <!-- End Chat Bubble -->
+        </transition-group>
       </div>
 
       <!-- Documents Section -->
@@ -416,11 +364,6 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import ChatBubble from '@/components/ChatMain/ChatBubble.vue';
 import ChatLoaderBubble from '@/components/ChatMain/ChatLoaderBubble.vue';
-import StatusAnimationBox from '@/components/ChatMain/StatusAnimationBox.vue';
-import StatusBox from '@/components/ChatMain/StatusBox.vue';
-import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
-
-
 const router = useRouter();
 const route = useRoute();
 import { useAuth } from '@clerk/vue';
@@ -533,18 +476,18 @@ function handleKeydownScroll(event) {
 // }
 
 function AutoScrollToBottom(smoothScrollOff = false) {
-  // nextTick(() => {
-  //   setTimeout(() => {
-  //     if (container.value) {
-  //       const targetScroll =
-  //         container.value.scrollHeight - container.value.clientHeight;
-  //       container.value.scrollTo({
-  //         top: targetScroll,
-  //         behavior: smoothScrollOff ? 'auto' : 'smooth',
-  //       });
-  //     }
-  //   }, 100); // Adjust timeout as needed
-  // });
+  nextTick(() => {
+    setTimeout(() => {
+      if (container.value) {
+        const targetScroll =
+          container.value.scrollHeight - container.value.clientHeight;
+        container.value.scrollTo({
+          top: targetScroll,
+          behavior: smoothScrollOff ? 'auto' : 'smooth',
+        });
+      }
+    }, 100); // Adjust timeout as needed
+  });
 }
 
 const emit = defineEmits([
@@ -580,12 +523,10 @@ const props = defineProps({
 
 const messages = ref([]);
 const draftMessage = ref('');
-const shouldResume = ref(false);
 const assistantThinking = ref(false);
 const isLoading = ref(false);
 const initialLoading = ref(false);
 const messagesContainer = ref(null);
-// const streamData = ref([]);
 
 // Conversation change watcher:
 watch(
@@ -599,12 +540,11 @@ watch(
       messagesData.value = [];
       agentThoughtsData.value = [];
       workflowData.value = [];
-      //  streamData.value = [];
       plannerTextData.value = [];
       searchQuery.value = '';
       chatName.value = '';
       isLoading.value = false;
-shouldResume.value=false
+
       // Load new conversation data
       if (newId) {
         loadPreviousChat(newId);
@@ -676,7 +616,7 @@ async function loadPreviousChat(convId) {
     console.log('Chat history response:', resp.data);
     
     if (resp.data && resp.data.messages) {
-      await filterChatCombo(resp.data);
+      await filterChat(resp.data);
       console.log('Filtered messages loaded:', messagesData.value.length);
 
     } else {
@@ -706,285 +646,17 @@ const workflowData = ref([]);
 const completionMetaData = ref(null);
 const agentThoughtsData = ref([]);
 
-
-
 async function filterChat(msgData) {
- 
-//  streamData.value = msgData.messages
-//     .map(message => {
-
-//       const agent_type=( message.additional_kwargs?.agent_type)
-//       // For agent_completion events, preserve the full data structure
-//       if (message.event === 'agent_completion'&& message.additional_kwargs?.agent_type !== 'human' &&(
-          
-//           !message.additional_kwargs?.agent_type.includes('_end') ||
-//           !message.additional_kwargs?.agent_type.includes('_interrupt'))
-//       ) {
-
-//         // alert(agent_type)
-//         message.agent_type=agent_type
-//         return message
-         
-//         ;
-//       }
-      
-//       return null;
-//     })
-//     .filter(Boolean)  // Remove nulls
-//     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-
-     messagesData.value = msgData.messages
-    .map(message => {
-
-      const agent_type=( message.additional_kwargs?.agent_type)
-      // For agent_completion events, preserve the full data structure
-      if (message.event === 'agent_completion' &&(
-          message.type === 'HumanMessage' ||
-          message.additional_kwargs?.agent_type.includes('_end') ||
-          message.additional_kwargs?.agent_type.includes('_interrupt'))
-      ) {
-
-
-        
-        // alert(agent_type)
-        message.agent_type=agent_type
-        return message
-         
-        ;
-      }
-      // For user_message events, keep existing behavior
-      else if (message.event === 'user_message') {
-        return message;
-      }
-      return null;
-    })
-    .filter(Boolean)  // Remove nulls
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-  let plannerData = msgData.messages.filter(
-    (message) => message.event === 'planner'
-  );
-  plannerData.forEach((planner) => {
-    addOrUpdateModel(JSON.parse(planner.data).metadata, planner.message_id);
-  });
-  let workData = msgData.messages.filter(
-    (message) => message.event === 'think'
-  );
-  workData.forEach((work) => {
-    addOrUpdateModel(JSON.parse(work.data).metadata, work.message_id);
-  });
-
-  AutoScrollToBottom();
-
-  agentThoughtsData.value = msgData.messages
-    .filter((message) => message.event === 'think')
-    .sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    )
-    .reduce((acc, message) => {
-      try {
-        const parsed = JSON.parse(message.data);
-        acc.push(parsed);
-      } catch (error) {
-        console.error('Failed to parse JSON for message:', message, error);
-      }
-      return acc;
-    }, []);
-  emit('agentThoughtsDataChanged', agentThoughtsData.value);
-
-  let userMessages = messagesData.value
-    .filter((message) => message.event === 'user_message')
-    .sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-
-  console.log('userMessages', userMessages);
-
-  if (userMessages[0]?.data) {
-    chatName.value = userMessages[0].data;
-  }
-
-  AutoScrollToBottom();
-  await nextTick();
-}
-
-async function filterChatCombo(msgData) {
- 
-
-
-     messagesData.value = msgData.messages
-    .map(message => {
-
-      const agent_type=( message.additional_kwargs?.agent_type)
-      // For agent_completion events, preserve the full data structure
-
-      if(message.event === 'agent_completion'){
-         
-          const isToolCall = message.content && typeof message.content === 'string' && message.content.includes('<tool>');
-        const isToolResult = Array.isArray(message.content) || (message.additional_kwargs?.agent_type === 'react_tool');
-        const isToolResponse = message.additional_kwargs?.agent_type === 'tool_response';
-        
-        // For Daytona sandbox tool calls/results, always preserve them for sidebar processing
-        const isDaytonaRelated = (isToolCall && message.content.includes('DaytonaCodeSandbox')) ||
-                                 (message.type === 'LiberalFunctionMessage' && message.name === 'DaytonaCodeSandbox');
-        
-        if (isToolCall || isToolResult || isToolResponse || isDaytonaRelated) {
-          // Preserve tool-related messages for comprehensive audit log and Daytona processing
-          console.log('Preserving tool-related message for audit log and Daytona processing:', message.additional_kwargs?.agent_type, message.name);
-          
-          // Create structured data for tool events matching the live streaming format
-          const toolData = {
-            content: message.content || '',
-            additional_kwargs: message.additional_kwargs || {},
-            response_metadata: message.response_metadata || {},
-            type: message.type || 'AIMessage',
-            id: message.id || message.message_id,
-            name: message.name || null,
-            agent_type: message.additional_kwargs?.agent_type || 'tool'
-          };
-          
-          
-          return {
-            event: 'agent_completion',
-            agent_type:"tool_response",
-            msgType:"toolData",
-            data: toolData,
-            message_id: message.message_id,
-            conversation_id: message.conversation_id,
-            timestamp: message.timestamp || new Date().toISOString(),
-            isToolRelated: true, // Flag for filtering in chat display but preserving for audit
-            isDaytonaRelated: isDaytonaRelated
-          };
-        }
-
-         else if ((
-          message.type === 'HumanMessage' ||
-          message.additional_kwargs?.agent_type.includes('_end') ||
-           
-          message.additional_kwargs?.agent_type.includes('_interrupt'))
-          
-      ) {
-
-  //  alert(agent_type)
-        if( message.additional_kwargs?.agent_type.includes('_interrupt')){
-          shouldResume.value=true
-        }
-       
-        message.agent_type=agent_type
-         message.msgType='message'
-        return message;
-
-       
-      }else if (message.event === 'llm_stream_chunk') {
-
-        // alert(agent_type)
-        message.agent_type=agent_type
-        message.msgType='stream'
-        return message
-         
-        ;
-      }
-      }
-
-     
-      // For user_message events, keep existing behavior
-      else if (message.event === 'user_message') {
-        return message;
-      }
-      return null;
-    })
-    .filter(Boolean)  // Remove nulls
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-  let plannerData = msgData.messages.filter(
-    (message) => message.event === 'planner'
-  );
-  plannerData.forEach((planner) => {
-    addOrUpdateModel(JSON.parse(planner.data).metadata, planner.message_id);
-  });
-  let workData = msgData.messages.filter(
-    (message) => message.event === 'think'
-  );
-  workData.forEach((work) => {
-    addOrUpdateModel(JSON.parse(work.data).metadata, work.message_id);
-  });
-
-  AutoScrollToBottom();
-
-  agentThoughtsData.value = msgData.messages
-    .filter((message) => message.event === 'think')
-    .sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    )
-    .reduce((acc, message) => {
-      try {
-        const parsed = JSON.parse(message.data);
-        acc.push(parsed);
-      } catch (error) {
-        console.error('Failed to parse JSON for message:', message, error);
-      }
-      return acc;
-    }, []);
-  emit('agentThoughtsDataChanged', agentThoughtsData.value);
-
-  let userMessages = messagesData.value
-    .filter((message) => message.event === 'user_message')
-    .sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-
-  console.log('userMessages', userMessages);
-
-  if (userMessages[0]?.data) {
-    chatName.value = userMessages[0].data;
-  }
-
-  AutoScrollToBottom();
-  await nextTick();
-}
-
-async function filterChatOld(msgData) {
   messagesData.value = msgData.messages
     .map(message => {
       // For agent_completion events, handle LangGraph format
-            if (message.type == 'HumanMessage') {
-                    console.log("data:",message.type,message.event ,message.additional_kwargs?.agent_type ,message)
-
-              console.log("is Human",message.content)
-              return{
-                data:message.content,
-                event:"user_message",
-                agent_type:"user_message",
-                  conversation_id: message.conversation_id,
-    timestamp:    message.timestamp || new Date().toISOString()
-                
-              }
-          //      return {
-          //   event: 'user_message',
-          //   data: message.content || '',
-          //   message_id: message.message_id,
-          //   conversation_id: message.conversation_id,
-          //   timestamp: message.timestamp || new Date().toISOString()
-          // };
-            }
-      else if (message.event === 'agent_completion') {
-        
+      if (message.event === 'agent_completion') {
         // For tool calls and tool results, preserve them for comprehensive audit log and Daytona sidebar
         // but only filter them from main chat display if they're tool-related
         const isToolCall = message.content && typeof message.content === 'string' && message.content.includes('<tool>');
         const isToolResult = Array.isArray(message.content) || (message.additional_kwargs?.agent_type === 'react_tool');
         const isToolResponse = message.additional_kwargs?.agent_type === 'tool_response';
-        const isFinalResponse =
-                        (message.additional_kwargs?.agent_type ?? "")
-                          .includes("_end")
-                        || (message.additional_kwargs?.agent_type ?? "")
-                          .includes("_interrupt");
-                              console.log("isFinalResponse",isFinalResponse);
+        
         // For Daytona sandbox tool calls/results, always preserve them for sidebar processing
         const isDaytonaRelated = (isToolCall && message.content.includes('DaytonaCodeSandbox')) ||
                                  (message.type === 'LiberalFunctionMessage' && message.name === 'DaytonaCodeSandbox');
@@ -1004,11 +676,8 @@ async function filterChatOld(msgData) {
             agent_type: message.additional_kwargs?.agent_type || 'tool'
           };
           
-        
-        if(isFinalResponse){
-          isLoading.value=false
-        }
           return {
+            agent_type:"toolData"
             event: 'agent_completion',
             data: toolData,
             message_id: message.message_id,
@@ -1021,16 +690,14 @@ async function filterChatOld(msgData) {
         
         // Only show user messages and final responses in main chat bubbles
         const isUserMessage = message.additional_kwargs?.agent_type === 'human';
-       
+        const isFinalResponse = message.additional_kwargs?.agent_type === 'react_end';
         
         if (!isUserMessage && !isFinalResponse) {
-          // alert(message.content)
           return null; // Filter out intermediate agent responses that aren't tool-related
         }
         
         // For human messages, convert to user_message event type
         if (isUserMessage) {
-          console.log("message.content:",message)
           return {
             event: 'user_message',
             data: message.content || '',
@@ -1047,7 +714,7 @@ async function filterChatOld(msgData) {
           response_metadata: message.response_metadata || {},
           type: message.type || 'AIMessage',
           id: message.id || message.message_id,
-          agent_type: message.additional_kwargs?.agent_type 
+          agent_type: message.additional_kwargs?.agent_type || 'assistant'
         };
         
         return {
@@ -1110,7 +777,6 @@ async function filterChatOld(msgData) {
       }
       // For any other events, include them as well
       else {
-       
         return {
           event: message.event,
           data: message.data || message,
@@ -1123,9 +789,6 @@ async function filterChatOld(msgData) {
     .filter(Boolean)  // Remove null values
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-
-    console.log("messagesData.value",messagesData.value);
-    
   // Process planner data for workflow metadata
   let plannerData = msgData.messages.filter(
     (message) => message.event === 'planner'
@@ -1372,9 +1035,9 @@ async function sendMessage() {
 }
 
 function scrollToBottom() {
-  // if (messagesContainer.value) {
-  //   messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
-  // }
+  if (messagesContainer.value) {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+  }
 }
 
 // Reactive state for voice and file uploads
@@ -1782,21 +1445,6 @@ function waitForSocketOpen(timeout = 5000) {
 }
 
 const currentMsgId = ref('');
-function addLoadingMessageEvent(){
-
-
-            messagesData.value.push({
-  event: 'loading',
-  data: {},                      // empty payload
-  agent_type: 'loading',      // anything that satisfies your isStreamingEvent test
-  message_id: currentMsgId.value,
-  conversation_id: currentId.value,
-    timestamp: new Date(Date.now() + 1).toISOString()
-  })
-
-          
-
-}
 const addMessage = async () => {
   isLoading.value = true;
   errorMessage.value = '';
@@ -1835,47 +1483,26 @@ const addMessage = async () => {
 
   currentMsgId.value = uuidv4();
   
-  // alert(currentMsgId.value)
   // Check if the last agent_completion message is a deep_research_interrupt and user typed something
-  // let shouldResume = false;
-  // if (messagesData.value.length > 0) {
-  //   // Find the last agent_completion message (not stream_complete)
-  //   for (let i = messagesData.value.length - 1; i >= 0; i--) {
-  //     const message = messagesData.value[i];
-  //     if (message.event === 'agent_completion') {
-  //       // Check if this agent_completion has deep_research_interrupt agent_type
-  //       if (message.data && message.data.agent_type === 'deep_research_interrupt') {
-  //         // If user typed something, set resume to true
-  //         shouldResume = searchQuery.value.trim().length > 0;
-  //       }
-  //       break; // Found the last agent_completion, stop looking
-  //     }
-  //   }
-  // }
+  let shouldResume = false;
+  if (messagesData.value.length > 0) {
+    // Find the last agent_completion message (not stream_complete)
+    for (let i = messagesData.value.length - 1; i >= 0; i--) {
+      const message = messagesData.value[i];
+      if (message.event === 'agent_completion') {
+        // Check if this agent_completion has deep_research_interrupt agent_type
+        if (message.data && message.data.agent_type === 'deep_research_interrupt') {
+          // If user typed something, set resume to true
+          shouldResume = searchQuery.value.trim().length > 0;
+        }
+        break; // Found the last agent_completion, stop looking
+      }
+    }
+  }
   
-  
-  const serverPayload = {
+  const messagePayload = {
     event: 'user_message',
     data: searchQuery.value,
-    timestamp: new Date().toISOString(),
-    provider: provider.value,
-    planner_model: localStorage.getItem(`selected_model_${userId.value}`) || '',
-    message_id: currentMsgId.value,
-    conversation_id: currentId.value,
-  };
-  if(shouldResume.value){
-    serverPayload.resume=true
-  }else{
-    serverPayload.resume=false
-  }
-  shouldResume.value=false
-    const messagePayload = {
-    
-     event: 'agent_completion',
-    type: 'HumanMessage', 
-    agent_type:"human",
-    msgType:"message",
-    content: searchQuery.value,
     timestamp: new Date().toISOString(),
     provider: provider.value,
     planner_model: localStorage.getItem(`selected_model_${userId.value}`) || '',
@@ -1885,11 +1512,11 @@ const addMessage = async () => {
   };
 
   if (selectedDocuments.value && selectedDocuments.value.length > 0) {
-    serverPayload.document_ids = selectedDocuments.value.map((doc) => {
+    messagePayload.document_ids = selectedDocuments.value.map((doc) => {
       return typeof doc === 'string' ? doc : doc.id;
     });
   } else {
-    serverPayload.document_ids = [];
+    messagePayload.document_ids = [];
   }
 
   if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
@@ -1898,13 +1525,9 @@ const addMessage = async () => {
       connectWebSocket();
       await waitForSocketOpen();
 
-      socket.value.send(JSON.stringify(serverPayload));
-      
-    
+      socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
 
-      // await nextTick()
-      // addLoadingMessageEvent()
       console.log('Message sent after connecting:', messagePayload);
     } catch (error) {
       errorMessage.value = 'WebSocket connection error occurred.';
@@ -1914,12 +1537,9 @@ const addMessage = async () => {
   } else {
     try {
       isLoading.value = true;
-      socket.value.send(JSON.stringify(serverPayload));
+      socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
-      console.log(messagesData)
       searchQuery.value = '';
-       await nextTick()
-        // addLoadingMessageEvent()
     } catch (e) {
       console.error('ChatView error', e);
       isLoading.value = false;
@@ -1988,145 +1608,76 @@ async function connectWebSocket() {
         })
       );
     };
-
- socket.value.onmessage = (event) => {
+    socket.value.onmessage = (event) => {
       try {
         const receivedData = JSON.parse(event.data);
         
         // Handle new streaming events
-        // if (receivedData.event === 'stream_start') {
-        //   console.log('Stream started:', receivedData);
-        //   // Add to messages for display
-        //   messagesData.value.push({
-        //     event: 'stream_start',
-        //     data: receivedData,
-        //     timestamp: new Date().toISOString()
-        //   });
-        // } else 
-        
-if ((receivedData.event === 'agent_completion'&&(receivedData.type!=="HumanMessage")&&
-(receivedData.additional_kwargs?.agent_type.includes("_end")||
-receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {   
-  
-  if(receivedData.additional_kwargs?.agent_type.includes("_interrupt")){
-    shouldResume.value=true
-  }
-  
-        console.log('Agent message stream:', receivedData);
-        receivedData.agent_type=receivedData.additional_kwargs?.agent_type
-        // receivedData=receivedData.content
-        // messagesData.value.push(receivedData)
-        console.log("onmessage",{
-            event: 'agent_completion', 
-            content: receivedData.content,
-            agent_type:receivedData.additional_kwargs?.agent_type,
-            timestamp: receivedData.timestamp || new Date().toISOString()
-          })
+        if (receivedData.event === 'stream_start') {
+          console.log('Stream started:', receivedData);
+          // Add to messages for display
+          messagesData.value.push({
+            event: 'stream_start',
+            data: receivedData,
+            message_id: currentMsgId.value,
+            conversation_id: currentId.value,
+            timestamp: new Date().toISOString()
+          });
+        } else if (receivedData.event === 'agent_completion') {
+          console.log('Agent message stream:', receivedData);
           messagesData.value.push({
             event: 'agent_completion', 
-                        content: receivedData.content,
-
-              message_id: receivedData.message_id,
-            conversation_id: receivedData.conversation_id,
-            content: receivedData.content,
-            agent_type:receivedData.additional_kwargs?.agent_type,
+            data: receivedData,
+            message_id: currentMsgId.value,
+            conversation_id: currentId.value,
             timestamp: receivedData.timestamp || new Date().toISOString()
           });
-
-
-          
-      console.log("messagesData",messagesData)
-            // isLoading.value = false;
-        } 
-         else if (receivedData.additional_kwargs?.agent_type!=='human'&&
-         (receivedData.event === 'llm_stream_chunk'||receivedData.event === 'agent_completion')) {
+        } else if (receivedData.event === 'llm_stream_chunk') {
           console.log('LLM stream chunk:', receivedData);
           const chunkId = receivedData.id;
-          // receivedData.agent_type=receivedData.additional_kwargs?.agent_type
           
-          // receivedData.content=receivedData.content
-
-          // streamData.value.push(receivedData)
-            messagesData.value.push({
-            event: receivedData.event , 
-            content: receivedData.content,
-            msgType:"stream",
-                message_id: receivedData.value,
-            conversation_id: receivedData.value,
-            agent_type:receivedData.additional_kwargs?.agent_type,
-            timestamp: receivedData.timestamp || new Date().toISOString()
-          });
-      
-
-  //          streamData.value.sort(
-  //   (a, b) =>
-  //     new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  // )
-
-  // console.log("streamData",streamData)
-          // if (chunkId) {
-          //   // Find existing message with the same ID
-          //   const existingIndex = messagesData.value.findIndex(
-          //     (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
-          //   );
+          if (chunkId) {
+            // Find existing message with the same ID
+            const existingIndex = messagesData.value.findIndex(
+              (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
+            );
             
-          //   if (existingIndex !== -1) {
-          //     // Accumulate content for existing message
-          //     const existingContent = messagesData.value[existingIndex].data?.content || '';
-          //     const newContent = receivedData.content || '';
-          //     messagesData.value[existingIndex].data.content = existingContent + newContent;
-          //   } else {
-          //     // Create new message for new ID
-          //     messagesData.value.push({
-          //       event: 'llm_stream_chunk',
-          //       data: receivedData, 
-          //       timestamp: new Date().toISOString()
-          //     });
-          //   }
-
-
-          // } else {
-          //   // No ID, just add as new message
-          //   messagesData.value.push({
-          //     event: 'llm_stream_chunk',
-          //     data: receivedData, 
-          //     timestamp: new Date().toISOString()
-          //   });
-          
+            if (existingIndex !== -1) {
+              // Accumulate content for existing message
+              const existingContent = messagesData.value[existingIndex].data?.content || '';
+              const newContent = receivedData.content || '';
+              messagesData.value[existingIndex].data.content = existingContent + newContent;
+            } else {
+              // Create new message for new ID
+              messagesData.value.push({
+                event: 'llm_stream_chunk',
+                data: receivedData,
+                message_id: currentMsgId.value,
+                conversation_id: currentId.value,
+                timestamp: new Date().toISOString()
+              });
+            }
+          } else {
+            // No ID, just add as new message
+            messagesData.value.push({
+              event: 'llm_stream_chunk',
+              data: receivedData,
+              message_id: currentMsgId.value,
+              conversation_id: currentId.value,
+              timestamp: new Date().toISOString()
+            });
+          }
         } else if (receivedData.event === 'stream_complete') {
-          
-          isLoading.value=false
           console.log('Stream complete:', receivedData);
-          // messagesData.value.push({
-          //   event: 'stream_complete',
-          //   data: receivedData,
-          //   timestamp: new Date().toISOString()
-          // });
-                    // receivedData.agent_type=receivedData.additional_kwargs?.agent_type
-                  // receivedData.msgType="stream"
-                  //         receivedData.content=receivedData.data.content
-
-                  //  streamData.value.push(receivedData)
-
-                    messagesData.value.push({
-            event: receivedData.event , 
-            content: receivedData.content,
-            msgType:"stream",
-                message_id: receivedData.value,
-            conversation_id: receivedData.value,
-            agent_type:receivedData.additional_kwargs?.agent_type,
-            timestamp: receivedData.timestamp || new Date().toISOString()
+          messagesData.value.push({
+            event: 'stream_complete',
+            data: receivedData,
+            message_id: currentMsgId.value,
+            conversation_id: currentId.value,
+            timestamp: new Date().toISOString()
           });
-
-  //          streamData.value.sort(
-  //   (a, b) =>
-  //     new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  // )
-
-        
+          isLoading.value = false;
         }
-
-
         // Handle legacy events
         else if (
           receivedData.event == 'user_message' ||
@@ -2144,7 +1695,17 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
             console.log('completionMetaData.value', error);
             isLoading.value = false;
           }
-          messagesData.value.push(receivedData);
+          
+          // Ensure legacy messages have proper structure
+          const legacyMessage = {
+            event: receivedData.event,
+            data: receivedData.data,
+            message_id: receivedData.message_id || currentMsgId.value,
+            conversation_id: receivedData.conversation_id || currentId.value,
+            timestamp: receivedData.timestamp || new Date().toISOString()
+          };
+          
+          messagesData.value.push(legacyMessage);
           isLoading.value = false;
         } else if (receivedData.event === 'think') {
           let dataParsed = JSON.parse(receivedData.data);
@@ -2154,6 +1715,15 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
           emit('agentThoughtsDataChanged', agentThoughtsData.value);
           try {
             addOrUpdateModel(dataParsed.metadata);
+            
+            // Add think event to messages for persistence
+            messagesData.value.push({
+              event: 'think',
+              data: receivedData.data,
+              message_id: receivedData.message_id || currentMsgId.value,
+              conversation_id: receivedData.conversation_id || currentId.value,
+              timestamp: receivedData.timestamp || new Date().toISOString()
+            });
 
             AutoScrollToBottom();
           } catch (e) {
@@ -2168,6 +1738,15 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
         } else if (receivedData.event === 'planner') {
           let dataParsed = JSON.parse(receivedData.data);
           addOrUpdateModel(dataParsed.metadata);
+          
+          // Add planner event to messages for persistence
+          messagesData.value.push({
+            event: 'planner',
+            data: receivedData.data,
+            message_id: receivedData.message_id || currentMsgId.value,
+            conversation_id: receivedData.conversation_id || currentId.value,
+            timestamp: receivedData.timestamp || new Date().toISOString()
+          });
 
           AutoScrollToBottom();
         } else {
@@ -2181,161 +1760,6 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
         isLoading.value = false;
       }
     };
-
-
-    // socket.value.onmessage = (event) => {
-    //   try {
-    //     const receivedData = JSON.parse(event.data);
-        
-    //     // Handle new streaming events
-    //     if (receivedData.event === 'stream_start') {
-    //       console.log('Stream started:', receivedData);
-    //       // Add to messages for display
-    //       messagesData.value.push({
-    //         event: 'stream_start',
-    //         data: receivedData,
-    //         message_id: currentMsgId.value,
-    //         conversation_id: currentId.value,
-    //         timestamp: new Date().toISOString()
-    //       });
-    //     } else if (receivedData.event === 'agent_completion') {
-    //       console.log('Agent message stream:', receivedData);
-    //       messagesData.value.push({
-    //         event: 'agent_completion', 
-    //         data: receivedData,
-    //         message_id: currentMsgId.value,
-    //         conversation_id: currentId.value,
-    //         timestamp: receivedData.timestamp || new Date().toISOString()
-    //       });
-    //     } else if (receivedData.event === 'llm_stream_chunk') {
-    //       console.log('LLM stream chunk:', receivedData);
-    //       const chunkId = receivedData.id;
-          
-    //       if (chunkId) {
-    //         // Find existing message with the same ID
-    //         const existingIndex = messagesData.value.findIndex(
-    //           (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
-    //         );
-            
-    //         if (existingIndex !== -1) {
-    //           // Accumulate content for existing message
-    //           const existingContent = messagesData.value[existingIndex].data?.content || '';
-    //           const newContent = receivedData.content || '';
-    //           messagesData.value[existingIndex].data.content = existingContent + newContent;
-    //         } else {
-    //           // Create new message for new ID
-    //           messagesData.value.push({
-    //             event: 'llm_stream_chunk',
-    //             data: receivedData,
-    //             message_id: currentMsgId.value,
-    //             conversation_id: currentId.value,
-    //             timestamp: new Date().toISOString()
-    //           });
-    //         }
-    //       } else {
-    //         // No ID, just add as new message
-    //         messagesData.value.push({
-    //           event: 'llm_stream_chunk',
-    //           data: receivedData,
-    //           message_id: currentMsgId.value,
-    //           conversation_id: currentId.value,
-    //           timestamp: new Date().toISOString()
-    //         });
-    //       }
-    //     } else if (receivedData.event === 'stream_complete') {
-    //       console.log('Stream complete:', receivedData);
-    //       messagesData.value.push({
-    //         event: 'stream_complete',
-    //         data: receivedData,
-    //         message_id: currentMsgId.value,
-    //         conversation_id: currentId.value,
-    //         timestamp: new Date().toISOString()
-    //       });
-    //       isLoading.value = false;
-    //     }
-        
-    //     // Handle legacy events
-    //     else if (
-    //       receivedData.event == 'user_message' ||
-    //       receivedData.event == 'completion'
-    //     ) {
-    //       try {
-    //         if (receivedData.event == 'completion') {
-    //           let metaDataComplettion = JSON.parse(receivedData.data);
-    //           completionMetaData.value = metaDataComplettion.metadata;
-    //           emit('metadataChanged', completionMetaData.value);
-    //         } else {
-    //           AutoScrollToBottom();
-    //         }
-    //       } catch (error) {
-    //         console.log('completionMetaData.value', error);
-    //         isLoading.value = false;
-    //       }
-          
-    //       // Ensure legacy messages have proper structure
-    //       const legacyMessage = {
-    //         event: receivedData.event,
-    //         data: receivedData.data,
-    //         message_id: receivedData.message_id || currentMsgId.value,
-    //         conversation_id: receivedData.conversation_id || currentId.value,
-    //         timestamp: receivedData.timestamp || new Date().toISOString()
-    //       };
-          
-    //       messagesData.value.push(legacyMessage);
-    //       isLoading.value = false;
-    //     } else if (receivedData.event === 'think') {
-    //       let dataParsed = JSON.parse(receivedData.data);
-    //       agentThoughtsData.value.push(dataParsed);
-
-    //       statusText.value = dataParsed.agent_name;
-    //       emit('agentThoughtsDataChanged', agentThoughtsData.value);
-    //       try {
-    //         addOrUpdateModel(dataParsed.metadata);
-            
-    //         // Add think event to messages for persistence
-    //         messagesData.value.push({
-    //           event: 'think',
-    //           data: receivedData.data,
-    //           message_id: receivedData.message_id || currentMsgId.value,
-    //           conversation_id: receivedData.conversation_id || currentId.value,
-    //           timestamp: receivedData.timestamp || new Date().toISOString()
-    //         });
-
-    //         AutoScrollToBottom();
-    //       } catch (e) {
-    //         console.log('model error', e);
-    //         isLoading.value = false;
-    //       }
-    //     } else if (receivedData.event === 'planner_chunk') {
-    //       addOrUpdatePlannerText({
-    //         message_id: currentMsgId.value,
-    //         data: receivedData.data,
-    //       });
-    //     } else if (receivedData.event === 'planner') {
-    //       let dataParsed = JSON.parse(receivedData.data);
-    //       addOrUpdateModel(dataParsed.metadata);
-          
-    //       // Add planner event to messages for persistence
-    //       messagesData.value.push({
-    //         event: 'planner',
-    //         data: receivedData.data,
-    //         message_id: receivedData.message_id || currentMsgId.value,
-    //         conversation_id: receivedData.conversation_id || currentId.value,
-    //         timestamp: receivedData.timestamp || new Date().toISOString()
-    //       });
-
-    //       AutoScrollToBottom();
-    //     } else {
-    //       console.log('ping event fired: ', receivedData.event);
-    //     }
-        
-    //     // Auto scroll after any message
-    //     AutoScrollToBottom();
-    //   } catch (error) {
-    //     console.error('Error parsing WebSocket message:', error);
-    //     isLoading.value = false;
-    //   }
-    // };
     socket.value.onerror = (error) => {
       console.error('WebSocket error:', error);
       if (!manualSocketClose.value)
@@ -2411,7 +1835,7 @@ function formatMessageData(msgItem) {
   try {
     switch (msgItem.event) {
       case 'user_message':
-        return ({
+        return JSON.stringify({
           message: msgItem.data,
           agent_type: 'user_proxy',
           timestamp: msgItem.timestamp || new Date().toISOString()
@@ -2420,12 +1844,10 @@ function formatMessageData(msgItem) {
       case 'agent_completion':
         // agent_completion events from LangGraph have structured data
         if (msgItem.data && typeof msgItem.data === 'object') {
-          const rawType = msgItem.data.additional_kwargs?.agent_type
-           
           const formatted = {
             message: msgItem.data.content || '',
-          agent_type: rawType.includes('_interrupt') ? 'interrupt' : rawType,      
-         metadata: msgItem.data.response_metadata || null,
+            agent_type: msgItem.data.agent_type || 'assistant',
+            metadata: msgItem.data.response_metadata || null,
             additional_kwargs: msgItem.data.additional_kwargs || {},
             timestamp: msgItem.timestamp || new Date().toISOString(),
             type: msgItem.data.type || 'AIMessage',
@@ -2436,7 +1858,7 @@ function formatMessageData(msgItem) {
         // Fallback for unexpected format
         return JSON.stringify({
           message: msgItem.data || '',
-          agent_type: msgItem.data.additional_kwargs?.agent_type,
+          agent_type: 'assistant',
           timestamp: msgItem.timestamp || new Date().toISOString()
         });
       
@@ -2619,13 +2041,6 @@ const filteredMessages = computed(() => {
     return messagesData.value || [];
   }
 });
-
-// 1) Combine all streaming chunks
-
-
-
-
-
 </script>
 
 <style scoped>
