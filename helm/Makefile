@@ -1,6 +1,21 @@
 # Variables
 ENV ?= dev
-TAG ?= $(ENV)-$(shell date '+%Y%m%d')
+
+# Try to determine version from Git
+# Uses `git describe` which gives:
+#   - latest tag (e.g., v1.2.3)
+#   - latest tag + commits since + short hash (e.g., v1.2.3-4-gabcdef)
+#   - short hash prefixed with 'g' if no tags (e.g., gabcdef0)
+#   - appends '-dirty' if there are uncommitted changes
+# Falls back to a date-based version if Git info is unavailable.
+GIT_VERSION_RAW = $(shell git describe --tags --always --dirty --abbrev=7 2>/dev/null)
+FALLBACK_VERSION = unknown-$(shell date '+%Y%m%d%H%M%S')
+
+# APP_VERSION will be the Git version if available, otherwise the fallback.
+APP_VERSION = $(if $(GIT_VERSION_RAW),$(GIT_VERSION_RAW),$(FALLBACK_VERSION))
+
+# TAG is now ENV-APP_VERSION. User can override with `make ... TAG=custom-tag`
+TAG ?= $(ENV)-$(APP_VERSION)
 
 # Environment-specific file paths
 VALUES_FILE = ./aiskagents/values.$(ENV).yaml
