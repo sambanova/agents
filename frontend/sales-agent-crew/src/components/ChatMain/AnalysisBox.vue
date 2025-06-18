@@ -1,5 +1,5 @@
 <template>
-
+{{ props.workflowData }}
 <div class="max-w-4xl mx-auto">
     <!-- Collapsible Header -->
     <button
@@ -34,6 +34,75 @@
         <!-- Your existing content starts here -->
         <TimeLineAssitance/>
 
+
+         <!-- Comprehensive Audit Log -->
+    <div
+      
+      class="p-3 dark:bg-gray-700 border-b dark:border-gray-600 max-h-96 overflow-y-auto"
+    >
+      <div class="text-xs font-medium text-gray-600 dark:text-gray-300 mb-3">
+        Comprehensive Audit Log
+      </div>
+      <div class="relative space-y-3 pl-6">
+        <div
+          v-for="(event, idx) in auditLogEvents"
+          :key="event.id"
+          class="relative"
+        >
+          <!-- dot -->
+          <div
+            class="absolute left-0 top-0 w-3 h-3 bg-[#EAECF0] dark:bg-white rounded-full"
+          ></div>
+          <!-- connector line (all but last) -->
+          <div
+            v-if="idx < auditLogEvents.length - 1"
+            class="absolute left-1.5 top-5 bottom-0 border-l-2 border-gray-200 dark:border-gray-600"
+          ></div>
+
+          <div class="flex items-start space-x-2 ml-6">
+            <div class="flex-1">
+              <div class="flex justify-between">
+                <span class="text-xs font-medium text-gray-900 dark:text-gray-100">
+                  {{ event.title }}
+                </span>
+                <span class="text-xs text-gray-400 dark:text-gray-500">
+                  {{ formatEventTime(event.timestamp) }}
+                </span>
+              </div>
+              <div
+                v-if="event.details"
+                class="text-xs text-gray-600 dark:text-gray-400 mt-1"
+              >
+                {{ event.details }}
+              </div>
+              <div
+                v-if="event.subItems?.length"
+                class="mt-2 ml-4 space-y-1 text-xs text-gray-600 dark:text-gray-400"
+              >
+                <div
+                  v-for="sub in event.subItems"
+                  :key="sub.id"
+                  class="flex items-start space-x-1"
+                >
+                  <span>•</span>
+                  <span>
+                    {{ sub.title }}
+                    <span v-if="sub.domain">({{ sub.domain }})</span>
+                  </span>
+                </div>
+              </div>
+              <div class="text-xs text-gray-400 dark:text-gray-600 mt-1">
+                <span class="bg-gray-100 dark:bg-gray-600 px-1 rounded">{{ event.event }}</span>
+                <span
+                  v-if="event.type"
+                  class="bg-blue-100 dark:bg-blue-600 px-1 rounded ml-1"
+                >{{ event.type }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
         <div v-if="props.workflowData && props.workflowData.length > 0" class="w-full p-2 mx-auto">
           <div class="flex my-2">
             <div class="flex space-x-4">
@@ -216,66 +285,7 @@ const toolSources = computed(() => {
   return sources.slice(0, 5)
 })
 
-// 5) audit log with safe stringify
-const auditLogEvents = computed(() => {
-  // synthetic if no streamingEvents but we have workflowData
-  if ((!props.streamingEvents || !props.streamingEvents.length) && props.workflowData.length) {
-    const unique = []
-    const seen = new Set()
-    props.workflowData.forEach((w, i) => {
-      const key = `${w.agent_name}-${w.task}-${w.tool_name}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        unique.push({
-          id: `synthetic-${i}`,
-          title: `✅ ${w.agent_name} – ${w.task}`,
-          details: w.tool_name ? `Tool: ${w.tool_name}` : 'Completed',
-          subItems: [],
-          event: 'workflow_item',
-          type: 'tool_result',
-          timestamp: new Date().toISOString()
-        })
-      }
-    })
-    return unique
-  }
 
-
-
-
-  // otherwise from streamingEvents
-  const out = []
-  const seenKeys = new Set()
-  props.streamingEvents.forEach((evt, idx) => {
-    const key = `${evt.event}-${evt.timestamp}`
-    if (!seenKeys.has(key)) {
-      seenKeys.add(key)
-
-      // SAFELY stringify or fallback
-      let raw = evt.content
-      let serialized = JSON.stringify(raw)
-      if (serialized === undefined) {
-        serialized = String(raw ?? '')
-      }
-
-      // truncate to 100 chars
-      const detail = serialized.length > 100
-        ? serialized.slice(0, 100) + '…'
-        : serialized
-
-      out.push({
-        id: `audit-${idx}`,
-        title: evt.event,
-        details: detail,
-        subItems: [],
-        event: evt.event,
-        type: 'info',
-        timestamp: evt.timestamp
-      })
-    }
-  })
-  return out
-})
 
 function formatEventTime(ts) {
   return new Date(ts).toLocaleTimeString([], {
@@ -411,6 +421,79 @@ const allSources = computed(() => {
 
   return items
 })
+
+
+
+
+// 5) audit log with safe stringify
+const auditLogEvents = computed(() => {
+  // synthetic if no streamingEvents but we have workflowData
+  if ((!props.streamData || !props.streamData.length) && props.workflowData.length) {
+
+    alert("steaming ")
+    const unique = []
+    const seen = new Set()
+    props.workflowData.forEach((w, i) => {
+      const key = `${w.agent_name}-${w.task}-${w.tool_name}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        unique.push({
+          id: `synthetic-${i}`,
+          title: `✅ ${w.agent_name} – ${w.task}`,
+          details: w.tool_name ? `Tool: ${w.tool_name}` : 'Completed',
+          subItems: [],
+          event: 'workflow_item',
+          type: 'tool_result',
+          timestamp: new Date().toISOString()
+        })
+      }
+    })
+    return unique
+  }
+
+
+
+
+  // otherwise from streamingEvents
+  const out = []
+  const seenKeys = new Set()
+  props.streamData.forEach((evt, idx) => {
+    const key = `${evt.event}-${evt.timestamp}`
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key)
+
+      // SAFELY stringify or fallback
+      let raw = evt.content
+      let serialized = JSON.stringify(raw)
+      if (serialized === undefined) {
+        serialized = String(raw ?? '')
+      }
+
+      // truncate to 100 chars
+      const detail = serialized.length > 100
+        ? serialized.slice(0, 100) + '…'
+        : serialized
+
+      out.push({
+        id: `audit-${idx}`,
+        title: evt.event,
+        details: detail,
+        subItems: [],
+        event: evt.event,
+        type: 'info',
+        timestamp: evt.timestamp
+      })
+    }
+  })
+  return out
+})
+
+
+const showAuditLog = ref(false)
+
+function toggleAuditLog() {
+  showAuditLog.value = !showAuditLog.value
+}
 
 </script>
 

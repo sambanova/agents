@@ -356,6 +356,73 @@ const latestToolAction = computed(() => {
 
 // … your auditLogEvents, formatEventTime, latestToolAction, etc. all stay exactly as before …
 
+
+// 5) audit log with safe stringify
+const auditLogEvents = computed(() => {
+  // synthetic if no streamingEvents but we have workflowData
+  if ((!props.streamingEvents || !props.streamingEvents.length) && props.workflowData.length) {
+
+    alert("steaming ")
+    const unique = []
+    const seen = new Set()
+    props.workflowData.forEach((w, i) => {
+      const key = `${w.agent_name}-${w.task}-${w.tool_name}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        unique.push({
+          id: `synthetic-${i}`,
+          title: `✅ ${w.agent_name} – ${w.task}`,
+          details: w.tool_name ? `Tool: ${w.tool_name}` : 'Completed',
+          subItems: [],
+          event: 'workflow_item',
+          type: 'tool_result',
+          timestamp: new Date().toISOString()
+        })
+      }
+    })
+    return unique
+  }
+
+
+
+
+  // otherwise from streamingEvents
+  const out = []
+  const seenKeys = new Set()
+  props.streamingEvents.forEach((evt, idx) => {
+    const key = `${evt.event}-${evt.timestamp}`
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key)
+
+      // SAFELY stringify or fallback
+      let raw = evt.content
+      let serialized = JSON.stringify(raw)
+      if (serialized === undefined) {
+        serialized = String(raw ?? '')
+      }
+
+      // truncate to 100 chars
+      const detail = serialized.length > 100
+        ? serialized.slice(0, 100) + '…'
+        : serialized
+
+      out.push({
+        id: `audit-${idx}`,
+        title: evt.event,
+        details: detail,
+        subItems: [],
+        event: evt.event,
+        type: 'info',
+        timestamp: evt.timestamp
+      })
+    }
+  })
+  return out
+})
+
+
+
+
 </script>
 
 <style scoped>

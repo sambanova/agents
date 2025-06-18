@@ -2134,7 +2134,7 @@ const filteredMessages = computed(() => {
               )
             "
             
-             :streamData="streamData"  
+            :streamData="streamData"  
             :plannerText="
               plannerTextData.filter(
                 (item) => item.message_id === msgItem.message_id
