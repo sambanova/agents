@@ -1,4 +1,5 @@
 <template>
+
   <!-- {{ props }} -->
   <!-- {{ (props.isLoading) }} -->
   <!-- {{props.agent_type}}
@@ -7,28 +8,19 @@
   <!-- Handle streaming and agent_completion events -->
     <!-- {{ props.streamData }} -->
   <!-- {{ props }} -->
-    <MetaData 
-    :presentMetadata="props.data.usage_metadata"
-    />
+   
     <!-- <AnalysisTimeline
     :workflowData="props.data.usage_metadata"
     /> -->
-    <div class="w-full flex flex-col ">
-        <!-- <AnalysisTimeline
-        :isLoading="isLoading"
-        :parsedData="parsedData"
-        :workflowData="workflowData"
-        :presentMetadata="props?.data?.usage_metadata"
-        :plannerText="plannerText"
-      /> -->
-      <!-- download pdf -->
-      <!-- <div class="grow relative text-start space-y-3">
+    <div class="w-full flex flex-col bg-gray-50 dark:bg-gray-700 ">
+       <!-- download pdf -->
+      <div class="grow relative text-start space-y-3">
         
-        <div class="inline-block">
+         <div class="inline-block">
           <div
-            class="relative p-4 flex items-center capitalize space-y-3 font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center capitalize text-gray-800 dark:text-gray-100"
+            class="relative p-4 flex items-center justify-center capitalize  font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center capitalize text-gray-800 dark:text-gray-100"
           >
-            {{ provider === 'sambanova' ? 'SambaNova' : provider }} Agent
+           <UserAvatar :type="provider" /> <span class="ml-1"> {{ provider === 'sambanova' ? 'SambaNova' : provider }} Agent</span>
         
             <button
               v-if="
@@ -85,26 +77,21 @@
             </div>
           </div>
         </div>
-      </div> -->
-      <!-- download pdf end -->
-      <!-- <UserAvatar :type="provider" /> -->
+      </div> 
+      <!-- download pdf end --> 
+    
+   
        
-        <!-- <StatusBox
-          :isLoading="isLoading"
-          :streamData="props.streamData"
-        /> -->
+      
        
       <div>
-        <!-- <StatusAnimationBox
-        isLoading="props.isLoading"
-        v-if="props.isLoading&&combinedContent" 
-      :isLoading="props.isLoading"
-    
-    :content="combinedContent"
-    :title="rawToolName ? title : undefined"
-  /> -->
+       
      
-      <div class="grow ml-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+
+  
+      <div class="grow ml-4 p-4  rounded-lg">
+
+
         <div class="flex hidden items-center justify-between mb-2">
           <span
             class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
@@ -141,8 +128,46 @@
             </div>
           </div> -->
 
+
+<div class="flex flex-wrap gap-2">
+  <a
+    v-for="src in allSources"
+    :key="src.url"
+    :href="src.url"
+    target="_blank"
+    rel="noopener"
+    class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium 
+           bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200
+           hover:bg-blue-200 dark:hover:bg-blue-800 transition"
+  >
+    <span v-if="src.type==='link'" class="mr-1">🌐</span>
+    <span v-else-if="src.type==='arxiv'" class="mr-1">📚</span>
+    {{ src.title }}
+  </a>
+</div>
+
+
+           <div class="flex hidden flex-wrap gap-2">
+      
+<a
+        v-for="(link, idx) in parsedLinks"
+        :key="idx"
+        :href="link.url"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-800 transition"
+      >
+        <!-- globe icon if we generated the name from domain -->
+        <span v-if="!link.hasOriginalName" class="mr-1">🌐</span>
+        {{ link.name }}
+      </a>
+
+      </div>
+   <MetaDataH 
+    :presentMetadata="props?.data?.response_metadata?.usage"
+    />
           <!-- Dropdown for full message details -->
-          <div class="mt-2">
+          <div class="mt-2 hidden">
             <button
               @click="toggleDetails"
               class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 flex items-center gap-1"
@@ -214,13 +239,27 @@
           @close="closeArtifactCanvas"
         />
   
+
+           <!-- Streaming response -->
+        <div class="p-4 bg-white dark:bg-gray-800">
+          <div v-if="streamingResponseContent" class="prose prose-sm dark:prose-invert" v-html="renderMarkdown(streamingResponseContent)"/>
+          <div
+            v-else-if="isCurrentlyStreaming"
+            class="flex items-center space-x-2 text-gray-500 dark:text-gray-400 italic"
+          >
+            <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+            <span>Generating response...</span>
+          </div>
+        </div>
+
+    
   
  
 </template>
 
 <script setup>
 import { computed, defineProps, ref, watch, nextTick } from 'vue'
-import MetaData from '@/components/ChatMain/MetaData.vue'
+import MetaDataH from '@/components/ChatMain/MetaDataH.vue'
 
 import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
 import AssistantComponent from '@/components/ChatMain/ResponseTypes/AssistantComponent.vue'
@@ -251,9 +290,87 @@ const showArtifactCanvas = ref(false)
 const showDaytonaSidebar = ref(false)
 const daytonaSidebarClosed = ref(false) // Track if user manually closed it
 
-
+// Extract sources from tool results with proper titles and domains
+const toolSources = computed(() => {
+  if (!props.streamingEvents || !Array.isArray(props.streamingEvents)) return []
+  
+  const sources = []
+  
+  props.streamingEvents.forEach(event => {
+    if (event.event === 'agent_completion' && 
+        event.data.type === 'LiberalFunctionMessage' && 
+        event.data.name === 'search_tavily' &&
+        Array.isArray(event.data.content)) {
+      
+      event.data.content.forEach(source => {
+        let displayTitle = 'Unknown Source'
+        let domain = ''
+        
+        // Try to get title first, fallback to domain
+        if (source.title && source.title.trim()) {
+          displayTitle = source.title.trim()
+        } else if (source.url) {
+          try {
+            const url = new URL(source.url)
+            domain = url.hostname.replace('www.', '')
+            displayTitle = domain
+          } catch {
+            displayTitle = source.url
+          }
+        }
+        
+        // Extract domain for icon/display
+        if (source.url) {
+          try {
+            domain = new URL(source.url).hostname.replace('www.', '')
+          } catch {
+            domain = 'web'
+          }
+        }
+        
+        sources.push({
+          title: displayTitle || 'Untitled',
+          domain: domain || '',
+          url: source.url || '',
+          content: source.content ? source.content.substring(0, 200) + '...' : '',
+          type: 'web'
+        })
+      })
+    } else if (event.data.name === 'arxiv') {
+      // Parse arXiv results - remove the broken URL construction
+      const content = event.data.content || ''
+      const papers = content.split('Published:').slice(1)
+      
+      papers.forEach(paper => {
+        const titleMatch = paper.match(/Title: ([^\n]+)/)
+        const authorsMatch = paper.match(/Authors: ([^\n]+)/)
+        const urlMatch = paper.match(/URL: ([^\n]+)/)
+        const publishedMatch = paper.match(/Published: ([^\n]+)/)
+        
+        if (titleMatch) {
+          // Only use actual URLs from the content, don't construct fake ones
+          const arxivUrl = urlMatch ? urlMatch[1].trim() : ''
+          
+          sources.push({
+            title: titleMatch[1].trim() || 'Untitled Paper',
+            authors: authorsMatch ? authorsMatch[1].trim() : '',
+            domain: 'arxiv.org',
+            url: arxivUrl, // This might be empty if no URL is provided
+            content: paper.substring(0, 300) + '...',
+            type: 'arxiv',
+            published: publishedMatch ? publishedMatch[1].trim() : ''
+          })
+        }
+      })
+    }
+  })
+  
+  return sources.slice(0, 5) // Limit to 5 sources for UI
+})
 
 function openArtifact(artifact) {
+
+  
   // For Daytona charts, create a simple image viewer instead of using ArtifactCanvas
   if (artifact && artifact.url && (artifact.url.includes('/api/files/') || artifact.url.startsWith('data:image/'))) {
     // Create a simple image modal overlay
@@ -336,8 +453,15 @@ function fetchProvider() {
 const hasArtifacts = computed(() => {
 
   
-  if (!props.streamData) return false
+  if (!props.streamingEvents) return false
   
+  console.log("hasArtifacts",props.streamingEvents.some(event => 
+    event.event === 'agent_completion' && 
+    event.name === 'DaytonaCodeSandbox' &&
+    event.content &&
+    event.content.includes('![Chart')
+  ))
+
   return props.streamingEvents.some(event => 
     event.event === 'agent_completion' && 
     event.name === 'DaytonaCodeSandbox' &&
@@ -695,6 +819,335 @@ const title = computed(() => {
     .map(w => w.charAt(0).toUpperCase() + w.slice(1))
   return `Searching ${words.join(' ')}`
 })
+
+
+// Extract streaming response content with better parsing
+const streamingResponseContent = computed(() => {
+  if (!props.streamingEvents) return ''
+  
+  // First, look for the final completed response (react_end)
+  for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
+    const event = props.streamingEvents[i]
+    if (event.event === 'agent_completion' && event.data.agent_type === 'react_end') {
+      return event.data.content || ''
+    }
+  }
+  
+  // If no completed response, find the largest streaming content that's not a tool call
+  let bestContent = ''
+  let maxLength = 0
+  
+  props.streamingEvents.forEach(event => {
+    if (event.event === 'llm_stream_chunk' && 
+        event.data.content && 
+        !event.data.content.includes('<tool>') &&
+        event.data.content.trim()) {
+      
+      const content = event.data.content.trim()
+      // Prefer longer content as it's likely the main response
+      if (content.length > maxLength) {
+        maxLength = content.length
+        bestContent = content
+      }
+    }
+  })
+  
+  return bestContent
+})
+
+
+const finalStatusSummary = computed(() => {
+  if (!props.streamingEvents || props.streamingEvents.length === 0) {
+    // For loaded conversations, generate summary from workflow data
+    if (props.workflowData && props.workflowData.length > 0) {
+      const completedTasks = props.workflowData.map(workflow => {
+        if (workflow.tool_name === 'DaytonaCodeSandbox' || workflow.task === 'code_execution') {
+          return 'Code execution complete';
+        } else if (workflow.tool_name === 'search_tavily' || workflow.task === 'web_search') {
+          return 'Web search complete';
+        } else if (workflow.tool_name === 'arxiv' || workflow.task === 'arxiv_search') {
+          return 'arXiv search complete';
+        } else {
+          return `${workflow.agent_name || 'Task'} complete`;
+        }
+      });
+      
+      if (completedTasks.length > 0) {
+        return `✅ ${completedTasks.join(' • ')}`;
+      }
+    }
+    return 'Details';
+  }
+  
+  let completedTools = []
+  
+  props.streamingEvents.forEach(event => {
+    if (event.event === 'agent_completion' && 
+        event.data.type === 'LiberalFunctionMessage' && 
+        event.data.name) {
+      
+      if (event.data.name === 'search_tavily' && Array.isArray(event.data.content)) {
+        completedTools.push(`Found ${event.data.content.length} web sources`)
+      } else if (event.data.name === 'arxiv') {
+        const papers = event.data.content && event.data.content.includes('Title:') ? 
+          event.data.content.split('Title:').length - 1 : 1
+        completedTools.push(`Found ${papers} arXiv papers`)
+      } else if (event.data.name === 'DaytonaCodeSandbox') {
+        completedTools.push('Code execution complete')
+      }
+    }
+  })
+  
+  if (completedTools.length > 0) {
+    return `✅ ${completedTools.join(' • ')}`
+  }
+  
+  return 'Details'
+})
+
+
+
+
+const parsedLinks = computed(() => {
+  const items = []
+
+  function extractFromText(text) {
+    if (!text) return
+    let m
+
+    // 1) Python-style list of dicts? Try parsing JSON
+    const trimmed = text.trim()
+    if (trimmed.startsWith('[')) {
+      try {
+        // convert single quotes → double quotes so JSON.parse works
+        const jsonArr = JSON.parse(
+          trimmed.replace(/'url'/g, '"url"').replace(/'/g, '"')
+        )
+        if (Array.isArray(jsonArr)) {
+          jsonArr.forEach((o) => {
+            if (o.url) {
+              let name
+              try { name = new URL(o.url).hostname } catch { name = o.url }
+              items.push({ url: o.url, name, hasOriginalName: false })
+            }
+          })
+          // once we parsed the JSON array, no need for regex on the same text
+          return
+        }
+      } catch {
+        // not valid JSON after all—fall back to regex
+      }
+    }
+
+    // 2) Named lines: "Name: https://…"
+    const nameUrlRe = /([^:*]+):\s*(https?:\/\/\S+)/g
+    while ((m = nameUrlRe.exec(text))) {
+      items.push({
+        name: m[1].trim(),
+        url: m[2].trim(),
+        hasOriginalName: true
+      })
+    }
+
+    // 3) Python-style 'url': '…'
+    const pythonRe = /'url':\s*'(https?:\/\/[^']+)'/g
+    while ((m = pythonRe.exec(text))) {
+      const url = m[1].trim()
+      let name
+      try { name = new URL(url).hostname } catch { name = url }
+      items.push({ url, name, hasOriginalName: false })
+    }
+
+    // 4) Plain URLs
+    const plainRe = /(https?:\/\/[^\s"'<>]+)/g
+    while ((m = plainRe.exec(text))) {
+      const url = m[1].trim()
+      if (!items.find((i) => i.url === url)) {
+        let name
+        try { name = new URL(url).hostname } catch { name = url }
+        items.push({ url, name, hasOriginalName: false })
+      }
+    }
+  }
+
+  // Parse the main bubble content
+  // extractFromText(props.data?.content)
+
+  if (typeof props.data?.content === 'string' && props.data.content.trim()) {
+  extractFromText(props.data.content)
+}
+
+  // Parse every streamingEvents[i].data.content
+  for (const evt of props.streamingEvents) {
+
+    const c = evt.data?.content
+  if (typeof c === 'string' && c.trim()) {
+   extractFromText(evt.data.content)
+  }
+    
+  }
+
+  // Dedupe by URL
+  const seen = new Set()
+  return items.filter((item) => {
+    if (seen.has(item.url)) return false
+    seen.add(item.url)
+    return true
+  })
+})
+
+
+
+const allSources = computed(() => {
+  const items = []
+  const seen = new Set()
+
+  const pushIfNew = (src) => {
+    if (!src.url || seen.has(src.url)) return
+    seen.add(src.url)
+    items.push(src)
+  }
+
+  function extractLinks(text, srcType = 'link') {
+    // **Guard**: only process strings
+    if (typeof text !== 'string') return
+
+    let m
+    const trimmed = text.trim()
+
+    // 1) JSON-style array of dicts
+    if (trimmed.startsWith('[')) {
+      try {
+        const arr = JSON.parse(
+          trimmed
+            .replace(/'url'/g, '"url"')
+            .replace(/([^{,\s])'([^'\\]*(\\.[^'\\]*)*)'/g, '$1"$2"')
+        )
+        if (Array.isArray(arr)) {
+          arr.forEach(o => {
+            if (o.url) {
+              let domain = ''
+              try { domain = new URL(o.url).hostname.replace(/^www\./, '') }
+              catch {}
+              pushIfNew({
+                title: o.title?.trim() || domain,
+                url: o.url,
+                domain,
+                content: o.content?.slice(0,200) + '…',
+                type: srcType
+              })
+            }
+          })
+          return
+        }
+      } catch {
+        // not valid JSON — fall back to regex
+      }
+    }
+
+    // 2) Named lines: "Name: https://..."
+    const nameRe = /([^:*]+):\s*(https?:\/\/\S+)/g
+    while ((m = nameRe.exec(text))) {
+      const url = m[2].trim()
+      let domain = ''
+      try { domain = new URL(url).hostname.replace(/^www\./,'') } catch {}
+      pushIfNew({
+        title: m[1].trim(),
+        url,
+        domain,
+        type: srcType
+      })
+    }
+
+    // 3) Python-style "'url': '…'"
+    const pyRe = /'url':\s*'(https?:\/\/[^']+)'/g
+    while ((m = pyRe.exec(text))) {
+      const url = m[1].trim()
+      let domain = ''
+      try { domain = new URL(url).hostname.replace(/^www\./,'') } catch {}
+      pushIfNew({
+        title: domain || url,
+        url,
+        domain,
+        type: srcType
+      })
+    }
+
+    // 4) Any plain URL
+    const urlRe = /(https?:\/\/[^\s"'<>]+)/g
+    while ((m = urlRe.exec(text))) {
+      const url = m[1].trim()
+      if (!seen.has(url)) {
+        let domain = ''
+        try { domain = new URL(url).hostname.replace(/^www\./,'') } catch {}
+        pushIfNew({
+          title: domain || url,
+          url,
+          domain,
+          type: srcType
+        })
+      }
+    }
+  }
+
+  // Parse the main bubble content
+  extractLinks(props.data?.content, 'link')
+
+  // Parse each streamingEvents[i].data.content
+  props.streamingEvents.forEach(evt => {
+    const txt = evt.data?.content
+    extractLinks(txt, 'link')
+  })
+
+  // Merge in your toolSources logic:
+
+  props.streamingEvents.forEach(event => {
+    const d = event.data
+
+    // A) search_tavily → array of web sources
+    if (
+      event.event === 'agent_completion' &&
+      d.type === 'LiberalFunctionMessage' &&
+      d.name === 'search_tavily' &&
+      Array.isArray(d.content)
+    ) {
+      d.content.forEach(src => {
+        if (!src.url) return
+        let domain = ''
+        try { domain = new URL(src.url).hostname.replace(/^www\./,'') } catch {}
+        pushIfNew({
+          title: src.title?.trim() || domain,
+          url: src.url,
+          domain,
+          content: src.content?.slice(0,200) + '…',
+          type: 'web'
+        })
+      })
+    }
+    // B) arXiv parsing
+    else if (d.name === 'arxiv' && typeof d.content === 'string') {
+      d.content.split('Published:').slice(1).forEach(paper => {
+        const ti = paper.match(/Title: ([^\n]+)/)?.[1]?.trim() || 'Untitled Paper'
+        const au = paper.match(/Authors: ([^\n]+)/)?.[1]?.trim()
+        const url = paper.match(/URL: ([^\n]+)/)?.[1]?.trim() || ''
+        const pub = paper.match(/Published: ([^\n]+)/)?.[1]?.trim()
+        pushIfNew({
+          title: ti,
+          url,
+          domain: 'arxiv.org',
+          content: `Authors: ${au||'N/A'} • Published: ${pub||'N/A'}`,
+          type: 'arxiv'
+        })
+      })
+    }
+  })
+
+  return items
+})
+
+
+
+
 </script>
 
 <style scoped>

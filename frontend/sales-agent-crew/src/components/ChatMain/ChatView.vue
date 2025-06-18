@@ -1,14 +1,12 @@
 <template>
   <div class="relative h-full w-full bg-white dark:bg-gray-900">
-    <!-- Content -->
+    
     <div
       ref="container"
       class="relative h-full flex  overflow-x-hidden overflow-y-auto"
        :class="
           (messagesData.length == 0 )? 'justify-center align-center flex-col' : 'flex-col'
-        "
-    >
-     
+        ">
       <div
         class=" w-full flex mx-auto"
         :class="
@@ -52,22 +50,14 @@
           </h1>
         </div>
         <!-- End Title -->
-        
-
-        <div
-          name="chat"
-          tag="ul"
-          class="mt-16 max-w-4xl w-full mx-auto space-y-5"
              
-        >
+
+        <div name="chat" class="mt-16  max-w-4xl w-full mx-auto space-y-5">
                   <div v-for="msgItem in messagesData.filter(
                         (item) => item.type === 'HumanMessage'
                       )" :key="msgItem.message_id">
 
-            <div
-          
-            class="flex px-4 items-start gap-x-2 sm:gap-x-4"
-          >
+            <div v-if="msgItem.type === 'HumanMessage'"  class="flex px-4 items-start gap-x-2 sm:gap-x-4">
             <div class="grow text-end space-y-3">
               <!-- Card -->
               <div class="inline-block flex justify-end">
@@ -82,12 +72,12 @@
           <div   class="px-4 items-start gap-x-2 sm:gap-x-4">
 
                 <StatusBox
-
-                 v-if="isLoading"
+  :metadata="completionMetaData"
+                v-if="isLoading"
                 :workflowData="
                       workflowData.filter(
                         (item) => item.message_id === msgItem.message_id)"
-                  :isLoading="isLoading"
+                  :loading="isLoading"
                   
                   :streamData=" messagesData.filter(
                         (item) => item.msgType ===  'stream'
@@ -96,7 +86,20 @@
                         (item) => item.msgType ===  'toolData'
                       )"
                 />
-                
+                 <AnalysisBox
+  :metadata="completionMetaData"
+                :workflowData="
+                      workflowData.filter(
+                        (item) => item.message_id === msgItem.message_id)"
+                  :loading="!isLoading"
+                  
+                  :streamData=" messagesData.filter(
+                        (item) => item.msgType ===  'stream'
+                      )"
+                      :streamingEvents=" messagesData.filter(
+                        (item) => item.msgType ===  'toolData'
+                      )"
+                />
                   <!-- Chat Bubble -->
                   <ChatBubble
                     :streamingEvents=" messagesData.filter(
@@ -109,11 +112,9 @@
             )
           )"
                     :metadata="completionMetaData"
-                    :workflowData="
+                      :workflowData="
                       workflowData.filter(
-                        (item) => item.message_id === msgItem.message_id
-                      )
-                    "
+                        (item) => item.message_id === msgItem.message_id)"
                     
                     :plannerText="
                       plannerTextData.filter(
@@ -392,7 +393,9 @@
         </div>
       </div>
     </div>
-  </div>
+  
+</div>
+
 </template>
 
 
@@ -418,6 +421,7 @@ import ChatBubble from '@/components/ChatMain/ChatBubble.vue';
 import ChatLoaderBubble from '@/components/ChatMain/ChatLoaderBubble.vue';
 import StatusAnimationBox from '@/components/ChatMain/StatusAnimationBox.vue';
 import StatusBox from '@/components/ChatMain/StatusBox.vue';
+import AnalysisBox from '@/components/ChatMain/AnalysisBox.vue';
 import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
 
 
@@ -533,18 +537,18 @@ function handleKeydownScroll(event) {
 // }
 
 function AutoScrollToBottom(smoothScrollOff = false) {
-  // nextTick(() => {
-  //   setTimeout(() => {
-  //     if (container.value) {
-  //       const targetScroll =
-  //         container.value.scrollHeight - container.value.clientHeight;
-  //       container.value.scrollTo({
-  //         top: targetScroll,
-  //         behavior: smoothScrollOff ? 'auto' : 'smooth',
-  //       });
-  //     }
-  //   }, 100); // Adjust timeout as needed
-  // });
+  nextTick(() => {
+    setTimeout(() => {
+      if (container.value) {
+        const targetScroll =
+          container.value.scrollHeight - container.value.clientHeight;
+        container.value.scrollTo({
+          top: targetScroll,
+          behavior: smoothScrollOff ? 'auto' : 'smooth',
+        });
+      }
+    }, 100); // Adjust timeout as needed
+  });
 }
 
 const emit = defineEmits([
@@ -823,6 +827,19 @@ async function filterChatCombo(msgData) {
 
       if(message.event === 'agent_completion'){
          
+
+
+        if(message?.response_metadata&&                         
+  Object.keys(message.response_metadata).length > 0  ){
+    
+          addOrUpdateModel((message.response_metadata), message.message_id);
+
+        }
+  
+
+        
+
+
           const isToolCall = message.content && typeof message.content === 'string' && message.content.includes('<tool>');
         const isToolResult = Array.isArray(message.content) || (message.additional_kwargs?.agent_type === 'react_tool');
         const isToolResponse = message.additional_kwargs?.agent_type === 'tool_response';
@@ -911,6 +928,10 @@ async function filterChatCombo(msgData) {
   workData.forEach((work) => {
     addOrUpdateModel(JSON.parse(work.data).metadata, work.message_id);
   });
+
+
+  // 
+
 
   AutoScrollToBottom();
 
@@ -1372,9 +1393,9 @@ async function sendMessage() {
 }
 
 function scrollToBottom() {
-  // if (messagesContainer.value) {
-  //   messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
-  // }
+  if (messagesContainer.value) {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+  }
 }
 
 // Reactive state for voice and file uploads
@@ -1929,6 +1950,16 @@ const addMessage = async () => {
 
 function addOrUpdateModel(newData, message_id) {
   // Determine which message_id to use.
+
+  let iData=newData
+  if(!iData.llm_name&&iData.model_name){
+
+    iData.llm_name=iData.model_name
+  }else{
+    return
+  }
+
+
   const idToUse = message_id ? message_id : currentMsgId.value;
 
   // Find an existing model with matching llm_name and message_id.
@@ -1948,6 +1979,9 @@ function addOrUpdateModel(newData, message_id) {
       message_id: idToUse,
     });
   }
+
+  console.log("workflowData.value",workflowData.value);
+  
 }
 
 async function connectWebSocket() {
@@ -2034,7 +2068,7 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
           });
 
 
-          
+          AutoScrollToBottom();
       console.log("messagesData",messagesData)
             // isLoading.value = false;
         } 
@@ -2155,7 +2189,7 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
           try {
             addOrUpdateModel(dataParsed.metadata);
 
-            AutoScrollToBottom();
+          
           } catch (e) {
             console.log('model error', e);
             isLoading.value = false;
@@ -2169,13 +2203,13 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
           let dataParsed = JSON.parse(receivedData.data);
           addOrUpdateModel(dataParsed.metadata);
 
-          AutoScrollToBottom();
+          
         } else {
           console.log('ping event fired: ', receivedData.event);
         }
         
         // Auto scroll after any message
-        AutoScrollToBottom();
+        
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
         isLoading.value = false;
