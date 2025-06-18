@@ -55,7 +55,7 @@
         <div name="chat" class="mt-16  max-w-4xl w-full mx-auto space-y-5">
                   <div v-for="msgItem in messagesData.filter(
                         (item) => item.type === 'HumanMessage'
-                      )" :key="msgItem.message_id">
+                      )" :key="msgItem.id">
 
             <div v-if="msgItem.type === 'HumanMessage'"  class="flex px-4 items-start gap-x-2 sm:gap-x-4">
             <div class="grow text-end space-y-3">

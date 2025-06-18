@@ -1,5 +1,5 @@
 <template>
-{{ props.streamingEvents }}
+
   <!-- {{ props }} -->
   <!-- {{ (props.isLoading) }} -->
   <!-- {{props.agent_type}}

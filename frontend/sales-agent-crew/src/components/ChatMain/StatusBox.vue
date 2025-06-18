@@ -323,6 +323,37 @@ const allSources = computed(() => {
   return items
 })
 
+
+const latestToolAction = computed(() => {
+  // 1) Grab only the react_tool completions
+  const calls = props.streamData.filter(i =>
+    i.event === 'agent_completion' &&
+    i.agent_type === 'react_tool' &&
+    typeof i.content === 'string'
+  )
+  if (!calls.length) return ''
+
+  // 2) Take the very last one
+  const lastContent = calls[calls.length - 1].content
+
+  // 3) Extract <tool>…</tool>
+  const toolMatch  = lastContent.match(/<\s*tool>([\s\S]*?)<\/\s*tool>/i)
+  // 4) Extract <tool_input>…</tool_input>
+  const inputMatch = lastContent.match(/<\s*tool_input>([\s\S]*?)<\/\s*tool_input>/i)
+
+  if (!toolMatch) return ''   // no tool tag → bail
+
+  // 5) Normalize the name: replace underscores with spaces
+  const rawName  = toolMatch[1].trim()              // e.g. "search_tavily"
+  const toolName = rawName.replace(/_/g, ' ')       // → "search tavily"
+
+  // 6) Pull out the explanation
+  const explanation = inputMatch ? inputMatch[1].trim() : ''
+
+  // 7) Format as "Tool Name: Explanation"
+  return {toolName:toolName,explanation: explanation}
+})
+
 // … your auditLogEvents, formatEventTime, latestToolAction, etc. all stay exactly as before …
 
 </script>
