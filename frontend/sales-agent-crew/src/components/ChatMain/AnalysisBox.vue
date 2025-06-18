@@ -6,8 +6,8 @@
       @click="isOpen = !isOpen"
       class="w-full flex items-center justify-start p-3 0 dark:bg-gray-800 rounded-md focus:outline-none"
     >
-      <span class="font-medium text-gray-900 dark:text-gray-100">
-        Conversation Details
+      <span class="text-md text-primary-brandTextSecondary dark:text-gray-100">
+        Analysis Conculed
       </span>
       <svg
         :class="{'transform rotate-180': isOpen}"

@@ -1,7 +1,7 @@
 <template>
   <div class=" p-2">
     <!-- Timeline Header -->
-    <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-1">{{ title }}</h2>
+    <!-- <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-1">{{ title }}</h2> -->
     <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">{{ description }}</p>
 
     <!-- Timeline Events -->
@@ -36,7 +36,7 @@
     </div>
 
 
-    
+
   </div>
 </template>
 
@@ -59,7 +59,9 @@ const props = withDefaults(
     title: 'Project Timeline',
     description: 'Key milestones and progress overview.',
     events: [
-      { date: '2025-01-10', title: 'Kickoff', description: 'Project kickoff meeting and planning.' },
+      { date: '2025-01-10', title: 'Kickoff', description: 'The error of kickoff meeting and planning.' },
+            { date: '2025-01-10', title: 'Done', description: '' },
+
     //   { date: '2025-02-20', title: 'Design Phase', description: 'Wireframes and design mockups completed.' },
     //   { date: '2025-04-05', title: 'Development', description: 'Core features implemented and initial build.' },
     //   { date: '2025-06-18', title: 'Testing', description: 'QA testing and bug fixes.' },

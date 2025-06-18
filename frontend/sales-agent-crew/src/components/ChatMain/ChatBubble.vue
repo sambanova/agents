@@ -1008,13 +1008,14 @@ const allSources = computed(() => {
     items.push(src)
   }
 
-  // Generic link extractor
   function extractLinks(text, srcType = 'link') {
-    if (!text) return
+    // **Guard**: only process strings
+    if (typeof text !== 'string') return
+
     let m
     const trimmed = text.trim()
 
-    // 1) JSON-array style?
+    // 1) JSON-style array of dicts
     if (trimmed.startsWith('[')) {
       try {
         const arr = JSON.parse(
@@ -1039,10 +1040,12 @@ const allSources = computed(() => {
           })
           return
         }
-      } catch {}
+      } catch {
+        // not valid JSON — fall back to regex
+      }
     }
 
-    // 2) Named lines
+    // 2) Named lines: "Name: https://..."
     const nameRe = /([^:*]+):\s*(https?:\/\/\S+)/g
     while ((m = nameRe.exec(text))) {
       const url = m[2].trim()
@@ -1056,7 +1059,7 @@ const allSources = computed(() => {
       })
     }
 
-    // 3) Python-style 'url'
+    // 3) Python-style "'url': '…'"
     const pyRe = /'url':\s*'(https?:\/\/[^']+)'/g
     while ((m = pyRe.exec(text))) {
       const url = m[1].trim()
@@ -1087,23 +1090,21 @@ const allSources = computed(() => {
     }
   }
 
-  // Parse main message
+  // Parse the main bubble content
   extractLinks(props.data?.content, 'link')
 
-  // Parse each streamingEvents[].data.content
+  // Parse each streamingEvents[i].data.content
   props.streamingEvents.forEach(evt => {
     const txt = evt.data?.content
-    if (typeof txt === 'string') {
-      extractLinks(txt, 'link')
-    }
+    extractLinks(txt, 'link')
   })
 
-  // Now toolSources logic merged in:
+  // Merge in your toolSources logic:
 
   props.streamingEvents.forEach(event => {
     const d = event.data
 
-    // A) search_tavily
+    // A) search_tavily → array of web sources
     if (
       event.event === 'agent_completion' &&
       d.type === 'LiberalFunctionMessage' &&
@@ -1123,8 +1124,7 @@ const allSources = computed(() => {
         })
       })
     }
-
-    // B) arXiv
+    // B) arXiv parsing
     else if (d.name === 'arxiv' && typeof d.content === 'string') {
       d.content.split('Published:').slice(1).forEach(paper => {
         const ti = paper.match(/Title: ([^\n]+)/)?.[1]?.trim() || 'Untitled Paper'
@@ -1144,6 +1144,8 @@ const allSources = computed(() => {
 
   return items
 })
+
+
 
 
 </script>
