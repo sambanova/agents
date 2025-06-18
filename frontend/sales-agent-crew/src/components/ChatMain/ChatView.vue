@@ -897,7 +897,7 @@ async function filterChatCombo(msgData) {
        
       }else if (message.event === 'llm_stream_chunk') {
 
-        // alert(agent_type)
+        alert(agent_type)
         message.agent_type=agent_type
         message.msgType='stream'
         return message
