@@ -64,15 +64,15 @@ async def lifespan(app: FastAPI):
             logger.warning(
                 "MLFLOW_TRACKING_URI environment variable not set. MLflow will default to local ./mlruns."
             )
-
-            # Enable MLflow LangChain autologging for LangGraph tracing
         try:
-            # Enable MLflow LangChain autologging which supports LangGraph
-            mlflow.langchain.autolog(disable=False, log_traces=True, silent=False)
-            logger.info("MLflow LangChain autologging enabled for LangGraph tracing.")
+            # At the moment, this is not working, it does not work with FastAPI: https://github.com/mlflow/mlflow/issues/14836
+            # Also the documentation mentions that MLflow CrewAI integration currently only supports synchronous task execution.
+            mlflow.crewai.autolog()
+            mlflow.langchain.autolog()
+            logger.info("MLflow CrewAI autologging enabled.")
         except Exception as e:
             logger.error(
-                f"Failed to initialize MLflow LangChain autologging: {e}",
+                f"Failed to initialize MLflow CrewAI autologging: {e}",
                 exc_info=True,
             )
 
