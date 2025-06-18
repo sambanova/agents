@@ -1,5 +1,5 @@
 <template>
-{{ props.workflowData }}
+{{ props.streamingEvents }}
 <div class="max-w-4xl mx-auto">
     <!-- Collapsible Header -->
     <button
