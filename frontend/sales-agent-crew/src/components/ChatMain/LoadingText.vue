@@ -7,7 +7,7 @@
       :key="idx"
       :class="[
         'transition-opacity duration-200 ease-in-out',
-        props.isLoading
+        props.loading
           ? (isInWindow(idx) ? 'opacity-100' : 'opacity-30')
           : 'opacity-100'
       ]"
@@ -25,7 +25,7 @@ const props = defineProps({
     type: String,
     required: true
   },
-  isLoading: {
+  loading: {
     type: Boolean,
     default: false
   },
@@ -68,12 +68,12 @@ function stopAnimation() {
   activeIndex.value = 0
 }
 
-watch(() => props.isLoading, val => {
+watch(() => props.loading, val => {
   val ? startAnimation() : stopAnimation()
 })
 
 onMounted(() => {
-  if (props.isLoading) startAnimation()
+  if (props.loading) startAnimation()
 })
 
 onUnmounted(() => {
