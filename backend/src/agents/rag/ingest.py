@@ -53,10 +53,10 @@ async def ingest_blob(
     docs_to_index = []
     ids = []
 
-    # Parse documents in a separate thread to avoid blocking
-    documents = await asyncio.to_thread(list, parser.lazy_parse(blob))
+    # Parse documents lazily without loading all into memory
+    lazy_documents = parser.lazy_parse(blob)
 
-    for i, document in enumerate(documents):
+    for i, document in enumerate(lazy_documents):
         # Split documents in a separate thread to avoid blocking
         docs = await asyncio.to_thread(text_splitter.split_documents, [document])
 
@@ -64,7 +64,9 @@ async def ingest_blob(
             _sanitize_document_content(doc)
             _update_document_metadata(doc, user_id, document_id)
             _clean_text(doc)
-        docs_to_index.extend(docs)
+            # Skip documents with no text content
+            if doc.page_content.strip():
+                docs_to_index.append(doc)
 
         if len(docs_to_index) >= batch_size:
             ids.extend(await vectorstore.aadd_documents(docs_to_index))
