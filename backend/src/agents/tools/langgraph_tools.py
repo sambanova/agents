@@ -264,7 +264,7 @@ def _get_retrieval_tool(
 
     user_filter = Tag("user_id") == user_id
     doc_filter = Tag("document_id") == list(doc_ids)
-    filter_expr = str(user_filter & doc_filter)
+    filter_expr = user_filter & doc_filter
 
     retriever = RedisHybridRetriever(
         search_index=vector_store._index,

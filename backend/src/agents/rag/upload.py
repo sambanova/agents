@@ -23,6 +23,7 @@ from langchain_text_splitters import TextSplitter, TokenTextSplitter
 from pydantic import BaseModel, ConfigDict
 from redisvl.index import SearchIndex
 from redisvl.query import HybridQuery
+from redisvl.query.filter import FilterExpression
 
 logger = structlog.get_logger(__name__)
 
@@ -35,7 +36,7 @@ class RedisHybridRetriever(BaseRetriever, BaseModel):
 
     search_index: SearchIndex
     embedding_model: SambaNovaCloudEmbeddings
-    filter_expr: str
+    filter_expr: FilterExpression
 
     class Config:
         arbitrary_types_allowed = True
