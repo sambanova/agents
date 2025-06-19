@@ -5,7 +5,7 @@
       <!-- Video box -->
       <div class="w-full h-full md:w-[60%] flex items-center justify-center">
         <div
-          class="shadow-lg rounded-lg max-h-[90vh] w-[90%] hover:w-full
+          class="shadow-lg dark:shadow-gray-900/50 rounded-lg max-h-[90vh] w-[90%] hover:w-full
                  border border-gray-200 dark:border-gray-700
                  bg-white dark:bg-gray-800
                  transition-all duration-300"
@@ -23,8 +23,10 @@
       </div>
 
       <!-- Login box -->
-      <div class="w-full h-full md:w-[40%] flex flex-col justify-center items-center p-4 md:pl-12
-                  bg-white dark:bg-gray-900 transition-colors duration-300">
+      <div
+        class="w-full h-full md:w-[40%] flex flex-col justify-center items-center p-4 md:pl-12
+               bg-white dark:bg-gray-900 transition-colors duration-300"
+      >
         <div class="w-auto">
           
           <!-- Logo & Title -->
@@ -32,7 +34,7 @@
             <img 
               src="https://sambanova.ai/hubfs/sambanova-logo-black.png"
               alt="SambaNova Logo"
-              class="h-[25px] mx-auto mb-2"
+              class="h-[25px] mx-auto mb-2 dark:invert"
             />
             <h1 class="text-4xl font-bold text-primary-brandTextPrimary dark:text-white mb-2">
               Agents
@@ -94,7 +96,7 @@
             />
             <div class="text-center mt-4">
               <p class="text-sm text-gray-600 dark:text-gray-400">
-                Don't have an account?
+                Don’t have an account?
                 <button
                   @click="showSignUp = true"
                   class="text-primary-600 dark:text-primary-400 font-medium hover:underline"
