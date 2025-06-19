@@ -2907,8 +2907,12 @@ const toolCalls = computed(() =>
     // only agent_completion events with content
     .filter(msg => msg.event === 'agent_completion' && msg.content)
     .map(msg => {
-      const toolMatch  = msg.content.match(/<tool>([\s\S]*?)<\/tool>/)
-      const inputMatch = msg.content.match(/<tool_input>([\s\S]*?)<\/tool_input>/)
+        const content = typeof msg.content === 'string'
+        ? msg.content
+        : String(msg.content)
+
+      const toolMatch  = content.match(/<tool>([\s\S]*?)<\/tool>/)
+      const inputMatch = content.match(/<tool_input>([\s\S]*?)<\/tool_input>/)
       if (!toolMatch || !inputMatch) return null
 
       const toolName  = toolMatch[1].trim()
