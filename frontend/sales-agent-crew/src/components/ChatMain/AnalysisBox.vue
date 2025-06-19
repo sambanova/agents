@@ -8,7 +8,8 @@
       class="w-full flex items-center justify-start p-3 0 dark:bg-gray-800 rounded-md focus:outline-none"
     >
       <span class="text-md text-primary-brandTextSecondary dark:text-gray-100">
-        Analysis Conculed <span v-if="props.allSources.length">( {{ props.allSources.length }} Sources)</span>
+        Analysis Conculed <span v-if="props.allSources.length">(🌐 {{ props.allSources.length }} Sources Found)</span> 
+        <span v-if="props.toolSources&&props.toolSources.length">(Searched {{ props.toolSources.length }} research papers)</span> 
       </span>
       <svg
         :class="{'transform rotate-180': isOpen}"
@@ -34,6 +35,7 @@
       <div v-show="isOpen" class="mt-2 space-y-4 p-4 border rounded-md bg-white dark:bg-gray-900">
         <!-- Your existing content starts here -->
         <TimeLineAssitance
+
         :auditLogEvents=props.auditLogEvents
         />
 

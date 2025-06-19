@@ -85,7 +85,7 @@
                      :loading="isLoading"
                   
                   :streamData="messagesData.filter(
-                        (item) => item.msgType ===  'stream'
+                        (item) => item.msgType ===  'stream'&&item.message_id==msgItem.message_id
                       )"
                       :streamingEvents=" messagesData.filter(
                         (item) => item.msgType ===  'toolData'
@@ -98,11 +98,10 @@
                   :auditLogEvents="auditLogEvents"
                   :allSources="allSources"
                   :metadata="msgItem?.response_metadata" 
-                :workflowData="
+                  :workflowData="
                       workflowData.filter(
                         (item) => item.message_id === msgItem.message_id)"
                   :loading="!isLoading"
-                  
                   :streamData=" messagesData.filter(
                         (item) => item.msgType ===  'stream'
                       )"
@@ -2670,36 +2669,33 @@ const filteredMessages = computed(() => {
 // 1) Combine all streaming chunks
 
 const allSources = computed(() => {
-
-  // alert("calling allSources")
   const items = []
   const seen  = new Set()
 
-  const pushIfNew = src => {
+  // only pushes if we haven't seen this URL before
+  const pushIfNew = (src) => {
     if (!src.url || seen.has(src.url)) return
     seen.add(src.url)
     items.push(src)
   }
 
   function extractLinks(text, type = 'link') {
-    if (!text) return
+    if (typeof text !== 'string') return
     let m
 
-    // JSON-array
+    // JSON-array of { url, … }
     if (text.trim().startsWith('[')) {
       try {
-        const arr = JSON.parse(
-          text.replace(/'url'/g, '"url"')
-        )
+        const arr = JSON.parse(text.replace(/'url'/g, '"url"'))
         if (Array.isArray(arr)) {
           arr.forEach(o => {
             if (o.url) {
               const domain = new URL(o.url).hostname.replace(/^www\./,'')
               pushIfNew({
-                title: o.title?.trim() || domain,
-                url: o.url,
+                title:  o.title?.trim() || domain,
+                url:    o.url,
                 domain,
-                type,
+                type
               })
             }
           })
@@ -2708,52 +2704,48 @@ const allSources = computed(() => {
       } catch {}
     }
 
-    // Named lines
+    // Named lines: "Name: https://…"
     const nameRe = /([^:*]+):\s*(https?:\/\/\S+)/g
     while ((m = nameRe.exec(text))) {
-      const url = m[2].trim()
+      const url    = m[2].trim()
       const domain = new URL(url).hostname.replace(/^www\./,'')
       pushIfNew({ title: m[1].trim(), url, domain, type })
     }
 
-    // Python style
+    // Python‐style "'url': '…'"
     const pyRe = /'url':\s*'(https?:\/\/[^']+)'/g
     while ((m = pyRe.exec(text))) {
-      const url = m[1].trim()
+      const url    = m[1].trim()
       const domain = new URL(url).hostname.replace(/^www\./,'')
       pushIfNew({ title: domain, url, domain, type })
     }
 
-    // Plain URLs
+    // Any plain URL
     const urlRe = /(https?:\/\/[^\s"'<>]+)/g
     while ((m = urlRe.exec(text))) {
-      const url = m[1].trim()
+      const url    = m[1].trim()
       const domain = new URL(url).hostname.replace(/^www\./,'')
       pushIfNew({ title: domain, url, domain, type })
     }
   }
 
-  // main message (if any)
-  // extractLinks(props.data?.content, 'link')
-
-  // each streamData item
+  // Loop through your messagesData (skip pure chat messages)
   messagesData.value.forEach(evt => {
-    if(evt.msgType!=="message"){
-
-    
-    const txt = evt?.content
-    if (typeof txt === 'string') extractLinks(txt, 'link')
+    if (evt.msgType !== 'message' && typeof evt.content === 'string') {
+      extractLinks(evt.content, 'link')
     }
   })
 
-  console.log("messagesData.value ",messagesData.value);
-  
-  console.log("allSources items",items)
-  // merge in toolSources
-  // toolSources.value.forEach(src => pushIfNew(src))
+  // (Optionally merge in toolSources here by doing:
+  //    toolSources.value.forEach(src => pushIfNew(src))
+  // )
 
-  return items
+  // Final safety‐net dedupe by URL
+  return items.filter((item, idx, arr) =>
+    idx === arr.findIndex(i => i.url === item.url)
+  )
 })
+
 
 
 const auditLogEvents = computed(() => {
