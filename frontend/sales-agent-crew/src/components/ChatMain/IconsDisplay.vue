@@ -1,4 +1,5 @@
 <template>
+    <span class="mr-2">
   <svg
     :class="['icon', 'bounce']"
     xmlns="http://www.w3.org/2000/svg"
@@ -43,6 +44,7 @@
       <path d="M12 2a7 7 0 0 1 7 7c0 2.08-1 4-3 5v2H8v-2c-2-1-3-2.92-3-5a7 7 0 0 1 7-7z"></path>
     </template>
   </svg>
+  </span>
 </template>
 
 <script setup>
