@@ -20,6 +20,7 @@ from agents.components.routing.user_proxy import UserProxyAgent
 from agents.rag.upload import convert_ingestion_input_to_blob, ingest_runnable
 from agents.storage.global_services import (
     get_secure_redis_client,
+    get_sync_redis_client,
     set_global_redis_storage_service,
 )
 from agents.storage.redis_storage import RedisStorage
@@ -79,6 +80,7 @@ async def lifespan(app: FastAPI):
     # Create SecureRedisService with Redis client
     app.state.redis_client = get_secure_redis_client()
     app.state.redis_storage_service = RedisStorage(redis_client=app.state.redis_client)
+    app.state.sync_redis_client = get_sync_redis_client()
 
     # Set global Redis storage service for tools
     set_global_redis_storage_service(app.state.redis_storage_service)
@@ -87,6 +89,7 @@ async def lifespan(app: FastAPI):
 
     app.state.manager = WebSocketConnectionManager(
         redis_client=app.state.redis_client,
+        sync_redis_client=app.state.sync_redis_client,
     )
     UserProxyAgent.connection_manager = app.state.manager
     SemanticRouterAgent.connection_manager = app.state.manager

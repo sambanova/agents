@@ -6,14 +6,15 @@ import time
 import uuid
 from enum import Enum
 from functools import lru_cache
-from typing import Annotated, List, Literal, Tuple
+from typing import Annotated, Literal, Tuple
 
+import redis
 import structlog
 from agents.rag.upload import RedisHybridRetriever, create_user_vector_store
-from agents.storage.global_services import get_global_redis_storage_service
+from agents.storage.redis_storage import RedisStorage
 from agents.utils.code_patcher import patch_plot_code_str
 from daytona_sdk import AsyncDaytona as DaytonaClient
-from daytona_sdk import CreateSandboxFromSnapshotParams, CreateSnapshotParams
+from daytona_sdk import CreateSandboxFromSnapshotParams
 from daytona_sdk import DaytonaConfig as DaytonaSDKConfig
 from langchain.tools.retriever import create_retriever_tool
 from langchain_community.agent_toolkits.connery import ConneryToolkit
@@ -30,8 +31,7 @@ from langchain_community.utilities.arxiv import ArxivAPIWrapper
 from langchain_community.utilities.dalle_image_generator import DallEAPIWrapper
 from langchain_community.utilities.tavily_search import TavilySearchAPIWrapper
 from langchain_core.tools import Tool
-from langchain_sambanova import SambaNovaCloudEmbeddings
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from redisvl.query.filter import Tag
 from typing_extensions import TypedDict
 
@@ -76,6 +76,7 @@ class ToolConfig(TypedDict): ...
 
 class DaytonaConfig(ToolConfig):
     user_id: str
+    redis_storage: RedisStorage
 
 
 class RetrievalConfig(ToolConfig):
@@ -83,9 +84,13 @@ class RetrievalConfig(ToolConfig):
     doc_ids: tuple
     description: str
     api_key: str
+    redis_client: redis.Redis
 
 
 class BaseTool(BaseModel):
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     type: AvailableTools
     name: str
     description: str
@@ -244,14 +249,18 @@ If the user asks a vague question, they are likely meaning to look up info from 
 
 
 def _get_retrieval_tool(
-    user_id: str, doc_ids: Tuple[str, ...], api_key: str, description: str
+    user_id: str,
+    doc_ids: Tuple[str, ...],
+    api_key: str,
+    description: str,
+    redis_client: redis.Redis,
 ):
     """
     Returns a LangChain Tool that does true hybrid (keyword + vector) search
     filtered by user_id and document_id tags.
     """
 
-    vector_store = create_user_vector_store(api_key)
+    vector_store = create_user_vector_store(api_key, redis_client)
 
     user_filter = Tag("user_id") == user_id
     doc_filter = Tag("document_id") == list(doc_ids)
@@ -381,7 +390,7 @@ def _get_dalle_tools():
 
 
 @lru_cache(maxsize=1)
-def _get_daytona(user_id: str):
+def _get_daytona(user_id: str, redis_storage: RedisStorage):
     api_key = os.getenv("DAYTONA_API_KEY")
 
     supported_extensions = [
@@ -467,9 +476,8 @@ def _get_daytona(user_id: str):
                     )
 
                     # Store in Redis for backup/download purposes
-                    storage_service = get_global_redis_storage_service()
-                    if storage_service:
-                        await storage_service.put_file(
+                    if redis_storage:
+                        await redis_storage.put_file(
                             user_id,
                             file_id,
                             data=content,
@@ -510,9 +518,8 @@ def _get_daytona(user_id: str):
                     )
 
                     # Store in Redis for backup/download purposes
-                    storage_service = get_global_redis_storage_service()
-                    if storage_service:
-                        await storage_service.put_file(
+                    if redis_storage:
+                        await redis_storage.put_file(
                             user_id,
                             file_id,
                             data=content,
@@ -549,9 +556,8 @@ def _get_daytona(user_id: str):
                             chart_data = base64.b64decode(chart.png)
 
                             # Store in Redis for backup/download purposes
-                            storage_service = get_global_redis_storage_service()
-                            if storage_service:
-                                await storage_service.put_file(
+                            if redis_storage:
+                                await redis_storage.put_file(
                                     user_id,
                                     image_id,
                                     data=chart_data,

@@ -8,13 +8,13 @@ import redis
 import structlog
 from agents.api.data_types import APIKeys
 from agents.api.websocket_interface import WebSocketInterface
-from agents.components.compound.assistant import get_assistant
 from agents.components.compound.financial_analysis_subgraph import (
     create_financial_analysis_graph,
 )
 from agents.components.open_deep_research.graph import create_deep_research_graph
 from agents.storage.redis_service import SecureRedisService
 from agents.storage.redis_storage import RedisStorage
+from agents.tools.langgraph_tools import RETRIEVAL_DESCRIPTION
 from fastapi import WebSocket, WebSocketDisconnect
 from langchain_core.messages import AIMessage, HumanMessage
 from starlette.websockets import WebSocketState
@@ -27,7 +27,7 @@ class WebSocketConnectionManager(WebSocketInterface):
     Manages WebSocket connections for user sessions.
     """
 
-    def __init__(self, redis_client: SecureRedisService):
+    def __init__(self, redis_client: SecureRedisService, sync_redis_client: redis.Redis):
         # Use user_id:conversation_id as the key
         self.connections: Dict[str, WebSocket] = {}
         self.redis_client = redis_client
@@ -536,25 +536,60 @@ class WebSocketConnectionManager(WebSocketInterface):
         self.cleanup_task: Optional[asyncio.Task] = None
 
         config = {
-            **get_assistant(
-                user_id=user_id,
-                llm_type=llm_type,
-                doc_ids=doc_ids,
-                api_key=api_keys.sambanova_key,
-            ).config,
             "configurable": {
-                **get_assistant(
-                    user_id=user_id,
-                    llm_type=llm_type,
-                    doc_ids=doc_ids,
-                    api_key=api_keys.sambanova_key,
-                ).config["configurable"],
+                "type==default/tools": [
+                    {
+                        "type": "arxiv",
+                        "config": {},
+                    },
+                    {
+                        "type": "search_tavily",
+                        "config": {},
+                    },
+                    {
+                        "type": "search_tavily_answer",
+                        "config": {},
+                    },
+                    {
+                        "type": "daytona",
+                        "config": {
+                            "user_id": user_id,
+                            "redis_storage": self.message_storage,
+                        },
+                    },
+                    {
+                        "type": "wikipedia",
+                        "config": {},
+                    },
+                ],
+                "type==default/llm_type": llm_type,
                 "thread_id": thread_id,
                 "user_id": user_id,
                 "api_key": api_keys.sambanova_key,
                 "message_id": message_id,
-            },
+            }
         }
+
+        if doc_ids:
+            config["configurable"]["type==default/tools"].append(
+                {
+                    "type": "retrieval",
+                    "config": {
+                        "user_id": user_id,
+                        "doc_ids": doc_ids,
+                        "description": RETRIEVAL_DESCRIPTION,
+                        "api_key": api_keys.sambanova_key,
+                        "redis_client": self.redis_client,
+                    },
+                }
+            )
+            config["configurable"][
+                "type==default/system_message"
+            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {len(doc_ids)} documents are available to you for retrieval."
+        else:
+            config["configurable"][
+                "type==default/system_message"
+            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}"
 
         config["configurable"]["type==default/subgraphs"] = {
             "financial_analysis": {
@@ -575,13 +610,5 @@ class WebSocketConnectionManager(WebSocketInterface):
                 ),
             },
         }
-
-        # Create assistant
-        assistant = get_assistant(
-            user_id=user_id,
-            llm_type=llm_type,
-            doc_ids=doc_ids,
-            api_key=api_keys.sambanova_key,
-        )
 
         return config

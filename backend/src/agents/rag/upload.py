@@ -5,10 +5,10 @@ from functools import lru_cache
 from typing import BinaryIO, List, Optional
 
 import numpy as np
+import redis
 import structlog
 from agents.rag.ingest import ingest_blob
 from agents.rag.parsing import MIMETYPE_BASED_PARSER
-from agents.storage.global_services import get_sync_redis_client
 from langchain.schema import Document
 from langchain_core.document_loaders.blob_loaders import Blob
 from langchain_core.retrievers import BaseRetriever
@@ -64,7 +64,9 @@ class RedisHybridRetriever(BaseRetriever, BaseModel):
 
 
 @lru_cache(maxsize=100)
-def create_user_vector_store(api_key: str) -> RedisVectorStore:
+def create_user_vector_store(
+    api_key: str, redis_client: redis.Redis
+) -> RedisVectorStore:
     # Initialize vector store with shared Redis client
     vstore = RedisVectorStore(
         embeddings=SambaNovaCloudEmbeddings(
@@ -72,7 +74,6 @@ def create_user_vector_store(api_key: str) -> RedisVectorStore:
             sambanova_api_key=api_key,
             batch_size=32,
         ),
-        redis_client=get_sync_redis_client(),
         index_name="sambanova-rag-index",
         metadata_schema=[
             {"name": "user_id", "type": "tag"},
