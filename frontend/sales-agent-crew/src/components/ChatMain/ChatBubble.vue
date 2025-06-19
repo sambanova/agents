@@ -131,7 +131,7 @@
 
 <div class="flex flex-wrap gap-2">
   <a
-    v-for="src in allSources"
+    v-for="src in props.allSources"
     :key="src.url"
     :href="src.url"
     target="_blank"
@@ -163,9 +163,9 @@
       </a>
 
       </div>
-   <MetaDataH 
+   <!-- <MetaDataH 
     :presentMetadata="props?.data?.response_metadata?.usage"
-    />
+    /> -->
           <!-- Dropdown for full message details -->
           <div class="mt-2 hidden">
             <button
@@ -998,152 +998,6 @@ const parsedLinks = computed(() => {
 
 
 
-const allSources = computed(() => {
-  const items = []
-  const seen = new Set()
-
-  const pushIfNew = (src) => {
-    if (!src.url || seen.has(src.url)) return
-    seen.add(src.url)
-    items.push(src)
-  }
-
-  function extractLinks(text, srcType = 'link') {
-    // **Guard**: only process strings
-    if (typeof text !== 'string') return
-
-    let m
-    const trimmed = text.trim()
-
-    // 1) JSON-style array of dicts
-    if (trimmed.startsWith('[')) {
-      try {
-        const arr = JSON.parse(
-          trimmed
-            .replace(/'url'/g, '"url"')
-            .replace(/([^{,\s])'([^'\\]*(\\.[^'\\]*)*)'/g, '$1"$2"')
-        )
-        if (Array.isArray(arr)) {
-          arr.forEach(o => {
-            if (o.url) {
-              let domain = ''
-              try { domain = new URL(o.url).hostname.replace(/^www\./, '') }
-              catch {}
-              pushIfNew({
-                title: o.title?.trim() || domain,
-                url: o.url,
-                domain,
-                content: o.content?.slice(0,200) + '…',
-                type: srcType
-              })
-            }
-          })
-          return
-        }
-      } catch {
-        // not valid JSON — fall back to regex
-      }
-    }
-
-    // 2) Named lines: "Name: https://..."
-    const nameRe = /([^:*]+):\s*(https?:\/\/\S+)/g
-    while ((m = nameRe.exec(text))) {
-      const url = m[2].trim()
-      let domain = ''
-      try { domain = new URL(url).hostname.replace(/^www\./,'') } catch {}
-      pushIfNew({
-        title: m[1].trim(),
-        url,
-        domain,
-        type: srcType
-      })
-    }
-
-    // 3) Python-style "'url': '…'"
-    const pyRe = /'url':\s*'(https?:\/\/[^']+)'/g
-    while ((m = pyRe.exec(text))) {
-      const url = m[1].trim()
-      let domain = ''
-      try { domain = new URL(url).hostname.replace(/^www\./,'') } catch {}
-      pushIfNew({
-        title: domain || url,
-        url,
-        domain,
-        type: srcType
-      })
-    }
-
-    // 4) Any plain URL
-    const urlRe = /(https?:\/\/[^\s"'<>]+)/g
-    while ((m = urlRe.exec(text))) {
-      const url = m[1].trim()
-      if (!seen.has(url)) {
-        let domain = ''
-        try { domain = new URL(url).hostname.replace(/^www\./,'') } catch {}
-        pushIfNew({
-          title: domain || url,
-          url,
-          domain,
-          type: srcType
-        })
-      }
-    }
-  }
-
-  // Parse the main bubble content
-  extractLinks(props.data?.content, 'link')
-
-  // Parse each streamingEvents[i].data.content
-  props.streamingEvents.forEach(evt => {
-    const txt = evt.data?.content
-    extractLinks(txt, 'link')
-  })
-
-  // Merge in your toolSources logic:
-
-  props.streamingEvents.forEach(event => {
-    const d = event.data
-
-    // A) search_tavily → array of web sources
-    if (
-      event.event === 'agent_completion' &&
-      d.type === 'LiberalFunctionMessage' &&
-      d.name === 'search_tavily' &&
-      Array.isArray(d.content)
-    ) {
-      d.content.forEach(src => {
-        if (!src.url) return
-        let domain = ''
-        try { domain = new URL(src.url).hostname.replace(/^www\./,'') } catch {}
-        pushIfNew({
-          title: src.title?.trim() || domain,
-          url: src.url,
-          domain,
-          content: src.content?.slice(0,200) + '…',
-          type: 'web'
-        })
-      })
-    }
-    // B) arXiv parsing
-    else if (d.name === 'arxiv' && typeof d.content === 'string') {
-      d.content.split('Published:').slice(1).forEach(paper => {
-        const ti = paper.match(/Title: ([^\n]+)/)?.[1]?.trim() || 'Untitled Paper'
-        const au = paper.match(/Authors: ([^\n]+)/)?.[1]?.trim()
-        const url = paper.match(/URL: ([^\n]+)/)?.[1]?.trim() || ''
-        const pub = paper.match(/Published: ([^\n]+)/)?.[1]?.trim()
-        pushIfNew({
-          title: ti,
-          url,
-          domain: 'arxiv.org',
-          content: `Authors: ${au||'N/A'} • Published: ${pub||'N/A'}`,
-          type: 'arxiv'
-        })
-      })
-    }
-  })
-
-  return items
-})
 
 
 

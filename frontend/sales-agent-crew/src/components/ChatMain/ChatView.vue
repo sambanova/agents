@@ -54,10 +54,7 @@
              
 
         <div name="chat" class="mt-16  max-w-4xl w-full mx-auto space-y-5">
-                  <div v-for="msgItem in messagesData.filter(
-                        (item) => item.type === 'HumanMessage'
-                      )" :key="msgItem.id">
-
+                  <div v-for="msgItem in messagesData.filter(item=>item.type===`HumanMessage`)" :key="msgItem.id">
             <div :key="`human-${msgItem.id}`"  v-if="msgItem.type === 'HumanMessage'"  class="flex px-4 items-start gap-x-2 sm:gap-x-4">
             <div class="grow text-end space-y-3">
               <!-- Card -->
@@ -73,7 +70,9 @@
           <div   class="px-4 items-start gap-x-2 sm:gap-x-4">
 
                 <StatusBox
-                v-if="isLoading"
+
+                 :toolCalls="toolCalls"
+                v-if="isLoading&&currentMsgId===msgItem.message_id"
                 :key="`status-${msgItem.id}`"
                 :toolSources="toolSources"
                 :allSources="allSources"
@@ -83,21 +82,26 @@
                       workflowData.filter(
                         (item) => item.message_id === msgItem.message_id)"
                      :loading="isLoading"
-                  
                   :streamData="messagesData.filter(
-                        (item) => item.msgType ===  'stream'&&item.message_id==msgItem.message_id
+                        (item) => item.msgType ===  'stream'
                       )"
                       :streamingEvents=" messagesData.filter(
                         (item) => item.msgType ===  'toolData'
                       )"
                 />
                  <AnalysisBox
-                  v-if="!isLoading"
+                 :toolCalls="toolCalls"
+                 v-if="(!isLoading)"
                  :key="`analysys-${msgItem.id}`"
                  :toolSources="toolSources"
                   :auditLogEvents="auditLogEvents"
                   :allSources="allSources"
-                  :metadata="msgItem?.response_metadata" 
+                  :msgItem="msgItem"
+                  :metadata="messagesData.find(item =>
+            item.message_id === msgItem.message_id &&
+            item.agent_type&& item.agent_type !== 'human' &&item.msgType !=  'toolData'&&
+            ( item.agent_type.includes('_end') || item.agent_type.includes('_interrupt'))
+          )?.response_metadata?.usage" 
                   :workflowData="
                       workflowData.filter(
                         (item) => item.message_id === msgItem.message_id)"
@@ -111,13 +115,15 @@
                 />
                   <!-- Chat Bubble -->
                   <ChatBubble
+
+                    :allSources="allSources"
                   :key="`chat-${msgItem.id}`"
                     :streamingEvents=" messagesData.filter(
                         (item) => item.msgType ===  'toolData'
                       )"
                 v-if="messagesData.find(item =>
             item.message_id === msgItem.message_id &&
-            item.agent_type !== 'human' &&item.msgType !=  'toolData'&&
+            item.agent_type&& item.agent_type !== 'human' &&item.msgType !=  'toolData'&&
             ( item.agent_type.includes('_end') || item.agent_type.includes('_interrupt')
             )
           )"
@@ -975,8 +981,13 @@ async function filterChatCombo(msgData) {
     chatName.value = userMessages[0].data;
   }
 
+
+  
   AutoScrollToBottom();
   await nextTick();
+
+
+
 }
 
 async function filterChatOld(msgData) {
@@ -2668,16 +2679,20 @@ const filteredMessages = computed(() => {
 
 // 1) Combine all streaming chunks
 
+// replace your existing parseLinks & allSources definitions with this:
+
 const allSources = computed(() => {
   const items = []
   const seen  = new Set()
 
-  // only pushes if we haven't seen this URL before
   const pushIfNew = (src) => {
     if (!src.url || seen.has(src.url)) return
     seen.add(src.url)
     items.push(src)
   }
+
+  // merge in any explicit toolSources
+  toolSources.value.forEach(src => pushIfNew(src))
 
   function extractLinks(text, type = 'link') {
     if (typeof text !== 'string') return
@@ -2688,17 +2703,12 @@ const allSources = computed(() => {
       try {
         const arr = JSON.parse(text.replace(/'url'/g, '"url"'))
         if (Array.isArray(arr)) {
-          arr.forEach(o => {
-            if (o.url) {
-              const domain = new URL(o.url).hostname.replace(/^www\./,'')
-              pushIfNew({
-                title:  o.title?.trim() || domain,
-                url:    o.url,
-                domain,
-                type
-              })
-            }
-          })
+          arr.forEach(o => o.url && pushIfNew({
+            title: (o.title || new URL(o.url).hostname).trim(),
+            url: o.url,
+            domain: new URL(o.url).hostname.replace(/^www\./, ''),
+            type
+          }))
           return
         }
       } catch {}
@@ -2707,44 +2717,39 @@ const allSources = computed(() => {
     // Named lines: "Name: https://…"
     const nameRe = /([^:*]+):\s*(https?:\/\/\S+)/g
     while ((m = nameRe.exec(text))) {
-      const url    = m[2].trim()
-      const domain = new URL(url).hostname.replace(/^www\./,'')
-      pushIfNew({ title: m[1].trim(), url, domain, type })
+      const url = m[2].trim()
+      pushIfNew({ title: m[1].trim(), url, domain: new URL(url).hostname.replace(/^www\./,''), type })
     }
 
-    // Python‐style "'url': '…'"
+    // Python style
     const pyRe = /'url':\s*'(https?:\/\/[^']+)'/g
     while ((m = pyRe.exec(text))) {
-      const url    = m[1].trim()
-      const domain = new URL(url).hostname.replace(/^www\./,'')
-      pushIfNew({ title: domain, url, domain, type })
+      const url = m[1].trim()
+      pushIfNew({ title: new URL(url).hostname.replace(/^www\./,''), url, domain: new URL(url).hostname.replace(/^www\./,''), type })
     }
 
-    // Any plain URL
+    // Any bare URL
     const urlRe = /(https?:\/\/[^\s"'<>]+)/g
     while ((m = urlRe.exec(text))) {
-      const url    = m[1].trim()
-      const domain = new URL(url).hostname.replace(/^www\./,'')
-      pushIfNew({ title: domain, url, domain, type })
+      const url = m[1].trim()
+      pushIfNew({ title: new URL(url).hostname.replace(/^www\./,''), url, domain: new URL(url).hostname.replace(/^www\./,''), type })
     }
   }
 
-  // Loop through your messagesData (skip pure chat messages)
+  // scan every message for URLs, in either evt.content or evt.data.content
   messagesData.value.forEach(evt => {
-    if (evt.msgType !== 'message' && typeof evt.content === 'string') {
-      extractLinks(evt.content, 'link')
+    let text = null
+    if (typeof evt.content === 'string') {
+      text = evt.content
+    } else if (evt.data && typeof evt.data.content === 'string') {
+      text = evt.data.content
     }
+    if (text) extractLinks(text, 'link')
   })
 
-  // (Optionally merge in toolSources here by doing:
-  //    toolSources.value.forEach(src => pushIfNew(src))
-  // )
-
-  // Final safety‐net dedupe by URL
-  return items.filter((item, idx, arr) =>
-    idx === arr.findIndex(i => i.url === item.url)
-  )
+  return items
 })
+
 
 
 
@@ -2752,10 +2757,12 @@ const auditLogEvents = computed(() => {
   // synthetic if no streamingEvents but we have workflowData
   if ((!messagesData.value || !messagesData.value.length) && workflowData.value) {
 
+
     // alert("steaming ")
     const unique = []
     const seen = new Set()
     workflowData.value.forEach((w, i) => {
+      
       const key = `${w.agent_name}-${w.task}-${w.tool_name}`
       if (!seen.has(key)) {
         seen.add(key)
@@ -2776,7 +2783,7 @@ const auditLogEvents = computed(() => {
   // otherwise from streamingEvents
   const out = []
   const seenKeys = new Set()
-  messagesData.value.forEach((evt, idx) => {
+  messagesData.value.filter(item=> item.event==="agent_completion").forEach((evt, idx) => {
     const key = `${evt.event}-${evt.timestamp}`
     if (!seenKeys.has(key)) {
       seenKeys.add(key)
@@ -2894,6 +2901,46 @@ const toolSources = computed(() => {
 })
 
 
+
+const toolCalls = computed(() =>
+  messagesData.value
+    // only agent_completion events with content
+    .filter(msg => msg.event === 'agent_completion' && msg.content)
+    .map(msg => {
+      const toolMatch  = msg.content.match(/<tool>([\s\S]*?)<\/tool>/)
+      const inputMatch = msg.content.match(/<tool_input>([\s\S]*?)<\/tool_input>/)
+      if (!toolMatch || !inputMatch) return null
+
+      const toolName  = toolMatch[1].trim()
+      const toolInput = inputMatch[1].trim()
+
+      let title = ''
+      let details = ''
+
+      if (toolName === 'search_tavily') {
+        title   = `Search Tavily`
+        details = `Query: "${toolInput}"`
+      } else if (toolName === 'arxiv') {
+        title   = `Search arXiv`
+        details = `Query: "${toolInput}"`
+      } else if (toolName === 'DaytonaCodeSandbox') {
+        title   = `Execute Code`
+        details = 'Running analysis in sandbox'
+      } else {
+        title   = `${toolName}`
+        details = `Query: "${toolInput}"`
+      }
+
+      return {
+        id:         msg.id,
+        toolName:   toolName,
+        toolInput:  toolInput,
+        title:      title,
+        details:    details
+      }
+    })
+    .filter(x => x !== null)
+)
 </script>
 
 <style scoped>
