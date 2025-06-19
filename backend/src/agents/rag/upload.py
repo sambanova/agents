@@ -18,7 +18,7 @@ from langchain_core.runnables import (
     RunnableSerializable,
 )
 from langchain_redis import RedisVectorStore
-from langchain_sambanova import SambaNovaCloudEmbeddings
+from langchain_sambanova import SambaNovaCloudEmbeddings, SambaStudioEmbeddings
 from langchain_text_splitters import TextSplitter, TokenTextSplitter
 from pydantic import BaseModel, ConfigDict
 from redisvl.index import SearchIndex
