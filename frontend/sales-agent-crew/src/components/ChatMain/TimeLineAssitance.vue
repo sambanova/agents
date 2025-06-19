@@ -1,81 +1,125 @@
 <template>
-  <div class=" p-2">
-    <!-- Timeline Header -->
-    <!-- <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-1">{{ title }}</h2> -->
-    <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">{{ description }}</p>
-
-    <!-- Timeline Events -->
-    <div class="border-l-2 border-gray-200 dark:border-gray-700">
+  <div class="p-2">
+    <div class="timeline relative pl-4">
       <div
-        v-for="(event, index) in events"
-        :key="index"
-        class="relative pl-4 mb-6"
+        v-for="(event, idx) in timelineItems"
+        :key="idx"
+        class="timeline-item relative mb-6 last:mb-0"
       >
         <!-- Dot -->
         <span
-          class="absolute -left-2 top-1 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 w-3 h-3 rounded-full"
+          class="absolute -left-4 w-3 h-3 rounded-full border-2 bg-white dark:bg-gray-800
+                 border-gray-200 dark:border-gray-700"
         ></span>
 
-        <!-- Title aligned with dot -->
-        <div class="flex items-center">
-          <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100">
-            {{ event.title }}
-          </h3>
+        <!-- Title -->
+        <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100">
+          {{ event.title }}
+        </h3>
+
+        <!-- Details -->
+        <div class="text-sm text-gray-600 dark:text-gray-300 mt-1 mb-2">
+          {{ event.details }}
         </div>
 
-        <!-- Description -->
-        <p class="text-sm text-gray-600 dark:text-gray-300 mt-1 mb-2">
-          {{ event.description }}
-        </p>
+        <!-- Sub-items -->
+        <div
+          v-if="event.subItems?.length"
+          class="ml-4 space-y-1 text-xs text-gray-600 dark:text-gray-400"
+        >
+          <div
+            v-for="sub in event.subItems"
+            :key="sub.id"
+            class="flex items-start space-x-1"
+          >
+            <span>•</span>
+            <span>
+              {{ sub.title }}
+              <span v-if="sub.domain">({{ sub.domain }})</span>
+            </span>
+          </div>
+        </div>
 
-        <!-- Date at bottom -->
-        <time class="block text-xs text-gray-400 dark:text-gray-500">
-          {{ event.date }}
+        <!-- Meta tags -->
+        <div class="text-xs text-gray-400 dark:text-gray-600 mt-1 space-x-1">
+          <span class="bg-gray-100 dark:bg-gray-600 px-1 rounded">{{ event.event }}</span>
+          <span v-if="event.type" class="bg-blue-100 dark:bg-blue-600 px-1 rounded">
+            {{ event.type }}
+          </span>
+        </div>
+
+        <!-- Timestamp -->
+        <time class="block text-xs text-gray-400 dark:text-gray-500 mt-1">
+          {{ formatEventTime(event.timestamp) }}
         </time>
       </div>
     </div>
-
-
-
   </div>
 </template>
 
 <script setup lang="ts">
-import { withDefaults, defineProps } from 'vue'
+import { computed } from 'vue'
 
-interface TimelineEvent {
-  date: string;
-  title: string;
-  description: string;
+interface AuditEvent {
+  title: string
+  details: string
+  event?: string
+  type?: string
+  timestamp: string
+  subItems?: Array<{ id: string; title: string; domain?: string }>
 }
 
-const props = withDefaults(
-  defineProps<{
-    title?: string;
-    description?: string;
-    events?: TimelineEvent[];
-  }>(),
-  {
-    title: 'Project Timeline',
-    description: 'Key milestones and progress overview.',
-    events: [
-      { date: '2025-01-10', title: 'Kickoff', description: 'The error of kickoff meeting and planning.' },
-            { date: '2025-01-10', title: 'Done', description: '' },
+const props = defineProps<{
+  auditLogEvents: AuditEvent[]
+}>()
 
-    //   { date: '2025-02-20', title: 'Design Phase', description: 'Wireframes and design mockups completed.' },
-    //   { date: '2025-04-05', title: 'Development', description: 'Core features implemented and initial build.' },
-    //   { date: '2025-06-18', title: 'Testing', description: 'QA testing and bug fixes.' },
-    //   { date: '2025-07-01', title: 'Launch', description: 'Official project release.' }
-    ],
+// Always prepend a "Done" entry with current time
+const timelineItems = computed<AuditEvent[]>(() => {
+  const now = new Date().toISOString()
+  const doneEntry: AuditEvent = {
+    title: 'Done',
+    details: 'Analysis concluded',
+    event: 'done',
+    type: 'summary',
+    timestamp: now,
+    subItems: []
   }
-)
+  return [ ...props.auditLogEvents, doneEntry || []]
+})
 
-const { title, description, events } = props
+function formatEventTime(ts: string) {
+  return new Date(ts).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
 </script>
 
 <style scoped>
-/* Remove extra margin on last event */
-.pl-4 > div:last-child {
+.timeline {
+  position: relative;
+  padding-left: 1rem;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 0.375rem;    /* Align with dot center */
+  top: 0.375rem;     /* Start at first dot center */
+  bottom: 0.375rem;  /* End at last dot center */
+  width: 2px;
+  background-color: rgba(229, 231, 235, var(--tw-border-opacity));
+}
+.dark .timeline::before {
+  background-color: rgba(55, 65, 81, var(--tw-border-opacity));
+}
+
+.timeline-item {
+  position: relative;
+}
+
+/* Ensure last item has no extra bottom margin */
+.last\:mb-0:last-child {
   margin-bottom: 0;
 }
 </style>
