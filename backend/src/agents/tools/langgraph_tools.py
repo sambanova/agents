@@ -397,6 +397,23 @@ def _get_daytona(user_id: str):
     ]
     images_formats = ["image/png", "image/jpg", "image/jpeg", "image/gif", "image/svg"]
 
+    def strip_markdown_code_blocks(code_str):
+        """
+        Strips markdown code block formatting from a code string.
+        Handles both ```python and ``` code blocks, as well as <|python_start|> and <|python_end|> tags.
+        """
+        # Remove opening code block markers (```python, ```py, or just ```)
+        code_str = re.sub(r"^```(?:python|py)?\s*\n?", "", code_str, flags=re.MULTILINE)
+
+        # Remove closing code block markers
+        code_str = re.sub(r"\n?```\s*$", "", code_str, flags=re.MULTILINE)
+
+        # Remove <|python_start|> and <|python_end|> tags
+        code_str = re.sub(r"<\|python_start\|>\s*\n?", "", code_str, flags=re.MULTILINE)
+        code_str = re.sub(r"\n?\s*<\|python_end\|>", "", code_str, flags=re.MULTILINE)
+
+        return code_str.strip()
+
     async def async_run_daytona_code(code_to_run: str) -> str:
         try:
 
@@ -407,7 +424,9 @@ def _get_daytona(user_id: str):
                 snapshot="cr.app.daytona.io/sbox-transient/data-analysis:0.0.7",
             )
 
-            patched_code, expected_filenames = patch_plot_code_str(code_to_run)
+            # Strip markdown formatting before processing
+            clean_code = strip_markdown_code_blocks(code_to_run)
+            patched_code, expected_filenames = patch_plot_code_str(clean_code)
             sandbox = await daytona.create(params=params)
             list_of_files = [f.name for f in await sandbox.fs.list_files(".")]
             response = await sandbox.process.code_run(patched_code)
