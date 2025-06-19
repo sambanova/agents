@@ -35,8 +35,10 @@
       <div v-show="isOpen" class="mt-2 space-y-4 p-4 border rounded-md bg-white dark:bg-gray-900">
         <!-- Your existing content starts here -->
         <TimeLineAssitance
-
+         :toolSources="props.toolSources"
+         :allSources="props.allSources"
         :auditLogEvents=props.auditLogEvents
+        :toolCalls=props.toolCalls
         />
 
         <div v-if="props.workflowData && props.workflowData.length > 0" class="w-full p-2 mx-auto">
@@ -47,22 +49,9 @@
           </div>
         </div>
 
-        <div class="flex flex-wrap gap-2">
-          <a
-            v-for="src in props.allSources"
-            :key="src.url + src.title"
-            :href="src.url"
-            target="_blank"
-            rel="noopener"
-            class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium 
-                   bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200
-                   hover:bg-blue-200 dark:hover:bg-blue-800 transition"
-          >
-            <span v-if="src.type==='link'" class="mr-1">🌐</span>
-            <span v-else-if="src.type==='arxiv'" class="mr-1">📚</span>
-            {{ src.title }}
-          </a>
-        </div>
+
+          <LinkChips :allSources="props.allSources" />
+     
           <div v-if="props.toolSources &&props.toolSources.length > 0" class="mt-4">
             <div class="flex flex-wrap gap-2">
               <template v-for="source in props.toolSources" :key="source?.url || source?.title || 'unknown'">
@@ -116,11 +105,12 @@ import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'
 import WorkflowDataItem from '@/components/ChatMain/WorkflowDataItem.vue'
 import TimeLineAssitance from '@/components/ChatMain/TimeLineAssitance.vue'
 import MetaDataH from '@/components/ChatMain/MetaDataH.vue'
-
+import LinkChips from '@/components/ChatMain/LinkChips.vue'
 const isOpen = ref(false)
 const props = defineProps({
   streamData: { type: Array, default: () => [] },
   allSources: { type: Array, default: () => [] },
+  toolCalls: { type: Array, default: () => [] },
   streamingEvents: { type: Array, default: () => [] },
   workflowData: { type: Array, default: () => [] },
    auditLogEvents:   { type: Array, default: () => [] },
@@ -319,82 +309,6 @@ const latestToolAction = computed(() => {
 
 
 
-const allSources = computed(() => {
-  const items = []
-  const seen  = new Set()
-
-  const pushIfNew = src => {
-    if (!src.url || seen.has(src.url)) return
-    seen.add(src.url)
-    items.push(src)
-  }
-
-  function extractLinks(text, type = 'link') {
-    if (!text) return
-    let m
-
-    // JSON-array
-    if (text.trim().startsWith('[')) {
-      try {
-        const arr = JSON.parse(
-          text.replace(/'url'/g, '"url"')
-        )
-        if (Array.isArray(arr)) {
-          arr.forEach(o => {
-            if (o.url) {
-              const domain = new URL(o.url).hostname.replace(/^www\./,'')
-              pushIfNew({
-                title: o.title?.trim() || domain,
-                url: o.url,
-                domain,
-                type,
-              })
-            }
-          })
-          return
-        }
-      } catch {}
-    }
-
-    // Named lines
-    const nameRe = /([^:*]+):\s*(https?:\/\/\S+)/g
-    while ((m = nameRe.exec(text))) {
-      const url = m[2].trim()
-      const domain = new URL(url).hostname.replace(/^www\./,'')
-      pushIfNew({ title: m[1].trim(), url, domain, type })
-    }
-
-    // Python style
-    const pyRe = /'url':\s*'(https?:\/\/[^']+)'/g
-    while ((m = pyRe.exec(text))) {
-      const url = m[1].trim()
-      const domain = new URL(url).hostname.replace(/^www\./,'')
-      pushIfNew({ title: domain, url, domain, type })
-    }
-
-    // Plain URLs
-    const urlRe = /(https?:\/\/[^\s"'<>]+)/g
-    while ((m = urlRe.exec(text))) {
-      const url = m[1].trim()
-      const domain = new URL(url).hostname.replace(/^www\./,'')
-      pushIfNew({ title: domain, url, domain, type })
-    }
-  }
-
-  // main message (if any)
-  extractLinks(props.data?.content, 'link')
-
-  // each streamData item
-  props.streamData.forEach(evt => {
-    const txt = evt.data?.content
-    if (typeof txt === 'string') extractLinks(txt, 'link')
-  })
-
-  // merge in toolSources
-  toolSources.value.forEach(src => pushIfNew(src))
-
-  return items
-})
 
 
 

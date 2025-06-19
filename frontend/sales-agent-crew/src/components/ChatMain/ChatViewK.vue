@@ -4231,6 +4231,21 @@ const filteredMessages = computed(() => {
     return messagesData.value || [];
   }
 });
+
+
+const toolCalls = computed(() =>
+  messagesData.value
+    .filter(msg => msg.event === 'agent_completion')
+    .map(msg => {
+      const toolMatch = msg.content.match(/<tool>([\s\S]*?)<\/tool>/)
+      const inputMatch = msg.content.match(/<tool_input>([\s\S]*?)<\/tool_input>/)
+      return {
+        id: msg.id,
+        toolName: toolMatch ? toolMatch[1] : '',
+        toolInput: inputMatch ? inputMatch[1] : ''
+      }
+    })
+)
 </script>
 
 <style scoped>

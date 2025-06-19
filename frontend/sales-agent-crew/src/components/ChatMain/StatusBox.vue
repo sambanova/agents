@@ -38,14 +38,37 @@
   <div>
     <!-- Tool header & timeline -->
     <div class="flex flex-col p-4 border rounded mb-2">
-      <span class="text-md flex inline-flex ">
+      <!-- <span class="text-md flex capitalize inline-flex ">
         <LoadingText
           v-if="loading"
           :key="loading"
           :loading="loading"
           :text="latestToolAction?.toolName || 'Thinking'"
         />: {{ latestToolAction?.explanation }}
+      </span> -->
+ <span class="text-md flex items-center  first-letter:uppercase inline-flex ">
+<IconsDisplay
+  :text="toolCalls.length > 0 
+            ? toolCalls[toolCalls.length - 1].title 
+            : 'Thinking'"
+/>
+
+
+      <LoadingText
+          v-if="loading"
+          :key="loading"
+          :loading="loading"
+          :text="(toolCalls.length > 0 
+            ? toolCalls[toolCalls.length - 1].title 
+    : 'Thinking')"
+/>
+: {{ toolCalls.length > 0 
+    ? toolCalls[toolCalls.length - 1].details 
+    : '' 
+}}
       </span>
+
+     
       <div class="flex space-x-6 mb-2">
         <div
           v-for="(tool, idx) in toolTimeline"
@@ -66,23 +89,8 @@
         <div class="markdown-content text-sm" v-html="renderMarkdown(description || '')"></div>
       </div>
     </div>
-
-    <div class="flex flex-wrap gap-2">
-      <a
-        v-for="src in props.allSources"
-        :key="src.url"
-        :href="src.url"
-        target="_blank"
-        rel="noopener"
-        class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium 
-               bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200
-               hover:bg-blue-200 dark:hover:bg-blue-800 transition"
-      >
-        <span v-if="src.type==='link'" class="mr-1">🌐</span>
-        <span v-else-if="src.type==='arxiv'" class="mr-1">📚</span>
-        {{ src.title }}
-      </a>
-    </div>
+  <LinkChips :allSources="allSources" />
+   
 
   </div>
 </template>
@@ -90,11 +98,15 @@
 <script setup>
 import { computed, ref, watch, nextTick } from 'vue'
 import LoadingText from '@/components/ChatMain/LoadingText.vue'
+import IconsDisplay from '@/components/ChatMain/IconsDisplay.vue'
+import LinkChips from '@/components/ChatMain/LinkChips.vue'
+
 import { marked } from 'marked'
 
 const props = defineProps({
   streamData:     { type: Array, default: () => [] },
   allSources:     { type: Array, default: () => [] },
+  toolCalls:     { type: Array, default: () => [] },  
   toolSources:     { type: Array, default: () => [] },
   streamingEvents:{ type: Array, default: () => [] },
   workflowData:   { type: Array, default: () => [] },
