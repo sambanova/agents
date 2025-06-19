@@ -31,6 +31,7 @@ class WebSocketConnectionManager(WebSocketInterface):
         # Use user_id:conversation_id as the key
         self.connections: Dict[str, WebSocket] = {}
         self.redis_client = redis_client
+        self.sync_redis_client = sync_redis_client
         self.message_storage = RedisStorage(redis_client)
         # Add state storage for active connections
         self.active_sessions: Dict[str, dict] = {}
@@ -579,7 +580,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                         "doc_ids": doc_ids,
                         "description": RETRIEVAL_DESCRIPTION,
                         "api_key": api_keys.sambanova_key,
-                        "redis_client": self.redis_client,
+                        "redis_client": self.sync_redis_client,
                     },
                 }
             )

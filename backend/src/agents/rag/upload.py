@@ -79,6 +79,7 @@ def create_user_vector_store(
             {"name": "user_id", "type": "tag"},
             {"name": "document_id", "type": "tag"},
         ],
+        redis_client=redis_client,
     )
     return vstore
 
@@ -137,6 +138,7 @@ class IngestRunnable(RunnableSerializable[BinaryIO, List[str]]):
     user_id: Optional[str] = None
     document_id: Optional[str] = None
     api_key: Optional[str] = None
+    redis_client: Optional[redis.Redis] = None
     """Ingested documents will be associated with user_id and document_id.
     
     ID is used as the namespace, and is filtered on at query time.
@@ -160,9 +162,11 @@ class IngestRunnable(RunnableSerializable[BinaryIO, List[str]]):
             raise ValueError("User ID is required")
         if self.document_id is None:
             raise ValueError("Document ID is required")
+        if self.redis_client is None:
+            raise ValueError("Redis client is required")
 
         if self.api_key:
-            vectorstore = create_user_vector_store(self.api_key)
+            vectorstore = create_user_vector_store(self.api_key, self.redis_client)
 
             out = await ingest_blob(
                 blob=blob,
@@ -194,5 +198,10 @@ ingest_runnable = IngestRunnable(
         id="api_key",
         annotation=Optional[str],
         name="API Key",
+    ),
+    redis_client=ConfigurableField(
+        id="redis_client",
+        annotation=Optional[redis.Redis],
+        name="Redis Client",
     ),
 )

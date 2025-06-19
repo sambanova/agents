@@ -523,6 +523,7 @@ async def upload_document(
                     "user_id": user_id,
                     "document_id": file_id,
                     "api_key": api_keys.sambanova_key,
+                    "redis_client": app.state.sync_redis_client,
                 },
             )
             logger.info("Indexed file successfully", file_id=file_id)
