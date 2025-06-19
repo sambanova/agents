@@ -187,7 +187,7 @@ class FinancialAnalysisCrew:
         user_id: str = "",
         run_id: str = "",
         docs_included: bool = False,
-        redis_client: SecureRedisService = None,
+        redis_client: Optional[SecureRedisService] = None,
         message_id: str = None,
         verbose: bool = True,
     ):

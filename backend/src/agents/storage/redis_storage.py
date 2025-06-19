@@ -4,7 +4,6 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import structlog
-from agents.api.data_types import APIKeys
 from agents.storage.redis_service import SecureRedisService
 
 logger = structlog.get_logger(__name__)
@@ -401,8 +400,10 @@ class RedisStorage:
         user_files_key = self._get_user_files_key(user_id)
         return await self.redis_client.sismember(user_files_key, file_id)
 
-    async def get_user_api_key(self, user_id: str) -> Optional[APIKeys]:
+    async def get_user_api_key(self, user_id: str) -> "APIKeys":
         """Get a user's API key."""
+        from agents.api.data_types import APIKeys
+
         user_api_key_key = self._get_api_key_key(user_id)
         api_keys = await self.redis_client.hgetall(user_api_key_key, user_id)
         return APIKeys(
@@ -412,7 +413,7 @@ class RedisStorage:
             fireworks_key=api_keys.get("fireworks_key", ""),
         )
 
-    async def set_user_api_key(self, user_id: str, keys: APIKeys) -> None:
+    async def set_user_api_key(self, user_id: str, keys: "APIKeys") -> None:
         """Set a user's API key."""
 
         # Store keys in Redis with user-specific prefix

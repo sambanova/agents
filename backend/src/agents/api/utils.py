@@ -2,38 +2,24 @@ import json
 import os
 import re
 from typing import List
-from autogen_core import SingleThreadedAgentRuntime
-from autogen_core import DefaultSubscription
-
-from agents.components.routing.financial_analysis import FinancialAnalysisAgent
-from agents.components.routing.educational_content import EducationalContentAgent
-from agents.components.routing.route import SemanticRouterAgent
-
-from agents.components.routing.sales_leads import SalesLeadsAgent
-
-
-
-
-
-from agents.api.otlp_tracing import configure_oltp_tracing
-from agents.api.websocket_interface import WebSocketInterface
-from agents.storage.redis_service import SecureRedisService
-from agents.api.session_state import SessionStateManager
-from agents.components.routing.user_proxy import UserProxyAgent
-from agents.components.routing.assistant import AssistantAgentWrapper
-from agents.api.data_types import APIKeys
-from agents.components.routing.deep_research_agent import DeepResearchAgent
 
 import structlog
+from agents.api.data_types import APIKeys
+from agents.api.session_state import SessionStateManager
+from agents.api.websocket_interface import WebSocketInterface
+from agents.components.routing.assistant import AssistantAgentWrapper
+from agents.components.routing.deep_research_agent import DeepResearchAgent
+from agents.components.routing.educational_content import EducationalContentAgent
+from agents.components.routing.financial_analysis import FinancialAnalysisAgent
+from agents.components.routing.route import SemanticRouterAgent
+from agents.components.routing.sales_leads import SalesLeadsAgent
+from agents.components.routing.user_proxy import UserProxyAgent
+from agents.storage.redis_service import SecureRedisService
+from autogen_core import DefaultSubscription, SingleThreadedAgentRuntime
 
 logger = structlog.get_logger(__name__)
 
 session_state_manager = SessionStateManager()
-
-# Make tracer optional based on environment variable
-tracer = None
-if os.getenv("ENABLE_TRACING", "false").lower() == "true":
-    tracer = configure_oltp_tracing()
 
 
 class DocumentContextLengthError(Exception):
