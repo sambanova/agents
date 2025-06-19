@@ -51,10 +51,7 @@
   :text="toolCalls.length > 0 
             ? toolCalls[toolCalls.length - 1].title 
             : 'Thinking'"
-/>
-
-
-      <LoadingText
+/>    <LoadingText
           v-if="loading"
           :key="loading"
           :loading="loading"
@@ -62,10 +59,12 @@
             ? toolCalls[toolCalls.length - 1].title 
     : 'Thinking')"
 />
-: {{ toolCalls.length > 0 
-    ? toolCalls[toolCalls.length - 1].details 
-    : '' 
-}}
+:  <span class="details ml-2">
+      {{ toolCalls.length > 0 
+          ? toolCalls[toolCalls.length - 1].details 
+          : '' 
+      }}
+    </span>
       </span>
 
      
@@ -503,5 +502,13 @@ const toolSources = computed(() => {
 
 p {
   line-height: 24px;
+}
+
+.details {
+  display: inline-block;       /* allow width constraints on inline element */
+  max-width: 200ch;            /* about 200 average characters */
+  white-space: nowrap;         /* prevent wrapping to next line */
+  overflow: hidden;            /* hide overflow */
+  text-overflow: ellipsis;     /* show “…” when clipped */
 }
 </style>

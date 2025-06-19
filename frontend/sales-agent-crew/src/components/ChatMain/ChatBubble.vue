@@ -163,9 +163,9 @@
       </a>
 
       </div>
-   <MetaDataH 
+   <!-- <MetaDataH 
     :presentMetadata="props?.data?.response_metadata?.usage"
-    />
+    /> -->
           <!-- Dropdown for full message details -->
           <div class="mt-2 hidden">
             <button

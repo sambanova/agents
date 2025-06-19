@@ -9,13 +9,16 @@
       rel="noopener noreferrer"
       class="inline-flex items-center mb-2 px-3 py-1 rounded-full text-sm font-medium
              bg-gray-100 dark:bg-gray-800
-             text-black-500 dark:text-white-300
+             text-black dark:text-white
              hover:bg-gray-200 dark:hover:bg-gray-700
              transition"
     >
       <span v-if="src.type==='link'" class="mr-1">🌐</span>
       <span v-else-if="src.type==='arxiv'" class="mr-1">📚</span>
-      {{ src.title }}
+      <!-- truncate at ~20 characters -->
+      <span class="truncate block max-w-[20ch]">
+        {{ src.title }}
+      </span>
     </a>
 
     <!-- toggle button -->
@@ -36,7 +39,6 @@
 <script setup>
 import { ref, computed } from 'vue'
 
-// receive allSources from parent
 const props = defineProps({
   allSources: {
     type: Array,

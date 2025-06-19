@@ -1,14 +1,14 @@
 <template>
-  
-<!-- {{ props.streamData }} -->
-<div class="max-w-4xl mx-auto">
+  <!-- {{ props.msgItem }}
+{{ props?.metadata }} -->
+<div class="max-w-4xl mt-2 mx-auto">
     <!-- Collapsible Header -->
     <button
       @click="isOpen = !isOpen"
-      class="w-full flex items-center justify-start p-3 0 dark:bg-gray-800 rounded-md focus:outline-none"
+      class="w-full flex items-center justify-start p-2 0 dark:bg-gray-800 rounded-md focus:outline-none"
     >
       <span class="text-md text-primary-brandTextSecondary dark:text-gray-100">
-        Analysis Conculed <span v-if="props.allSources.length">(🌐 {{ props.allSources.length }} Sources Found)</span> 
+        Analysis Concluded <span v-if="props.allSources.length">(🌐 {{ props.allSources.length }} Sources Found)</span> 
         <span v-if="props.toolSources&&props.toolSources.length">(Searched {{ props.toolSources.length }} research papers)</span> 
       </span>
       <svg
@@ -32,7 +32,7 @@
       leave-from-class="opacity-100 max-h-screen"
       leave-to-class="opacity-0 max-h-0"
     >
-      <div v-show="isOpen" class="mt-2 space-y-4 p-4 border rounded-md bg-white dark:bg-gray-900">
+      <div v-show="isOpen" class="mt-2  p-4 border rounded-md bg-white dark:bg-gray-900">
         <!-- Your existing content starts here -->
         <TimeLineAssitance
          :toolSources="props.toolSources"
@@ -121,6 +121,10 @@ const props = defineProps({
     required: true,
   },
   metadata: {
+    type: Object,
+    required: true,
+  },
+   msgItem: {
     type: Object,
     required: true,
   },

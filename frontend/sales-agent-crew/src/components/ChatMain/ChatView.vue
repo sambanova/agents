@@ -54,10 +54,7 @@
              
 
         <div name="chat" class="mt-16  max-w-4xl w-full mx-auto space-y-5">
-                  <div v-for="msgItem in messagesData.filter(
-                        (item) => item.type === 'HumanMessage'
-                      )" :key="msgItem.id">
-
+                  <div v-for="msgItem in messagesData.filter(item=>item.type===`HumanMessage`)" :key="msgItem.id">
             <div :key="`human-${msgItem.id}`"  v-if="msgItem.type === 'HumanMessage'"  class="flex px-4 items-start gap-x-2 sm:gap-x-4">
             <div class="grow text-end space-y-3">
               <!-- Card -->
@@ -73,8 +70,9 @@
           <div   class="px-4 items-start gap-x-2 sm:gap-x-4">
 
                 <StatusBox
+
                  :toolCalls="toolCalls"
-                v-if="isLoading"
+                v-if="isLoading&&currentMsgId===msgItem.message_id"
                 :key="`status-${msgItem.id}`"
                 :toolSources="toolSources"
                 :allSources="allSources"
@@ -84,7 +82,6 @@
                       workflowData.filter(
                         (item) => item.message_id === msgItem.message_id)"
                      :loading="isLoading"
-                  
                   :streamData="messagesData.filter(
                         (item) => item.msgType ===  'stream'
                       )"
@@ -94,12 +91,17 @@
                 />
                  <AnalysisBox
                  :toolCalls="toolCalls"
-                 v-if="!isLoading"
+                 v-if="(!isLoading)"
                  :key="`analysys-${msgItem.id}`"
                  :toolSources="toolSources"
                   :auditLogEvents="auditLogEvents"
                   :allSources="allSources"
-                  :metadata="msgItem?.response_metadata" 
+                  :msgItem="msgItem"
+                  :metadata="messagesData.find(item =>
+            item.message_id === msgItem.message_id &&
+            item.agent_type&& item.agent_type !== 'human' &&item.msgType !=  'toolData'&&
+            ( item.agent_type.includes('_end') || item.agent_type.includes('_interrupt'))
+          )?.response_metadata?.usage" 
                   :workflowData="
                       workflowData.filter(
                         (item) => item.message_id === msgItem.message_id)"
@@ -113,6 +115,7 @@
                 />
                   <!-- Chat Bubble -->
                   <ChatBubble
+
                     :allSources="allSources"
                   :key="`chat-${msgItem.id}`"
                     :streamingEvents=" messagesData.filter(
@@ -120,7 +123,7 @@
                       )"
                 v-if="messagesData.find(item =>
             item.message_id === msgItem.message_id &&
-            item.agent_type !== 'human' &&item.msgType !=  'toolData'&&
+            item.agent_type&& item.agent_type !== 'human' &&item.msgType !=  'toolData'&&
             ( item.agent_type.includes('_end') || item.agent_type.includes('_interrupt')
             )
           )"
