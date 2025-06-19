@@ -34,7 +34,7 @@
         <!-- Your existing content starts here -->
         <TimeLineAssitance/>
 
-
+{{ auditLogEvents }}
          <!-- Comprehensive Audit Log -->
     <div
       
