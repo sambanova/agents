@@ -5,10 +5,10 @@ from functools import lru_cache
 from typing import BinaryIO, List, Optional
 
 import numpy as np
+import redis
 import structlog
 from agents.rag.ingest import ingest_blob
 from agents.rag.parsing import MIMETYPE_BASED_PARSER
-from agents.storage.global_services import get_sync_redis_client
 from langchain.schema import Document
 from langchain_core.document_loaders.blob_loaders import Blob
 from langchain_core.retrievers import BaseRetriever
@@ -23,6 +23,7 @@ from langchain_text_splitters import TextSplitter, TokenTextSplitter
 from pydantic import BaseModel, ConfigDict
 from redisvl.index import SearchIndex
 from redisvl.query import HybridQuery
+from redisvl.query.filter import FilterExpression
 
 logger = structlog.get_logger(__name__)
 
@@ -35,7 +36,7 @@ class RedisHybridRetriever(BaseRetriever, BaseModel):
 
     search_index: SearchIndex
     embedding_model: SambaNovaCloudEmbeddings
-    filter_expr: str
+    filter_expr: FilterExpression
 
     class Config:
         arbitrary_types_allowed = True
@@ -64,7 +65,9 @@ class RedisHybridRetriever(BaseRetriever, BaseModel):
 
 
 @lru_cache(maxsize=100)
-def create_user_vector_store(api_key: str) -> RedisVectorStore:
+def create_user_vector_store(
+    api_key: str, redis_client: redis.Redis
+) -> RedisVectorStore:
     # Initialize vector store with shared Redis client
     vstore = RedisVectorStore(
         embeddings=SambaNovaCloudEmbeddings(
@@ -72,12 +75,12 @@ def create_user_vector_store(api_key: str) -> RedisVectorStore:
             sambanova_api_key=api_key,
             batch_size=32,
         ),
-        redis_client=get_sync_redis_client(),
         index_name="sambanova-rag-index",
         metadata_schema=[
             {"name": "user_id", "type": "tag"},
             {"name": "document_id", "type": "tag"},
         ],
+        redis_client=redis_client,
     )
     return vstore
 
@@ -136,6 +139,7 @@ class IngestRunnable(RunnableSerializable[BinaryIO, List[str]]):
     user_id: Optional[str] = None
     document_id: Optional[str] = None
     api_key: Optional[str] = None
+    redis_client: Optional[redis.Redis] = None
     """Ingested documents will be associated with user_id and document_id.
     
     ID is used as the namespace, and is filtered on at query time.
@@ -159,9 +163,11 @@ class IngestRunnable(RunnableSerializable[BinaryIO, List[str]]):
             raise ValueError("User ID is required")
         if self.document_id is None:
             raise ValueError("Document ID is required")
+        if self.redis_client is None:
+            raise ValueError("Redis client is required")
 
         if self.api_key:
-            vectorstore = create_user_vector_store(self.api_key)
+            vectorstore = create_user_vector_store(self.api_key, self.redis_client)
 
             out = await ingest_blob(
                 blob=blob,
@@ -193,5 +199,10 @@ ingest_runnable = IngestRunnable(
         id="api_key",
         annotation=Optional[str],
         name="API Key",
+    ),
+    redis_client=ConfigurableField(
+        id="redis_client",
+        annotation=Optional[redis.Redis],
+        name="Redis Client",
     ),
 )
