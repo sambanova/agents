@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import jwt
+import mlflow
 import structlog
 from agents.api.data_types import APIKeys
 from agents.api.middleware import LoggingMiddleware
@@ -51,6 +52,30 @@ async def lifespan(app: FastAPI):
 
     Initializes the agent runtime and registers the UserProxyAgent.
     """
+
+    if os.getenv("MLFLOW_TRACKING_ENABLED", "false") == "true":
+        # Set MLflow Tracking URI from environment variable
+        mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
+        if mlflow_tracking_uri:
+            mlflow.set_tracking_uri(mlflow_tracking_uri)
+            mlflow.set_experiment("aiskagents")
+            logger.info(f"MLflow tracking URI set to: {mlflow_tracking_uri}")
+        else:
+            logger.warning(
+                "MLFLOW_TRACKING_URI environment variable not set. MLflow will default to local ./mlruns."
+            )
+        try:
+            # At the moment, this is not working, it does not work with FastAPI: https://github.com/mlflow/mlflow/issues/14836
+            # Also the documentation mentions that MLflow CrewAI integration currently only supports synchronous task execution.
+            mlflow.crewai.autolog()
+            mlflow.langchain.autolog()
+            logger.info("MLflow CrewAI autologging enabled.")
+        except Exception as e:
+            logger.error(
+                f"Failed to initialize MLflow CrewAI autologging: {e}",
+                exc_info=True,
+            )
+
     app.state.context_length_summariser = 100_000
 
     # Create SecureRedisService with Redis client
