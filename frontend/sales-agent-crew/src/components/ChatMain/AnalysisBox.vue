@@ -1,5 +1,6 @@
 <template>
-
+  
+<!-- {{ props.streamData }} -->
 <div class="max-w-4xl mx-auto">
     <!-- Collapsible Header -->
     <button
@@ -7,7 +8,8 @@
       class="w-full flex items-center justify-start p-3 0 dark:bg-gray-800 rounded-md focus:outline-none"
     >
       <span class="text-md text-primary-brandTextSecondary dark:text-gray-100">
-        Analysis Conculed
+        Analysis Conculed <span v-if="props.allSources.length">(🌐 {{ props.allSources.length }} Sources Found)</span> 
+        <span v-if="props.toolSources&&props.toolSources.length">(Searched {{ props.toolSources.length }} research papers)</span> 
       </span>
       <svg
         :class="{'transform rotate-180': isOpen}"
@@ -32,7 +34,10 @@
     >
       <div v-show="isOpen" class="mt-2 space-y-4 p-4 border rounded-md bg-white dark:bg-gray-900">
         <!-- Your existing content starts here -->
-        <TimeLineAssitance/>
+        <TimeLineAssitance
+
+        :auditLogEvents=props.auditLogEvents
+        />
 
         <div v-if="props.workflowData && props.workflowData.length > 0" class="w-full p-2 mx-auto">
           <div class="flex my-2">
@@ -44,7 +49,7 @@
 
         <div class="flex flex-wrap gap-2">
           <a
-            v-for="src in allSources"
+            v-for="src in props.allSources"
             :key="src.url + src.title"
             :href="src.url"
             target="_blank"
@@ -58,9 +63,44 @@
             {{ src.title }}
           </a>
         </div>
+          <div v-if="props.toolSources &&props.toolSources.length > 0" class="mt-4">
+            <div class="flex flex-wrap gap-2">
+              <template v-for="source in props.toolSources" :key="source?.url || source?.title || 'unknown'">
+                <a
+                  v-if="source && source.url"
+                  :href="source.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs text-gray-700 hover:text-gray-900 transition-colors border border-gray-200 hover:border-gray-300"
+                >
+                  <span v-if="source.type === 'web'">🌐</span>
+                  <span v-else-if="source.type === 'arxiv'">📚</span>
+                  <span v-else>📄</span>
+                  <span class="truncate max-w-[180px]">{{ source.title || 'Untitled' }}</span>
+                  <span v-if="source.domain && source.domain !== source.title && source.type === 'web'" class="text-gray-500 text-xs">
+                    • {{ source.domain }}
+                  </span>
+                  <svg class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                  </svg>
+                </a>
+                <div
+                  v-else-if="source && !source.url"
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 rounded-lg text-xs text-gray-700 border border-gray-200"
+                >
+                  <span v-if="source.type === 'web'">🌐</span>
+                  <span v-else-if="source.type === 'arxiv'">📚</span>
+                  <span v-else>📄</span>
+                  <span class="truncate max-w-[180px]">{{ source.title || 'Untitled' }}</span>
+                </div>
+              </template>
+            </div>
+          </div>
         <!-- Your existing content ends here -->
 
-  
+   <MetaDataH 
+    :presentMetadata="props?.metadata"
+    />
       </div>
 
      
@@ -80,8 +120,11 @@ import MetaDataH from '@/components/ChatMain/MetaDataH.vue'
 const isOpen = ref(false)
 const props = defineProps({
   streamData: { type: Array, default: () => [] },
+  allSources: { type: Array, default: () => [] },
   streamingEvents: { type: Array, default: () => [] },
   workflowData: { type: Array, default: () => [] },
+   auditLogEvents:   { type: Array, default: () => [] },
+
   loading: { type: Boolean, default: false },
     plannerText: {
     type: String,
@@ -216,66 +259,7 @@ const toolSources = computed(() => {
   return sources.slice(0, 5)
 })
 
-// 5) audit log with safe stringify
-const auditLogEvents = computed(() => {
-  // synthetic if no streamingEvents but we have workflowData
-  if ((!props.streamingEvents || !props.streamingEvents.length) && props.workflowData.length) {
-    const unique = []
-    const seen = new Set()
-    props.workflowData.forEach((w, i) => {
-      const key = `${w.agent_name}-${w.task}-${w.tool_name}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        unique.push({
-          id: `synthetic-${i}`,
-          title: `✅ ${w.agent_name} – ${w.task}`,
-          details: w.tool_name ? `Tool: ${w.tool_name}` : 'Completed',
-          subItems: [],
-          event: 'workflow_item',
-          type: 'tool_result',
-          timestamp: new Date().toISOString()
-        })
-      }
-    })
-    return unique
-  }
 
-
-
-
-  // otherwise from streamingEvents
-  const out = []
-  const seenKeys = new Set()
-  props.streamingEvents.forEach((evt, idx) => {
-    const key = `${evt.event}-${evt.timestamp}`
-    if (!seenKeys.has(key)) {
-      seenKeys.add(key)
-
-      // SAFELY stringify or fallback
-      let raw = evt.content
-      let serialized = JSON.stringify(raw)
-      if (serialized === undefined) {
-        serialized = String(raw ?? '')
-      }
-
-      // truncate to 100 chars
-      const detail = serialized.length > 100
-        ? serialized.slice(0, 100) + '…'
-        : serialized
-
-      out.push({
-        id: `audit-${idx}`,
-        title: evt.event,
-        details: detail,
-        subItems: [],
-        event: evt.event,
-        type: 'info',
-        timestamp: evt.timestamp
-      })
-    }
-  })
-  return out
-})
 
 function formatEventTime(ts) {
   return new Date(ts).toLocaleTimeString([], {
@@ -411,6 +395,79 @@ const allSources = computed(() => {
 
   return items
 })
+
+
+
+
+// 5) audit log with safe stringify
+const auditLogEvents = computed(() => {
+  // synthetic if no streamingEvents but we have workflowData
+  if ((!props.streamData || !props.streamData.length) && props.workflowData.length) {
+
+    // alert("steaming ")
+    const unique = []
+    const seen = new Set()
+    props.workflowData.forEach((w, i) => {
+      const key = `${w.agent_name}-${w.task}-${w.tool_name}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        unique.push({
+          id: `synthetic-${i}`,
+          title: `✅ ${w.agent_name} – ${w.task}`,
+          details: w.tool_name ? `Tool: ${w.tool_name}` : 'Completed',
+          subItems: [],
+          event: 'workflow_item',
+          type: 'tool_result',
+          timestamp: new Date().toISOString()
+        })
+      }
+    })
+    return unique
+  }
+
+
+
+
+  // otherwise from streamingEvents
+  const out = []
+  const seenKeys = new Set()
+  props.streamData.forEach((evt, idx) => {
+    const key = `${evt.event}-${evt.timestamp}`
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key)
+
+      // SAFELY stringify or fallback
+      let raw = evt.content
+      let serialized = JSON.stringify(raw)
+      if (serialized === undefined) {
+        serialized = String(raw ?? '')
+      }
+
+      // truncate to 100 chars
+      const detail = serialized.length > 100
+        ? serialized.slice(0, 100) + '…'
+        : serialized
+
+      out.push({
+        id: `audit-${idx}`,
+        title: evt.event,
+        details: detail,
+        subItems: [],
+        event: evt.event,
+        type: 'info',
+        timestamp: evt.timestamp
+      })
+    }
+  })
+  return out
+})
+
+
+const showAuditLog = ref(false)
+
+function toggleAuditLog() {
+  showAuditLog.value = !showAuditLog.value
+}
 
 </script>
 
