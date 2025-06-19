@@ -323,9 +323,12 @@ async def human_feedback(
     ]
 ]:
     sections = state["sections"]
-    sec_str = "\n\n".join(
-        f"<b>Section {i+1}:</b> {s.name} - {s.description}\n"
-        for i, s in enumerate(sections)
+    sec_str = (
+        "Please <b>provide feedback</b> on the following plan or <b>type 'true' to approve it.</b>\n"
+        + "\n".join(
+            f"<b>Section {i+1}:</b> {s.name} - {s.description}"
+            for i, s in enumerate(sections)
+        )
     )
     logger.info("Interrupting for human feedback", sections=sec_str)
     fb = interrupt(sec_str)
