@@ -37,8 +37,19 @@ CHART_PATH = ./aiskagents
 BACKEND_BASE_URL = $(shell echo $(BACKEND_REPO) | cut -d/ -f1)
 FRONTEND_BASE_URL = $(shell echo $(FRONTEND_REPO) | cut -d/ -f1)
 
+# MLflow-related variables
+MLFLOW_HELM_REPO_NAME = community-charts
+MLFLOW_HELM_REPO_URL = https://community-charts.github.io/helm-charts
+MLFLOW_CHART_NAME = mlflow
+MLFLOW_RELEASE_NAME = mlflow-$(ENV)
+MLFLOW_NAMESPACE = default
+
+# OpenEBS variables
+OPENEBS_NAMESPACE = openebs
+
+
 # Phony targets
-.PHONY: build-backend build-frontend push-backend push-frontend build push deploy install upgrade uninstall clean help
+.PHONY: build-backend build-frontend push-backend push-frontend build push deploy install upgrade uninstall clean help install-postgres install-mlflow uninstall-mlflow
 
 # Build the backend Docker image
 build-backend:
@@ -100,11 +111,50 @@ uninstall:
 # Deploy to Kubernetes using Helm
 deploy: push install
 
-# Clean up
-clean:
-	@echo "Cleaning up ($(ENV) environment)..."
-	docker rmi -f $(BACKEND_DOCKER_IMAGE):$(TAG) || true
-	docker rmi -f $(FRONTEND_DOCKER_IMAGE):$(TAG) || true
+# Install mlflow
+install-mlflow: 
+	@if [ -z "$(PG_PASSWORD)" ]; then \
+		echo "PG_PASSWORD is required. Please run: make install-mlflow PG_PASSWORD=your_secure_password ADMIN_PASSWORD=your_admin_password"; \
+		exit 1; \
+	fi
+	@if [ -z "$(ADMIN_PASSWORD)" ]; then \
+		echo "ADMIN_PASSWORD is required. Please run: make install-mlflow PG_PASSWORD=your_secure_password ADMIN_PASSWORD=your_admin_password"; \
+		exit 1; \
+	fi
+	@echo "Creating mlflow artifacts PVC..."
+	@kubectl apply -f ./mlflow/templates/artifacts-pvc.yaml -n $(MLFLOW_NAMESPACE)
+	@helm repo add $(MLFLOW_HELM_REPO_NAME) $(MLFLOW_HELM_REPO_URL) || echo "Repo already exists."
+	@helm repo update
+	@echo "Installing mlflow..."
+	@helm upgrade $(MLFLOW_RELEASE_NAME) $(MLFLOW_HELM_REPO_NAME)/$(MLFLOW_CHART_NAME) \
+		--install \
+		--namespace $(MLFLOW_NAMESPACE) \
+		--set backendStore.postgres.password=$(PG_PASSWORD) \
+		--set auth.postgres.password=$(PG_PASSWORD) \
+		--set auth.adminPassword=$(ADMIN_PASSWORD) \
+		-f ./mlflow/values/$(ENV).yaml
+
+
+install-postgres: 
+	@if [ -z "$(PG_PASSWORD)" ]; then \
+		echo "PG_PASSWORD is required. Please run: make install-postgres PG_PASSWORD=your_secure_password"; \
+		exit 1; \
+	fi
+	helm repo add bitnami https://charts.bitnami.com/bitnami || true && \
+	helm repo update && \
+	kubectl create namespace postgres --dry-run=client -o yaml | kubectl apply -f - && \
+	helm upgrade --install postgres bitnami/postgresql \
+		--set auth.postgresPassword=$(PG_PASSWORD) \
+		--namespace postgres \
+		-f ./postgres/values/$(ENV).yaml
+
+install-openebs: ## Install OpenEBS storage engine
+	helm repo add openebs https://openebs.github.io/openebs || true
+	helm repo update
+	helm upgrade --install openebs openebs/openebs \
+		--create-namespace \
+		--namespace $(OPENEBS_NAMESPACE) \
+		-f ./openebs/values/$(ENV).yaml
 
 # Help message
 help:
@@ -129,6 +179,9 @@ help:
 	@echo "  upgrade         Upgrade the Helm chart"
 	@echo "  uninstall       Uninstall the Helm chart"
 	@echo "  deploy          Build, push, and deploy using Helm"
+	@echo "  install-mlflow  Install the mlflow chart"
+	@echo "  uninstall-mlflow Uninstall the mlflow chart"
+	@echo "  upgrade-mlflow  Upgrade the mlflow chart"
 	@echo "  clean           Clean up Docker images"
 	@echo "  help            Display this help message"
 	@echo ""
