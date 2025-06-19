@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from agents.components.crewai_llm import CustomLLM
 from agents.registry.model_registry import model_registry
 from agents.services.structured_output_parser import CustomConverter
+from agents.storage.global_services import get_secure_redis_client
 from agents.storage.redis_service import SecureRedisService
 from agents.tools.competitor_analysis_tool import competitor_analysis_tool
 from agents.tools.fundamental_analysis_tool import fundamental_analysis_tool
@@ -187,7 +188,7 @@ class FinancialAnalysisCrew:
         user_id: str = "",
         run_id: str = "",
         docs_included: bool = False,
-        redis_client: SecureRedisService = None,
+        redis_client: Optional[SecureRedisService] = None,
         message_id: str = None,
         verbose: bool = True,
     ):
@@ -229,7 +230,7 @@ class FinancialAnalysisCrew:
         self.run_id = run_id
         self.docs_included = docs_included
         self.verbose = verbose
-        self.redis_client = redis_client
+        self.redis_client = redis_client if redis_client else get_secure_redis_client()
         self.message_id = message_id
         self._init_agents()
         self._init_tasks()

@@ -76,8 +76,6 @@ async def lifespan(app: FastAPI):
                 exc_info=True,
             )
 
-    app.state.context_length_summariser = 100_000
-
     # Create SecureRedisService with Redis client
     app.state.redis_client = get_secure_redis_client()
     app.state.redis_storage_service = RedisStorage(redis_client=app.state.redis_client)
@@ -89,7 +87,6 @@ async def lifespan(app: FastAPI):
 
     app.state.manager = WebSocketConnectionManager(
         redis_client=app.state.redis_client,
-        context_length_summariser=app.state.context_length_summariser,
     )
     UserProxyAgent.connection_manager = app.state.manager
     SemanticRouterAgent.connection_manager = app.state.manager

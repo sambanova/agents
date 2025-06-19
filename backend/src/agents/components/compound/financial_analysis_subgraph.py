@@ -54,9 +54,9 @@ def create_financial_analysis_graph(redis_client: SecureRedisService):
                 user_id=config["metadata"]["user_id"],
                 run_id=config["metadata"]["thread_id"],
                 docs_included=False,
+                redis_client=redis_client,
                 verbose=False,
                 message_id=config["metadata"]["message_id"],
-                redis_client=redis_client,
             )
 
             inputs = {"ticker": extracted_ticker, "company_name": extracted_company}

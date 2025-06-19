@@ -6,16 +6,8 @@ from typing import Dict, Optional
 
 import redis
 import structlog
-from agents.api.data_types import (
-    AgentEnum,
-    AgentStructuredResponse,
-    APIKeys,
-    EndUserMessage,
-    ErrorResponse,
-)
-from agents.api.utils import DocumentContextLengthError, load_documents
+from agents.api.data_types import APIKeys
 from agents.api.websocket_interface import WebSocketInterface
-from agents.components.compound.agent import agent
 from agents.components.compound.assistant import get_assistant
 from agents.components.compound.financial_analysis_subgraph import (
     create_financial_analysis_graph,
@@ -23,7 +15,6 @@ from agents.components.compound.financial_analysis_subgraph import (
 from agents.components.open_deep_research.graph import create_deep_research_graph
 from agents.storage.redis_service import SecureRedisService
 from agents.storage.redis_storage import RedisStorage
-from autogen_core import DefaultTopicId
 from fastapi import WebSocket, WebSocketDisconnect
 from langchain_core.messages import AIMessage, HumanMessage
 from starlette.websockets import WebSocketState
@@ -36,14 +27,11 @@ class WebSocketConnectionManager(WebSocketInterface):
     Manages WebSocket connections for user sessions.
     """
 
-    def __init__(
-        self, redis_client: SecureRedisService, context_length_summariser: int
-    ):
+    def __init__(self, redis_client: SecureRedisService):
         # Use user_id:conversation_id as the key
         self.connections: Dict[str, WebSocket] = {}
         self.redis_client = redis_client
         self.message_storage = RedisStorage(redis_client)
-        self.context_length_summariser = context_length_summariser
         # Add state storage for active connections
         self.active_sessions: Dict[str, dict] = {}
         # Track last activity time for each session
@@ -313,35 +301,15 @@ class WebSocketConnectionManager(WebSocketInterface):
                     user_id, user_message_input
                 )
 
-                config = await _run_input_and_config(
+                config = await self.create_config(
                     user_id=user_id,
                     thread_id=conversation_id,
                     api_keys=api_keys,
-                    provider=user_message_input["provider"],
+                    provider=provider,
                     message_id=user_message_input["message_id"],
                     llm_type=model,
                     doc_ids=tuple(user_message_input["document_ids"]),
                 )
-
-                config["configurable"]["type==default/subgraphs"] = {
-                    "financial_analysis": {
-                        "graph": create_financial_analysis_graph(self.redis_client),
-                        "state_input_mapper": lambda x: [HumanMessage(content=x)],
-                        "state_output_mapper": lambda x: x[-1],
-                    },
-                    "deep_research": {
-                        "graph": create_deep_research_graph(
-                            api_keys.sambanova_key, "sambanova", request_timeout=120
-                        ),
-                        "state_input_mapper": lambda x: {"topic": x},
-                        "state_output_mapper": lambda x: AIMessage(
-                            content=x["final_report"],
-                            additional_kwargs={
-                                "agent_type": "deep_research_end",
-                            },
-                        ),
-                    },
-                }
 
                 # Stream the response directly via WebSocket
                 await agent.astream_websocket(
@@ -554,42 +522,66 @@ class WebSocketConnectionManager(WebSocketInterface):
             logger.error("Error sending WebSocket message", error=str(e))
             return False
 
+    async def create_config(
+        self,
+        user_id: str,
+        thread_id: str,
+        api_keys: APIKeys,
+        provider: str,
+        message_id: str,
+        llm_type: str,
+        doc_ids: tuple,
+    ):
+        # Add cleanup task
+        self.cleanup_task: Optional[asyncio.Task] = None
 
-from langchain_core.runnables import RunnableConfig
+        config = {
+            **get_assistant(
+                user_id=user_id,
+                llm_type=llm_type,
+                doc_ids=doc_ids,
+                api_key=api_keys.sambanova_key,
+            ).config,
+            "configurable": {
+                **get_assistant(
+                    user_id=user_id,
+                    llm_type=llm_type,
+                    doc_ids=doc_ids,
+                    api_key=api_keys.sambanova_key,
+                ).config["configurable"],
+                "thread_id": thread_id,
+                "user_id": user_id,
+                "api_key": api_keys.sambanova_key,
+                "message_id": message_id,
+            },
+        }
 
+        config["configurable"]["type==default/subgraphs"] = {
+            "financial_analysis": {
+                "graph": create_financial_analysis_graph(self.redis_client),
+                "state_input_mapper": lambda x: [HumanMessage(content=x)],
+                "state_output_mapper": lambda x: x[-1],
+            },
+            "deep_research": {
+                "graph": create_deep_research_graph(
+                    api_keys.sambanova_key, "sambanova", request_timeout=120
+                ),
+                "state_input_mapper": lambda x: {"topic": x},
+                "state_output_mapper": lambda x: AIMessage(
+                    content=x["final_report"],
+                    additional_kwargs={
+                        "agent_type": "deep_research_end",
+                    },
+                ),
+            },
+        }
 
-# TODO: move this
-async def _run_input_and_config(
-    user_id: str,
-    thread_id: str,
-    api_keys: APIKeys,
-    provider: str,
-    message_id: str,
-    llm_type: str,
-    doc_ids: tuple,
-):
+        # Create assistant
+        assistant = get_assistant(
+            user_id=user_id,
+            llm_type=llm_type,
+            doc_ids=doc_ids,
+            api_key=api_keys.sambanova_key,
+        )
 
-    assistant = get_assistant(
-        user_id=user_id,
-        llm_type=llm_type,
-        doc_ids=doc_ids,
-        api_key=api_keys.sambanova_key,
-    )
-
-    if provider == "sambanova":
-        api_key = api_keys.sambanova_key
-    else:
-        raise ValueError("Unsupported provider")
-
-    config: RunnableConfig = {
-        **assistant.config,
-        "configurable": {
-            **assistant.config["configurable"],
-            "thread_id": thread_id,
-            "user_id": user_id,
-            "api_key": api_key,
-            "message_id": message_id,
-        },
-    }
-
-    return config
+        return config
