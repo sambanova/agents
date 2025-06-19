@@ -72,10 +72,11 @@
           <div   class="px-4 items-start gap-x-2 sm:gap-x-4">
 
                 <StatusBox
-
+                :toolSources="toolSources"
                 :allSources="allSources"
-              :metadata="completionMetaData"  
-               :workflowData="
+                :auditLogEvents="auditLogEvents"
+                :metadata="completionMetaData"  
+                :workflowData="
                       workflowData.filter(
                         (item) => item.message_id === msgItem.message_id)"
                      :loading="isLoading"
@@ -88,6 +89,7 @@
                       )"
                 />
                  <AnalysisBox
+                  :auditLogEvents="auditLogEvents"
                   :allSources="allSources"
                   :metadata="completionMetaData"
                 :workflowData="
@@ -899,7 +901,7 @@ async function filterChatCombo(msgData) {
        
       }else if (message.event === 'llm_stream_chunk') {
 
-        alert(agent_type)
+        
         message.agent_type=agent_type
         message.msgType='stream'
         return message
@@ -2084,6 +2086,8 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
 
           // streamData.value.push(receivedData)
             messagesData.value.push({
+               name: receivedData.name , 
+               type: receivedData.type , 
             event: receivedData.event , 
             content: receivedData.content,
             msgType:"stream",
@@ -2727,8 +2731,12 @@ const allSources = computed(() => {
 
   // each streamData item
   messagesData.value.forEach(evt => {
+    if(evt.msgType!=="message"){
+
+    
     const txt = evt?.content
     if (typeof txt === 'string') extractLinks(txt, 'link')
+    }
   })
 
   console.log("messagesData.value ",messagesData.value);
@@ -2740,6 +2748,151 @@ const allSources = computed(() => {
   return items
 })
 
+
+const auditLogEvents = computed(() => {
+  // synthetic if no streamingEvents but we have workflowData
+  if ((!messagesData.value || !messagesData.value.length) && workflowData.value) {
+
+    // alert("steaming ")
+    const unique = []
+    const seen = new Set()
+    workflowData.value.forEach((w, i) => {
+      const key = `${w.agent_name}-${w.task}-${w.tool_name}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        unique.push({
+          id: `synthetic-${i}`,
+          title: `✅ ${w.agent_name} – ${w.task}`,
+          details: w.tool_name ? `Tool: ${w.tool_name}` : 'Completed',
+          subItems: [],
+          event: 'workflow_item',
+          type: 'tool_result',
+          timestamp: new Date().toISOString()
+        })
+      }
+    })
+    return unique
+  }
+
+  // otherwise from streamingEvents
+  const out = []
+  const seenKeys = new Set()
+  messagesData.value.forEach((evt, idx) => {
+    const key = `${evt.event}-${evt.timestamp}`
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key)
+
+      // SAFELY stringify or fallback
+      let raw = evt.content
+      let serialized = JSON.stringify(raw)
+      if (serialized === undefined) {
+        serialized = String(raw ?? '')
+      }
+
+      // truncate to 100 chars
+      const detail = serialized.length > 100
+        ? serialized.slice(0, 100) + '…'
+        : serialized
+
+      out.push({
+        id: `audit-${idx}`,
+        title: evt.event,
+        details: detail,
+        subItems: [],
+        event: evt.event,
+        type: 'info',
+        timestamp: evt.timestamp
+      })
+    }
+  })
+  return out
+})
+
+
+const toolSources = computed(() => {
+
+  console.log("messagesData tool",messagesData.value.filter(item=>item.event=="agent_completion"))
+
+  if (!messagesData.value || !Array.isArray(messagesData.value)) return []
+  
+  const sources = []
+  
+  messagesData.value.forEach(event => {
+    console.log("msg event",event.event,event.type,event.name, event)
+    if (event.event === 'agent_completion' && 
+        event.type === 'LiberalFunctionMessage' && 
+        event.name === 'search_tavily' &&
+        Array.isArray(event.content)) {
+      
+      event.content.forEach(source => {
+        let displayTitle = 'Unknown Source'
+        let domain = ''
+        
+        // Try to get title first, fallback to domain
+        if (source.title && source.title.trim()) {
+          displayTitle = source.title.trim()
+        } else if (source.url) {
+          try {
+            const url = new URL(source.url)
+            domain = url.hostname.replace('www.', '')
+            displayTitle = domain
+          } catch {
+            displayTitle = source.url
+          }
+        }
+        
+        // Extract domain for icon/display
+        if (source.url) {
+          try {
+            domain = new URL(source.url).hostname.replace('www.', '')
+          } catch {
+            domain = 'web'
+          }
+        }
+        
+        sources.push({
+          title: displayTitle || 'Untitled',
+          domain: domain || '',
+          url: source.url || '',
+          content: source.content ? source.content.substring(0, 200) + '...' : '',
+          type: 'web'
+        })
+      })
+    } else if (event.name === 'arxiv') {
+      // Parse arXiv results - remove the broken URL construction
+      const content = event.content || ''
+      const papers = content.split('Published:').slice(1)
+      
+      papers.forEach(paper => {
+        const titleMatch = paper.match(/Title: ([^\n]+)/)
+        const authorsMatch = paper.match(/Authors: ([^\n]+)/)
+        const urlMatch = paper.match(/URL: ([^\n]+)/)
+        const publishedMatch = paper.match(/Published: ([^\n]+)/)
+        
+        if (titleMatch) {
+          // Only use actual URLs from the content, don't construct fake ones
+          const arxivUrl = urlMatch ? urlMatch[1].trim() : ''
+          
+          sources.push({
+            title: titleMatch[1].trim() || 'Untitled Paper',
+            authors: authorsMatch ? authorsMatch[1].trim() : '',
+            domain: 'arxiv.org',
+            url: arxivUrl, // This might be empty if no URL is provided
+            content: paper.substring(0, 300) + '...',
+            type: 'arxiv',
+            published: publishedMatch ? publishedMatch[1].trim() : ''
+          })
+        }
+      })
+    }
+  })
+  
+
+  console.log("sources:",sources)
+  return sources.slice(0, 5) // Limit to 5 sources for UI
+
+  
+})
 
 
 </script>

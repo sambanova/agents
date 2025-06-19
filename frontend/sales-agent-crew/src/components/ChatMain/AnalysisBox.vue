@@ -7,7 +7,7 @@
       class="w-full flex items-center justify-start p-3 0 dark:bg-gray-800 rounded-md focus:outline-none"
     >
       <span class="text-md text-primary-brandTextSecondary dark:text-gray-100">
-        Analysis Conculed
+        Analysis Conculed <span v-if="props.allSources.length">( {{ props.allSources.length }} Sources)</span>
       </span>
       <svg
         :class="{'transform rotate-180': isOpen}"
@@ -32,77 +32,10 @@
     >
       <div v-show="isOpen" class="mt-2 space-y-4 p-4 border rounded-md bg-white dark:bg-gray-900">
         <!-- Your existing content starts here -->
-        <TimeLineAssitance/>
+        <TimeLineAssitance
+        :auditLogEvents=props.auditLogEvents
+        />
 
-{{ auditLogEvents }}
-         <!-- Comprehensive Audit Log -->
-    <div
-      
-      class="p-3 dark:bg-gray-700 border-b dark:border-gray-600 max-h-96 overflow-y-auto"
-    >
-      <div class="text-xs font-medium text-gray-600 dark:text-gray-300 mb-3">
-        Comprehensive Audit Log
-      </div>
-      <div class="relative space-y-3 pl-6">
-        <div
-          v-for="(event, idx) in auditLogEvents"
-          :key="event.id"
-          class="relative"
-        >
-          <!-- dot -->
-          <div
-            class="absolute left-0 top-0 w-3 h-3 bg-[#EAECF0] dark:bg-white rounded-full"
-          ></div>
-          <!-- connector line (all but last) -->
-          <div
-            v-if="idx < auditLogEvents.length - 1"
-            class="absolute left-1.5 top-5 bottom-0 border-l-2 border-gray-200 dark:border-gray-600"
-          ></div>
-
-          <div class="flex items-start space-x-2 ml-6">
-            <div class="flex-1">
-              <div class="flex justify-between">
-                <span class="text-xs font-medium text-gray-900 dark:text-gray-100">
-                  {{ event.title }}
-                </span>
-                <span class="text-xs text-gray-400 dark:text-gray-500">
-                  {{ formatEventTime(event.timestamp) }}
-                </span>
-              </div>
-              <div
-                v-if="event.details"
-                class="text-xs text-gray-600 dark:text-gray-400 mt-1"
-              >
-                {{ event.details }}
-              </div>
-              <div
-                v-if="event.subItems?.length"
-                class="mt-2 ml-4 space-y-1 text-xs text-gray-600 dark:text-gray-400"
-              >
-                <div
-                  v-for="sub in event.subItems"
-                  :key="sub.id"
-                  class="flex items-start space-x-1"
-                >
-                  <span>•</span>
-                  <span>
-                    {{ sub.title }}
-                    <span v-if="sub.domain">({{ sub.domain }})</span>
-                  </span>
-                </div>
-              </div>
-              <div class="text-xs text-gray-400 dark:text-gray-600 mt-1">
-                <span class="bg-gray-100 dark:bg-gray-600 px-1 rounded">{{ event.event }}</span>
-                <span
-                  v-if="event.type"
-                  class="bg-blue-100 dark:bg-blue-600 px-1 rounded ml-1"
-                >{{ event.type }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
         <div v-if="props.workflowData && props.workflowData.length > 0" class="w-full p-2 mx-auto">
           <div class="flex my-2">
             <div class="flex space-x-4">
@@ -152,6 +85,8 @@ const props = defineProps({
   allSources: { type: Array, default: () => [] },
   streamingEvents: { type: Array, default: () => [] },
   workflowData: { type: Array, default: () => [] },
+   auditLogEvents:   { type: Array, default: () => [] },
+
   loading: { type: Boolean, default: false },
     plannerText: {
     type: String,
@@ -431,7 +366,7 @@ const auditLogEvents = computed(() => {
   // synthetic if no streamingEvents but we have workflowData
   if ((!props.streamData || !props.streamData.length) && props.workflowData.length) {
 
-    alert("steaming ")
+    // alert("steaming ")
     const unique = []
     const seen = new Set()
     props.workflowData.forEach((w, i) => {

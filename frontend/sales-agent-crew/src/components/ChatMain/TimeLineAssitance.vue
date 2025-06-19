@@ -7,7 +7,7 @@
     <!-- Timeline Events -->
     <div class="border-l-2 border-gray-200 dark:border-gray-700">
       <div
-        v-for="(event, index) in events"
+        v-for="(event, index) in props.auditLogEvents"
         :key="index"
         class="relative pl-4 mb-6"
       >
@@ -24,13 +24,35 @@
         </div>
 
         <!-- Description -->
-        <p class="text-sm text-gray-600 dark:text-gray-300 mt-1 mb-2">
-          {{ event.description }}
-        </p>
-
+        <div class="text-sm text-gray-600 dark:text-gray-300 mt-1 mb-2">
+         {{ event.details }}
+        </div>
+ <div
+                v-if="event.subItems?.length"
+                class="mt-2 ml-4 space-y-1 text-xs text-gray-600 dark:text-gray-400"
+              >
+                <div
+                  v-for="sub in event.subItems"
+                  :key="sub.id"
+                  class="flex items-start space-x-1"
+                >
+                  <span>•</span>
+                  <span>
+                    {{ sub.title }}
+                    <span v-if="sub.domain">({{ sub.domain }})</span>
+                  </span>
+                </div>
+              </div>
+              <div class="text-xs text-gray-400 dark:text-gray-600 mt-1">
+                <span class="bg-gray-100 dark:bg-gray-600 px-1 rounded">{{ event.event }}</span>
+                <span
+                  v-if="event.type"
+                  class="bg-blue-100 dark:bg-blue-600 px-1 rounded ml-1"
+                >{{ event.type }}</span>
+              </div>
         <!-- Date at bottom -->
         <time class="block text-xs text-gray-400 dark:text-gray-500">
-          {{ event.date }}
+          {{ formatEventTime(event.timestamp) }}
         </time>
       </div>
     </div>
@@ -54,6 +76,8 @@ const props = withDefaults(
     title?: string;
     description?: string;
     events?: TimelineEvent[];
+       auditLogEvents:   { type: Array, default: () => [] },
+
   }>(),
   {
     title: 'Project Timeline',
@@ -70,7 +94,15 @@ const props = withDefaults(
   }
 )
 
-const { title, description, events } = props
+const { title, description, events,auditLogEvents } = props
+
+
+function formatEventTime(ts) {
+  return new Date(ts).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
 </script>
 
 <style scoped>

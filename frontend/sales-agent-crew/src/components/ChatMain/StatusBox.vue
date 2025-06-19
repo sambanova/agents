@@ -1,5 +1,40 @@
 <template>
-  
+  {{ props.toolSources }}
+
+
+     <div v-if="props.toolSources &&props.toolSources.length > 0" class="mt-4">
+            <div class="flex flex-wrap gap-2">
+              <template v-for="source in props.toolSources" :key="source?.url || source?.title || 'unknown'">
+                <a
+                  v-if="source && source.url"
+                  :href="source.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs text-gray-700 hover:text-gray-900 transition-colors border border-gray-200 hover:border-gray-300"
+                >
+                  <span v-if="source.type === 'web'">🌐</span>
+                  <span v-else-if="source.type === 'arxiv'">📚</span>
+                  <span v-else>📄</span>
+                  <span class="truncate max-w-[180px]">{{ source.title || 'Untitled' }}</span>
+                  <span v-if="source.domain && source.domain !== source.title && source.type === 'web'" class="text-gray-500 text-xs">
+                    • {{ source.domain }}
+                  </span>
+                  <svg class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                  </svg>
+                </a>
+                <div
+                  v-else-if="source && !source.url"
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 rounded-lg text-xs text-gray-700 border border-gray-200"
+                >
+                  <span v-if="source.type === 'web'">🌐</span>
+                  <span v-else-if="source.type === 'arxiv'">📚</span>
+                  <span v-else>📄</span>
+                  <span class="truncate max-w-[180px]">{{ source.title || 'Untitled' }}</span>
+                </div>
+              </template>
+            </div>
+          </div>
   <!-- 2) Otherwise render full timeline + audit log -->
   <div>
     <!-- Tool header & timeline -->
@@ -50,75 +85,6 @@
       </a>
     </div>
 
-    <!-- Comprehensive Audit Log -->
-    <div
-      v-if="showAuditLog && hasCompletedEvents && auditLogEvents.length"
-      class="p-3 dark:bg-gray-700 border-b dark:border-gray-600 max-h-96 overflow-y-auto"
-    >
-      <div class="text-xs font-medium text-gray-600 dark:text-gray-300 mb-3">
-        Comprehensive Audit Log
-      </div>
-      <div class="relative space-y-3 pl-6">
-        <div
-          v-for="(event, idx) in auditLogEvents"
-          :key="event.id"
-          class="relative"
-        >
-          <!-- dot -->
-          <div
-            class="absolute left-0 top-0 w-3 h-3 bg-[#EAECF0] dark:bg-white rounded-full"
-          ></div>
-          <!-- connector line (all but last) -->
-          <div
-            v-if="idx < auditLogEvents.length - 1"
-            class="absolute left-1.5 top-5 bottom-0 border-l-2 border-gray-200 dark:border-gray-600"
-          ></div>
-
-          <div class="flex items-start space-x-2 ml-6">
-            <div class="flex-1">
-              <div class="flex justify-between">
-                <span class="text-xs font-medium text-gray-900 dark:text-gray-100">
-                  {{ event.title }}
-                </span>
-                <span class="text-xs text-gray-400 dark:text-gray-500">
-                  {{ formatEventTime(event.timestamp) }}
-                </span>
-              </div>
-              <div
-                v-if="event.details"
-                class="text-xs text-gray-600 dark:text-gray-400 mt-1"
-              >
-                {{ event.details }}
-              </div>
-              <div
-                v-if="event.subItems?.length"
-                class="mt-2 ml-4 space-y-1 text-xs text-gray-600 dark:text-gray-400"
-              >
-                <div
-                  v-for="sub in event.subItems"
-                  :key="sub.id"
-                  class="flex items-start space-x-1"
-                >
-                  <span>•</span>
-                  <span>
-                    {{ sub.title }}
-                    <span v-if="sub.domain">({{ sub.domain }})</span>
-                  </span>
-                </div>
-              </div>
-              <div class="text-xs text-gray-400 dark:text-gray-600 mt-1">
-                <span class="bg-gray-100 dark:bg-gray-600 px-1 rounded">{{ event.event }}</span>
-                <span
-                  v-if="event.type"
-                  class="bg-blue-100 dark:bg-blue-600 px-1 rounded ml-1"
-                >{{ event.type }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
   </div>
 </template>
 
@@ -130,8 +96,11 @@ import { marked } from 'marked'
 const props = defineProps({
   streamData:     { type: Array, default: () => [] },
   allSources:     { type: Array, default: () => [] },
+  toolSources:     { type: Array, default: () => [] },
   streamingEvents:{ type: Array, default: () => [] },
   workflowData:   { type: Array, default: () => [] },
+ auditLogEvents:   { type: Array, default: () => [] },
+
   loading:        { type: Boolean, default: false },
   plannerText:    { type: String, required: true },
   metadata:       { type: Object, required: true },
@@ -197,54 +166,7 @@ watch(description, () => {
   })
 })
 
-// 4) TOOL SOURCES (search_tavily & arxiv)
-const toolSources = computed(() => {
-  const sources = []
-  props.streamingEvents.forEach(event => {
-    if (!event.data) return
-    const d = event.data
 
-    // A) search_tavily
-    if (
-      event.event === 'agent_completion' &&
-      d.type === 'LiberalFunctionMessage' &&
-      d.name === 'search_tavily' &&
-      Array.isArray(d.content)
-    ) {
-      d.content.forEach(src => {
-        if (!src.url) return
-        let title  = src.title?.trim() || ''
-        let domain = ''
-        if (!title && src.url) {
-          try {
-            domain = new URL(src.url).hostname.replace('www.','')
-            title = domain
-          } catch {}
-        }
-        sources.push({ title: title||'Untitled', domain, url: src.url, type: 'web' })
-      })
-    }
-    // B) arxiv
-    else if (
-      d.name === 'arxiv' &&
-      typeof d.content === 'string'
-    ) {
-      d.content.split('Published:').slice(1).forEach(chunk => {
-        const title = chunk.match(/Title:\s*([^\n]+)/)?.[1]?.trim()   ?? 'Untitled Paper'
-        const url   = chunk.match(/URL:\s*(https?:\/\/[^\s]+)/)?.[1]?.trim() ?? ''
-        const pub   = chunk.match(/Published:\s*([^\n]+)/)?.[1]?.trim() ?? 'Unknown date'
-        sources.push({
-          title,
-          url,
-          domain: 'arxiv.org',
-          content: `Published: ${pub}`,
-          type: 'arxiv',
-        })
-      })
-    }
-  })
-  return sources.slice(0,5)
-})
 
 // 5) ALL SOURCES (generic + toolSources)
 // const allSources = computed(() => {
@@ -332,7 +254,7 @@ const latestToolAction = computed(() => {
     i.agent_type === 'react_tool' &&
     typeof i.content === 'string'
   )
-  if (!calls.length) return ''
+  if (!calls.length) return { toolName: '', explanation: '', sources: [] }
 
   // 2) Take the very last one
   const lastContent = calls[calls.length - 1].content
@@ -342,18 +264,74 @@ const latestToolAction = computed(() => {
   // 4) Extract <tool_input>…</tool_input>
   const inputMatch = lastContent.match(/<\s*tool_input>([\s\S]*?)<\/\s*tool_input>/i)
 
-  if (!toolMatch) return ''   // no tool tag → bail
+  if (!toolMatch) return null
 
   // 5) Normalize the name: replace underscores with spaces
-  const rawName  = toolMatch[1].trim()              // e.g. "search_tavily"
-  const toolName = rawName.replace(/_/g, ' ')       // → "search tavily"
-
+  const rawName     = toolMatch[1].trim()                // e.g. "search_tavily"
+  const toolName    = rawName.replace(/_/g, ' ')         // → "search tavily"
   // 6) Pull out the explanation
   const explanation = inputMatch ? inputMatch[1].trim() : ''
 
-  // 7) Format as "Tool Name: Explanation"
-  return {toolName:toolName,explanation: explanation}
+  // 7) Now build the sources array by reusing your toolSources logic
+  const sources = []
+  props.streamingEvents.forEach(event => {
+    const d = event.data
+    if (!d) return
+
+    // A) search_tavily → web sources
+    if (
+      event.event === 'agent_completion' &&
+      d.type === 'LiberalFunctionMessage' &&
+      d.name === 'search_tavily' &&
+      Array.isArray(d.content)
+    ) {
+      d.content.forEach(src => {
+        if (!src.url) return
+        let title  = src.title?.trim() || ''
+        let domain = ''
+        if (!title && src.url) {
+          try {
+            domain = new URL(src.url).hostname.replace(/^www\./, '')
+            title  = domain
+          } catch {}
+        }
+        sources.push({
+          title:   title || 'Untitled',
+          url:     src.url,
+          domain,
+          content: typeof src.content === 'string'
+                   ? src.content.slice(0,200) + '…'
+                   : undefined,
+          type:    'web'
+        })
+      })
+    }
+
+    // B) arXiv
+    else if (d.name === 'arxiv' && typeof d.content === 'string') {
+      d.content.split('Published:').slice(1).forEach(chunk => {
+        const title = chunk.match(/Title:\s*([^\n]+)/)?.[1]?.trim() ?? 'Untitled Paper'
+        const url   = chunk.match(/URL:\s*(https?:\/\/\S+)/)?.[1]?.trim() ?? ''
+        const pub   = chunk.match(/Published:\s*([^\n]+)/)?.[1]?.trim() ?? 'Unknown date'
+        sources.push({
+          title,
+          url,
+          domain:  'arxiv.org',
+          content: `Published: ${pub}`,
+          type:    'arxiv'
+        })
+      })
+    }
+  })
+
+  // 8) Return a single object with everything
+  return {
+    toolName,
+    explanation,
+    sources: sources.slice(0,5)
+  }
 })
+
 
 // … your auditLogEvents, formatEventTime, latestToolAction, etc. all stay exactly as before …
 
@@ -361,9 +339,9 @@ const latestToolAction = computed(() => {
 // 5) audit log with safe stringify
 const auditLogEvents = computed(() => {
   // synthetic if no streamingEvents but we have workflowData
-  if ((!props.streamingEvents || !props.streamingEvents.length) && props.workflowData.length) {
+  if ((!props.streamData || !props.streamData.length) && props.workflowData.length) {
 
-    alert("steaming ")
+    // alert("steaming ")
     const unique = []
     const seen = new Set()
     props.workflowData.forEach((w, i) => {
@@ -422,7 +400,82 @@ const auditLogEvents = computed(() => {
 })
 
 
-
+const toolSources = computed(() => {
+  if (!props.streamingEvents || !Array.isArray(props.streamingEvents)) return []
+  
+  const sources = []
+  
+  props.streamingEvents.forEach(event => {
+    if (event.event === 'agent_completion' && 
+        event.type === 'LiberalFunctionMessage' && 
+        event.name === 'search_tavily' &&
+        Array.isArray(event.content)) {
+      
+      event.content.forEach(source => {
+        let displayTitle = 'Unknown Source'
+        let domain = ''
+        
+        // Try to get title first, fallback to domain
+        if (source.title && source.title.trim()) {
+          displayTitle = source.title.trim()
+        } else if (source.url) {
+          try {
+            const url = new URL(source.url)
+            domain = url.hostname.replace('www.', '')
+            displayTitle = domain
+          } catch {
+            displayTitle = source.url
+          }
+        }
+        
+        // Extract domain for icon/display
+        if (source.url) {
+          try {
+            domain = new URL(source.url).hostname.replace('www.', '')
+          } catch {
+            domain = 'web'
+          }
+        }
+        
+        sources.push({
+          title: displayTitle || 'Untitled',
+          domain: domain || '',
+          url: source.url || '',
+          content: source.content ? source.content.substring(0, 200) + '...' : '',
+          type: 'web'
+        })
+      })
+    } else if (event.name === 'arxiv') {
+      // Parse arXiv results - remove the broken URL construction
+      const content = event.content || ''
+      const papers = content.split('Published:').slice(1)
+      
+      papers.forEach(paper => {
+        const titleMatch = paper.match(/Title: ([^\n]+)/)
+        const authorsMatch = paper.match(/Authors: ([^\n]+)/)
+        const urlMatch = paper.match(/URL: ([^\n]+)/)
+        const publishedMatch = paper.match(/Published: ([^\n]+)/)
+        
+        if (titleMatch) {
+          // Only use actual URLs from the content, don't construct fake ones
+          const arxivUrl = urlMatch ? urlMatch[1].trim() : ''
+          
+          sources.push({
+            title: titleMatch[1].trim() || 'Untitled Paper',
+            authors: authorsMatch ? authorsMatch[1].trim() : '',
+            domain: 'arxiv.org',
+            url: arxivUrl, // This might be empty if no URL is provided
+            content: paper.substring(0, 300) + '...',
+            type: 'arxiv',
+            published: publishedMatch ? publishedMatch[1].trim() : ''
+          })
+        }
+      })
+    }
+  })
+  
+  return sources.slice(0, 5) // Limit to 5 sources for UI
+})
 
 </script>
 
