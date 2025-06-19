@@ -1,4 +1,5 @@
 <template>
+  
   <div class="relative h-full w-full bg-white dark:bg-gray-900">
     
     <div
@@ -57,7 +58,7 @@
                         (item) => item.type === 'HumanMessage'
                       )" :key="msgItem.id">
 
-            <div v-if="msgItem.type === 'HumanMessage'"  class="flex px-4 items-start gap-x-2 sm:gap-x-4">
+            <div :key="`human-${msgItem.id}`"  v-if="msgItem.type === 'HumanMessage'"  class="flex px-4 items-start gap-x-2 sm:gap-x-4">
             <div class="grow text-end space-y-3">
               <!-- Card -->
               <div class="inline-block flex justify-end">
@@ -72,10 +73,12 @@
           <div   class="px-4 items-start gap-x-2 sm:gap-x-4">
 
                 <StatusBox
+                v-if="isLoading"
+                :key="`status-${msgItem.id}`"
                 :toolSources="toolSources"
                 :allSources="allSources"
                 :auditLogEvents="auditLogEvents"
-                :metadata="completionMetaData"  
+                :metadata="msgItem?.response_metadata?.usage"  
                 :workflowData="
                       workflowData.filter(
                         (item) => item.message_id === msgItem.message_id)"
@@ -89,9 +92,12 @@
                       )"
                 />
                  <AnalysisBox
+                  v-if="!isLoading"
+                 :key="`analysys-${msgItem.id}`"
+                 :toolSources="toolSources"
                   :auditLogEvents="auditLogEvents"
                   :allSources="allSources"
-                  :metadata="completionMetaData"
+                  :metadata="msgItem?.response_metadata" 
                 :workflowData="
                       workflowData.filter(
                         (item) => item.message_id === msgItem.message_id)"
@@ -106,6 +112,7 @@
                 />
                   <!-- Chat Bubble -->
                   <ChatBubble
+                  :key="`chat-${msgItem.id}`"
                     :streamingEvents=" messagesData.filter(
                         (item) => item.msgType ===  'toolData'
                       )"
@@ -125,7 +132,7 @@
                         (item) => item.message_id === msgItem.message_id
                       )[0]?.data
                     "
-                    :key="msgItem.conversation_id"
+                    
                   
                   :data="
           messagesData.find(item =>

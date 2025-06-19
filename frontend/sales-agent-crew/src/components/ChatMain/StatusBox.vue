@@ -1,5 +1,4 @@
 <template>
-  {{ props.toolSources }}
 
 
      <div v-if="props.toolSources &&props.toolSources.length > 0" class="mt-4">

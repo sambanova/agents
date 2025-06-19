@@ -1,4 +1,5 @@
 <template>
+  
 <!-- {{ props.streamData }} -->
 <div class="max-w-4xl mx-auto">
     <!-- Collapsible Header -->
@@ -60,9 +61,44 @@
             {{ src.title }}
           </a>
         </div>
+          <div v-if="props.toolSources &&props.toolSources.length > 0" class="mt-4">
+            <div class="flex flex-wrap gap-2">
+              <template v-for="source in props.toolSources" :key="source?.url || source?.title || 'unknown'">
+                <a
+                  v-if="source && source.url"
+                  :href="source.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs text-gray-700 hover:text-gray-900 transition-colors border border-gray-200 hover:border-gray-300"
+                >
+                  <span v-if="source.type === 'web'">🌐</span>
+                  <span v-else-if="source.type === 'arxiv'">📚</span>
+                  <span v-else>📄</span>
+                  <span class="truncate max-w-[180px]">{{ source.title || 'Untitled' }}</span>
+                  <span v-if="source.domain && source.domain !== source.title && source.type === 'web'" class="text-gray-500 text-xs">
+                    • {{ source.domain }}
+                  </span>
+                  <svg class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                  </svg>
+                </a>
+                <div
+                  v-else-if="source && !source.url"
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 rounded-lg text-xs text-gray-700 border border-gray-200"
+                >
+                  <span v-if="source.type === 'web'">🌐</span>
+                  <span v-else-if="source.type === 'arxiv'">📚</span>
+                  <span v-else>📄</span>
+                  <span class="truncate max-w-[180px]">{{ source.title || 'Untitled' }}</span>
+                </div>
+              </template>
+            </div>
+          </div>
         <!-- Your existing content ends here -->
 
-  
+   <MetaDataH 
+    :presentMetadata="props?.metadata"
+    />
       </div>
 
      
