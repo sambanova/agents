@@ -72,14 +72,15 @@
           <div   class="px-4 items-start gap-x-2 sm:gap-x-4">
 
                 <StatusBox
-  :metadata="completionMetaData"
-                v-if="isLoading"
-                :workflowData="
+
+                :allSources="allSources"
+              :metadata="completionMetaData"  
+               :workflowData="
                       workflowData.filter(
                         (item) => item.message_id === msgItem.message_id)"
-                  :loading="isLoading"
+                     :loading="isLoading"
                   
-                  :streamData=" messagesData.filter(
+                  :streamData="messagesData.filter(
                         (item) => item.msgType ===  'stream'
                       )"
                       :streamingEvents=" messagesData.filter(
@@ -87,7 +88,8 @@
                       )"
                 />
                  <AnalysisBox
-  :metadata="completionMetaData"
+                  :allSources="allSources"
+                  :metadata="completionMetaData"
                 :workflowData="
                       workflowData.filter(
                         (item) => item.message_id === msgItem.message_id)"
@@ -2656,7 +2658,87 @@ const filteredMessages = computed(() => {
 
 // 1) Combine all streaming chunks
 
+const allSources = computed(() => {
 
+  // alert("calling allSources")
+  const items = []
+  const seen  = new Set()
+
+  const pushIfNew = src => {
+    if (!src.url || seen.has(src.url)) return
+    seen.add(src.url)
+    items.push(src)
+  }
+
+  function extractLinks(text, type = 'link') {
+    if (!text) return
+    let m
+
+    // JSON-array
+    if (text.trim().startsWith('[')) {
+      try {
+        const arr = JSON.parse(
+          text.replace(/'url'/g, '"url"')
+        )
+        if (Array.isArray(arr)) {
+          arr.forEach(o => {
+            if (o.url) {
+              const domain = new URL(o.url).hostname.replace(/^www\./,'')
+              pushIfNew({
+                title: o.title?.trim() || domain,
+                url: o.url,
+                domain,
+                type,
+              })
+            }
+          })
+          return
+        }
+      } catch {}
+    }
+
+    // Named lines
+    const nameRe = /([^:*]+):\s*(https?:\/\/\S+)/g
+    while ((m = nameRe.exec(text))) {
+      const url = m[2].trim()
+      const domain = new URL(url).hostname.replace(/^www\./,'')
+      pushIfNew({ title: m[1].trim(), url, domain, type })
+    }
+
+    // Python style
+    const pyRe = /'url':\s*'(https?:\/\/[^']+)'/g
+    while ((m = pyRe.exec(text))) {
+      const url = m[1].trim()
+      const domain = new URL(url).hostname.replace(/^www\./,'')
+      pushIfNew({ title: domain, url, domain, type })
+    }
+
+    // Plain URLs
+    const urlRe = /(https?:\/\/[^\s"'<>]+)/g
+    while ((m = urlRe.exec(text))) {
+      const url = m[1].trim()
+      const domain = new URL(url).hostname.replace(/^www\./,'')
+      pushIfNew({ title: domain, url, domain, type })
+    }
+  }
+
+  // main message (if any)
+  // extractLinks(props.data?.content, 'link')
+
+  // each streamData item
+  messagesData.value.forEach(evt => {
+    const txt = evt?.content
+    if (typeof txt === 'string') extractLinks(txt, 'link')
+  })
+
+  console.log("messagesData.value ",messagesData.value);
+  
+  console.log("allSources items",items)
+  // merge in toolSources
+  // toolSources.value.forEach(src => pushIfNew(src))
+
+  return items
+})
 
 
 

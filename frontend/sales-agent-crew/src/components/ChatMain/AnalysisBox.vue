@@ -1,5 +1,5 @@
 <template>
-{{ props.streamData }}
+<!-- {{ props.streamData }} -->
 <div class="max-w-4xl mx-auto">
     <!-- Collapsible Header -->
     <button
@@ -113,7 +113,7 @@
 
         <div class="flex flex-wrap gap-2">
           <a
-            v-for="src in allSources"
+            v-for="src in props.allSources"
             :key="src.url + src.title"
             :href="src.url"
             target="_blank"
@@ -149,6 +149,7 @@ import MetaDataH from '@/components/ChatMain/MetaDataH.vue'
 const isOpen = ref(false)
 const props = defineProps({
   streamData: { type: Array, default: () => [] },
+  allSources: { type: Array, default: () => [] },
   streamingEvents: { type: Array, default: () => [] },
   workflowData: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },

@@ -35,7 +35,7 @@
 
     <div class="flex flex-wrap gap-2">
       <a
-        v-for="src in allSources"
+        v-for="src in props.allSources"
         :key="src.url"
         :href="src.url"
         target="_blank"
@@ -129,6 +129,7 @@ import { marked } from 'marked'
 
 const props = defineProps({
   streamData:     { type: Array, default: () => [] },
+  allSources:     { type: Array, default: () => [] },
   streamingEvents:{ type: Array, default: () => [] },
   workflowData:   { type: Array, default: () => [] },
   loading:        { type: Boolean, default: false },
@@ -246,82 +247,82 @@ const toolSources = computed(() => {
 })
 
 // 5) ALL SOURCES (generic + toolSources)
-const allSources = computed(() => {
-  const items = []
-  const seen  = new Set()
+// const allSources = computed(() => {
+//   const items = []
+//   const seen  = new Set()
 
-  const pushIfNew = src => {
-    if (!src.url || seen.has(src.url)) return
-    seen.add(src.url)
-    items.push(src)
-  }
+//   const pushIfNew = src => {
+//     if (!src.url || seen.has(src.url)) return
+//     seen.add(src.url)
+//     items.push(src)
+//   }
 
-  function extractLinks(text, type = 'link') {
-    if (!text) return
-    let m
+//   function extractLinks(text, type = 'link') {
+//     if (!text) return
+//     let m
 
-    // JSON-array
-    if (text.trim().startsWith('[')) {
-      try {
-        const arr = JSON.parse(
-          text.replace(/'url'/g, '"url"')
-        )
-        if (Array.isArray(arr)) {
-          arr.forEach(o => {
-            if (o.url) {
-              const domain = new URL(o.url).hostname.replace(/^www\./,'')
-              pushIfNew({
-                title: o.title?.trim() || domain,
-                url: o.url,
-                domain,
-                type,
-              })
-            }
-          })
-          return
-        }
-      } catch {}
-    }
+//     // JSON-array
+//     if (text.trim().startsWith('[')) {
+//       try {
+//         const arr = JSON.parse(
+//           text.replace(/'url'/g, '"url"')
+//         )
+//         if (Array.isArray(arr)) {
+//           arr.forEach(o => {
+//             if (o.url) {
+//               const domain = new URL(o.url).hostname.replace(/^www\./,'')
+//               pushIfNew({
+//                 title: o.title?.trim() || domain,
+//                 url: o.url,
+//                 domain,
+//                 type,
+//               })
+//             }
+//           })
+//           return
+//         }
+//       } catch {}
+//     }
 
-    // Named lines
-    const nameRe = /([^:*]+):\s*(https?:\/\/\S+)/g
-    while ((m = nameRe.exec(text))) {
-      const url = m[2].trim()
-      const domain = new URL(url).hostname.replace(/^www\./,'')
-      pushIfNew({ title: m[1].trim(), url, domain, type })
-    }
+//     // Named lines
+//     const nameRe = /([^:*]+):\s*(https?:\/\/\S+)/g
+//     while ((m = nameRe.exec(text))) {
+//       const url = m[2].trim()
+//       const domain = new URL(url).hostname.replace(/^www\./,'')
+//       pushIfNew({ title: m[1].trim(), url, domain, type })
+//     }
 
-    // Python style
-    const pyRe = /'url':\s*'(https?:\/\/[^']+)'/g
-    while ((m = pyRe.exec(text))) {
-      const url = m[1].trim()
-      const domain = new URL(url).hostname.replace(/^www\./,'')
-      pushIfNew({ title: domain, url, domain, type })
-    }
+//     // Python style
+//     const pyRe = /'url':\s*'(https?:\/\/[^']+)'/g
+//     while ((m = pyRe.exec(text))) {
+//       const url = m[1].trim()
+//       const domain = new URL(url).hostname.replace(/^www\./,'')
+//       pushIfNew({ title: domain, url, domain, type })
+//     }
 
-    // Plain URLs
-    const urlRe = /(https?:\/\/[^\s"'<>]+)/g
-    while ((m = urlRe.exec(text))) {
-      const url = m[1].trim()
-      const domain = new URL(url).hostname.replace(/^www\./,'')
-      pushIfNew({ title: domain, url, domain, type })
-    }
-  }
+//     // Plain URLs
+//     const urlRe = /(https?:\/\/[^\s"'<>]+)/g
+//     while ((m = urlRe.exec(text))) {
+//       const url = m[1].trim()
+//       const domain = new URL(url).hostname.replace(/^www\./,'')
+//       pushIfNew({ title: domain, url, domain, type })
+//     }
+//   }
 
-  // main message (if any)
-  extractLinks(props.data?.content, 'link')
+//   // main message (if any)
+//   extractLinks(props.data?.content, 'link')
 
-  // each streamData item
-  props.streamData.forEach(evt => {
-    const txt = evt.data?.content
-    if (typeof txt === 'string') extractLinks(txt, 'link')
-  })
+//   // each streamData item
+//   props.streamData.forEach(evt => {
+//     const txt = evt.data?.content
+//     if (typeof txt === 'string') extractLinks(txt, 'link')
+//   })
 
-  // merge in toolSources
-  toolSources.value.forEach(src => pushIfNew(src))
+//   // merge in toolSources
+//   toolSources.value.forEach(src => pushIfNew(src))
 
-  return items
-})
+//   return items
+// })
 
 
 const latestToolAction = computed(() => {
