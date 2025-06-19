@@ -79,7 +79,18 @@ def create_financial_analysis_graph(redis_client: SecureRedisService):
                 additional_kwargs={
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "agent_type": "financial_analysis_end",
-                    "token_usage": result[1],
+                },
+                usage_metadata={
+                    "input_tokens": result[1].get("prompt_tokens", None),
+                    "output_tokens": result[1].get("completion_tokens", None),
+                    "total_tokens": result[1].get("total_tokens", None),
+                },
+                response_metadata={
+                    "usage": {
+                        "completion_tokens": result[1].get("completion_tokens", None),
+                        "prompt_tokens": result[1].get("prompt_tokens", None),
+                        "total_tokens": result[1].get("total_tokens", None),
+                    }
                 },
             )
         except Exception as e:
