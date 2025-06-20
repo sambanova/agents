@@ -1,7 +1,7 @@
 <template>
+<div class="mt-4">
 
-
-     <div v-if="props.toolSources &&props.toolSources.length > 0" class="mt-4">
+     <div v-if="props.toolSources &&props.toolSources.length > 0" >
             <div class="flex flex-wrap gap-2">
               <template v-for="source in props.toolSources" :key="source?.url || source?.title || 'unknown'">
                 <a
@@ -38,14 +38,7 @@
   <div>
     <!-- Tool header & timeline -->
     <div class="flex flex-col p-4 border rounded mb-2">
-      <!-- <span class="text-md flex capitalize inline-flex ">
-        <LoadingText
-          v-if="loading"
-          :key="loading"
-          :loading="loading"
-          :text="latestToolAction?.toolName || 'Thinking'"
-        />: {{ latestToolAction?.explanation }}
-      </span> -->
+     
  <span class="text-md flex items-center  first-letter:uppercase inline-flex ">
 <IconsDisplay
   :text="toolCalls.length > 0 
@@ -92,6 +85,7 @@
    
 
   </div>
+  </div>
 </template>
 
 <script setup>
@@ -104,6 +98,9 @@ import { marked } from 'marked'
 
 const props = defineProps({
   streamData:     { type: Array, default: () => [] },
+  currentStream:     { type: Array, default: () => [] },
+
+  
   allSources:     { type: Array, default: () => [] },
   toolCalls:     { type: Array, default: () => [] },  
   toolSources:     { type: Array, default: () => [] },
@@ -157,7 +154,7 @@ const currentToolName = computed(() =>
 )
 
 const description = computed(() =>
-  props.streamData
+  props.currentStream
     .filter(i =>
       i.content&&['stream_start','llm_stream_chunk','stream_complete'].includes(i.event) &&
       !i.content.includes('<tool>')

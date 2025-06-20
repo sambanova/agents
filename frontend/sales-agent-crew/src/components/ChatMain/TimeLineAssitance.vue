@@ -18,7 +18,7 @@
         </h3>
 
         <!-- Details -->
-        <div class="text-sm text-gray-600 dark:text-gray-300 mt-1 mb-2">
+        <div class="text-sm ml-2 text-gray-600 dark:text-gray-300 mt-1 mb-2">
           {{ event.details }}
         </div>
 
@@ -104,16 +104,42 @@ if(props.toolCalls&&props.toolCalls.length)
 }
 
    
-  if (props.allSources.length > 0) {
-    items.push({
-      title: `${props.allSources.length} Web source${props.allSources.length > 1 ? 's' : ''} searched`,
-      details: `Found ${props.allSources.length} unique website${props.allSources.length > 1 ? 's' : ''}`,
-      event: 'summary',
-      type: 'summary',
-      timestamp: now,
-      subItems: []
-    })
+if (props.allSources.length > 0) {
+  const now = Date.now();
+
+  // extract hostnames
+  const domainSubItems = props.allSources.map(source => {
+    let hostname;
+    try {
+      hostname = new URL(source.url).hostname;
+    } catch {
+      hostname = source.url;
+    }
+    return { title: hostname, url: source.url };
+  });
+
+  // build details: first two domains, then “and X more”
+  const hostnames = domainSubItems.map(item => item.title);
+  let details;
+  if (hostnames.length === 1) {
+    details = hostnames[0];
+  } else if (hostnames.length === 2) {
+    details = `${hostnames[0]} and ${hostnames[1]}`;
+  } else {
+    details = `${hostnames[0]}, ${hostnames[1]} and ${hostnames.length - 2} more`;
   }
+
+  items.push({
+    title: `Found ${props.allSources.length} Web source${props.allSources.length > 1 ? 's' : ''}`,
+    details,
+    event: 'summary',
+    type: 'summary',
+    timestamp: '',
+    subItems: domainSubItems
+  });
+}
+
+
 
   if (props.toolSources.length > 0) {
     items.push({
@@ -121,7 +147,7 @@ if(props.toolCalls&&props.toolCalls.length)
       details: `Found ${props.toolSources.length} paper${props.toolSources.length > 1 ? 's' : ''}`,
       event: 'summary',
       type: 'summary',
-      timestamp: now,
+      timestamp: '',
       subItems: []
     })
   }
