@@ -67,15 +67,20 @@
             </div>
             <UserAvatar :type="'user'" />
           </div>
-          <div   class="px-4 items-start gap-x-2 sm:gap-x-4">
-
+          <div   class="px-4 my-4 py-4  border  rounded-lg bg-gray-50 dark:bg-gray-700 items-start gap-x-2 sm:gap-x-4">
+             <div class="grow relative text-start ">
+        
+         <div class="inline-block">
+           <UserAvatar :type="provider" /> <span class="ml-1"> {{ provider === 'sambanova' ? 'SambaNova' : provider }} Agent</span>
+</div>
+</div>
                 <StatusBox
 
                  :toolCalls="toolCalls"
                 v-if="isLoading&&currentMsgId===msgItem.message_id"
                 :key="`status-${msgItem.id}`"
                 :toolSources="toolSources"
-                :allSources="allSources"
+                :allSources="sourcesMap[msgItem.message_id] || []"
                 :auditLogEvents="auditLogEvents"
                 :metadata="msgItem?.response_metadata?.usage"  
                 :workflowData="
@@ -94,10 +99,10 @@
                  <AnalysisBox
                  :toolCalls="toolCalls"
                  v-if="(!isLoading)"
-                 :key="`analysys-${msgItem.id}`"
-                 :toolSources="toolSources"
-                  :auditLogEvents="auditLogEvents"
-                  :allSources="allSources"
+                   :toolSources="toolSources"
+
+                 
+                     :allSources="sourcesMap[msgItem.message_id] || []"
                   :msgItem="msgItem"
                   :metadata="messagesData.find(item =>
             item.message_id === msgItem.message_id &&
@@ -108,18 +113,13 @@
                       workflowData.filter(
                         (item) => item.message_id === msgItem.message_id)"
                   :loading="!isLoading"
-                  :streamData=" messagesData.filter(
-                        (item) => item.msgType ===  'stream'
-                      )"
-                      :streamingEvents=" messagesData.filter(
-                        (item) => item.msgType ===  'toolData'
-                      )"
+                  
                 />
                   <!-- Chat Bubble -->
                   <ChatBubble
 
-                    :allSources="allSources"
-                  :key="`chat-${msgItem.id}`"
+               :allSources="sourcesMap[msgItem.message_id] || []"
+                  
                     :streamingEvents=" messagesData.filter(
                         (item) => item.msgType ===  'toolData'
                       )"
@@ -2307,6 +2307,8 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
         console.error('Error parsing WebSocket message:', error);
         isLoading.value = false;
       }
+
+      console.log("msg data ",messagesData.value)
     };
 
 
@@ -2751,77 +2753,120 @@ const filteredMessages = computed(() => {
 
 // replace your existing parseLinks & allSources definitions with this:
 
+
 const allSources = computed(() => {
-  const items = []
-  const seen  = new Set()
+  const items = [];
+  const seen  = new Set();
 
+  // now any src.message_id will be carried through
   const pushIfNew = (src) => {
-    if (!src.url || seen.has(src.url)) return
-    seen.add(src.url)
-    items.push(src)
-  }
+    if (!src.url || seen.has(src.url)) return;
+    seen.add(src.url);
+    items.push({ ...src });
+  };
 
-  // merge in any explicit toolSources
-  toolSources.value.forEach(src => pushIfNew(src))
+  // merge in any explicit toolSources (if they already include message_id, it'll stick)
 
-  function extractLinks(text, type = 'link') {
-    if (typeof text !== 'string') return
-    let m
+  // extractLinks now takes message_id so we can attach it
+  function extractLinks(text, type = 'link', message_id = null) {
+    if (typeof text !== 'string') return;
+    let m;
 
     // JSON-array of { url, … }
     if (text.trim().startsWith('[')) {
       try {
-        const arr = JSON.parse(text.replace(/'url'/g, '"url"'))
+        const arr = JSON.parse(text.replace(/'url'/g, '"url"'));
         if (Array.isArray(arr)) {
-          arr.forEach(o => o.url && pushIfNew({
-            title: (o.title || new URL(o.url).hostname).trim(),
-            url: o.url,
-            domain: new URL(o.url).hostname.replace(/^www\./, ''),
-            type
-          }))
-          return
+          arr.forEach(o => {
+            if (!o.url) return;
+            const hostname = new URL(o.url).hostname.replace(/^www\./, '');
+            pushIfNew({
+              title: (o.title || hostname).trim(),
+              url: o.url,
+              domain: hostname,
+              type,
+              message_id
+            });
+          });
+          return;
         }
       } catch {}
     }
 
     // Named lines: "Name: https://…"
-    const nameRe = /([^:*]+):\s*(https?:\/\/\S+)/g
+    const nameRe = /([^:*]+):\s*(https?:\/\/\S+)/g;
     while ((m = nameRe.exec(text))) {
-      const url = m[2].trim()
-      pushIfNew({ title: m[1].trim(), url, domain: new URL(url).hostname.replace(/^www\./,''), type })
+      const url = m[2].trim();
+      const hostname = new URL(url).hostname.replace(/^www\./,'');
+      pushIfNew({
+        title: m[1].trim(),
+        url,
+        domain: hostname,
+        type,
+        message_id
+      });
     }
 
     // Python style
-    const pyRe = /'url':\s*'(https?:\/\/[^']+)'/g
+    const pyRe = /'url':\s*'(https?:\/\/[^']+)'/g;
     while ((m = pyRe.exec(text))) {
-      const url = m[1].trim()
-      pushIfNew({ title: new URL(url).hostname.replace(/^www\./,''), url, domain: new URL(url).hostname.replace(/^www\./,''), type })
+      const url = m[1].trim();
+      const hostname = new URL(url).hostname.replace(/^www\./,'');
+      pushIfNew({
+        title: hostname,
+        url,
+        domain: hostname,
+        type,
+        message_id
+      });
     }
 
     // Any bare URL
-    const urlRe = /(https?:\/\/[^\s"'<>]+)/g
+    const urlRe = /(https?:\/\/[^\s"'<>]+)/g;
     while ((m = urlRe.exec(text))) {
-      const url = m[1].trim()
-      pushIfNew({ title: new URL(url).hostname.replace(/^www\./,''), url, domain: new URL(url).hostname.replace(/^www\./,''), type })
+      const url = m[1].trim();
+      const hostname = new URL(url).hostname.replace(/^www\./,'');
+      pushIfNew({
+        title: hostname,
+        url,
+        domain: hostname,
+        type,
+        message_id
+      });
     }
   }
 
-  // scan every message for URLs, in either evt.content or evt.data.content
-  messagesData.value.filter(item=>item.message_id).forEach(evt => {
-    let text = null
-    if (typeof evt.content === 'string') {
-      text = evt.content
-    } else if (evt.data && typeof evt.data.content === 'string') {
-      text = evt.data.content
-    }
-    if (text) extractLinks(text, 'link')
+  // Scan every message, passing its message_id into extractLinks
+  messagesData.value
+    .filter(evt => evt.message_id)
+    .forEach(evt => {
+      let text = null;
+      if (typeof evt.content === 'string') {
+        text = evt.content;
+      } else if (evt.data && typeof evt.data.content === 'string') {
+        text = evt.data.content;
+      }
+      if (text) extractLinks(text, 'link', evt.message_id);
+    });
+
+  return items;
+});
+
+
+
+// helper that *is* a function
+function sourcesFor(message_id) {
+  return allSources.value.filter(src => src.message_id === message_id)
+}
+const sourcesMap = computed(() => {
+  const m = {}
+  allSources.value.forEach(src => {
+    if (!m[src.message_id]) m[src.message_id] = []
+    m[src.message_id].push(src)
   })
-
-  return items
+  console.log('⟳ sourcesMap computed:', m)
+  return m
 })
-
-
-
 
 const auditLogEvents = computed(() => {
   // synthetic if no streamingEvents but we have workflowData
@@ -2989,20 +3034,25 @@ const toolCalls = computed(() =>
       const toolInput = inputMatch[1].trim()
 
       let title = ''
+       let titleSearch = ''
       let details = ''
 
       if (toolName === 'search_tavily') {
         title   = `Search Tavily`
-        details = `Query: "${toolInput}"`
+        titleSearch   = `Searching Web`
+        details = `"${toolInput}"`
       } else if (toolName === 'arxiv') {
         title   = `Search arXiv`
-        details = `Query: "${toolInput}"`
+        titleSearch   = `Searching arXiv`
+        details = `"${toolInput}"`
       } else if (toolName === 'DaytonaCodeSandbox') {
         title   = `Execute Code`
+        titleSearch   = `Running analysis in sandbox`
         details = 'Running analysis in sandbox'
       } else {
         title   = `${toolName}`
-        details = `Query: "${toolInput}"`
+         titleSearch   = `Calling: "${toolInput}"`
+        details = `"${toolInput}"`
       }
 
       return {
@@ -3010,6 +3060,7 @@ const toolCalls = computed(() =>
         toolName:   toolName,
         toolInput:  toolInput,
         title:      title,
+        titleSearch:titleSearch,
         details:    details
       }
     })

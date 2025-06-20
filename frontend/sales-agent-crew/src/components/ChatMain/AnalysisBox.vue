@@ -1,14 +1,15 @@
 <template>
+    
   <!-- {{ props.msgItem }}
 {{ props?.metadata }} -->
 <div class="max-w-4xl mt-2 mx-auto">
     <!-- Collapsible Header -->
     <button
       @click="isOpen = !isOpen"
-      class="w-full flex items-center justify-start p-2 0 dark:bg-gray-800 rounded-md focus:outline-none"
+      class="w-full flex items-center justify-start p-2 0  rounded-md focus:outline-none"
     >
       <span class="text-md text-primary-brandTextSecondary dark:text-gray-100">
-        Analysis Concluded <span v-if="props.allSources.length">(🌐 {{ props.allSources.length }} Sources Found)</span> 
+        Analysis Concluded <span v-if="props.allSources.length">(Found {{ props.allSources.length }} 🌐 Sources )</span> 
         <span v-if="props.toolSources&&props.toolSources.length">(Searched {{ props.toolSources.length }} research papers)</span> 
       </span>
       <svg
@@ -111,6 +112,8 @@ const props = defineProps({
   streamData: { type: Array, default: () => [] },
   allSources: { type: Array, default: () => [] },
   toolCalls: { type: Array, default: () => [] },
+    toolSources: { type: Array, default: () => [] },
+
   streamingEvents: { type: Array, default: () => [] },
   workflowData: { type: Array, default: () => [] },
    auditLogEvents:   { type: Array, default: () => [] },
@@ -227,31 +230,31 @@ watch(description, () => {
 })
 
 // 4) tool sources
-const toolSources = computed(() => {
-  const sources = []
-  props.streamingEvents.forEach(event => {
-    if (event.name === 'search_tavily' && Array.isArray(event.content)) {
-      event.content.forEach(src => {
-        let title = src.title?.trim() || ''
-        let domain = ''
-        if (!title && src.url) {
-          try {
-            domain = new URL(src.url).hostname.replace('www.', '')
-            title = domain
-          } catch {}
-        }
-        sources.push({
-          title: title || 'Untitled',
-          domain,
-          url: src.url || '',
-          type: 'web'
-        })
-      })
-    }
-    // extend for arxiv if needed…
-  })
-  return sources.slice(0, 5)
-})
+// const toolSources = computed(() => {
+//   const sources = []
+//   props.streamingEvents.forEach(event => {
+//     if (event.name === 'search_tavily' && Array.isArray(event.content)) {
+//       event.content.forEach(src => {
+//         let title = src.title?.trim() || ''
+//         let domain = ''
+//         if (!title && src.url) {
+//           try {
+//             domain = new URL(src.url).hostname.replace('www.', '')
+//             title = domain
+//           } catch {}
+//         }
+//         sources.push({
+//           title: title || 'Untitled',
+//           domain,
+//           url: src.url || '',
+//           type: 'web'
+//         })
+//       })
+//     }
+//     // extend for arxiv if needed…
+//   })
+//   return sources.slice(0, 5)
+// })
 
 
 
