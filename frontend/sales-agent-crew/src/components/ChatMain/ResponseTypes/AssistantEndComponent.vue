@@ -141,6 +141,7 @@ export default {
 
 p{
   line-height: 24px;
+  margin-top: 0px!important;
 }
 
 </style>

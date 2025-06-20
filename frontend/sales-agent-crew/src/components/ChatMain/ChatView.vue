@@ -88,6 +88,8 @@
                       :streamingEvents=" messagesData.filter(
                         (item) => item.msgType ===  'toolData'
                       )"
+
+                      :currentStream="streamData"
                 />
                  <AnalysisBox
                  :toolCalls="toolCalls"
@@ -608,7 +610,7 @@ const assistantThinking = ref(false);
 const isLoading = ref(false);
 const initialLoading = ref(false);
 const messagesContainer = ref(null);
-// const streamData = ref([]);
+const streamData = ref([]);
 
 // Conversation change watcher:
 watch(
@@ -1911,6 +1913,7 @@ const addMessage = async () => {
   errorMessage.value = '';
 
   workflowData.value = [];
+  streamData.value = [];
 
   // If no conversation exists, create a new chat first.
   if (!route.params.id) {
@@ -2011,7 +2014,7 @@ const addMessage = async () => {
       
     
       messagesData.value.push(messagePayload);
-
+      searchQuery.value = '';
       // await nextTick()
       // addLoadingMessageEvent()
       console.log('Message sent after connecting:', messagePayload);
@@ -2168,7 +2171,7 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
           
           // receivedData.content=receivedData.content
 
-          // streamData.value.push(receivedData)
+          streamData.value.push(receivedData)
             messagesData.value.push({
                name: receivedData.name , 
                type: receivedData.type , 

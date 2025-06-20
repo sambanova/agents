@@ -14,11 +14,11 @@
     /> -->
     <div class="w-full flex flex-col bg-gray-50 dark:bg-gray-700 ">
        <!-- download pdf -->
-      <div class="grow relative text-start space-y-3">
+      <div class="grow relative text-start ">
         
          <div class="inline-block">
           <div
-            class="relative p-4 flex items-center justify-center capitalize  font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center capitalize text-gray-800 dark:text-gray-100"
+            class="relative pl-4 pt-4 flex items-center justify-center capitalize  font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center capitalize text-gray-800 dark:text-gray-100"
           >
            <UserAvatar :type="provider" /> <span class="ml-1"> {{ provider === 'sambanova' ? 'SambaNova' : provider }} Agent</span>
         
@@ -81,15 +81,13 @@
       <!-- download pdf end --> 
     
    
-       
-      
-       
-      <div>
+  
+    
        
      
 
   
-      <div class="grow ml-4 p-4  rounded-lg">
+      <div class="grow ml-4  rounded-lg">
 
 
         <div class="flex hidden items-center justify-between mb-2">
@@ -104,22 +102,14 @@
         </div>
 
         <!-- Main message content -->
-        <div class=" p-3  ">
+       
           <!-- Message content -->
-          <div class="text-sm prose text-gray-800 dark:text-gray-100  mb-2">
-            <!-- {{  formattedText(props?.data.content) }} -->
-                <!-- <div class="markdown-content" v-html="formattedText(parsedData.content||'')"></div> -->
-<!-- {{ parsedData.content }} -->
-          </div>
-        <div class="prose prose-sm  prose prose-sm dark:prose-invert mb-2 text-gray-800 dark:text-gray-100 mb-2">
-              <!-- Render Markdown → HTML here -->
-              <!-- <div v-html="renderMarkdown((props?.data.content) || '')"></div> -->
-              <!-- {{ props?.data.content }} -->
-            </div>
-                    <div class="prose prose-sm  prose prose-sm dark:prose-invert mb-2 text-gray-800 dark:text-gray-100 mb-2">
+          
+       
+                    <div class="prose  dark:prose-invert mb-2 text-gray-800 dark:text-gray-100 mb-2">
 
              <component :id="'chat-' + messageId" :is="selectedComponent" :agent_type="props.agent_type" :parsed="props?.data"  />
-             </div>
+       
           <!-- Message metadata -->
           <!-- <div class="text-xs text-gray-500 dark:text-gray-400 hidden">
             <div v-if="props?.data.type">Type: {{ props?.data.type }}</div>
@@ -196,7 +186,7 @@
         </div>
       </div>
       </div>
-    </div>
+    
     
      
 
