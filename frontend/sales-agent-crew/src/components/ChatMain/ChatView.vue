@@ -201,7 +201,9 @@
               </button>
 
               <!-- Collapsible content -->
-              <div v-if="isExpanded">
+              <div 
+              v-if="isExpanded"
+              >
                 <HorizontalScroll>
                   <div class="flex space-x-4">
                     <div
@@ -266,6 +268,7 @@
                     <!-- Attach Button -->
                     <button
                       @click="$refs.fileInput.click()"
+                      
                       :disabled="isLoading || isUploading"
                       type="button"
                       class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:z-1 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
@@ -1738,11 +1741,13 @@ function cleanTranscription(transcribedText) {
   }
   return cleanedText;
 }
-
-async function handleFileUpload(event) {
+async function handleFileUploadOld(event) {
   isUploading.value = true;
   const file = event.target.files[0];
-  if (!file) return;
+  if (!file) {
+    isUploading.value = false;
+    return;
+  }
   try {
     uploadStatus.value = { type: 'info', message: 'Uploading document...' };
     const formData = new FormData();
@@ -1756,14 +1761,75 @@ async function handleFileUpload(event) {
         },
       }
     );
-    // Store the uploaded document and update selection.
-    const document = response.data.document;
-    uploadedDocuments.value.push(document);
-    selectedDocuments.value.push(document.id);
+    console.log('upload response:', response.data);
+    const uploadedDoc = response.data.document;
+    if (!uploadedDoc) {
+      throw new Error('No `document` in response');
+    }
+    // now safe to push
+    uploadedDocuments.value.push(uploadedDoc);
+    selectedDocuments.value.push(uploadedDoc.id);
+    uploadStatus.value = { type: 'success', message: 'Document uploaded successfully!' };
+    // clear the file input so you can re-upload the same file if you want
+    if (fileInput.value) fileInput.value.value = '';
+  } catch (error) {
+    console.error('[SearchSection] Upload error:', error);
+    uploadStatus.value = {
+      type: 'error',
+      message: error.message || 'Failed to upload document',
+    };
+  } finally {
+    isUploading.value = false;
+  }
+}
+
+
+async function handleFileUpload(event) {
+  isUploading.value = true;
+  const file = event.target.files[0];
+  if (!file) {
+    isUploading.value = false;
+    return;
+  }
+
+  try {
+    uploadStatus.value = { type: 'info', message: 'Uploading document...' };
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await axios.post(
+      `${import.meta.env.VITE_API_URL}/upload`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+        },
+      }
+    );
+
+    console.log('upload response:', response.data);
+    const uploadedFile = response.data.file;
+    if (!uploadedFile) {
+      throw new Error('No `file` in response');
+    }
+
+    // Transform into the shape your template expects:
+    const doc = {
+      id:               uploadedFile.file_id,
+      filename:         uploadedFile.filename,
+      upload_timestamp: Math.floor(uploadedFile.created_at),
+      num_chunks:       uploadedFile.num_chunks ?? 1,
+    };
+
+    uploadedDocuments.value.push(doc);
+    selectedDocuments.value.push(doc.id);
+
     uploadStatus.value = {
       type: 'success',
       message: 'Document uploaded successfully!',
     };
+
+    // Clear the input so the same file can be re-selected later
     if (fileInput.value) {
       fileInput.value.value = '';
     }
@@ -1771,12 +1837,13 @@ async function handleFileUpload(event) {
     console.error('[SearchSection] Upload error:', error);
     uploadStatus.value = {
       type: 'error',
-      message: error.response?.data?.error || 'Failed to upload document',
+      message: error.message || 'Failed to upload document',
     };
   } finally {
     isUploading.value = false;
   }
 }
+
 
 async function loadUserDocuments() {
   try {
@@ -2737,7 +2804,7 @@ const allSources = computed(() => {
   }
 
   // scan every message for URLs, in either evt.content or evt.data.content
-  messagesData.value.forEach(evt => {
+  messagesData.value.filter(item=>item.message_id).forEach(evt => {
     let text = null
     if (typeof evt.content === 'string') {
       text = evt.content
