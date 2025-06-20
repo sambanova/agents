@@ -1,26 +1,13 @@
 <template>
-
-  <!-- {{ props }} -->
-  <!-- {{ (props.isLoading) }} -->
-  <!-- {{props.agent_type}}
-  {{props}} -->
-   <!-- {{props?.data.content}} -->
-  <!-- Handle streaming and agent_completion events -->
-    <!-- {{ props.streamData }} -->
-  <!-- {{ props }} -->
-   
-    <!-- <AnalysisTimeline
-    :workflowData="props.data.usage_metadata"
-    /> -->
-    <div class="w-full flex flex-col bg-gray-50 dark:bg-gray-700 ">
+  
+    <div class="w-full flex flex-col  ">
        <!-- download pdf -->
-      <div class="grow relative text-start ">
+      <div class="grow hidden relative text-start ">
         
          <div class="inline-block">
           <div
             class="relative pl-4 pt-4 flex items-center justify-center capitalize  font-inter font-semibold text-[16px] leading-[18px] tracking-[0px] text-center capitalize text-gray-800 dark:text-gray-100"
           >
-           <UserAvatar :type="provider" /> <span class="ml-1"> {{ provider === 'sambanova' ? 'SambaNova' : provider }} Agent</span>
         
             <button
               v-if="
@@ -79,15 +66,10 @@
         </div>
       </div> 
       <!-- download pdf end --> 
-    
-   
   
-    
-       
-     
 
   
-      <div class="grow ml-4  rounded-lg">
+      <div class="grow ">
 
 
         <div class="flex hidden items-center justify-between mb-2">
@@ -119,40 +101,11 @@
           </div> -->
 
 
-<div class="flex flex-wrap gap-2">
-  <a
-    v-for="src in props.allSources"
-    :key="src.url"
-    :href="src.url"
-    target="_blank"
-    rel="noopener"
-    class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium 
-           bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200
-           hover:bg-blue-200 dark:hover:bg-blue-800 transition"
-  >
-    <span v-if="src.type==='link'" class="mr-1">🌐</span>
-    <span v-else-if="src.type==='arxiv'" class="mr-1">📚</span>
-    {{ src.title }}
-  </a>
-</div>
 
 
-           <div class="flex hidden flex-wrap gap-2">
-      
-<a
-        v-for="(link, idx) in parsedLinks"
-        :key="idx"
-        :href="link.url"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="inline-flex items-center px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-800 transition"
-      >
-        <!-- globe icon if we generated the name from domain -->
-        <span v-if="!link.hasOriginalName" class="mr-1">🌐</span>
-        {{ link.name }}
-      </a>
 
-      </div>
+
+
    <!-- <MetaDataH 
     :presentMetadata="props?.data?.response_metadata?.usage"
     /> -->
@@ -228,22 +181,11 @@
           :artifact="selectedArtifact"
           @close="closeArtifactCanvas"
         />
-  
 
-           <!-- Streaming response -->
-        <div class="p-4 bg-white dark:bg-gray-800">
-          <div v-if="streamingResponseContent" class="prose prose-sm dark:prose-invert" v-html="renderMarkdown(streamingResponseContent)"/>
-          <div
-            v-else-if="isCurrentlyStreaming"
-            class="flex items-center space-x-2 text-gray-500 dark:text-gray-400 italic"
-          >
-            <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-            <span>Generating response...</span>
-          </div>
-        </div>
 
     
-  
+              <LinkChips :allSources="props.allSources" />
+
  
 </template>
 
@@ -274,6 +216,7 @@ import { marked } from 'marked'
 import StatusAnimationBox from './StatusAnimationBox.vue'
 import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue'
 import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue'
+import LinkChips from '@/components/ChatMain/LinkChips.vue'
 
 const selectedArtifact = ref(null)
 const showArtifactCanvas = ref(false)
@@ -503,6 +446,12 @@ const props = defineProps({
   type: [String, Object], 
      required: true,
   },
+ allSources: {
+    type: Array,
+    required: false,
+    default: () => []
+  },
+  
   event: {
     type: String,
     required: true,

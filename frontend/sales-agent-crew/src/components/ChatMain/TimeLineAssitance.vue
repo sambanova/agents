@@ -152,16 +152,16 @@ if (props.allSources.length > 0) {
     })
   }
 
-  items.push(...props.auditLogEvents)
+//   items.push(...props.auditLogEvents)
 
-  items.push({
-    title: 'Done',
-    details: 'Analysis concluded',
-    event: 'done',
-    type: 'summary',
-    timestamp: '',
-    subItems: []
-  })
+//   items.push({
+//     title: 'Done',
+//     details: 'Analysis concluded',
+//     event: 'done',
+//     type: 'summary',
+//     timestamp: '',
+//     subItems: []
+//   })
 
   return items
 })

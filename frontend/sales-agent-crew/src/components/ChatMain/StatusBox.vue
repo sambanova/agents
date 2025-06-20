@@ -1,7 +1,8 @@
 <template>
-<div class="mt-4">
 
-     <div v-if="props.toolSources &&props.toolSources.length > 0" >
+<div class="mt-4 bg-white ">
+
+     <div v-if="props.toolSources &&props.toolSources.length > 0" class="mb-2" >
             <div class="flex flex-wrap gap-2">
               <template v-for="source in props.toolSources" :key="source?.url || source?.title || 'unknown'">
                 <a
@@ -49,7 +50,7 @@
           :key="loading"
           :loading="loading"
           :text="(toolCalls.length > 0 
-            ? toolCalls[toolCalls.length - 1].title 
+            ? toolCalls[toolCalls.length - 1].titleSearch 
     : 'Thinking')"
 />
 :  <span class="details ml-2">
@@ -81,7 +82,7 @@
         <div class="markdown-content text-sm" v-html="renderMarkdown(description || '')"></div>
       </div>
     </div>
-  <LinkChips :allSources="allSources" />
+  <LinkChips :allSources="props.allSources" />
    
 
   </div>
