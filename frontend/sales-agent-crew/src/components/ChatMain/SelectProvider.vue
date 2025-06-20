@@ -5,12 +5,12 @@
       @click="toggleDropdown"
       :disabled="!showOtherProviders"
       type="button"
-      class="inline-flex justify-between items-center w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none"
+      class="inline-flex justify-between items-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none"
     >
       {{ localSelected.label }}
       <!-- Chevron Icon -->
       <svg
-        class="-mr-1 ml-2 h-5 w-5 text-gray-500 dark:text-gray-400"
+        class="-mr-1 ml-2 h-5 w-5 text-gray-500"
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 20 20"
         fill="currentColor"
@@ -22,12 +22,11 @@
         />
       </svg>
     </button>
-
     <!-- Dropdown Menu -->
     <transition name="dropdown">
       <div
         v-if="open && showOtherProviders"
-        class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 dark:ring-gray-700 dark:ring-opacity-50"
+        class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5"
         role="menu"
         aria-orientation="vertical"
       >
@@ -36,7 +35,7 @@
             <a
               href="#"
               @click.prevent="selectOption(option)"
-              class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-orange-600 dark:hover:bg-orange-500 hover:text-white transition-colors focus:outline-none active:outline-none"
+              class="block px-4 py-2 text-sm text-gray-700 hover:bg-orange-600 hover:text-white transition-colors focus:outline-none active:outline-none"
               role="menuitem"
             >
               {{ option.label }}
@@ -47,7 +46,6 @@
     </transition>
   </div>
 </template>
-
 
 <script setup>
 import { ref, watch } from 'vue'

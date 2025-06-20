@@ -1,28 +1,19 @@
 <template>
-  
-  <div class="relative h-full w-full bg-white dark:bg-gray-900">
-    
+  <div class="relative h-full w-full">
+    <!-- Content -->
     <div
       ref="container"
-      class="relative h-full flex  overflow-x-hidden overflow-y-auto"
-       :class="
-          (messagesData.length == 0 )? 'justify-center align-center flex-col' : 'flex-col'
-        ">
-      <div
-        class=" w-full flex mx-auto"
-        :class="
-          messagesData.length == 0? 'justify-center align-center flex-col' : 'flex-1'
-        "
-      >
-       <!-- Sticky Top Component -->
+      class="relative h-full flex flex-col overflow-x-hidden overflow-y-auto"
+    >
+      <!-- Sticky Top Component -->
       <div
         v-if="chatName"
-        class="sticky hidden h-[62px] top-0 z-10 bg-white dark:bg-gray-800 p-4 shadow"
+        class="sticky h-[62px] top-0 z-10 bg-white p-4 shadow"
       >
         <div class="flex items-center justify-between">
           <!-- Left text -->
           <div
-            class="text-[16px] font-medium text-gray-800 dark:text-gray-100 line-clamp-1 overflow-hidden"
+            class="text-[16px] font-medium text-gray-800 line-clamp-1 overflow-hidden"
           >
             {{ chatName }}
           </div>
@@ -35,141 +26,78 @@
             </button>
             <button
               @click="genPDF"
-              class="text-sm h-[30px] py-1 px-2.5 bg-[#EAECF0] dark:bg-gray-700 text-[#344054] dark:text-gray-200 rounded"
+              class="text-sm h-[30px] py-1 px-2.5 bg-[#EAECF0] text-[#344054] rounded"
             >
               Download PDF
             </button>
           </div>
         </div>
       </div>
+      <div
+        class="flex-1 w-full flex mx-auto"
+        :class="
+          messagesData.length == 0 ? 'justify-center align-center flex-col' : ''
+        "
+      >
         <!-- Title -->
         <div v-if="messagesData.length == 0" class="w-full text-center">
           <h1 v-if="!initialLoading" class="text-3xl font-bold sm:text-3xl">
-            <span class="bg-clip-text text-primary-brandTextSecondary dark:text-primary-brandTextSecondary-dark">
+            <span class="bg-clip-text text-primary-brandTextSecondary">
               What can I help you with?
             </span>
           </h1>
         </div>
         <!-- End Title -->
-             
-
-        <div name="chat" class="mt-16  max-w-4xl w-full mx-auto space-y-5">
-                  <div v-for="msgItem in messagesData.filter(item=>item.type===`HumanMessage`)" :key="msgItem.id">
-            <div :key="`human-${msgItem.id}`"  v-if="msgItem.type === 'HumanMessage'"  class="flex px-4 items-start gap-x-2 sm:gap-x-4">
-            <div class="grow text-end space-y-3">
-              <!-- Card -->
-              <div class="inline-block flex justify-end">
-                <p class="text-[16px] text-left color-primary-brandGray dark:text-gray-100 max-w-[80%] w-auto">
-                  {{ msgItem.content }}
-                </p>
-              </div>
-              <!-- End Card -->
-            </div>
-            <UserAvatar :type="'user'" />
-          </div>
-          <div   class="px-4 my-4 py-4  border  rounded-lg bg-gray-50 dark:bg-gray-700 items-start gap-x-2 sm:gap-x-4">
-             <div class="grow relative text-start ">
         
-         <div class="inline-block">
-           <UserAvatar :type="provider" /> <span class="ml-1"> {{ provider === 'sambanova' ? 'SambaNova' : provider }} Agent</span>
-</div>
-</div>
-                <StatusBox
+        <transition-group
+          name="chat"
+          tag="ul"
+          class="mt-16 max-w-4xl w-full mx-auto space-y-5"
+        >
+          <!-- Chat Bubble -->
+          <ChatBubble
+            v-for="msgItem in filteredMessages"
+            :metadata="completionMetaData || {}"
+            :workflowData="
+              workflowData.filter(
+                (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
+              )
+            "
+            :plannerText="
+              plannerTextData.filter(
+                (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
+              )[0]?.data || ''
+            "
+            :key="msgItem.conversation_id || msgItem.message_id || msgItem.timestamp || Math.random()"
+            :event="msgItem.event || 'unknown'"
+            :data="formatMessageData(msgItem)"
+            :messageId="msgItem.message_id || msgItem.messageId || ''"
+            :provider="provider"
+            :currentMsgId="currentMsgId || ''"
+            :streamingEvents="msgItem.type === 'streaming_group' ? msgItem.events : null"
+          />
+          <ChatLoaderBubble
+            :workflowData="
+              workflowData.filter((item) => item.message_id === currentMsgId)
+            "
+            v-if="isLoading"
+            :isLoading="isLoading"
+            :statusText="'Planning...'"
+            :plannerText="
+              plannerTextData.filter(
+                (item) => item.message_id === currentMsgId
+              )[0]?.data
+            "
+            :provider="provider"
+            :messageId="currentMsgId"
+          />
 
-                 :toolCalls="toolCalls"
-                v-if="isLoading&&currentMsgId===msgItem.message_id"
-                :key="`status-${msgItem.id}`"
-                :toolSources="toolSources"
-                :allSources="sourcesMap[msgItem.message_id] || []"
-                :auditLogEvents="auditLogEvents"
-                :metadata="msgItem?.response_metadata?.usage"  
-                :workflowData="
-                      workflowData.filter(
-                        (item) => item.message_id === msgItem.message_id)"
-                     :loading="isLoading"
-                  :streamData="messagesData.filter(
-                        (item) => item.msgType ===  'stream'
-                      )"
-                      :streamingEvents=" messagesData.filter(
-                        (item) => item.msgType ===  'toolData'
-                      )"
-
-                      :currentStream="streamData"
-                />
-                 <AnalysisBox
-                 :toolCalls="toolCalls"
-                 v-if="(!isLoading)"
-                   :toolSources="toolSources"
-
-                 
-                     :allSources="sourcesMap[msgItem.message_id] || []"
-                  :msgItem="msgItem"
-                  :metadata="messagesData.find(item =>
-            item.message_id === msgItem.message_id &&
-            item.agent_type&& item.agent_type !== 'human' &&item.msgType !=  'toolData'&&
-            ( item.agent_type.includes('_end') || item.agent_type.includes('_interrupt'))
-          )?.response_metadata?.usage" 
-                  :workflowData="
-                      workflowData.filter(
-                        (item) => item.message_id === msgItem.message_id)"
-                  :loading="!isLoading"
-                  
-                />
-                  <!-- Chat Bubble -->
-                  <ChatBubble
-
-               :allSources="sourcesMap[msgItem.message_id] || []"
-                  
-                    :streamingEvents=" messagesData.filter(
-                        (item) => item.msgType ===  'toolData'
-                      )"
-                v-if="messagesData.find(item =>
-            item.message_id === msgItem.message_id &&
-            item.agent_type&& item.agent_type !== 'human' &&item.msgType !=  'toolData'&&
-            ( item.agent_type.includes('_end') || item.agent_type.includes('_interrupt')
-            )
-          )"
-                    :metadata="completionMetaData"
-                      :workflowData="
-                      workflowData.filter(
-                        (item) => item.message_id === msgItem.message_id)"
-                    
-                    :plannerText="
-                      plannerTextData.filter(
-                        (item) => item.message_id === msgItem.message_id
-                      )[0]?.data
-                    "
-                    
-                  
-                  :data="
-          messagesData.find(item =>
-            item.message_id === msgItem.message_id &&
-            item.agent_type !== 'human' &&
-            (
-              item.agent_type.includes('_end') ||
-              item.agent_type.includes('_interrupt')
-            )
-          )
-        "
-
-                    :messageId="msgItem.message_id"
-                    :provider="provider"
-                    :currentMsgId="currentMsgId"
-                    :isLoading="isLoading"
-                    
-                    
-                  />
-                  
-                
-          </div>
-      
-           </div>
-          </div>
-        
+          <!-- End Chat Bubble -->
+        </transition-group>
       </div>
 
       <!-- Documents Section -->
-      <div class="sticky z-1000 bottom-0 left-0 right-0 bg-white dark:bg-gray-900 p-2">
+      <div class="sticky z-1000 bottom-0 left-0 right-0 bg-white p-2">
         <div class="sticky bottom-0 z-10">
           <!-- Textarea -->
           <div class="max-w-4xl mx-auto lg:px-0">
@@ -183,12 +111,12 @@
                 @click="toggleExpand"
                 class="flex items-center justify-between focus:outline-none mb-2"
               >
-                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                <h3 class="text-sm font-medium text-gray-700">
                   Uploaded Documents ({{ uploadedDocuments.length }})
                 </h3>
                 <svg
                   :class="{ 'transform rotate-180': isExpanded }"
-                  class="w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200"
+                  class="w-5 h-5 text-gray-500 transition-transform duration-200"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -203,28 +131,26 @@
               </button>
 
               <!-- Collapsible content -->
-              <div 
-              v-if="isExpanded"
-              >
+              <div v-if="isExpanded">
                 <HorizontalScroll>
                   <div class="flex space-x-4">
                     <div
                       v-for="doc in uploadedDocuments"
                       :key="doc.id"
-                      class="w-48 flex-shrink-0 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 relative group"
+                      class="w-48 flex-shrink-0 p-2 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 relative group"
                     >
                       <div class="flex items-center space-x-3">
                         <input
                           type="checkbox"
                           :checked="selectedDocuments.includes(doc.id)"
                           @change="toggleDocumentSelection(doc.id)"
-                          class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 dark:border-gray-600 rounded"
+                          class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                         />
                         <div class="w-48 overflow-hidden">
-                          <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                          <p class="text-sm font-medium text-gray-900 truncate">
                             {{ doc.filename }}
                           </p>
-                          <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          <p class="text-xs text-gray-500 truncate">
                             Uploaded
                             {{
                               new Date(
@@ -237,7 +163,7 @@
                       </div>
                       <button
                         @click="removeDocument(doc.id)"
-                        class="absolute top-1 right-1 bg-orange-300 dark:bg-orange-600 text-white rounded-full p-1 transition-opacity opacity-0 group-hover:opacity-100"
+                        class="absolute top-1 right-1 bg-orange-300 text-white rounded-full p-1 transition-opacity opacity-0 group-hover:opacity-100"
                         title="Remove document"
                       >
                         <XMarkIcon class="w-5 h-5" />
@@ -257,12 +183,12 @@
                 type="search"
                 placeholder="Ask me about...companies to target, research topics, or company stocks and financials"
                 :disabled="isLoading"
-                class="p-4 pb-12 block min-h-[106px] w-full bg-primary-brandFrame dark:bg-gray-700 border-primary-brandFrame dark:border-gray-600 rounded-lg text-sm dark:text-gray-200 focus:outline-none active:outline-none border focus:border-primary-brandColor disabled:opacity-50 disabled:pointer-events-none resize-y"
+                class="p-4 pb-12 block min-h-[106px] w-full bg-primary-brandFrame border-primary-brandFrame rounded-lg text-sm focus:outline-none active:outline-none border focus:border-primary-brandColor disabled:opacity-50 disabled:pointer-events-none resize-y"
               ></textarea>
 
               <!-- Toolbar -->
               <div
-                class="absolute bottom-px inset-x-px p-2 rounded-b-lg border-primary-brandFrame dark:border-gray-600 dark:bg-gray-00"
+                class="absolute bottom-px inset-x-px p-2 rounded-b-lg border-primary-brandFrame"
               >
                 <div class="flex justify-between items-center">
                   <!-- Button Group -->
@@ -270,17 +196,16 @@
                     <!-- Attach Button -->
                     <button
                       @click="$refs.fileInput.click()"
-                      
                       :disabled="isLoading || isUploading"
                       type="button"
-                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:z-1 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
+                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
                     >
                       <input
                         type="file"
                         ref="fileInput"
                         @change="handleFileUpload"
                         class="hidden"
-                        accept=".pdf,.doc,.docx,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.svg,.bmp,.tiff,.webp"
+                        accept=".pdf,.doc,.docx,.csv,.xlsx,.xls"
                       />
                       <svg
                         v-if="!isUploading"
@@ -300,7 +225,7 @@
 
                       <svg
                         v-if="isUploading"
-                        class="shrink-0 w-5 h-5 animate-spin text-gray-500 dark:text-gray-400"
+                        class="shrink-0 w-5 h-5 animate-spin"
                         xmlns="http://www.w3.org/2000/svg"
                         fill="none"
                         viewBox="0 0 24 24"
@@ -321,10 +246,10 @@
                       @click="toggleRecording"
                       :disabled="isLoading"
                       :class="{
-                        'text-gray-500 dark:text-gray-400': !isRecording,
+                        'text-gray-500': !isRecording,
                         'text-orange-500': isRecording,
                       }"
-                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:z-1 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
+                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
                     >
                       <svg
                         v-if="!isRecording"
@@ -347,7 +272,7 @@
 
                       <svg
                         v-else
-                        class="w-6 h-6 text-gray-800 dark:text-gray-200"
+                        class="w-6 h-6 text-gray-800"
                         aria-hidden="true"
                         xmlns="http://www.w3.org/2000/svg"
                         width="24"
@@ -365,6 +290,58 @@
                   <!-- End Button Group -->
                   <!-- Button Group -->
                   <div class="flex items-center gap-x-1">
+                    <!-- Mic Button -->
+                    <Tooltip
+                      text="Use voice mode"
+                      position="top"
+                      color="bg-black text-white"
+                    >
+                      <button
+                        type="button"
+                        @click="toggleRecording"
+                        :disabled="isLoading"
+                        :class="{
+                          'text-gray-500': !isRecording,
+                          'text-orange-500': isRecording,
+                        }"
+                        class="inline-flex hidden shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
+                      >
+                        <svg
+                          v-if="!isRecording"
+                          class="w-6 h-6 text-gray-800"
+                          aria-hidden="true"
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            fill-rule="evenodd"
+                            d="M5 8a1 1 0 0 1 1 1v3a4.006 4.006 0 0 0 4 4h4a4.006 4.006 0 0 0 4-4V9a1 1 0 1 1 2 0v3.001A6.006 6.006 0 0 1 14.001 18H13v2h2a1 1 0 1 1 0 2H9a1 1 0 1 1 0-2h2v-2H9.999A6.006 6.006 0 0 1 4 12.001V9a1 1 0 0 1 1-1Z"
+                            clip-rule="evenodd"
+                          />
+                          <path
+                            d="M7 6a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v5a4 4 0 0 1-4 4h-2a4 4 0 0 1-4-4V6Z"
+                          />
+                        </svg>
+                        <svg
+                          v-else
+                          class="w-6 h-6 text-gray-800"
+                          aria-hidden="true"
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            d="M7 5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H7Z"
+                          />
+                        </svg>
+                      </button>
+                    </Tooltip>
+                    <!-- End Mic Button -->
                     <!-- Send Button -->
                     <button
                       type="button"
@@ -414,13 +391,8 @@
         </div>
       </div>
     </div>
-  
-</div>
-
+  </div>
 </template>
-
-
-
 
 <script setup>
 import {
@@ -440,12 +412,6 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import ChatBubble from '@/components/ChatMain/ChatBubble.vue';
 import ChatLoaderBubble from '@/components/ChatMain/ChatLoaderBubble.vue';
-import StatusAnimationBox from '@/components/ChatMain/StatusAnimationBox.vue';
-import StatusBox from '@/components/ChatMain/StatusBox.vue';
-import AnalysisBox from '@/components/ChatMain/AnalysisBox.vue';
-import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
-
-
 const router = useRouter();
 const route = useRoute();
 import { useAuth } from '@clerk/vue';
@@ -605,12 +571,10 @@ const props = defineProps({
 
 const messages = ref([]);
 const draftMessage = ref('');
-const shouldResume = ref(false);
 const assistantThinking = ref(false);
 const isLoading = ref(false);
 const initialLoading = ref(false);
 const messagesContainer = ref(null);
-const streamData = ref([]);
 
 // Conversation change watcher:
 watch(
@@ -624,12 +588,11 @@ watch(
       messagesData.value = [];
       agentThoughtsData.value = [];
       workflowData.value = [];
-      //  streamData.value = [];
       plannerTextData.value = [];
       searchQuery.value = '';
       chatName.value = '';
       isLoading.value = false;
-shouldResume.value=false
+
       // Load new conversation data
       if (newId) {
         loadPreviousChat(newId);
@@ -701,7 +664,7 @@ async function loadPreviousChat(convId) {
     console.log('Chat history response:', resp.data);
     
     if (resp.data && resp.data.messages) {
-      await filterChatCombo(resp.data);
+      await filterChat(resp.data);
       console.log('Filtered messages loaded:', messagesData.value.length);
 
     } else {
@@ -731,307 +694,17 @@ const workflowData = ref([]);
 const completionMetaData = ref(null);
 const agentThoughtsData = ref([]);
 
-
-
 async function filterChat(msgData) {
- 
-//  streamData.value = msgData.messages
-//     .map(message => {
-
-//       const agent_type=( message.additional_kwargs?.agent_type)
-//       // For agent_completion events, preserve the full data structure
-//       if (message.event === 'agent_completion'&& message.additional_kwargs?.agent_type !== 'human' &&(
-          
-//           !message.additional_kwargs?.agent_type.includes('_end') ||
-//           !message.additional_kwargs?.agent_type.includes('_interrupt'))
-//       ) {
-
-//         // alert(agent_type)
-//         message.agent_type=agent_type
-//         return message
-         
-//         ;
-//       }
-      
-//       return null;
-//     })
-//     .filter(Boolean)  // Remove nulls
-//     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-
-     messagesData.value = msgData.messages
-    .map(message => {
-
-      const agent_type=( message.additional_kwargs?.agent_type)
-      // For agent_completion events, preserve the full data structure
-      if (message.event === 'agent_completion' &&(
-          message.type === 'HumanMessage' ||
-          message.additional_kwargs?.agent_type.includes('_end') ||
-          message.additional_kwargs?.agent_type.includes('_interrupt'))
-      ) {
-
-
-        
-        // alert(agent_type)
-        message.agent_type=agent_type
-        return message
-         
-        ;
-      }
-      // For user_message events, keep existing behavior
-      else if (message.event === 'user_message') {
-        return message;
-      }
-      return null;
-    })
-    .filter(Boolean)  // Remove nulls
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-  let plannerData = msgData.messages.filter(
-    (message) => message.event === 'planner'
-  );
-  plannerData.forEach((planner) => {
-    addOrUpdateModel(JSON.parse(planner.data).metadata, planner.message_id);
-  });
-  let workData = msgData.messages.filter(
-    (message) => message.event === 'think'
-  );
-  workData.forEach((work) => {
-    addOrUpdateModel(JSON.parse(work.data).metadata, work.message_id);
-  });
-
-  AutoScrollToBottom();
-
-  agentThoughtsData.value = msgData.messages
-    .filter((message) => message.event === 'think')
-    .sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    )
-    .reduce((acc, message) => {
-      try {
-        const parsed = JSON.parse(message.data);
-        acc.push(parsed);
-      } catch (error) {
-        console.error('Failed to parse JSON for message:', message, error);
-      }
-      return acc;
-    }, []);
-  emit('agentThoughtsDataChanged', agentThoughtsData.value);
-
-  let userMessages = messagesData.value
-    .filter((message) => message.event === 'user_message')
-    .sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-
-  console.log('userMessages', userMessages);
-
-  if (userMessages[0]?.data) {
-    chatName.value = userMessages[0].data;
-  }
-
-  AutoScrollToBottom();
-  await nextTick();
-}
-
-async function filterChatCombo(msgData) {
- 
-
-
-     messagesData.value = msgData.messages
-    .map(message => {
-
-      const agent_type=( message.additional_kwargs?.agent_type)
-      // For agent_completion events, preserve the full data structure
-
-      if(message.event === 'agent_completion'){
-         
-
-
-        if(message?.response_metadata&&                         
-  Object.keys(message.response_metadata).length > 0  ){
-    
-          addOrUpdateModel((message.response_metadata), message.message_id);
-
-        }
-  
-
-        
-
-
-          const isToolCall = message.content && typeof message.content === 'string' && message.content.includes('<tool>');
-        const isToolResult = Array.isArray(message.content) || (message.additional_kwargs?.agent_type === 'react_tool');
-        const isToolResponse = message.additional_kwargs?.agent_type === 'tool_response';
-        
-        // For Daytona sandbox tool calls/results, always preserve them for sidebar processing
-        const isDaytonaRelated = (isToolCall && message.content.includes('DaytonaCodeSandbox')) ||
-                                 (message.type === 'LiberalFunctionMessage' && message.name === 'DaytonaCodeSandbox');
-        
-        if (isToolCall || isToolResult || isToolResponse || isDaytonaRelated) {
-          // Preserve tool-related messages for comprehensive audit log and Daytona processing
-          console.log('Preserving tool-related message for audit log and Daytona processing:', message.additional_kwargs?.agent_type, message.name);
-          
-          // Create structured data for tool events matching the live streaming format
-          const toolData = {
-            content: message.content || '',
-            additional_kwargs: message.additional_kwargs || {},
-            response_metadata: message.response_metadata || {},
-            type: message.type || 'AIMessage',
-            id: message.id || message.message_id,
-            name: message.name || null,
-            agent_type: message.additional_kwargs?.agent_type || 'tool'
-          };
-          
-          
-          return {
-            event: 'agent_completion',
-            agent_type:"tool_response",
-            msgType:"toolData",
-            data: toolData,
-            message_id: message.message_id,
-            conversation_id: message.conversation_id,
-            timestamp: message.timestamp || new Date().toISOString(),
-            isToolRelated: true, // Flag for filtering in chat display but preserving for audit
-            isDaytonaRelated: isDaytonaRelated
-          };
-        }
-
-         else if ((
-          message.type === 'HumanMessage' ||
-          message.additional_kwargs?.agent_type.includes('_end') ||
-           
-          message.additional_kwargs?.agent_type.includes('_interrupt'))
-          
-      ) {
-
-  //  alert(agent_type)
-        if( message.additional_kwargs?.agent_type.includes('_interrupt')){
-          shouldResume.value=true
-        }
-       
-        message.agent_type=agent_type
-         message.msgType='message'
-        return message;
-
-       
-      }else if (message.event === 'llm_stream_chunk') {
-
-        
-        message.agent_type=agent_type
-        message.msgType='stream'
-        return message
-         
-        ;
-      }
-      }
-
-     
-      // For user_message events, keep existing behavior
-      else if (message.event === 'user_message') {
-        return message;
-      }
-      return null;
-    })
-    .filter(Boolean)  // Remove nulls
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-  let plannerData = msgData.messages.filter(
-    (message) => message.event === 'planner'
-  );
-  plannerData.forEach((planner) => {
-    addOrUpdateModel(JSON.parse(planner.data).metadata, planner.message_id);
-  });
-  let workData = msgData.messages.filter(
-    (message) => message.event === 'think'
-  );
-  workData.forEach((work) => {
-    addOrUpdateModel(JSON.parse(work.data).metadata, work.message_id);
-  });
-
-
-  // 
-
-
-  AutoScrollToBottom();
-
-  agentThoughtsData.value = msgData.messages
-    .filter((message) => message.event === 'think')
-    .sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    )
-    .reduce((acc, message) => {
-      try {
-        const parsed = JSON.parse(message.data);
-        acc.push(parsed);
-      } catch (error) {
-        console.error('Failed to parse JSON for message:', message, error);
-      }
-      return acc;
-    }, []);
-  emit('agentThoughtsDataChanged', agentThoughtsData.value);
-
-  let userMessages = messagesData.value
-    .filter((message) => message.event === 'user_message')
-    .sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-
-  console.log('userMessages', userMessages);
-
-  if (userMessages[0]?.data) {
-    chatName.value = userMessages[0].data;
-  }
-
-
-  
-  AutoScrollToBottom();
-  await nextTick();
-
-
-
-}
-
-async function filterChatOld(msgData) {
   messagesData.value = msgData.messages
     .map(message => {
       // For agent_completion events, handle LangGraph format
-            if (message.type == 'HumanMessage') {
-                    console.log("data:",message.type,message.event ,message.additional_kwargs?.agent_type ,message)
-
-              console.log("is Human",message.content)
-              return{
-                data:message.content,
-                event:"user_message",
-                agent_type:"user_message",
-                  conversation_id: message.conversation_id,
-    timestamp:    message.timestamp || new Date().toISOString()
-                
-              }
-          //      return {
-          //   event: 'user_message',
-          //   data: message.content || '',
-          //   message_id: message.message_id,
-          //   conversation_id: message.conversation_id,
-          //   timestamp: message.timestamp || new Date().toISOString()
-          // };
-            }
-      else if (message.event === 'agent_completion') {
-        
+      if (message.event === 'agent_completion') {
         // For tool calls and tool results, preserve them for comprehensive audit log and Daytona sidebar
         // but only filter them from main chat display if they're tool-related
         const isToolCall = message.content && typeof message.content === 'string' && message.content.includes('<tool>');
         const isToolResult = Array.isArray(message.content) || (message.additional_kwargs?.agent_type === 'react_tool');
         const isToolResponse = message.additional_kwargs?.agent_type === 'tool_response';
-        const isFinalResponse =
-                        (message.additional_kwargs?.agent_type ?? "")
-                          .includes("_end")
-                        || (message.additional_kwargs?.agent_type ?? "")
-                          .includes("_interrupt");
-                              console.log("isFinalResponse",isFinalResponse);
+        
         // For Daytona sandbox tool calls/results, always preserve them for sidebar processing
         const isDaytonaRelated = (isToolCall && message.content.includes('DaytonaCodeSandbox')) ||
                                  (message.type === 'LiberalFunctionMessage' && message.name === 'DaytonaCodeSandbox');
@@ -1051,10 +724,6 @@ async function filterChatOld(msgData) {
             agent_type: message.additional_kwargs?.agent_type || 'tool'
           };
           
-        
-        if(isFinalResponse){
-          isLoading.value=false
-        }
           return {
             event: 'agent_completion',
             data: toolData,
@@ -1068,16 +737,14 @@ async function filterChatOld(msgData) {
         
         // Only show user messages and final responses in main chat bubbles
         const isUserMessage = message.additional_kwargs?.agent_type === 'human';
-       
+        const isFinalResponse = message.additional_kwargs?.agent_type === 'react_end';
         
         if (!isUserMessage && !isFinalResponse) {
-          // alert(message.content)
           return null; // Filter out intermediate agent responses that aren't tool-related
         }
         
         // For human messages, convert to user_message event type
         if (isUserMessage) {
-          console.log("message.content:",message)
           return {
             event: 'user_message',
             data: message.content || '',
@@ -1094,7 +761,7 @@ async function filterChatOld(msgData) {
           response_metadata: message.response_metadata || {},
           type: message.type || 'AIMessage',
           id: message.id || message.message_id,
-          agent_type: message.additional_kwargs?.agent_type 
+          agent_type: message.additional_kwargs?.agent_type || 'assistant'
         };
         
         return {
@@ -1157,7 +824,6 @@ async function filterChatOld(msgData) {
       }
       // For any other events, include them as well
       else {
-       
         return {
           event: message.event,
           data: message.data || message,
@@ -1170,9 +836,6 @@ async function filterChatOld(msgData) {
     .filter(Boolean)  // Remove null values
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-
-    console.log("messagesData.value",messagesData.value);
-    
   // Process planner data for workflow metadata
   let plannerData = msgData.messages.filter(
     (message) => message.event === 'planner'
@@ -1743,62 +1406,15 @@ function cleanTranscription(transcribedText) {
   }
   return cleanedText;
 }
-async function handleFileUploadOld(event) {
-  isUploading.value = true;
-  const file = event.target.files[0];
-  if (!file) {
-    isUploading.value = false;
-    return;
-  }
-  try {
-    uploadStatus.value = { type: 'info', message: 'Uploading document...' };
-    const formData = new FormData();
-    formData.append('file', file);
-    const response = await axios.post(
-      `${import.meta.env.VITE_API_URL}/upload`,
-      formData,
-      {
-        headers: {
-          Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
-        },
-      }
-    );
-    console.log('upload response:', response.data);
-    const uploadedDoc = response.data.document;
-    if (!uploadedDoc) {
-      throw new Error('No `document` in response');
-    }
-    // now safe to push
-    uploadedDocuments.value.push(uploadedDoc);
-    selectedDocuments.value.push(uploadedDoc.id);
-    uploadStatus.value = { type: 'success', message: 'Document uploaded successfully!' };
-    // clear the file input so you can re-upload the same file if you want
-    if (fileInput.value) fileInput.value.value = '';
-  } catch (error) {
-    console.error('[SearchSection] Upload error:', error);
-    uploadStatus.value = {
-      type: 'error',
-      message: error.message || 'Failed to upload document',
-    };
-  } finally {
-    isUploading.value = false;
-  }
-}
-
 
 async function handleFileUpload(event) {
   isUploading.value = true;
   const file = event.target.files[0];
-  if (!file) {
-    isUploading.value = false;
-    return;
-  }
-
+  if (!file) return;
   try {
     uploadStatus.value = { type: 'info', message: 'Uploading document...' };
     const formData = new FormData();
     formData.append('file', file);
-
     const response = await axios.post(
       `${import.meta.env.VITE_API_URL}/upload`,
       formData,
@@ -1808,30 +1424,14 @@ async function handleFileUpload(event) {
         },
       }
     );
-
-    console.log('upload response:', response.data);
-    const uploadedFile = response.data.file;
-    if (!uploadedFile) {
-      throw new Error('No `file` in response');
-    }
-
-    // Transform into the shape your template expects:
-    const doc = {
-      id:               uploadedFile.file_id,
-      filename:         uploadedFile.filename,
-      upload_timestamp: Math.floor(uploadedFile.created_at),
-      num_chunks:       uploadedFile.num_chunks ?? 1,
-    };
-
-    uploadedDocuments.value.push(doc);
-    selectedDocuments.value.push(doc.id);
-
+    // Store the uploaded document and update selection.
+    const document = response.data.document;
+    uploadedDocuments.value.push(document);
+    selectedDocuments.value.push(document.id);
     uploadStatus.value = {
       type: 'success',
       message: 'Document uploaded successfully!',
     };
-
-    // Clear the input so the same file can be re-selected later
     if (fileInput.value) {
       fileInput.value.value = '';
     }
@@ -1839,18 +1439,17 @@ async function handleFileUpload(event) {
     console.error('[SearchSection] Upload error:', error);
     uploadStatus.value = {
       type: 'error',
-      message: error.message || 'Failed to upload document',
+      message: error.response?.data?.error || 'Failed to upload document',
     };
   } finally {
     isUploading.value = false;
   }
 }
 
-
 async function loadUserDocuments() {
   try {
     const response = await axios.get(
-      `${import.meta.env.VITE_API_URL}/files`,
+      `${import.meta.env.VITE_API_URL}/documents`,
       {
         headers: {
           Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
@@ -1893,27 +1492,11 @@ function waitForSocketOpen(timeout = 5000) {
 }
 
 const currentMsgId = ref('');
-function addLoadingMessageEvent(){
-
-
-            messagesData.value.push({
-  event: 'loading',
-  data: {},                      // empty payload
-  agent_type: 'loading',      // anything that satisfies your isStreamingEvent test
-  message_id: currentMsgId.value,
-  conversation_id: currentId.value,
-    timestamp: new Date(Date.now() + 1).toISOString()
-  })
-
-          
-
-}
 const addMessage = async () => {
   isLoading.value = true;
   errorMessage.value = '';
 
   workflowData.value = [];
-  streamData.value = [];
 
   // If no conversation exists, create a new chat first.
   if (!route.params.id) {
@@ -1947,47 +1530,26 @@ const addMessage = async () => {
 
   currentMsgId.value = uuidv4();
   
-  // alert(currentMsgId.value)
   // Check if the last agent_completion message is a deep_research_interrupt and user typed something
-  // let shouldResume = false;
-  // if (messagesData.value.length > 0) {
-  //   // Find the last agent_completion message (not stream_complete)
-  //   for (let i = messagesData.value.length - 1; i >= 0; i--) {
-  //     const message = messagesData.value[i];
-  //     if (message.event === 'agent_completion') {
-  //       // Check if this agent_completion has deep_research_interrupt agent_type
-  //       if (message.data && message.data.agent_type === 'deep_research_interrupt') {
-  //         // If user typed something, set resume to true
-  //         shouldResume = searchQuery.value.trim().length > 0;
-  //       }
-  //       break; // Found the last agent_completion, stop looking
-  //     }
-  //   }
-  // }
+  let shouldResume = false;
+  if (messagesData.value.length > 0) {
+    // Find the last agent_completion message (not stream_complete)
+    for (let i = messagesData.value.length - 1; i >= 0; i--) {
+      const message = messagesData.value[i];
+      if (message.event === 'agent_completion') {
+        // Check if this agent_completion has deep_research_interrupt agent_type
+        if (message.data && message.data.agent_type === 'deep_research_interrupt') {
+          // If user typed something, set resume to true
+          shouldResume = searchQuery.value.trim().length > 0;
+        }
+        break; // Found the last agent_completion, stop looking
+      }
+    }
+  }
   
-  
-  const serverPayload = {
+  const messagePayload = {
     event: 'user_message',
     data: searchQuery.value,
-    timestamp: new Date().toISOString(),
-    provider: provider.value,
-    planner_model: localStorage.getItem(`selected_model_${userId.value}`) || '',
-    message_id: currentMsgId.value,
-    conversation_id: currentId.value,
-  };
-  if(shouldResume.value){
-    serverPayload.resume=true
-  }else{
-    serverPayload.resume=false
-  }
-  shouldResume.value=false
-    const messagePayload = {
-    
-     event: 'agent_completion',
-    type: 'HumanMessage', 
-    agent_type:"human",
-    msgType:"message",
-    content: searchQuery.value,
     timestamp: new Date().toISOString(),
     provider: provider.value,
     planner_model: localStorage.getItem(`selected_model_${userId.value}`) || '',
@@ -1997,11 +1559,11 @@ const addMessage = async () => {
   };
 
   if (selectedDocuments.value && selectedDocuments.value.length > 0) {
-    serverPayload.document_ids = selectedDocuments.value.map((doc) => {
+    messagePayload.document_ids = selectedDocuments.value.map((doc) => {
       return typeof doc === 'string' ? doc : doc.id;
     });
   } else {
-    serverPayload.document_ids = [];
+    messagePayload.document_ids = [];
   }
 
   if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
@@ -2010,13 +1572,9 @@ const addMessage = async () => {
       connectWebSocket();
       await waitForSocketOpen();
 
-      socket.value.send(JSON.stringify(serverPayload));
-      
-    
+      socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
-      searchQuery.value = '';
-      // await nextTick()
-      // addLoadingMessageEvent()
+
       console.log('Message sent after connecting:', messagePayload);
     } catch (error) {
       errorMessage.value = 'WebSocket connection error occurred.';
@@ -2026,12 +1584,9 @@ const addMessage = async () => {
   } else {
     try {
       isLoading.value = true;
-      socket.value.send(JSON.stringify(serverPayload));
+      socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
-      console.log(messagesData)
       searchQuery.value = '';
-       await nextTick()
-        // addLoadingMessageEvent()
     } catch (e) {
       console.error('ChatView error', e);
       isLoading.value = false;
@@ -2041,16 +1596,6 @@ const addMessage = async () => {
 
 function addOrUpdateModel(newData, message_id) {
   // Determine which message_id to use.
-
-  let iData=newData
-  if(!iData.llm_name&&iData.model_name){
-
-    iData.llm_name=iData.model_name
-  }else{
-    return
-  }
-
-
   const idToUse = message_id ? message_id : currentMsgId.value;
 
   // Find an existing model with matching llm_name and message_id.
@@ -2070,9 +1615,6 @@ function addOrUpdateModel(newData, message_id) {
       message_id: idToUse,
     });
   }
-
-  console.log("workflowData.value",workflowData.value);
-  
 }
 
 async function connectWebSocket() {
@@ -2113,147 +1655,76 @@ async function connectWebSocket() {
         })
       );
     };
-
- socket.value.onmessage = (event) => {
+    socket.value.onmessage = (event) => {
       try {
         const receivedData = JSON.parse(event.data);
         
         // Handle new streaming events
-        // if (receivedData.event === 'stream_start') {
-        //   console.log('Stream started:', receivedData);
-        //   // Add to messages for display
-        //   messagesData.value.push({
-        //     event: 'stream_start',
-        //     data: receivedData,
-        //     timestamp: new Date().toISOString()
-        //   });
-        // } else 
-        
-if ((receivedData.event === 'agent_completion'&&(receivedData.type!=="HumanMessage")&&
-(receivedData.additional_kwargs?.agent_type.includes("_end")||
-receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {   
-  
-  if(receivedData.additional_kwargs?.agent_type.includes("_interrupt")){
-    shouldResume.value=true
-  }
-  
-        console.log('Agent message stream:', receivedData);
-        receivedData.agent_type=receivedData.additional_kwargs?.agent_type
-        // receivedData=receivedData.content
-        // messagesData.value.push(receivedData)
-        console.log("onmessage",{
-            event: 'agent_completion', 
-            content: receivedData.content,
-            agent_type:receivedData.additional_kwargs?.agent_type,
-            timestamp: receivedData.timestamp || new Date().toISOString()
-          })
+        if (receivedData.event === 'stream_start') {
+          console.log('Stream started:', receivedData);
+          // Add to messages for display
+          messagesData.value.push({
+            event: 'stream_start',
+            data: receivedData,
+            message_id: currentMsgId.value,
+            conversation_id: currentId.value,
+            timestamp: new Date().toISOString()
+          });
+        } else if (receivedData.event === 'agent_completion') {
+          console.log('Agent message stream:', receivedData);
           messagesData.value.push({
             event: 'agent_completion', 
-                        content: receivedData.content,
-
-              message_id: receivedData.message_id,
-            conversation_id: receivedData.conversation_id,
-            content: receivedData.content,
-            agent_type:receivedData.additional_kwargs?.agent_type,
+            data: receivedData,
+            message_id: currentMsgId.value,
+            conversation_id: currentId.value,
             timestamp: receivedData.timestamp || new Date().toISOString()
           });
-
-
-          AutoScrollToBottom();
-      console.log("messagesData",messagesData)
-            // isLoading.value = false;
-        } 
-         else if (receivedData.additional_kwargs?.agent_type!=='human'&&
-         (receivedData.event === 'llm_stream_chunk'||receivedData.event === 'agent_completion')) {
+        } else if (receivedData.event === 'llm_stream_chunk') {
           console.log('LLM stream chunk:', receivedData);
           const chunkId = receivedData.id;
-          // receivedData.agent_type=receivedData.additional_kwargs?.agent_type
           
-          // receivedData.content=receivedData.content
-
-          streamData.value.push(receivedData)
-            messagesData.value.push({
-               name: receivedData.name , 
-               type: receivedData.type , 
-            event: receivedData.event , 
-            content: receivedData.content,
-            msgType:"stream",
-                message_id: receivedData.value,
-            conversation_id: receivedData.value,
-            agent_type:receivedData.additional_kwargs?.agent_type,
-            timestamp: receivedData.timestamp || new Date().toISOString()
-          });
-      
-
-  //          streamData.value.sort(
-  //   (a, b) =>
-  //     new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  // )
-
-  // console.log("streamData",streamData)
-          // if (chunkId) {
-          //   // Find existing message with the same ID
-          //   const existingIndex = messagesData.value.findIndex(
-          //     (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
-          //   );
+          if (chunkId) {
+            // Find existing message with the same ID
+            const existingIndex = messagesData.value.findIndex(
+              (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
+            );
             
-          //   if (existingIndex !== -1) {
-          //     // Accumulate content for existing message
-          //     const existingContent = messagesData.value[existingIndex].data?.content || '';
-          //     const newContent = receivedData.content || '';
-          //     messagesData.value[existingIndex].data.content = existingContent + newContent;
-          //   } else {
-          //     // Create new message for new ID
-          //     messagesData.value.push({
-          //       event: 'llm_stream_chunk',
-          //       data: receivedData, 
-          //       timestamp: new Date().toISOString()
-          //     });
-          //   }
-
-
-          // } else {
-          //   // No ID, just add as new message
-          //   messagesData.value.push({
-          //     event: 'llm_stream_chunk',
-          //     data: receivedData, 
-          //     timestamp: new Date().toISOString()
-          //   });
-          
+            if (existingIndex !== -1) {
+              // Accumulate content for existing message
+              const existingContent = messagesData.value[existingIndex].data?.content || '';
+              const newContent = receivedData.content || '';
+              messagesData.value[existingIndex].data.content = existingContent + newContent;
+            } else {
+              // Create new message for new ID
+              messagesData.value.push({
+                event: 'llm_stream_chunk',
+                data: receivedData,
+                message_id: currentMsgId.value,
+                conversation_id: currentId.value,
+                timestamp: new Date().toISOString()
+              });
+            }
+          } else {
+            // No ID, just add as new message
+            messagesData.value.push({
+              event: 'llm_stream_chunk',
+              data: receivedData,
+              message_id: currentMsgId.value,
+              conversation_id: currentId.value,
+              timestamp: new Date().toISOString()
+            });
+          }
         } else if (receivedData.event === 'stream_complete') {
-          
-          isLoading.value=false
           console.log('Stream complete:', receivedData);
-          // messagesData.value.push({
-          //   event: 'stream_complete',
-          //   data: receivedData,
-          //   timestamp: new Date().toISOString()
-          // });
-                    // receivedData.agent_type=receivedData.additional_kwargs?.agent_type
-                  // receivedData.msgType="stream"
-                  //         receivedData.content=receivedData.data.content
-
-                  //  streamData.value.push(receivedData)
-
-                    messagesData.value.push({
-            event: receivedData.event , 
-            content: receivedData.content,
-            msgType:"stream",
-                message_id: receivedData.value,
-            conversation_id: receivedData.value,
-            agent_type:receivedData.additional_kwargs?.agent_type,
-            timestamp: receivedData.timestamp || new Date().toISOString()
+          messagesData.value.push({
+            event: 'stream_complete',
+            data: receivedData,
+            message_id: currentMsgId.value,
+            conversation_id: currentId.value,
+            timestamp: new Date().toISOString()
           });
-
-  //          streamData.value.sort(
-  //   (a, b) =>
-  //     new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  // )
-
-        
+          isLoading.value = false;
         }
-
-
         // Handle legacy events
         else if (
           receivedData.event == 'user_message' ||
@@ -2271,7 +1742,17 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
             console.log('completionMetaData.value', error);
             isLoading.value = false;
           }
-          messagesData.value.push(receivedData);
+          
+          // Ensure legacy messages have proper structure
+          const legacyMessage = {
+            event: receivedData.event,
+            data: receivedData.data,
+            message_id: receivedData.message_id || currentMsgId.value,
+            conversation_id: receivedData.conversation_id || currentId.value,
+            timestamp: receivedData.timestamp || new Date().toISOString()
+          };
+          
+          messagesData.value.push(legacyMessage);
           isLoading.value = false;
         } else if (receivedData.event === 'think') {
           let dataParsed = JSON.parse(receivedData.data);
@@ -2281,8 +1762,17 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
           emit('agentThoughtsDataChanged', agentThoughtsData.value);
           try {
             addOrUpdateModel(dataParsed.metadata);
+            
+            // Add think event to messages for persistence
+            messagesData.value.push({
+              event: 'think',
+              data: receivedData.data,
+              message_id: receivedData.message_id || currentMsgId.value,
+              conversation_id: receivedData.conversation_id || currentId.value,
+              timestamp: receivedData.timestamp || new Date().toISOString()
+            });
 
-          
+            AutoScrollToBottom();
           } catch (e) {
             console.log('model error', e);
             isLoading.value = false;
@@ -2295,176 +1785,28 @@ receivedData.additional_kwargs?.agent_type.includes("_interrupt")))) {
         } else if (receivedData.event === 'planner') {
           let dataParsed = JSON.parse(receivedData.data);
           addOrUpdateModel(dataParsed.metadata);
-
           
+          // Add planner event to messages for persistence
+          messagesData.value.push({
+            event: 'planner',
+            data: receivedData.data,
+            message_id: receivedData.message_id || currentMsgId.value,
+            conversation_id: receivedData.conversation_id || currentId.value,
+            timestamp: receivedData.timestamp || new Date().toISOString()
+          });
+
+          AutoScrollToBottom();
         } else {
           console.log('ping event fired: ', receivedData.event);
         }
         
         // Auto scroll after any message
-        
+        AutoScrollToBottom();
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
         isLoading.value = false;
       }
-
-      console.log("msg data ",messagesData.value)
     };
-
-
-    // socket.value.onmessage = (event) => {
-    //   try {
-    //     const receivedData = JSON.parse(event.data);
-        
-    //     // Handle new streaming events
-    //     if (receivedData.event === 'stream_start') {
-    //       console.log('Stream started:', receivedData);
-    //       // Add to messages for display
-    //       messagesData.value.push({
-    //         event: 'stream_start',
-    //         data: receivedData,
-    //         message_id: currentMsgId.value,
-    //         conversation_id: currentId.value,
-    //         timestamp: new Date().toISOString()
-    //       });
-    //     } else if (receivedData.event === 'agent_completion') {
-    //       console.log('Agent message stream:', receivedData);
-    //       messagesData.value.push({
-    //         event: 'agent_completion', 
-    //         data: receivedData,
-    //         message_id: currentMsgId.value,
-    //         conversation_id: currentId.value,
-    //         timestamp: receivedData.timestamp || new Date().toISOString()
-    //       });
-    //     } else if (receivedData.event === 'llm_stream_chunk') {
-    //       console.log('LLM stream chunk:', receivedData);
-    //       const chunkId = receivedData.id;
-          
-    //       if (chunkId) {
-    //         // Find existing message with the same ID
-    //         const existingIndex = messagesData.value.findIndex(
-    //           (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
-    //         );
-            
-    //         if (existingIndex !== -1) {
-    //           // Accumulate content for existing message
-    //           const existingContent = messagesData.value[existingIndex].data?.content || '';
-    //           const newContent = receivedData.content || '';
-    //           messagesData.value[existingIndex].data.content = existingContent + newContent;
-    //         } else {
-    //           // Create new message for new ID
-    //           messagesData.value.push({
-    //             event: 'llm_stream_chunk',
-    //             data: receivedData,
-    //             message_id: currentMsgId.value,
-    //             conversation_id: currentId.value,
-    //             timestamp: new Date().toISOString()
-    //           });
-    //         }
-    //       } else {
-    //         // No ID, just add as new message
-    //         messagesData.value.push({
-    //           event: 'llm_stream_chunk',
-    //           data: receivedData,
-    //           message_id: currentMsgId.value,
-    //           conversation_id: currentId.value,
-    //           timestamp: new Date().toISOString()
-    //         });
-    //       }
-    //     } else if (receivedData.event === 'stream_complete') {
-    //       console.log('Stream complete:', receivedData);
-    //       messagesData.value.push({
-    //         event: 'stream_complete',
-    //         data: receivedData,
-    //         message_id: currentMsgId.value,
-    //         conversation_id: currentId.value,
-    //         timestamp: new Date().toISOString()
-    //       });
-    //       isLoading.value = false;
-    //     }
-        
-    //     // Handle legacy events
-    //     else if (
-    //       receivedData.event == 'user_message' ||
-    //       receivedData.event == 'completion'
-    //     ) {
-    //       try {
-    //         if (receivedData.event == 'completion') {
-    //           let metaDataComplettion = JSON.parse(receivedData.data);
-    //           completionMetaData.value = metaDataComplettion.metadata;
-    //           emit('metadataChanged', completionMetaData.value);
-    //         } else {
-    //           AutoScrollToBottom();
-    //         }
-    //       } catch (error) {
-    //         console.log('completionMetaData.value', error);
-    //         isLoading.value = false;
-    //       }
-          
-    //       // Ensure legacy messages have proper structure
-    //       const legacyMessage = {
-    //         event: receivedData.event,
-    //         data: receivedData.data,
-    //         message_id: receivedData.message_id || currentMsgId.value,
-    //         conversation_id: receivedData.conversation_id || currentId.value,
-    //         timestamp: receivedData.timestamp || new Date().toISOString()
-    //       };
-          
-    //       messagesData.value.push(legacyMessage);
-    //       isLoading.value = false;
-    //     } else if (receivedData.event === 'think') {
-    //       let dataParsed = JSON.parse(receivedData.data);
-    //       agentThoughtsData.value.push(dataParsed);
-
-    //       statusText.value = dataParsed.agent_name;
-    //       emit('agentThoughtsDataChanged', agentThoughtsData.value);
-    //       try {
-    //         addOrUpdateModel(dataParsed.metadata);
-            
-    //         // Add think event to messages for persistence
-    //         messagesData.value.push({
-    //           event: 'think',
-    //           data: receivedData.data,
-    //           message_id: receivedData.message_id || currentMsgId.value,
-    //           conversation_id: receivedData.conversation_id || currentId.value,
-    //           timestamp: receivedData.timestamp || new Date().toISOString()
-    //         });
-
-    //         AutoScrollToBottom();
-    //       } catch (e) {
-    //         console.log('model error', e);
-    //         isLoading.value = false;
-    //       }
-    //     } else if (receivedData.event === 'planner_chunk') {
-    //       addOrUpdatePlannerText({
-    //         message_id: currentMsgId.value,
-    //         data: receivedData.data,
-    //       });
-    //     } else if (receivedData.event === 'planner') {
-    //       let dataParsed = JSON.parse(receivedData.data);
-    //       addOrUpdateModel(dataParsed.metadata);
-          
-    //       // Add planner event to messages for persistence
-    //       messagesData.value.push({
-    //         event: 'planner',
-    //         data: receivedData.data,
-    //         message_id: receivedData.message_id || currentMsgId.value,
-    //         conversation_id: receivedData.conversation_id || currentId.value,
-    //         timestamp: receivedData.timestamp || new Date().toISOString()
-    //       });
-
-    //       AutoScrollToBottom();
-    //     } else {
-    //       console.log('ping event fired: ', receivedData.event);
-    //     }
-        
-    //     // Auto scroll after any message
-    //     AutoScrollToBottom();
-    //   } catch (error) {
-    //     console.error('Error parsing WebSocket message:', error);
-    //     isLoading.value = false;
-    //   }
-    // };
     socket.value.onerror = (error) => {
       console.error('WebSocket error:', error);
       if (!manualSocketClose.value)
@@ -2508,7 +1850,7 @@ function addOrUpdatePlannerText(newEntry) {
 
 async function removeDocument(docId) {
   try {
-    await axios.delete(`${import.meta.env.VITE_API_URL}/files/${docId}`, {
+    await axios.delete(`${import.meta.env.VITE_API_URL}/documents/${docId}`, {
       headers: {
         Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
       },
@@ -2540,7 +1882,7 @@ function formatMessageData(msgItem) {
   try {
     switch (msgItem.event) {
       case 'user_message':
-        return ({
+        return JSON.stringify({
           message: msgItem.data,
           agent_type: 'user_proxy',
           timestamp: msgItem.timestamp || new Date().toISOString()
@@ -2549,12 +1891,10 @@ function formatMessageData(msgItem) {
       case 'agent_completion':
         // agent_completion events from LangGraph have structured data
         if (msgItem.data && typeof msgItem.data === 'object') {
-          const rawType = msgItem.data.additional_kwargs?.agent_type
-           
           const formatted = {
             message: msgItem.data.content || '',
-          agent_type: rawType.includes('_interrupt') ? 'interrupt' : rawType,      
-         metadata: msgItem.data.response_metadata || null,
+            agent_type: msgItem.data.agent_type || 'assistant',
+            metadata: msgItem.data.response_metadata || null,
             additional_kwargs: msgItem.data.additional_kwargs || {},
             timestamp: msgItem.timestamp || new Date().toISOString(),
             type: msgItem.data.type || 'AIMessage',
@@ -2565,7 +1905,7 @@ function formatMessageData(msgItem) {
         // Fallback for unexpected format
         return JSON.stringify({
           message: msgItem.data || '',
-          agent_type: msgItem.data.additional_kwargs?.agent_type,
+          agent_type: 'assistant',
           timestamp: msgItem.timestamp || new Date().toISOString()
         });
       
@@ -2748,324 +2088,6 @@ const filteredMessages = computed(() => {
     return messagesData.value || [];
   }
 });
-
-// 1) Combine all streaming chunks
-
-// replace your existing parseLinks & allSources definitions with this:
-
-
-const allSources = computed(() => {
-  const items = [];
-  const seen  = new Set();
-
-  // now any src.message_id will be carried through
-  const pushIfNew = (src) => {
-    if (!src.url || seen.has(src.url)) return;
-    seen.add(src.url);
-    items.push({ ...src });
-  };
-
-  // merge in any explicit toolSources (if they already include message_id, it'll stick)
-
-  // extractLinks now takes message_id so we can attach it
-  function extractLinks(text, type = 'link', message_id = null) {
-    if (typeof text !== 'string') return;
-    let m;
-
-    // JSON-array of { url, … }
-    if (text.trim().startsWith('[')) {
-      try {
-        const arr = JSON.parse(text.replace(/'url'/g, '"url"'));
-        if (Array.isArray(arr)) {
-          arr.forEach(o => {
-            if (!o.url) return;
-            const hostname = new URL(o.url).hostname.replace(/^www\./, '');
-            pushIfNew({
-              title: (o.title || hostname).trim(),
-              url: o.url,
-              domain: hostname,
-              type,
-              message_id
-            });
-          });
-          return;
-        }
-      } catch {}
-    }
-
-    // Named lines: "Name: https://…"
-    const nameRe = /([^:*]+):\s*(https?:\/\/\S+)/g;
-    while ((m = nameRe.exec(text))) {
-      const url = m[2].trim();
-      const hostname = new URL(url).hostname.replace(/^www\./,'');
-      pushIfNew({
-        title: m[1].trim(),
-        url,
-        domain: hostname,
-        type,
-        message_id
-      });
-    }
-
-    // Python style
-    const pyRe = /'url':\s*'(https?:\/\/[^']+)'/g;
-    while ((m = pyRe.exec(text))) {
-      const url = m[1].trim();
-      const hostname = new URL(url).hostname.replace(/^www\./,'');
-      pushIfNew({
-        title: hostname,
-        url,
-        domain: hostname,
-        type,
-        message_id
-      });
-    }
-
-    // Any bare URL
-    const urlRe = /(https?:\/\/[^\s"'<>]+)/g;
-    while ((m = urlRe.exec(text))) {
-      const url = m[1].trim();
-      const hostname = new URL(url).hostname.replace(/^www\./,'');
-      pushIfNew({
-        title: hostname,
-        url,
-        domain: hostname,
-        type,
-        message_id
-      });
-    }
-  }
-
-  // Scan every message, passing its message_id into extractLinks
-  messagesData.value
-    .filter(evt => evt.message_id)
-    .forEach(evt => {
-      let text = null;
-      if (typeof evt.content === 'string') {
-        text = evt.content;
-      } else if (evt.data && typeof evt.data.content === 'string') {
-        text = evt.data.content;
-      }
-      if (text) extractLinks(text, 'link', evt.message_id);
-    });
-
-  return items;
-});
-
-
-
-// helper that *is* a function
-function sourcesFor(message_id) {
-  return allSources.value.filter(src => src.message_id === message_id)
-}
-const sourcesMap = computed(() => {
-  const m = {}
-  allSources.value.forEach(src => {
-    if (!m[src.message_id]) m[src.message_id] = []
-    m[src.message_id].push(src)
-  })
-  console.log('⟳ sourcesMap computed:', m)
-  return m
-})
-
-const auditLogEvents = computed(() => {
-  // synthetic if no streamingEvents but we have workflowData
-  if ((!messagesData.value || !messagesData.value.length) && workflowData.value) {
-
-
-    // alert("steaming ")
-    const unique = []
-    const seen = new Set()
-    workflowData.value.forEach((w, i) => {
-      
-      const key = `${w.agent_name}-${w.task}-${w.tool_name}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        unique.push({
-          id: `synthetic-${i}`,
-          title: `✅ ${w.agent_name} – ${w.task}`,
-          details: w.tool_name ? `Tool: ${w.tool_name}` : 'Completed',
-          subItems: [],
-          event: 'workflow_item',
-          type: 'tool_result',
-          timestamp: new Date().toISOString()
-        })
-      }
-    })
-    return unique
-  }
-
-  // otherwise from streamingEvents
-  const out = []
-  const seenKeys = new Set()
-  messagesData.value.filter(item=> item.event==="agent_completion").forEach((evt, idx) => {
-    const key = `${evt.event}-${evt.timestamp}`
-    if (!seenKeys.has(key)) {
-      seenKeys.add(key)
-
-      // SAFELY stringify or fallback
-      let raw = evt.content
-      let serialized = JSON.stringify(raw)
-      if (serialized === undefined) {
-        serialized = String(raw ?? '')
-      }
-
-      // truncate to 100 chars
-      const detail = serialized.length > 100
-        ? serialized.slice(0, 100) + '…'
-        : serialized
-
-      out.push({
-        id: `audit-${idx}`,
-        title: evt.event,
-        details: detail,
-        subItems: [],
-        event: evt.event,
-        type: 'info',
-        timestamp: evt.timestamp
-      })
-    }
-  })
-  return out
-})
-
-
-const toolSources = computed(() => {
-
-  console.log("messagesData tool",messagesData.value.filter(item=>item.event=="agent_completion"))
-
-  if (!messagesData.value || !Array.isArray(messagesData.value)) return []
-  
-  const sources = []
-  
-  messagesData.value.forEach(event => {
-    console.log("msg event",event.event,event.type,event.name, event)
-    if (event.event === 'agent_completion' && 
-        event.type === 'LiberalFunctionMessage' && 
-        event.name === 'search_tavily' &&
-        Array.isArray(event.content)) {
-      
-      event.content.forEach(source => {
-        let displayTitle = 'Unknown Source'
-        let domain = ''
-        
-        // Try to get title first, fallback to domain
-        if (source.title && source.title.trim()) {
-          displayTitle = source.title.trim()
-        } else if (source.url) {
-          try {
-            const url = new URL(source.url)
-            domain = url.hostname.replace('www.', '')
-            displayTitle = domain
-          } catch {
-            displayTitle = source.url
-          }
-        }
-        
-        // Extract domain for icon/display
-        if (source.url) {
-          try {
-            domain = new URL(source.url).hostname.replace('www.', '')
-          } catch {
-            domain = 'web'
-          }
-        }
-        
-        sources.push({
-          title: displayTitle || 'Untitled',
-          domain: domain || '',
-          url: source.url || '',
-          content: source.content ? source.content.substring(0, 200) + '...' : '',
-          type: 'web'
-        })
-      })
-    } else if (event.name === 'arxiv') {
-      // Parse arXiv results - remove the broken URL construction
-      const content = event.content || ''
-      const papers = content.split('Published:').slice(1)
-      
-      papers.forEach(paper => {
-        const titleMatch = paper.match(/Title: ([^\n]+)/)
-        const authorsMatch = paper.match(/Authors: ([^\n]+)/)
-        const urlMatch = paper.match(/URL: ([^\n]+)/)
-        const publishedMatch = paper.match(/Published: ([^\n]+)/)
-        
-        if (titleMatch) {
-          // Only use actual URLs from the content, don't construct fake ones
-          const arxivUrl = urlMatch ? urlMatch[1].trim() : ''
-          
-          sources.push({
-            title: titleMatch[1].trim() || 'Untitled Paper',
-            authors: authorsMatch ? authorsMatch[1].trim() : '',
-            domain: 'arxiv.org',
-            url: arxivUrl, // This might be empty if no URL is provided
-            content: paper.substring(0, 300) + '...',
-            type: 'arxiv',
-            published: publishedMatch ? publishedMatch[1].trim() : ''
-          })
-        }
-      })
-    }
-  })
-  
-
-  console.log("sources:",sources)
-  return sources.slice(0, 5) // Limit to 5 sources for UI
-
-  
-})
-
-
-
-const toolCalls = computed(() =>
-  messagesData.value
-    // only agent_completion events with content
-    .filter(msg => msg.event === 'agent_completion' && msg.content)
-    .map(msg => {
-        const content = typeof msg.content === 'string'
-        ? msg.content
-        : String(msg.content)
-
-      const toolMatch  = content.match(/<tool>([\s\S]*?)<\/tool>/)
-      const inputMatch = content.match(/<tool_input>([\s\S]*?)<\/tool_input>/)
-      if (!toolMatch || !inputMatch) return null
-
-      const toolName  = toolMatch[1].trim()
-      const toolInput = inputMatch[1].trim()
-
-      let title = ''
-       let titleSearch = ''
-      let details = ''
-
-      if (toolName === 'search_tavily') {
-        title   = `Search Tavily`
-        titleSearch   = `Searching Web`
-        details = `"${toolInput}"`
-      } else if (toolName === 'arxiv') {
-        title   = `Search arXiv`
-        titleSearch   = `Searching arXiv`
-        details = `"${toolInput}"`
-      } else if (toolName === 'DaytonaCodeSandbox') {
-        title   = `Execute Code`
-        titleSearch   = `Running analysis in sandbox`
-        details = 'Running analysis in sandbox'
-      } else {
-        title   = `${toolName}`
-         titleSearch   = `Calling: "${toolInput}"`
-        details = `"${toolInput}"`
-      }
-
-      return {
-        id:         msg.id,
-        toolName:   toolName,
-        toolInput:  toolInput,
-        title:      title,
-        titleSearch:titleSearch,
-        details:    details
-      }
-    })
-    .filter(x => x !== null)
-)
 </script>
 
 <style scoped>

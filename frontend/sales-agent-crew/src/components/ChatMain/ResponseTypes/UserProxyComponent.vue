@@ -1,10 +1,8 @@
 <template>
-  {{ props }}
-  <h1>User Proxu</h1>
     <div class="user-proxy-message">
       
       <!-- <p>{{ parsed.data?.agent_question || parsed.data?.deep_research_question }}</p> -->
-      <div class="markdown-content" v-html="formattedText(parsed.content?.agent_question || parsed.content?.deep_research_question||'')"></div>
+      <div class="markdown-content" v-html="formattedText(parsed.data?.agent_question || parsed.data?.deep_research_question||'')"></div>
 
       <!-- You might also parse parsed.message if needed -->
     </div>

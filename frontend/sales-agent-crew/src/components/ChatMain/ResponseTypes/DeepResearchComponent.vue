@@ -1,30 +1,31 @@
 <template>
-  <!-- {{ props }} -->
-  <div class="deep-research  mx-auto px-0 py-0">
+  <div class="deep-research max-w-4xl mx-auto px-0 py-0">
     <!-- If there's no finalReport, show a placeholder -->
     <div v-if="!finalReport">
-      <p class="text-center text-gray-500 dark:text-gray-400 italic">
+      <p class="text-center text-gray-500 italic">
         No research data available.
       </p>
     </div>
 
     <template v-else>
       <!-- Main Markdown-Rendered Content (larger font) -->
-      <div class="report-content prose prose-lg max-w-none mb-6 dark:prose-invert">
+      <div class="report-content prose prose-lg max-w-none mb-6">
         <div v-html="renderMarkdown(finalReport)"></div>
       </div>
 
       <!-- CITATIONS SECTION -->
+      <!-- We do a quick check if '## Citations' existed at all (citationsBlockFound) -->
       <div v-if="citationsBlockFound" class="mt-4">
-        <div v-if="citations.length === 0" class="text-sm text-red-500 dark:text-red-400">
-          Citations block found, but no bullet lines matched (check your format).
+        <div v-if="citations.length === 0" class="text-sm text-red-500">
+          Citations block found, but no bullet lines matched (check your
+          format).
         </div>
       </div>
 
       <!-- If citations exist, show them in a smaller text size -->
       <div v-if="citations.length > 0" class="citations-container space-y-4">
         <!-- Smaller heading for "Sources & Citations" -->
-        <h2 class="text-base font-semibold text-gray-800 dark:text-gray-200">
+        <h2 class="text-base font-semibold text-primary-brandTextPrimary">
           Sources & Citations ({{ totalCitationsCount }})
         </h2>
 
@@ -34,7 +35,7 @@
             type="text"
             v-model="searchQuery"
             placeholder="Search citations..."
-            class="flex-1 px-2 py-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 outline-none focus:ring-1 focus:ring-blue-500 text-[16px]"
+            class="flex-1 px-2 py-1 rounded-md border border-gray-300 outline-none focus:ring-1 focus:ring-blue-500 text-[16px]"
           />
         </div>
 
@@ -45,7 +46,7 @@
             <div
               v-for="cit in pagedCitations"
               :key="cit.id"
-              class="citation-card flex flex-col bg-white dark:bg-gray-800 p-3 rounded-md shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow"
+              class="citation-card flex flex-col bg-white p-3 rounded-md shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
             >
               <div class="flex items-start gap-2 mb-2">
                 <!-- Favicon -->
@@ -56,7 +57,7 @@
                 />
                 <!-- Citation Title -->
                 <h3
-                  class="font-medium text-gray-800 dark:text-gray-200 flex-1 leading-snug truncate"
+                  class="font-medium text-primary-brandTextPrimary flex-1 leading-snug text-ellipsis overflow-hidden"
                   :title="cit.title"
                 >
                   {{ cit.title }}
@@ -71,7 +72,7 @@
                   :href="cit.url"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="inline-flex items-center text-blue-600 dark:text-blue-400 hover:underline text-xs break-all"
+                  class="inline-flex items-center text-blue-600 hover:underline text-xs break-all"
                 >
                   {{ getDomain(cit.url) }}
                   <svg
@@ -88,7 +89,7 @@
                     />
                   </svg>
                 </a>
-                <span v-else class="text-[16px] text-gray-400 dark:text-gray-500">
+                <span v-else class="text-[16px] text-gray-400">
                   No URL provided
                 </span>
               </div>
@@ -100,17 +101,15 @@
             <button
               @click="prevPage"
               :disabled="currentPage === 1"
-              class="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded disabled:opacity-50"
+              class="px-2 py-1 bg-gray-100 rounded disabled:opacity-50"
             >
               Prev
             </button>
-            <span class="text-gray-900 dark:text-gray-100">
-              Page {{ currentPage }} of {{ totalPages }}
-            </span>
+            <span> Page {{ currentPage }} of {{ totalPages }} </span>
             <button
               @click="nextPage"
               :disabled="currentPage === totalPages"
-              class="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded disabled:opacity-50"
+              class="px-2 py-1 bg-gray-100 rounded disabled:opacity-50"
             >
               Next
             </button>
@@ -150,7 +149,7 @@ function renderMarkdown(text) {
 
 // ---- GET final_report (larger text for main body) ----
 const finalReport = computed(() => {
-  const raw = props.parsed?.content || '';
+  const raw = props.parsed?.data?.final_report || '';
   if (!raw) return '';
 
   // Remove the "## Citations" section from the main body
@@ -166,7 +165,7 @@ const finalReport = computed(() => {
 const citationsBlockFound = ref(false);
 
 const citations = computed(() => {
-  const text = props.parsed?.content || '';
+  const text = props.parsed?.data?.final_report || '';
   if (!text) return [];
 
   // Find "## Citations"
@@ -295,24 +294,27 @@ function getDomain(url) {
 
 /* MAIN REPORT: Larger text sizes (matching 'prose-lg') */
 .report-content :deep(h1) {
-  @apply text-[20px] font-semibold mt-4 mb-4 text-gray-900 dark:text-gray-100;
+  @apply text-[20px] font-semibold mt-4 mb-4;
 }
-.report-content :deep(h2),
+.report-content :deep(h2) {
+  @apply text-[16px] font-semibold mt-4 mb-4;
+}
 .report-content :deep(h3) {
-  @apply text-[16px] font-semibold mt-4 mb-4 text-gray-900 dark:text-gray-100;
+  @apply text-[16px] font-semibold mt-4 mb-4;
 }
 .report-content :deep(p) {
-  @apply text-base text-[16px] leading-relaxed mb-4 text-gray-800 dark:text-gray-200;
+  @apply text-base text-[16px] leading-relaxed mb-4 text-primary-brandTextPrimary;
 }
 .report-content :deep(a) {
-  @apply text-blue-600 dark:text-blue-400 underline;
+  @apply text-blue-600  underline;
 }
 
-/* CITATIONS: smaller text overall */
+/* CITATIONS: We do smaller text overall */
 .citations-container .citation-card {
   @apply text-[16px];
 }
 .citations-container .citation-card h3 {
+  /* text-sm or smaller as needed */
   @apply text-[16px];
 }
 
@@ -328,6 +330,5 @@ function getDomain(url) {
 ul,
 li {
   font-size: 16px !important;
-  color: inherit;
 }
 </style>

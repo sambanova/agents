@@ -11,7 +11,7 @@
           <div class="grow">
             <h3 class="text-sm text-primary-bodyText flex items-center">
               <span class="inline-block w-[75%] truncate capitalize">
-                {{ getTextAfterLastSlash(item.model_name) }} 
+                {{ getTextAfterLastSlash(item.llm_name) }} 
               </span>
               <span class="ml-1 w-[15%]">
                 ({{ item.count }})
@@ -24,11 +24,10 @@
           </div>
           <!-- Right: Icon  -->
           <div class="absolute top-[5px] right-[5px]">
-            
-            <template v-if="item?.model_name?.toLowerCase().includes('lama')">
+            <template v-if="item.llm_name.toLowerCase().includes('meta')">
               <img class="w-4 h-4" src="/Images/icons/meta.png" alt="">
             </template>
-            <template v-else-if="item?.model_name?.toLowerCase().includes('deepseek')">
+            <template v-else-if="item.llm_name.toLowerCase().includes('deepseek')">
               <img class="w-4 h-4" src="/Images/icons/deepseek.png" alt="">
             </template>
           </div>
@@ -74,13 +73,12 @@ watch(
 
 
 function getTextAfterLastSlash(str) {
-  // if it's not a string, bail out
-  if (typeof str !== 'string') return ''
-  // split on '/', return last segment
-  const parts = str.split('/')
-  return parts[parts.length - 1] || ''
+  if (!str.includes('/')) {
+    // If there is no slash, return the original string
+    return str;
+  }
+  return str.substring(str.lastIndexOf('/') + 1);
 }
-
 
 
 

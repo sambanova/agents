@@ -1,13 +1,11 @@
 <template>
-  <div v-if="isOpen" class="fixed inset-0 z-[99999] overflow-y-auto" style="z-index: 99999 !important;">
-    <div class="flex min-h-screen items-center justify-center p-4" @click="handleBackdropClick">
+  <div v-if="isOpen" class="fixed inset-0 z-50 overflow-y-auto" @click="handleBackdropClick">
+    <div class="flex min-h-screen items-center justify-center p-4">
       <!-- Backdrop -->
-      <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity -z-10"></div>
+      <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity"></div>
       
       <!-- Modal -->
-      <div class="relative w-full max-w-6xl bg-white rounded-lg shadow-xl z-10 pointer-events-auto opacity-100" 
-           style="z-index: 100000 !important; pointer-events: auto !important; opacity: 1 !important;" 
-           @click.stop @mousedown.stop @mouseup.stop>
+      <div class="relative w-full max-w-6xl bg-white rounded-lg shadow-xl" @click.stop>
         <!-- Header -->
         <div class="flex items-center justify-between p-4 border-b">
           <h3 class="text-lg font-semibold text-gray-900">
@@ -139,11 +137,12 @@ function loadArtifactContent(artifact) {
   
   switch (artifact.type) {
     case 'chart':
-      // Use the existing URL if available, otherwise try to construct from ID
-      if (artifact.url) {
-        chartUrl.value = artifact.url
-      } else if (artifact.id) {
-        chartUrl.value = `/api/files/${artifact.id}`
+      // For charts, we need to construct the URL from the attachment ID
+      if (artifact.id) {
+        // This would typically be a URL to your backend that serves the chart
+        chartUrl.value = `/api/artifacts/${artifact.id}`
+        // For now, we'll use a placeholder
+        chartUrl.value = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="100%" height="100%" fill="#f0f0f0"/><text x="50%" y="50%" text-anchor="middle" fill="#666">Chart: ' + artifact.title + '</text></svg>')}`
       }
       break
       

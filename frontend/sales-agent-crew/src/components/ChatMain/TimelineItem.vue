@@ -1,32 +1,25 @@
 <template>
-  <li
-    class="py-2 relative text-primary-brandGray dark:text-gray-300"
-  >
+  <li class="py-2 relative color-primary-brandGray">
     <div
       v-if="!isLast"
-      class="absolute left-0 top-0 h-full border-l-2 border-[#EAECF0] dark:border-gray-700"
+      class="absolute left-0 top-0 h-full border-l-2 border-[#EAECF0]"
     ></div>
 
     <span
-      class="absolute flex items-center justify-center w-6 h-6 bg-white dark:bg-gray-800 rounded-full -start-3 ring-8 ring-white dark:ring-gray-800"
+      class="absolute flex items-center justify-center w-6 h-6 bg-white rounded-full -start-3 ring-8 ring-white"
       :title="formatKey(data?.agent_name)"
     >
-      <component
-        class="w-4 h-4 text-gray-700 dark:text-gray-300"
-        :is="iconComponent"
-      />
+      <component class="size-[16px]" :is="iconComponent" />
     </span>
 
     <h3
-      :class="[
-        collapsed ? 'invisible' : '',
-        'flex ml-5 font-medium capitalize items-center mb-1 text-primary-brandTextPrimary dark:text-gray-100 text-[14px]'
-      ]"
+      :class="collapsed ? 'invisible' : ''"
+      class="flex ml-5 font-medium capitalize items-center mb-1 text-primary-brandTextPrimary text-[14px]"
     >
       {{ formatKey(data?.agent_name) }}
     </h3>
 
-    <div class="text-base font-normal text-gray-500 dark:text-gray-400">
+    <div class="text-base font-normal text-gray-500">
       <div
         class="mx-2"
         v-for="(value, key) in parsedResponse"
@@ -38,53 +31,33 @@
           :data="value"
         />
       </div>
-
-      <div v-if="!collapsed" class="p-1 text-right rounded text-xs">
+      <div v-if="!collapsed" class="p-1 text text-right rounded text-xs">
         <button
           @click="toggleExpanded"
-          class="m-0 p-0 text-primary-brandTextPrimary dark:text-gray-100 focus:outline-none"
+          class="m-0 p-0 text-primary-brandTextPrimary focus:outline-none"
         >
           {{ isExpanded ? '..hide' : 'more...' }}
         </button>
-
-        <div
-          v-if="isExpanded"
-          class="bg-primary-brandGray dark:bg-gray-700 p-2"
-          name="slide"
-        >
+        <div v-if="isExpanded" class="bg-primary-brandGray p-2" name="slide">
           <table class="w-full text-left">
             <tbody>
               <tr>
-                <td class="px-1 py-0 font-semibold text-gray-900 dark:text-gray-100">
-                  Name:
-                </td>
-                <td class="px-1 py-0 text-gray-700 dark:text-gray-300">
-                  {{ data.metadata.llm_name }}
-                </td>
+                <td class="px-1 py-0 font-semibold">Name:</td>
+                <td class="px-1 py-0">{{ data.metadata.llm_name }}</td>
               </tr>
               <tr>
-                <td class="px-1 py-0 font-semibold text-gray-900 dark:text-gray-100">
-                  Task:
-                </td>
-                <td class="px-1 py-0 text-gray-700 dark:text-gray-300">
-                  {{ data.metadata.task }}
-                </td>
+                <td class="px-1 py-0 font-semibold">Task:</td>
+                <td class="px-1 py-0">{{ data.metadata.task }}</td>
               </tr>
               <tr>
-                <td class="px-1 py-0 font-semibold text-gray-900 dark:text-gray-100">
-                  Duration:
-                </td>
-                <td class="px-1 py-0 text-gray-700 dark:text-gray-300">
+                <td class="px-1 py-0 font-semibold">Duration:</td>
+                <td class="px-1 py-0">
                   {{ formattedDuration(data.metadata.duration) }} s
                 </td>
               </tr>
               <tr>
-                <td class="px-1 py-0 font-semibold text-gray-900 dark:text-gray-100">
-                  Provider:
-                </td>
-                <td class="px-1 py-0 text-gray-700 dark:text-gray-300">
-                  {{ data.metadata.llm_provider }}
-                </td>
+                <td class="px-1 py-0 font-semibold">Provider:</td>
+                <td class="px-1 py-0">{{ data.metadata.llm_provider }}</td>
               </tr>
             </tbody>
           </table>
