@@ -738,8 +738,9 @@ async function filterChat(msgData) {
         // Only show user messages and final responses in main chat bubbles
         const isUserMessage = message.additional_kwargs?.agent_type === 'human';
         const isFinalResponse = message.additional_kwargs?.agent_type === 'react_end';
+        const isRegularAIMessage = message.type === 'AIMessage' && !isToolCall && !isToolResult && !isToolResponse;
         
-        if (!isUserMessage && !isFinalResponse) {
+        if (!isUserMessage && !isFinalResponse && !isRegularAIMessage) {
           return null; // Filter out intermediate agent responses that aren't tool-related
         }
         
@@ -1892,8 +1893,9 @@ function formatMessageData(msgItem) {
         // agent_completion events from LangGraph have structured data
         if (msgItem.data && typeof msgItem.data === 'object') {
           const formatted = {
+            content: msgItem.data.content || '',
             message: msgItem.data.content || '',
-            agent_type: msgItem.data.agent_type || 'assistant',
+            agent_type: msgItem.data.agent_type || msgItem.data.additional_kwargs?.agent_type || 'assistant',
             metadata: msgItem.data.response_metadata || null,
             additional_kwargs: msgItem.data.additional_kwargs || {},
             timestamp: msgItem.timestamp || new Date().toISOString(),

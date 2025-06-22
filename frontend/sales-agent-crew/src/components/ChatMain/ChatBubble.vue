@@ -345,6 +345,7 @@
   import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'
 import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue'
 import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue'
+import AssistantEndComponent from '@/components/ChatMain/ResponseTypes/AssistantEndComponent.vue'
 
 // Icons for streaming timeline
 import {
@@ -479,6 +480,8 @@ return parsedData.metadata;
         return FinancialAnalysisComponent
       case 'deep_research':
         return DeepResearchComponent
+      case 'react_end':
+        return AssistantEndComponent
       case 'error':
         return ErrorComponent
       default:
