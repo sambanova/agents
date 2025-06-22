@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div v-if="showBubble">
     <!-- Handle streaming events -->
     <li v-if="props.streamingEvents" class="relative px-4 items-start gap-x-2 sm:gap-x-4">
       <div class="w-full relative flex items-center">
@@ -1960,6 +1960,28 @@ function getAgentType (event) {
     null
   )
 }
+
+// Decide whether this bubble should be rendered (skip internal or debug-only messages)
+const showBubble = computed(() => {
+  // Always show if this bubble carries streamingEvents (status line)
+  if (props.streamingEvents) return true
+
+  // Empty or whitespace-only data – skip
+  if (!props.data || String(props.data).trim() === '') return false
+
+  // Raw subgraph payload – skip
+  if (String(props.data).includes('<subgraph')) return false
+
+  // Internal agent types we never surface
+  const internalTypes = ['react_subgraph', 'react_tool', 'tool_response', 'routing']
+  const agentType = parsedData.value?.agent_type
+  if (internalTypes.includes(agentType)) return false
+
+  // If component to be rendered is UnknownTypeComponent (and no streaming events), hide
+  if (selectedComponent.value === UnknownTypeComponent) return false
+
+  return true
+})
 
   </script>
 
