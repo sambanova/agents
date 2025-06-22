@@ -2008,8 +2008,11 @@ const filteredMessages = computed(() => {
       }
       
       if (streamingEvents.includes(msg.event) && msg.message_id) {
-        // Count all streaming events
-        messageIdCounts[msg.message_id] = (messageIdCounts[msg.message_id] || 0) + 1;
+        // CRITICAL: Only count non-AI messages for grouping
+        // AI messages should never be grouped, so exclude them from the count
+        if (msg.type !== 'AIMessage' && msg.agent_type !== 'react_end') {
+          messageIdCounts[msg.message_id] = (messageIdCounts[msg.message_id] || 0) + 1;
+        }
         
         // Separate tool-related messages for comprehensive audit log and Daytona processing
         if (msg.isToolRelated || msg.isDaytonaRelated) {
