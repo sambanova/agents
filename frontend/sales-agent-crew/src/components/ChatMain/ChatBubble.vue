@@ -995,29 +995,13 @@ uniqueEvents.forEach((event, index) => {
       break;
 
     case 'agent_completion':
+
+
       if (data.type === 'LiberalFunctionMessage' && data.name) {
         // --- search_tavily result block ---
         if (data.name === 'search_tavily' && Array.isArray(data.content)) {
 
-           const hasEvent = auditEvents.some(it => it.title === '🔍 Search Tavily');
-          if (!hasEvent) {
-            auditEvents.push({
-              id:        `audit-${idx}`,
-              title:     `🔍 Search Tavily`,
-              details:   '',
-              subItems:  [],
-              dotClass:  'bg-gray-400',
-              type:      'info',
-              event:     event.event,
-              timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
-              fullData:  data
-            });
-            idx++;
-          }
-
-
-
-
+          
           title = `✅ Found ${data.content.length} web sources`;
           subItems = data.content.slice(0, 5).map((source, idx) => {
             let displayTitle = source.title?.trim() || '';
@@ -1069,24 +1053,6 @@ uniqueEvents.forEach((event, index) => {
         // --- arxiv result block ---
         if (data.name === 'arxiv') {
 
-
-           const hasEvent = auditEvents.some(it => it.title === '📚 Search arXiv');
-          if (!hasEvent) {
-            auditEvents.push({
-              id:        `audit-${idx}`,
-              title:     `📚 Search arXiv`,
-              details:   '',
-              subItems:  [],
-              dotClass:  'bg-gray-400',
-              type:      'info',
-              event:     event.event,
-              timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
-              fullData:  data
-            });
-            idx++;
-          }
-
-
           const papers = data.content?.includes('Title:')
             ? data.content.split('Title:').length - 1
             : 1;
@@ -1129,26 +1095,37 @@ uniqueEvents.forEach((event, index) => {
 
 
            const hasEvent = auditEvents.some(it => it.title === '⚡ Execute Code');
-          if (!hasEvent) {
-            auditEvents.push({
-              id:        `audit-${idx}`,
-              title:     `⚡ Execute Code`,
-              details:   '',
-              subItems:  [],
-              dotClass:  'bg-gray-400',
-              type:      'info',
-              event:     event.event,
-              timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
-              fullData:  data
-            });
-            idx++;
-          }
-
+         
           title   = `✅ Code execution complete`;
           details = 'Generated charts and analysis';
           dotClass = 'bg-green-500';
           type     = 'tool_result';
         }
+      }else if(data.agent_type==="react_tool"){
+       const toolMatch  = data.content.match(/<tool>([^<]+)<\/tool>/);
+        const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/);
+
+        if (toolMatch) {
+          const tool  = toolMatch[1];
+          const query = inputMatch ? inputMatch[1].trim() : 'No query';
+
+          if (tool === 'search_tavily') {
+            title   = `🔍 Search Tavily`;
+            details = `Query: "${query}"`;
+          } else if (tool === 'arxiv') {
+            title   = `📚 Search arXiv`;
+            details = `Query: "${query}"`;
+          } else if (tool === 'DaytonaCodeSandbox') {
+            title   = `⚡ Execute Code`;
+            details = 'Running analysis in sandbox';
+          } else {
+            title   = `🔧 ${tool.replace('_', ' ')}`;
+            details = `Query: "${query}"`;
+          }
+          dotClass = 'bg-purple-500';
+          type     = 'tool_call';
+        }
+        
       }
       break;
   }
