@@ -2014,18 +2014,12 @@ const filteredMessages = computed(() => {
         return;
       }
 
-      // Separate only the FINAL AI messages (react_end, financial_analysis_end)
-      if (agentType === 'react_end' || agentType === 'financial_analysis_end') {
-        const uniqueKey = `${agentType}_${msgId}_${index}`;
-        grouped.set(uniqueKey, msg);
-        return;
-      }
-
-      // For tool responses and streaming chunks, group them if they belong to the same conversation turn
-      if (streamingEvents.includes(msg.event) &&
+      // For tool responses, streaming chunks, AND final AI responses, group them if they belong to the same conversation turn
+      if ((streamingEvents.includes(msg.event) &&
           msgId &&
           messageIdCounts[msgId] > 1 &&
-          !userMessages.has(msgId)) {
+          !userMessages.has(msgId)) ||
+          (agentType === 'react_end' || agentType === 'financial_analysis_end' || agentType === 'sales_leads_end')) {
 
         const groupKey = `streaming_${msgId}`;
 
@@ -2092,6 +2086,14 @@ const filteredMessages = computed(() => {
       const bTime = new Date(b.timestamp || 0).getTime();
       return aTime - bTime;
     });
+    
+    console.log('filteredMessages result:', result.map(item => ({
+      type: item.type || 'individual',
+      event: item.event,
+      agent_type: item.data?.agent_type || item.agent_type,
+      message_id: item.message_id,
+      eventCount: item.type === 'streaming_group' ? item.events?.length : 1
+    })));
     
     return result;
   } catch (error) {

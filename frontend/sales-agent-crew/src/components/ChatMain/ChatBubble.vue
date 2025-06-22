@@ -755,10 +755,13 @@ const currentStreamingStatus = computed(() => {
     }
   }
   
-  // Check if we're done
+  // Check if we're done - include all completion agent types
   const lastEvent = events[events.length - 1]
   if (lastEvent?.event === 'stream_complete' || 
-      (lastEvent?.event === 'agent_completion' && lastEvent.data.agent_type === 'react_end')) {
+      (lastEvent?.event === 'agent_completion' && 
+       (lastEvent.data.agent_type === 'react_end' || 
+        lastEvent.data.agent_type === 'financial_analysis_end' || 
+        lastEvent.data.agent_type === 'sales_leads_end'))) {
     return '✅ Response complete'
   }
   
@@ -797,7 +800,11 @@ const isCurrentlyStreaming = computed(() => {
   if (!props.streamingEvents || props.streamingEvents.length === 0) return true
   
   const lastEvent = props.streamingEvents[props.streamingEvents.length - 1]
-  return lastEvent.event !== 'stream_complete'
+  return lastEvent.event !== 'stream_complete' && 
+         !(lastEvent.event === 'agent_completion' && 
+           (lastEvent.data.agent_type === 'react_end' || 
+            lastEvent.data.agent_type === 'financial_analysis_end' || 
+            lastEvent.data.agent_type === 'sales_leads_end'))
 })
 
 const hasCompletedEvents = computed(() => {
@@ -1289,10 +1296,13 @@ const auditLogEvents = computed(() => {
 const streamingResponseContent = computed(() => {
   if (!props.streamingEvents) return ''
   
-  // First, look for the final completed response (react_end)
+  // First, look for the final completed response (react_end, financial_analysis_end, sales_leads_end)
   for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
     const event = props.streamingEvents[i]
-    if (event.event === 'agent_completion' && event.data.agent_type === 'react_end') {
+    if (event.event === 'agent_completion' && 
+        (event.data.agent_type === 'react_end' || 
+         event.data.agent_type === 'financial_analysis_end' || 
+         event.data.agent_type === 'sales_leads_end')) {
       return event.data.content || ''
     }
   }
