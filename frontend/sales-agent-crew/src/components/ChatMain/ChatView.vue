@@ -2029,8 +2029,10 @@ const filteredMessages = computed(() => {
       const msgId = msg.message_id;
       
       // ALWAYS show user messages and AI messages as separate bubbles
-      if (userMessages.has(msgId) || aiMessages.has(msgId)) {
-        const uniqueKey = `${msg.type}_${msgId}_${index}`;
+      // Check the message type directly, not just the message_id
+      if (msg.type === 'HumanMessage' || msg.type === 'AIMessage' || 
+          msg.agent_type === 'human' || msg.agent_type === 'react_end') {
+        const uniqueKey = `${msg.type || msg.agent_type}_${msgId}_${index}`;
         grouped.set(uniqueKey, msg);
         return;
       }

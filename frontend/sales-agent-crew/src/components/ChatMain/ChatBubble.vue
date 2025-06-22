@@ -1274,71 +1274,133 @@ const toolSources = computed(() => {
   const sources = []
   
   props.streamingEvents.forEach(event => {
-    if (event.event === 'agent_completion' && 
-        event.data.type === 'LiberalFunctionMessage' && 
-        event.data.name === 'search_tavily' &&
-        Array.isArray(event.data.content)) {
-      
-      event.data.content.forEach(source => {
-        let displayTitle = 'Unknown Source'
-        let domain = ''
+    // Handle Tavily sources - multiple formats for real-time vs persistence
+    if (event.event === 'agent_completion') {
+      // Format 1: LiberalFunctionMessage with name = 'search_tavily'
+      if (event.data.type === 'LiberalFunctionMessage' && event.data.name === 'search_tavily') {
+        let sourcesArray = []
         
-        // Try to get title first, fallback to domain
-        if (source.title && source.title.trim()) {
-          displayTitle = source.title.trim()
-        } else if (source.url) {
-          try {
-            const url = new URL(source.url)
-            domain = url.hostname.replace('www.', '')
-            displayTitle = domain
-          } catch {
-            displayTitle = source.url
+        // Parse sources from different possible formats
+        if (Array.isArray(event.data.content)) {
+          sourcesArray = event.data.content
+        } else if (typeof event.data.content === 'string') {
+          sourcesArray = parsePythonStyleJSON(event.data.content)
+          if (!Array.isArray(sourcesArray)) {
+            sourcesArray = []
           }
         }
         
-        // Extract domain for icon/display
-        if (source.url) {
-          try {
-            domain = new URL(source.url).hostname.replace('www.', '')
-          } catch {
-            domain = 'web'
-          }
-        }
-        
-        sources.push({
-          title: displayTitle || 'Untitled',
-          domain: domain || '',
-          url: source.url || '',
-          content: source.content ? source.content.substring(0, 200) + '...' : '',
-          type: 'web'
-        })
-      })
-    } else if (event.data.name === 'arxiv') {
-      // Parse arXiv results - remove the broken URL construction
-      const content = event.data.content || ''
-      const papers = content.split('Published:').slice(1)
-      
-      papers.forEach(paper => {
-        const titleMatch = paper.match(/Title: ([^\n]+)/)
-        const authorsMatch = paper.match(/Authors: ([^\n]+)/)
-        const urlMatch = paper.match(/URL: ([^\n]+)/)
-        const publishedMatch = paper.match(/Published: ([^\n]+)/)
-        
-        if (titleMatch) {
-          // Only use actual URLs from the content, don't construct fake ones
-          const arxivUrl = urlMatch ? urlMatch[1].trim() : ''
-          
-          sources.push({
-            title: titleMatch[1].trim() || 'Untitled Paper',
-            authors: authorsMatch ? authorsMatch[1].trim() : '',
-            domain: 'arxiv.org',
-            url: arxivUrl, // This might be empty if no URL is provided
-            content: paper.substring(0, 300) + '...',
-            type: 'arxiv',
-            published: publishedMatch ? publishedMatch[1].trim() : ''
+        if (sourcesArray.length > 0) {
+          sourcesArray.forEach(source => {
+            let displayTitle = 'Unknown Source'
+            let domain = ''
+            
+            // Try to get title first, fallback to domain
+            if (source.title && source.title.trim()) {
+              displayTitle = source.title.trim()
+            } else if (source.url) {
+              try {
+                const url = new URL(source.url)
+                domain = url.hostname.replace('www.', '')
+                displayTitle = domain
+              } catch {
+                displayTitle = source.url
+              }
+            }
+            
+            // Extract domain for icon/display
+            if (source.url) {
+              try {
+                domain = new URL(source.url).hostname.replace('www.', '')
+              } catch {
+                domain = 'web'
+              }
+            }
+            
+            sources.push({
+              title: displayTitle || 'Untitled',
+              domain: domain || '',
+              url: source.url || '',
+              content: source.content ? source.content.substring(0, 200) + '...' : '',
+              type: 'web'
+            })
           })
         }
-      })
+      }
+      // Format 2: agent_type = 'tool_response' (for persistence)
+      else if (event.data.agent_type === 'tool_response' && event.data.content) {
+        let sourcesArray = []
+        
+        if (typeof event.data.content === 'string') {
+          sourcesArray = parsePythonStyleJSON(event.data.content)
+          if (!Array.isArray(sourcesArray)) {
+            sourcesArray = []
+          }
+        }
+        
+        if (sourcesArray.length > 0) {
+          sourcesArray.forEach(source => {
+            let displayTitle = 'Unknown Source'
+            let domain = ''
+            
+            if (source.title && source.title.trim()) {
+              displayTitle = source.title.trim()
+            } else if (source.url) {
+              try {
+                const url = new URL(source.url)
+                domain = url.hostname.replace('www.', '')
+                displayTitle = domain
+              } catch {
+                displayTitle = source.url
+              }
+            }
+            
+            if (source.url) {
+              try {
+                domain = new URL(source.url).hostname.replace('www.', '')
+              } catch {
+                domain = 'web'
+              }
+            }
+            
+            sources.push({
+              title: displayTitle || 'Untitled',
+              domain: domain || '',
+              url: source.url || '',
+              content: source.content ? source.content.substring(0, 200) + '...' : '',
+              type: 'web'
+            })
+          })
+        }
+      }
+      // Handle arXiv sources
+      else if (event.data.name === 'arxiv') {
+        // Parse arXiv results - remove the broken URL construction
+        const content = event.data.content || ''
+        const papers = content.split('Published:').slice(1)
+        
+        papers.forEach(paper => {
+          const titleMatch = paper.match(/Title: ([^\n]+)/)
+          const authorsMatch = paper.match(/Authors: ([^\n]+)/)
+          const urlMatch = paper.match(/URL: ([^\n]+)/)
+          const publishedMatch = paper.match(/Published: ([^\n]+)/)
+          
+          if (titleMatch) {
+            // Only use actual URLs from the content, don't construct fake ones
+            const arxivUrl = urlMatch ? urlMatch[1].trim() : ''
+            
+            sources.push({
+              title: titleMatch[1].trim() || 'Untitled Paper',
+              authors: authorsMatch ? authorsMatch[1].trim() : '',
+              domain: 'arxiv.org',
+              url: arxivUrl, // This might be empty if no URL is provided
+              content: paper.substring(0, 300) + '...',
+              type: 'arxiv',
+              published: publishedMatch ? publishedMatch[1].trim() : ''
+            })
+          }
+        })
+      }
     }
   })
   
