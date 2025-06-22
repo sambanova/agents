@@ -737,7 +737,7 @@ async function filterChat(msgData) {
         
         // Only show user messages and final responses in main chat bubbles
         const isUserMessage = message.additional_kwargs?.agent_type === 'human';
-        const isFinalResponse = message.additional_kwargs?.agent_type === 'react_end';
+        const isFinalResponse = ['react_end', 'financial_analysis_end', 'sales_leads_end'].includes(message.additional_kwargs?.agent_type);
         const isRegularAIMessage = message.type === 'AIMessage' && !isToolCall && !isToolResult && !isToolResponse;
         
         if (!isUserMessage && !isFinalResponse && !isRegularAIMessage) {
