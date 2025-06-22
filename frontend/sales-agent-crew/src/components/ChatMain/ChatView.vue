@@ -1988,12 +1988,26 @@ const filteredMessages = computed(() => {
     const grouped = new Map();
     const streamingEvents = ['stream_start', 'agent_completion', 'llm_stream_chunk', 'stream_complete'];
     
-    // First pass: count streaming events by message_id and separate tool-related messages
+    // First pass: identify distinct conversation turns and streaming groups
     const messageIdCounts = {};
+    const userMessages = new Set(); // Track user messages
+    const aiMessages = new Set(); // Track AI messages
     const toolRelatedMessages = new Map(); // Store tool-related messages separately
     
     messagesData.value.forEach(msg => {
-      if (msg && streamingEvents.includes(msg.event) && msg.message_id) {
+      if (!msg) return;
+      
+      // Identify user messages (these should always be separate)
+      if (msg.type === 'HumanMessage' || msg.agent_type === 'human') {
+        userMessages.add(msg.message_id);
+      }
+      
+      // Identify AI messages (these should be separate unless they're truly streaming)
+      if (msg.type === 'AIMessage' || msg.agent_type === 'react_end') {
+        aiMessages.add(msg.message_id);
+      }
+      
+      if (streamingEvents.includes(msg.event) && msg.message_id) {
         // Count all streaming events
         messageIdCounts[msg.message_id] = (messageIdCounts[msg.message_id] || 0) + 1;
         
@@ -2012,17 +2026,28 @@ const filteredMessages = computed(() => {
     messagesData.value.forEach((msg, index) => {
       if (!msg) return; // Skip null/undefined messages
       
-      // For streaming events that appear multiple times with same message_id, group them
+      const msgId = msg.message_id;
+      
+      // ALWAYS show user messages and AI messages as separate bubbles
+      if (userMessages.has(msgId) || aiMessages.has(msgId)) {
+        const uniqueKey = `${msg.type}_${msgId}_${index}`;
+        grouped.set(uniqueKey, msg);
+        return;
+      }
+      
+      // For tool responses and streaming chunks, group them if they belong to the same conversation turn
       if (streamingEvents.includes(msg.event) && 
-          msg.message_id && 
-          messageIdCounts[msg.message_id] > 1) {
+          msgId && 
+          messageIdCounts[msgId] > 1 &&
+          !userMessages.has(msgId) &&
+          !aiMessages.has(msgId)) {
         
-        const groupKey = `streaming_${msg.message_id}`;
+        const groupKey = `streaming_${msgId}`;
         
         if (!grouped.has(groupKey)) {
           grouped.set(groupKey, {
             type: 'streaming_group',
-            message_id: msg.message_id,
+            message_id: msgId,
             events: [],
             timestamp: msg.timestamp || new Date().toISOString()
           });
@@ -2033,7 +2058,7 @@ const filteredMessages = computed(() => {
           group.events.push(msg);
           
           // Add tool-related events to the streaming group for comprehensive processing
-          const toolKey = `tool_${msg.message_id}`;
+          const toolKey = `tool_${msgId}`;
           if (toolRelatedMessages.has(toolKey)) {
             group.events.push(...toolRelatedMessages.get(toolKey));
             // Sort events within the group by timestamp for proper timeline
@@ -2046,12 +2071,11 @@ const filteredMessages = computed(() => {
         }
       } else if (msg.isToolRelated) {
         // For tool-related messages from loaded conversations, create a synthetic streaming group
-        
-        const groupKey = `streaming_${msg.message_id}`;
+        const groupKey = `streaming_${msgId}`;
         if (!grouped.has(groupKey)) {
           grouped.set(groupKey, {
             type: 'streaming_group',
-            message_id: msg.message_id,
+            message_id: msgId,
             events: [msg], // Include the tool-related message in the events
             timestamp: msg.timestamp || new Date().toISOString()
           });
@@ -2069,7 +2093,7 @@ const filteredMessages = computed(() => {
         }
       } else {
         // For all other messages (loaded chats, standalone messages), show individually
-        const uniqueKey = msg.conversation_id || `${msg.event}_${msg.message_id}_${index}` || msg.timestamp || `msg_${index}`;
+        const uniqueKey = `${msg.type || msg.event}_${msgId}_${index}`;
         grouped.set(uniqueKey, msg);
       }
     });

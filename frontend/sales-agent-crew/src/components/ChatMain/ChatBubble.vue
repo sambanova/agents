@@ -251,7 +251,7 @@
         </div>
         <!-- End Card -->
       </div>
-      <UserAvatar :type="user" />
+      <UserAvatar :type="'user'" />
     </li>
     
     <!-- For all other cases -->
@@ -423,6 +423,11 @@ import {
   streamingEvents: {
     type: Array,
     default: null
+  },
+  
+  isLoading: {
+    type: Boolean,
+    default: false
   }
   
   })
@@ -895,8 +900,6 @@ const auditLogEvents = computed(() => {
     return [];
   }
   
-
-  
   // First, deduplicate events to prevent duplicate audit log entries
   const uniqueEvents = [];
   const seenEventKeys = new Set();
@@ -954,6 +957,7 @@ const auditLogEvents = computed(() => {
       let details = ''
       let dotClass = 'bg-gray-400'
       let type = 'info'
+      let subItems = []
       
       switch (event.event) {
         case 'llm_stream_chunk':
@@ -986,12 +990,144 @@ const auditLogEvents = computed(() => {
           break
           
         case 'agent_completion':
+          // Handle both real-time and persistence cases for tool responses
           if (data.type === 'LiberalFunctionMessage' && data.name) {
-            if (data.name === 'search_tavily' && Array.isArray(data.content)) {
-              title = `✅ Found ${data.content.length} web sources`
+            if (data.name === 'search_tavily') {
+              let sourcesArray = []
+              
+              // Parse sources from different possible formats
+              if (Array.isArray(data.content)) {
+                sourcesArray = data.content
+              } else if (typeof data.content === 'string') {
+                sourcesArray = parsePythonStyleJSON(data.content)
+                if (!Array.isArray(sourcesArray)) {
+                  sourcesArray = []
+                }
+              }
+              
+              if (sourcesArray.length > 0) {
+                title = `✅ Found ${sourcesArray.length} web sources`
+                
+                // Extract actual domains/titles from sources for sub-bullets
+                subItems = sourcesArray.slice(0, 5).map((source, idx) => {
+                  let displayTitle = 'Unknown Source'
+                  let domain = ''
+                  
+                  if (source.title && source.title.trim()) {
+                    displayTitle = source.title.trim()
+                  } else if (source.url) {
+                    try {
+                      const url = new URL(source.url)
+                      domain = url.hostname.replace('www.', '')
+                      displayTitle = domain
+                    } catch {
+                      displayTitle = source.url
+                    }
+                  }
+                  
+                  if (source.url) {
+                    try {
+                      domain = new URL(source.url).hostname.replace('www.', '')
+                    } catch {
+                      domain = 'web'
+                    }
+                  }
+                  
+                  return {
+                    id: `source-${idx}`,
+                    title: displayTitle,
+                    domain: domain
+                  }
+                })
+                
+                // Keep the old details for backward compatibility
+                const sourceNames = subItems.slice(0, 3).map(item => item.title)
+                details = sourceNames.join(', ')
+                if (sourcesArray.length > 3) details += `, and ${sourcesArray.length - 3} more...`
+                
+                dotClass = 'bg-green-500'
+                type = 'tool_result'
+              } else {
+                // Fallback if no sources found
+                title = `✅ Search Tavily completed`
+                details = 'No sources returned'
+                dotClass = 'bg-yellow-500'
+                type = 'tool_result'
+              }
+            } else if (data.name === 'arxiv') {
+              const papers = data.content && data.content.includes('Title:') ? 
+                data.content.split('Title:').length - 1 : 1
+              title = `✅ Found ${papers} arXiv papers`
+              
+              // Extract paper titles for sub-bullets with deduplication
+              const titleMatches = data.content.match(/Title: ([^\n]+)/g)
+              
+              if (titleMatches) {
+                // Deduplicate papers by title
+                const uniqueTitles = [...new Set(titleMatches.map(t => t.replace('Title: ', '').trim()))]
+                
+                details = uniqueTitles.slice(0, 2).join(', ')
+                if (uniqueTitles.length > 2) details += `, and ${uniqueTitles.length - 2} more...`
+                
+                subItems = uniqueTitles.slice(0, 5).map((title, idx) => ({
+                  id: `paper-${idx}`,
+                  title: title,
+                  domain: 'arxiv.org'
+                }))
+              }
+              
+              dotClass = 'bg-green-500'
+              type = 'tool_result'
+            } else if (data.name === 'DaytonaCodeSandbox') {
+              title = `✅ Code execution complete`
+              details = 'Generated charts and analysis'
+              dotClass = 'bg-green-500'
+              type = 'tool_result'
+            }
+          }
+          // ENHANCED: Handle tool calls from agent_completion (for persistence)
+          else if (data.agent_type === 'react_tool' && data.content && typeof data.content === 'string' && data.content.includes('<tool>')) {
+            const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
+            const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
+            
+            if (toolMatch) {
+              const tool = toolMatch[1]
+              const query = inputMatch ? inputMatch[1].trim() : 'No query'
+              
+              if (tool === 'search_tavily') {
+                title = `🔍 Search Tavily`
+                details = `Query: "${query}"`
+              } else if (tool === 'arxiv') {
+                title = `📚 Search arXiv`
+                details = `Query: "${query}"`
+              } else if (tool === 'DaytonaCodeSandbox') {
+                title = `⚡ Execute Code`
+                details = 'Running analysis in sandbox'
+              } else {
+                title = `🔧 ${tool.replace('_', ' ')}`
+                details = `Query: "${query}"`
+              }
+              dotClass = 'bg-purple-500'
+              type = 'tool_call'
+            }
+          }
+          // Handle tool responses from agent_completion (for persistence) - ENHANCED FOR TAVILY
+          else if (data.agent_type === 'tool_response' && data.content) {
+            // This handles the case where tool responses are stored as agent_completion with agent_type: 'tool_response'
+            let sourcesArray = []
+            
+            if (typeof data.content === 'string') {
+              sourcesArray = parsePythonStyleJSON(data.content)
+              if (!Array.isArray(sourcesArray)) {
+                sourcesArray = []
+              }
+            }
+            
+            if (sourcesArray.length > 0) {
+              title = `✅ Found ${sourcesArray.length} web sources`
               
               // Extract actual domains/titles from sources for sub-bullets
-              const subItems = data.content.slice(0, 5).map((source, idx) => {
+              subItems = sourcesArray.slice(0, 5).map((source, idx) => {
                 let displayTitle = 'Unknown Source'
                 let domain = ''
                 
@@ -1022,63 +1158,57 @@ const auditLogEvents = computed(() => {
                 }
               })
               
-              // Keep the old details for backward compatibility
               const sourceNames = subItems.slice(0, 3).map(item => item.title)
               details = sourceNames.join(', ')
-              if (data.content.length > 3) details += `, and ${data.content.length - 3} more...`
+              if (sourcesArray.length > 3) details += `, and ${sourcesArray.length - 3} more...`
               
               dotClass = 'bg-green-500'
               type = 'tool_result'
+            }
+          }
+          // CRITICAL FIX: Handle LiberalFunctionMessage that might not have name but has search_tavily data
+          else if (data.type === 'LiberalFunctionMessage' && !data.name && data.content && typeof data.content === 'string') {
+            // Check if this is a search_tavily response based on content structure
+            const contentArray = parsePythonStyleJSON(data.content)
+            if (Array.isArray(contentArray) && contentArray.length > 0 && contentArray[0]?.url) {
+              // This looks like a search result
+              title = `✅ Found ${contentArray.length} web sources`
               
-              // Add subItems to the event
-              return {
-                id: `audit-${index}`,
-                title,
-                details,
-                subItems,
-                dotClass,
-                type,
-                event: event.event,
-                timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
-                fullData: data
-              }
-            } else if (data.name === 'arxiv') {
-              const papers = data.content && data.content.includes('Title:') ? 
-                data.content.split('Title:').length - 1 : 1
-              title = `✅ Found ${papers} arXiv papers`
-              
-              // Extract paper titles for sub-bullets
-              const titleMatches = data.content.match(/Title: ([^\n]+)/g)
-              let subItems = []
-              
-              if (titleMatches) {
-                details = titleMatches.slice(0, 2).map(t => t.replace('Title: ', '').trim()).join(', ')
-                if (titleMatches.length > 2) details += `, and ${titleMatches.length - 2} more...`
+              subItems = contentArray.slice(0, 5).map((source, idx) => {
+                let displayTitle = 'Unknown Source'
+                let domain = ''
                 
-                subItems = titleMatches.slice(0, 5).map((titleMatch, idx) => ({
-                  id: `paper-${idx}`,
-                  title: titleMatch.replace('Title: ', '').trim(),
-                  domain: 'arxiv.org'
-                }))
-              }
+                if (source.title && source.title.trim()) {
+                  displayTitle = source.title.trim()
+                } else if (source.url) {
+                  try {
+                    const url = new URL(source.url)
+                    domain = url.hostname.replace('www.', '')
+                    displayTitle = domain
+                  } catch {
+                    displayTitle = source.url
+                  }
+                }
+                
+                if (source.url) {
+                  try {
+                    domain = new URL(source.url).hostname.replace('www.', '')
+                  } catch {
+                    domain = 'web'
+                  }
+                }
+                
+                return {
+                  id: `source-${idx}`,
+                  title: displayTitle,
+                  domain: domain
+                }
+              })
               
-              dotClass = 'bg-green-500'
-              type = 'tool_result'
+              const sourceNames = subItems.slice(0, 3).map(item => item.title)
+              details = sourceNames.join(', ')
+              if (contentArray.length > 3) details += `, and ${contentArray.length - 3} more...`
               
-              return {
-                id: `audit-${index}`,
-                title,
-                details,
-                subItems,
-                dotClass,
-                type,
-                event: event.event,
-                timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
-                fullData: data
-              }
-            } else if (data.name === 'DaytonaCodeSandbox') {
-              title = `✅ Code execution complete`
-              details = 'Generated charts and analysis'
               dotClass = 'bg-green-500'
               type = 'tool_result'
             }
@@ -1090,7 +1220,7 @@ const auditLogEvents = computed(() => {
         id: `audit-${index}`,
         title,
         details,
-        subItems: [],
+        subItems,
         dotClass,
         type,
         event: event.event,
@@ -1593,8 +1723,40 @@ async function generateSelectablePDF() {
   }, 500) // A delay of 500ms; adjust if necessary
 }
 
-
-
+// Helper function to parse Python-style JSON with single quotes
+function parsePythonStyleJSON(jsonString) {
+  try {
+    // First try regular JSON parsing
+    return JSON.parse(jsonString);
+  } catch (e) {
+    // If that fails, try to handle Python-style single quotes
+    try {
+      // Use a more sophisticated approach to handle Python-style JSON
+      // This regex-based approach is more robust for handling nested quotes
+      let processedString = jsonString;
+      
+      // Replace Python-style single quotes with double quotes, but preserve escaped quotes
+      // This handles cases like: [{'url': 'https://example.com', 'content': 'The company\'s mission...'}]
+      processedString = processedString
+        .replace(/'/g, '"')  // Replace all single quotes with double quotes
+        .replace(/\\"/g, "'") // Restore escaped quotes back to single quotes
+        .replace(/"(\w+)":/g, '"$1":') // Ensure property names are double-quoted
+        .replace(/:\s*"([^"]*)"(?=\s*[,}])/g, ':"$1"'); // Ensure string values are properly quoted
+      
+      return JSON.parse(processedString);
+    } catch (e2) {
+      // If still failing, try using eval as last resort (safer than before)
+      try {
+        // This is a controlled eval - we know the source is from our backend
+        const result = eval('(' + jsonString + ')');
+        return result;
+      } catch (e3) {
+        console.error('Failed to parse JSON with all methods:', e3);
+        return null;
+      }
+    }
+  }
+}
 
 
   </script>
