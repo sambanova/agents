@@ -492,6 +492,8 @@ const newMessage = ref(''); // User input field
 const socket = ref(null); // WebSocket reference
 const container = ref(null);
 const isExpanded = ref(false);
+let pingInterval = null;
+
 function toggleExpand() {
   isExpanded.value = !isExpanded.value;
 }
@@ -1654,11 +1656,22 @@ async function connectWebSocket() {
           token: `Bearer ${token}`,
         })
       );
+      // Start sending pings
+      pingInterval = setInterval(() => {
+        if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+          socket.value.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 30000); // Send a ping every 30 seconds
     };
     socket.value.onmessage = (event) => {
       try {
         const receivedData = JSON.parse(event.data);
         
+        if (receivedData.type === 'pong') {
+          // Pong received, connection is alive.
+          return;
+        }
+
         // Handle new streaming events
         if (receivedData.event === 'stream_start') {
           console.log('Stream started:', receivedData);
@@ -1829,6 +1842,7 @@ function closeSocket() {
   if (socket.value) {
     socket.value.close();
   }
+  clearInterval(pingInterval);
 }
 onBeforeUnmount(() => {
   closeSocket();

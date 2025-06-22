@@ -27,7 +27,9 @@ class WebSocketConnectionManager(WebSocketInterface):
     Manages WebSocket connections for user sessions.
     """
 
-    def __init__(self, redis_client: SecureRedisService, sync_redis_client: redis.Redis):
+    def __init__(
+        self, redis_client: SecureRedisService, sync_redis_client: redis.Redis
+    ):
         # Use user_id:conversation_id as the key
         self.connections: Dict[str, WebSocket] = {}
         self.redis_client = redis_client
@@ -250,6 +252,11 @@ class WebSocketConnectionManager(WebSocketInterface):
                     break
 
                 user_message_text = await websocket.receive_text()
+
+                # Handle ping messages
+                if user_message_text == '{"type":"ping"}':
+                    await websocket.send_json({"type": "pong"})
+                    continue
 
                 logger.info(
                     "Received message from user",
