@@ -1725,36 +1725,11 @@ async function connectWebSocket() {
             timestamp: new Date().toISOString()
           });
           isLoading.value = false;
-        }
-        // Handle legacy events
-        else if (
-          receivedData.event == 'user_message' ||
-          receivedData.event == 'completion'
-        ) {
-          try {
-            if (receivedData.event == 'completion') {
-              let metaDataComplettion = JSON.parse(receivedData.data);
-              completionMetaData.value = metaDataComplettion.metadata;
-              emit('metadataChanged', completionMetaData.value);
-            } else {
-              AutoScrollToBottom();
-            }
-          } catch (error) {
-            console.log('completionMetaData.value', error);
-            isLoading.value = false;
-          }
-          
-          // Ensure legacy messages have proper structure
-          const legacyMessage = {
-            event: receivedData.event,
+        } else if (receivedData.event === 'planner_chunk') {
+          addOrUpdatePlannerText({
+            message_id: currentMsgId.value,
             data: receivedData.data,
-            message_id: receivedData.message_id || currentMsgId.value,
-            conversation_id: receivedData.conversation_id || currentId.value,
-            timestamp: receivedData.timestamp || new Date().toISOString()
-          };
-          
-          messagesData.value.push(legacyMessage);
-          isLoading.value = false;
+          });
         } else if (receivedData.event === 'think') {
           let dataParsed = JSON.parse(receivedData.data);
           agentThoughtsData.value.push(dataParsed);
@@ -1778,11 +1753,6 @@ async function connectWebSocket() {
             console.log('model error', e);
             isLoading.value = false;
           }
-        } else if (receivedData.event === 'planner_chunk') {
-          addOrUpdatePlannerText({
-            message_id: currentMsgId.value,
-            data: receivedData.data,
-          });
         } else if (receivedData.event === 'planner') {
           let dataParsed = JSON.parse(receivedData.data);
           addOrUpdateModel(dataParsed.metadata);
@@ -1894,6 +1864,7 @@ function formatMessageData(msgItem) {
         if (msgItem.data && typeof msgItem.data === 'object') {
           const formatted = {
             content: msgItem.data.content || '',
+            data: msgItem.data.content || '',
             message: msgItem.data.content || '',
             agent_type: msgItem.data.agent_type || msgItem.data.additional_kwargs?.agent_type || 'assistant',
             metadata: msgItem.data.response_metadata || null,
@@ -1988,7 +1959,7 @@ const filteredMessages = computed(() => {
 
   try {
     const grouped = new Map();
-    const streamingEvents = ['stream_start', 'agent_completion', 'llm_stream_chunk', 'stream_complete'];
+    const streamingEvents = ['stream_start', 'agent_completion', 'llm_stream_chunk', 'stream_complete', 'think', 'planner'];
     
     // First pass: identify distinct conversation turns and streaming groups
     const messageIdCounts = {};
@@ -2005,7 +1976,7 @@ const filteredMessages = computed(() => {
       }
       
       // Identify AI messages (these should be separate unless they're truly streaming)
-      if (msg.type === 'AIMessage' || msg.agent_type === 'react_end') {
+      if (msg.type === 'AIMessage' || msg.agent_type === 'react_end' || msg.agent_type === 'financial_analysis_end') {
         aiMessages.add(msg.message_id);
       }
       

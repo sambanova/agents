@@ -195,25 +195,37 @@ const sections = computed(() => {
  * Otherwise, returns the original string.
  */
 function tryParseJSON(content) {
-  try {
-    if (typeof content !== 'string') return content;
-    const trimmed = content.trim();
-    if (
-      (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-      (trimmed.startsWith('[') && trimmed.endsWith(']'))
-    ) {
+  // Quick exit for non-strings
+  if (typeof content !== 'string') return content;
+  const trimmed = content.trim();
+  // Only attempt to parse if it looks like an object/array literal
+  if (
+    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+    (trimmed.startsWith('[') && trimmed.endsWith(']'))
+  ) {
+    // First attempt – standard JSON
+    try {
+      return JSON.parse(trimmed);
+    } catch (eJson) {
+      // Fallback: attempt to sanitise common python-dict quirks then parse again
       try {
-        return JSON.parse(trimmed);
-      } catch (e) {
-        console.warn('Could not parse JSON:', e);
+        const sanitised = trimmed
+          // convert single quotes to double quotes
+          .replace(/([,{\s])'([^']*?)'(?=\s*:)/g, '$1"$2"') // keys
+          .replace(/:(\s*)'([^']*?)'/g, ':$1"$2"') // string values
+          // replace None / nan with null so JSON can parse
+          .replace(/\bNone\b/g, 'null')
+          .replace(/\bnan\b/gi, 'null');
+        return JSON.parse(sanitised);
+      } catch (eSanitised) {
+        // Ultimate fallback – return original string so UI still renders
+        console.warn('Could not parse JSON after sanitising:', eSanitised);
         return content;
       }
     }
-    return content;
-  } catch (e) {
-    console.log('Error TimelineItem tryParseJSON', e);
-    return content;
   }
+  // Not a JSON-looking string – return original
+  return content;
 }
 
 /**

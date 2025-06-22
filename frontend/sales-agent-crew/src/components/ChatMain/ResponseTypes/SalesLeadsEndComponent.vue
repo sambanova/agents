@@ -48,20 +48,17 @@
   
   <script>
   export default {
-    name: 'OutreachList',
+    name: 'SalesLeadsEndComponent',
     props: {
-      // The parsed API response should have a 'data' property containing the outreach_list
       parsed: {
         type: Object,
         required: true,
       },
     },
     computed: {
-      // If the API returned an error message (like "Unknown agent type: sales_leads"), display it.
       error() {
         return this.parsed.data?.error || '';
       },
-      // Check if outreach_list exists and has items.
       hasOutreachData() {
         return (
           this.parsed.data &&
@@ -74,6 +71,4 @@
   </script>
   
   <style scoped>
-  /* Additional scoped styles can be added here if needed */
-  </style>
-  
+  </style> 

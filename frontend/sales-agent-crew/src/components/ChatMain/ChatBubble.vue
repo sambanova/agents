@@ -136,6 +136,11 @@
           </div>
         </div>
 
+        <!-- Model usage cards -->
+        <div v-if="workflowData && workflowData.length" class="px-3 pt-3 pb-1 bg-gray-50 border-b">
+          <WorkflowDataItem :workflowData="workflowData" />
+        </div>
+
         <!-- Actual Streaming Response Content -->
         <div class="p-4">
           <div class="prose prose-sm max-w-none">
@@ -302,13 +307,7 @@
         </div>
       </div>
       <div class="w-full bg-white">          
-        <AnalysisTimeline 
-          :isLoading="isLoading" 
-          :parsedData="parsedData" 
-          :workflowData="workflowData" 
-          :presentMetadata="parsedData.metadata" 
-          :plannerText="plannerText" 
-        />
+        <!-- Main response component -->
         <component :id="'chat-'+messageId" :is="selectedComponent" :parsed="parsedData" />
       </div>
     </li>
@@ -342,10 +341,12 @@
   import FinancialAnalysisComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisComponent.vue'
   import DeepResearchComponent from '@/components/ChatMain/ResponseTypes//DeepResearchComponent.vue'
   import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue'
-  import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'
-import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue'
-import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue'
-import AssistantEndComponent from '@/components/ChatMain/ResponseTypes/AssistantEndComponent.vue'
+  import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue'
+  import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue'
+  import AssistantEndComponent from '@/components/ChatMain/ResponseTypes/AssistantEndComponent.vue'
+  import FinancialAnalysisEndComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisEndComponent.vue'
+  import SalesLeadsEndComponent from '@/components/ChatMain/ResponseTypes/SalesLeadsEndComponent.vue'
+  import WorkflowDataItem from '@/components/ChatMain/WorkflowDataItem.vue'
 
 // Icons for streaming timeline
 import {
@@ -381,6 +382,12 @@ import {
       // Format duration to 2 decimal places
       return duration?.toFixed(2);
     }
+  
+  function getTextAfterLastSlash(str) {
+    if (!str) return ''
+    if (!str.includes('/')) return str
+    return str.substring(str.lastIndexOf('/') + 1)
+  }
   
   // Define props
   const props = defineProps({
@@ -484,6 +491,10 @@ return parsedData.metadata;
         return AssistantEndComponent
       case 'error':
         return ErrorComponent
+      case 'financial_analysis_end':
+        return FinancialAnalysisEndComponent
+      case 'sales_leads_end':
+        return SalesLeadsEndComponent
       default:
         return UnknownTypeComponent
     }
@@ -1232,6 +1243,32 @@ const auditLogEvents = computed(() => {
       }
     })
     .filter(event => event.title) // Only include events with titles
+    // ------------------------------------------------------------
+    // 🆕 2️⃣  Append workflow-based events so model metadata / counts
+    //      are ALWAYS included in the comprehensive audit log.
+    // ------------------------------------------------------------
+    .concat(
+      (() => {
+        if (!props.workflowData || props.workflowData.length === 0) return []
+        // Deduplicate by llm_name + task
+        const seen = new Set()
+        return props.workflowData.map((wf, i) => {
+          const key = `${wf.llm_name || 'model'}-${wf.task || 'task'}`
+          if (seen.has(key)) return null
+          seen.add(key)
+          return {
+            id: `wf-${key}-${i}`,
+            title: `🤖 ${wf.agent_name || getTextAfterLastSlash(wf.llm_name)}`,
+            details: `${wf.task || 'call'} (${wf.count || 1}×, ${wf.duration ? formattedDuration(wf.duration)+'s' : 'in-flight'})`,
+            dotClass: 'bg-indigo-500',
+            type: 'model_usage',
+            event: 'workflow_item',
+            timestamp: new Date().toISOString(),
+            fullData: wf
+          }
+        }).filter(Boolean)
+      })()
+    )
 })
 
 // Extract streaming response content with better parsing
