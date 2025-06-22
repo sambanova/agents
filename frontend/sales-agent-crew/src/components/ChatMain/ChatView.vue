@@ -1673,12 +1673,20 @@ async function connectWebSocket() {
           });
         } else if (receivedData.event === 'agent_completion') {
           console.log('Agent message stream:', receivedData);
+          
+          // Check if this is a final response event
+          const isFinalResponse = receivedData.agent_type === 'react_end' || 
+                                 receivedData.agent_type === 'financial_analysis_end' || 
+                                 receivedData.agent_type === 'sales_leads_end';
+          
           messagesData.value.push({
             event: 'agent_completion', 
             data: receivedData,
             message_id: currentMsgId.value,
             conversation_id: currentId.value,
-            timestamp: receivedData.timestamp || new Date().toISOString()
+            timestamp: receivedData.timestamp || new Date().toISOString(),
+            agent_type: receivedData.agent_type,
+            isFinalResponse: isFinalResponse
           });
         } else if (receivedData.event === 'llm_stream_chunk') {
           console.log('LLM stream chunk:', receivedData);
@@ -1983,7 +1991,11 @@ const filteredMessages = computed(() => {
       if (streamingEvents.includes(msg.event) && msg.message_id) {
         // CRITICAL: Only count non-AI messages for grouping
         // AI messages should never be grouped, so exclude them from the count
-        if (msg.type !== 'AIMessage' && msg.agent_type !== 'react_end') {
+        if (msg.type !== 'AIMessage' && 
+            msg.agent_type !== 'react_end' && 
+            msg.data?.agent_type !== 'react_end' &&
+            msg.data?.agent_type !== 'financial_analysis_end' &&
+            msg.data?.agent_type !== 'sales_leads_end') {
           messageIdCounts[msg.message_id] = (messageIdCounts[msg.message_id] || 0) + 1;
         }
         
@@ -2003,9 +2015,10 @@ const filteredMessages = computed(() => {
       if (!msg) return; // Skip null/undefined messages
       
       const msgId = msg.message_id;
+
       
       // Decide whether this message should always render its own bubble
-      const agentType = msg.agent_type || msg.data?.additional_kwargs?.agent_type || msg.data?.agent_type
+      const agentType = msg.agent_type || msg.data?.additional_kwargs?.agent_type || msg.data?.agent_type || msg.data?.agent_type
 
       // Always separate genuine user inputs
       if (msg.event === 'user_message' || agentType === 'human') {
@@ -2019,7 +2032,11 @@ const filteredMessages = computed(() => {
           msgId &&
           messageIdCounts[msgId] > 1 &&
           !userMessages.has(msgId)) ||
-          (agentType === 'react_end' || agentType === 'financial_analysis_end' || agentType === 'sales_leads_end')) {
+          (agentType === 'react_end' || agentType === 'financial_analysis_end' || agentType === 'sales_leads_end') ||
+          (msg.event === 'agent_completion' && (
+            msg.data?.agent_type === 'react_end' || 
+            msg.data?.agent_type === 'financial_analysis_end' || 
+            msg.data?.agent_type === 'sales_leads_end'))) {
 
         const groupKey = `streaming_${msgId}`;
 
@@ -2074,9 +2091,11 @@ const filteredMessages = computed(() => {
         return;
       }
 
-      // Fallback: render as individual bubble
-      const uniqueKey = `${msg.type || msg.event}_${msgId}_${index}`;
-      grouped.set(uniqueKey, msg);
+      // Fallback: render as individual bubble - but only if it has content
+      if (msg.data?.content || msg.content || msg.event === 'user_message') {
+        const uniqueKey = `${msg.type || msg.event}_${msgId}_${index}`;
+        grouped.set(uniqueKey, msg);
+      }
       
     });
     
@@ -2087,13 +2106,7 @@ const filteredMessages = computed(() => {
       return aTime - bTime;
     });
     
-    console.log('filteredMessages result:', result.map(item => ({
-      type: item.type || 'individual',
-      event: item.event,
-      agent_type: item.data?.agent_type || item.agent_type,
-      message_id: item.message_id,
-      eventCount: item.type === 'streaming_group' ? item.events?.length : 1
-    })));
+
     
     return result;
   } catch (error) {

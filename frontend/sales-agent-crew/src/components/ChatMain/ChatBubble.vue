@@ -143,7 +143,15 @@
 
         <!-- Actual Streaming Response Content -->
         <div class="p-4">
-          <div class="prose prose-sm max-w-none">
+          <!-- Render appropriate component for final response -->
+          <div v-if="finalResponseComponent && streamingResponseContent">
+            <component 
+              :is="finalResponseComponent" 
+              :parsed="finalResponseData" 
+            />
+          </div>
+          <!-- Fallback to simple markdown rendering -->
+          <div v-else class="prose prose-sm max-w-none">
             <div 
               v-if="streamingResponseContent"
               class="text-gray-800 whitespace-pre-wrap"
@@ -1327,6 +1335,63 @@ const streamingResponseContent = computed(() => {
   })
   
   return bestContent
+})
+
+// Get the final response component based on the agent_type
+const finalResponseComponent = computed(() => {
+  if (!props.streamingEvents) return null
+  
+  // Look for the final agent_completion event with a specific agent_type
+  for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
+    const event = props.streamingEvents[i]
+    if (event.event === 'agent_completion') {
+      const agentType = event.data.agent_type || event.agent_type
+      
+      switch (agentType) {
+        case 'financial_analysis_end':
+          return FinancialAnalysisEndComponent
+        case 'sales_leads_end':
+          return SalesLeadsEndComponent
+        case 'react_end':
+          return AssistantEndComponent
+        default:
+          return null
+      }
+    }
+  }
+  
+  return null
+})
+
+// Get the final response data formatted for the component
+const finalResponseData = computed(() => {
+  if (!props.streamingEvents) return {}
+  
+  // Look for the final agent_completion event with the response data
+  for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
+    const event = props.streamingEvents[i]
+    if (event.event === 'agent_completion' && 
+        (event.data.agent_type === 'financial_analysis_end' || 
+         event.data.agent_type === 'sales_leads_end' || 
+         event.data.agent_type === 'react_end')) {
+      
+      // Try to parse the content as JSON
+      try {
+        const content = event.data.content || ''
+        if (typeof content === 'string' && content.trim().startsWith('{')) {
+          const parsed = JSON.parse(content)
+          return { content: parsed }
+        } else {
+          return { content: content }
+        }
+      } catch (error) {
+        console.error('Error parsing final response data:', error)
+        return { content: event.data.content || '' }
+      }
+    }
+  }
+  
+  return {}
 })
 
 
