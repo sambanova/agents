@@ -813,6 +813,7 @@ const isStreamingResponse = computed(() => {
 // Summary for when we've moved to response streaming - ENHANCED FOR LOADED CONVERSATIONS
 const finalStatusSummary = computed(() => {
   if (!props.streamingEvents || props.streamingEvents.length === 0) {
+    
     // For loaded conversations, generate summary from workflow data
     if (props.workflowData && props.workflowData.length > 0) {
       const completedTasks = props.workflowData.map(workflow => {
@@ -862,6 +863,7 @@ const finalStatusSummary = computed(() => {
 
 // Comprehensive audit log with filtered meaningful events - ENHANCED FOR LOADED CONVERSATIONS
 const auditLogEvents = computed(() => {
+  
   
   if (!props.streamingEvents || props.streamingEvents.length === 0) {
     // For loaded conversations without streaming events, create synthetic audit log from workflow data
@@ -932,6 +934,7 @@ const auditLogEvents = computed(() => {
     }
   });
   
+  console.log("uniqueEvents",uniqueEvents)
   return uniqueEvents
     .filter(event => {
       // Keep meaningful events, remove clutter - but include tool-related events
@@ -961,8 +964,9 @@ const auditLogEvents = computed(() => {
             const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
             // Fixed regex to handle missing closing tag
             const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
-            
+             console.log("event required",event)
             if (toolMatch) {
+
               const tool = toolMatch[1]
               const query = inputMatch ? inputMatch[1].trim() : 'No query'
               
@@ -987,7 +991,11 @@ const auditLogEvents = computed(() => {
           
         case 'agent_completion':
           if (data.type === 'LiberalFunctionMessage' && data.name) {
-            if (data.name === 'search_tavily' && Array.isArray(data.content)) {
+              console.log(data.name, typeof data.content,data.content )
+            if (data.name === 'search_tavily' && Array.isArray(JSON.parse(data.content))) {
+      console.log("event required",event)
+
+            
               title = `✅ Found ${data.content.length} web sources`
               
               // Extract actual domains/titles from sources for sub-bullets
@@ -1144,6 +1152,7 @@ const toolSources = computed(() => {
   const sources = []
   
   props.streamingEvents.forEach(event => {
+    
     if (event.event === 'agent_completion' && 
         event.data.type === 'LiberalFunctionMessage' && 
         event.data.name === 'search_tavily' &&
@@ -1211,6 +1220,7 @@ const toolSources = computed(() => {
       })
     }
   })
+  
   
   return sources.slice(0, 5) // Limit to 5 sources for UI
 })
