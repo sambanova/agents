@@ -98,6 +98,7 @@
           class="p-3 bg-gray-50 border-b max-h-96 overflow-y-auto"
         >
           <div class="text-xs font-medium text-gray-600 mb-3">Comprehensive Audit Log</div>
+          
           <div class="space-y-3">
             <div
               v-for="event in auditLogEvents"
@@ -934,179 +935,246 @@ const auditLogEvents = computed(() => {
     }
   });
   
-  console.log("uniqueEvents",uniqueEvents)
-  return uniqueEvents
-    .filter(event => {
-      // Keep meaningful events, remove clutter - but include tool-related events
-      if (event.event === 'stream_start') return false
-      if (event.event === 'stream_complete') return false
-      if (event.event === 'agent_completion' && event.data.agent_type === 'human') return false
-      if (event.event === 'agent_completion' && event.data.agent_type === 'react_end') return false
-      if (event.event === 'llm_stream_chunk' && event.data.content && !event.data.content.includes('<tool>')) return false
-      
-      // Always include tool-related events
-      if (event.isToolRelated || event.isDaytonaRelated) return true
-      if (event.event === 'agent_completion' && (event.data.agent_type === 'react_tool' || event.data.agent_type === 'tool_response')) return true
-      if (event.event === 'agent_completion' && event.data.name) return true // Tool responses
-      
-      return true
-    })
-    .map((event, index) => {
-      const data = event.data
-      let title = ''
-      let details = ''
-      let dotClass = 'bg-gray-400'
-      let type = 'info'
-      
-      switch (event.event) {
-        case 'llm_stream_chunk':
-          if (data.content && data.content.includes('<tool>')) {
-            const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
-            // Fixed regex to handle missing closing tag
-            const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
-             console.log("event required",event)
-            if (toolMatch) {
 
-              const tool = toolMatch[1]
-              const query = inputMatch ? inputMatch[1].trim() : 'No query'
-              
-              if (tool === 'search_tavily') {
-                title = `🔍 Search Tavily`
-                details = `Query: "${query}"`
-              } else if (tool === 'arxiv') {
-                title = `📚 Search arXiv`
-                details = `Query: "${query}"`
-              } else if (tool === 'DaytonaCodeSandbox') {
-                title = `⚡ Execute Code`
-                details = 'Running analysis in sandbox'
-              } else {
-                title = `🔧 ${tool.replace('_', ' ')}`
-                details = `Query: "${query}"`
-              }
-              dotClass = 'bg-purple-500'
-              type = 'tool_call'
-            }
-          }
-          break
-          
-        case 'agent_completion':
-          if (data.type === 'LiberalFunctionMessage' && data.name) {
-              console.log(data.name, typeof data.content,data.content )
-            if (data.name === 'search_tavily' && Array.isArray(JSON.parse(data.content))) {
-      console.log("event required",event)
+  console.log("uniqueEvents", uniqueEvents);
 
-            
-              title = `✅ Found ${data.content.length} web sources`
-              
-              // Extract actual domains/titles from sources for sub-bullets
-              const subItems = data.content.slice(0, 5).map((source, idx) => {
-                let displayTitle = 'Unknown Source'
-                let domain = ''
-                
-                if (source.title && source.title.trim()) {
-                  displayTitle = source.title.trim()
-                } else if (source.url) {
-                  try {
-                    const url = new URL(source.url)
-                    domain = url.hostname.replace('www.', '')
-                    displayTitle = domain
-                  } catch {
-                    displayTitle = source.url
-                  }
-                }
-                
-                if (source.url) {
-                  try {
-                    domain = new URL(source.url).hostname.replace('www.', '')
-                  } catch {
-                    domain = 'web'
-                  }
-                }
-                
-                return {
-                  id: `source-${idx}`,
-                  title: displayTitle,
-                  domain: domain
-                }
-              })
-              
-              // Keep the old details for backward compatibility
-              const sourceNames = subItems.slice(0, 3).map(item => item.title)
-              details = sourceNames.join(', ')
-              if (data.content.length > 3) details += `, and ${data.content.length - 3} more...`
-              
-              dotClass = 'bg-green-500'
-              type = 'tool_result'
-              
-              // Add subItems to the event
-              return {
-                id: `audit-${index}`,
-                title,
-                details,
-                subItems,
-                dotClass,
-                type,
-                event: event.event,
-                timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
-                fullData: data
-              }
-            } else if (data.name === 'arxiv') {
-              const papers = data.content && data.content.includes('Title:') ? 
-                data.content.split('Title:').length - 1 : 1
-              title = `✅ Found ${papers} arXiv papers`
-              
-              // Extract paper titles for sub-bullets
-              const titleMatches = data.content.match(/Title: ([^\n]+)/g)
-              let subItems = []
-              
-              if (titleMatches) {
-                details = titleMatches.slice(0, 2).map(t => t.replace('Title: ', '').trim()).join(', ')
-                if (titleMatches.length > 2) details += `, and ${titleMatches.length - 2} more...`
-                
-                subItems = titleMatches.slice(0, 5).map((titleMatch, idx) => ({
-                  id: `paper-${idx}`,
-                  title: titleMatch.replace('Title: ', '').trim(),
-                  domain: 'arxiv.org'
-                }))
-              }
-              
-              dotClass = 'bg-green-500'
-              type = 'tool_result'
-              
-              return {
-                id: `audit-${index}`,
-                title,
-                details,
-                subItems,
-                dotClass,
-                type,
-                event: event.event,
-                timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
-                fullData: data
-              }
-            } else if (data.name === 'DaytonaCodeSandbox') {
-              title = `✅ Code execution complete`
-              details = 'Generated charts and analysis'
-              dotClass = 'bg-green-500'
-              type = 'tool_result'
-            }
+const auditEvents = [];
+const streamingItems = [];
+let idx = 0;
+uniqueEvents.forEach((event, index) => {
+  const data = event.data;
+
+  // 1) initial filter
+  if (event.event === 'stream_start') return;
+  if (event.event === 'stream_complete') return;
+  if (event.event === 'agent_completion' && data.agent_type === 'human') return;
+  if (event.event === 'agent_completion' && data.agent_type === 'react_end') return;
+  if (event.event === 'llm_stream_chunk' && data.content && !data.content.includes('<tool>')) return;
+
+  if (!(event.isToolRelated || event.isDaytonaRelated) &&
+      !(event.event === 'agent_completion' && ['react_tool','tool_response'].includes(data.agent_type)) &&
+      !(event.event === 'agent_completion' && data.name)) {
+    // if none of the “always-include” conditions match, still include (because your final `return true`)
+    // So in this block we do nothing, allowing fall-through into mapping.
+  }
+
+  // 2) mapping
+  let title = '';
+  let details = '';
+  let dotClass = 'bg-gray-400';
+  let type = 'info';
+  let subItems = [];
+
+  switch (event.event) {
+    case 'llm_stream_chunk':
+      if (data.content && data.content.includes('<tool>')) {
+        const toolMatch  = data.content.match(/<tool>([^<]+)<\/tool>/);
+        const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/);
+
+        if (toolMatch) {
+          const tool  = toolMatch[1];
+          const query = inputMatch ? inputMatch[1].trim() : 'No query';
+
+          if (tool === 'search_tavily') {
+            title   = `🔍 Search Tavily`;
+            details = `Query: "${query}"`;
+          } else if (tool === 'arxiv') {
+            title   = `📚 Search arXiv`;
+            details = `Query: "${query}"`;
+          } else if (tool === 'DaytonaCodeSandbox') {
+            title   = `⚡ Execute Code`;
+            details = 'Running analysis in sandbox';
+          } else {
+            title   = `🔧 ${tool.replace('_', ' ')}`;
+            details = `Query: "${query}"`;
           }
-          break
+          dotClass = 'bg-purple-500';
+          type     = 'tool_call';
+        }
       }
-      
-      return {
-        id: `audit-${index}`,
-        title,
-        details,
-        subItems: [],
-        dotClass,
-        type,
-        event: event.event,
-        timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
-        fullData: data
+      break;
+
+    case 'agent_completion':
+      if (data.type === 'LiberalFunctionMessage' && data.name) {
+        // --- search_tavily result block ---
+        if (data.name === 'search_tavily' && Array.isArray(data.content)) {
+
+           const hasEvent = auditEvents.some(it => it.title === '🔍 Search Tavily');
+          if (!hasEvent) {
+            auditEvents.push({
+              id:        `audit-${idx}`,
+              title:     `🔍 Search Tavily`,
+              details:   '',
+              subItems:  [],
+              dotClass:  'bg-gray-400',
+              type:      'info',
+              event:     event.event,
+              timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
+              fullData:  data
+            });
+            idx++;
+          }
+
+
+
+
+          title = `✅ Found ${data.content.length} web sources`;
+          subItems = data.content.slice(0, 5).map((source, idx) => {
+            let displayTitle = source.title?.trim() || '';
+            let domain       = '';
+
+            if (!displayTitle && source.url) {
+              try {
+                domain       = new URL(source.url).hostname.replace(/^www\./, '');
+                displayTitle = domain;
+              } catch {
+                displayTitle = source.url;
+              }
+            } else if (source.url) {
+              domain = (() => {
+                try { return new URL(source.url).hostname.replace(/^www\./, ''); }
+                catch { return 'web'; }
+              })();
+            }
+
+            return { id: `source-${idx}`, title: displayTitle, domain };
+          });
+
+          // old-style details
+          const sourceNames = subItems.slice(0, 3).map(i => i.title);
+          details = sourceNames.join(', ');
+          if (data.content.length > 3) {
+            details += `, and ${data.content.length - 3} more...`;
+          }
+
+          dotClass = 'bg-green-500';
+          type     = 'tool_result';
+
+          // push full object immediately
+          const item = {
+            id:        `audit-${index}`,
+            title,
+            details,
+            subItems,
+            dotClass,
+            type,
+            event:     event.event,
+            timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
+            fullData:  data
+          };
+          auditEvents.push(item);
+          return;
+        }
+
+        // --- arxiv result block ---
+        if (data.name === 'arxiv') {
+
+
+           const hasEvent = auditEvents.some(it => it.title === '📚 Search arXiv');
+          if (!hasEvent) {
+            auditEvents.push({
+              id:        `audit-${idx}`,
+              title:     `📚 Search arXiv`,
+              details:   '',
+              subItems:  [],
+              dotClass:  'bg-gray-400',
+              type:      'info',
+              event:     event.event,
+              timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
+              fullData:  data
+            });
+            idx++;
+          }
+
+
+          const papers = data.content?.includes('Title:')
+            ? data.content.split('Title:').length - 1
+            : 1;
+          title = `✅ Found ${papers} arXiv papers`;
+
+          const titleMatches = data.content.match(/Title: ([^\n]+)/g) || [];
+          details = titleMatches.slice(0, 2)
+            .map(t => t.replace('Title: ', '').trim())
+            .join(', ');
+          if (titleMatches.length > 2) {
+            details += `, and ${titleMatches.length - 2} more...`;
+          }
+
+          subItems = titleMatches.slice(0, 5).map((t, idx) => ({
+            id:     `paper-${idx}`,
+            title:  t.replace('Title: ', '').trim(),
+            domain: 'arxiv.org'
+          }));
+
+          dotClass = 'bg-green-500';
+          type     = 'tool_result';
+
+          const item = {
+            id:        `audit-${index}`,
+            title,
+            details,
+            subItems,
+            dotClass,
+            type,
+            event:     event.event,
+            timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
+            fullData:  data
+          };
+          auditEvents.push(item);
+          return;
+        }
+
+        // --- DaytonaCodeSandbox completion ---
+        if (data.name === 'DaytonaCodeSandbox') {
+
+
+           const hasEvent = auditEvents.some(it => it.title === '⚡ Execute Code');
+          if (!hasEvent) {
+            auditEvents.push({
+              id:        `audit-${idx}`,
+              title:     `⚡ Execute Code`,
+              details:   '',
+              subItems:  [],
+              dotClass:  'bg-gray-400',
+              type:      'info',
+              event:     event.event,
+              timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
+              fullData:  data
+            });
+            idx++;
+          }
+
+          title   = `✅ Code execution complete`;
+          details = 'Generated charts and analysis';
+          dotClass = 'bg-green-500';
+          type     = 'tool_result';
+        }
       }
-    })
-    .filter(event => event.title) // Only include events with titles
+      break;
+  }
+
+  // 3) default mapping for everything else
+  const defaultItem = {
+    id:        `audit-${index}`,
+    title,
+    details,
+    subItems,
+    dotClass,
+    type,
+    event:     event.event,
+    timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
+    fullData:  data
+  };
+
+  // 4) only push if we have a non-empty title
+  if (defaultItem.title) {
+    auditEvents.push(defaultItem);
+  }
+});
+
+return auditEvents;
+
+
 })
 
 // Extract streaming response content with better parsing
