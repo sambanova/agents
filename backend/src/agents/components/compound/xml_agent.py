@@ -527,7 +527,7 @@ Make sure to include both opening and closing tags for both tool and tool_input.
 
             # Create function message
             function_message = LiberalFunctionMessage(
-                content=str(response) if len(response) > 0 else "No response from tool",
+                content=response if len(response) > 0 else "No response from tool",
                 name=action.tool,
                 additional_kwargs={
                     "timestamp": datetime.now(timezone.utc).isoformat(),
