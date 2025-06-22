@@ -765,11 +765,12 @@ const currentStreamingStatus = computed(() => {
   
   // Check if we're done - include all completion agent types
   const lastEvent = events[events.length - 1]
+  const lastAgentType = getAgentType(lastEvent)
   if (lastEvent?.event === 'stream_complete' || 
       (lastEvent?.event === 'agent_completion' && 
-       (lastEvent.data.agent_type === 'react_end' || 
-        lastEvent.data.agent_type === 'financial_analysis_end' || 
-        lastEvent.data.agent_type === 'sales_leads_end'))) {
+       (lastAgentType === 'react_end' || 
+        lastAgentType === 'financial_analysis_end' || 
+        lastAgentType === 'sales_leads_end'))) {
     return '✅ Response complete'
   }
   
@@ -808,11 +809,12 @@ const isCurrentlyStreaming = computed(() => {
   if (!props.streamingEvents || props.streamingEvents.length === 0) return true
   
   const lastEvent = props.streamingEvents[props.streamingEvents.length - 1]
+  const lastAgentType = getAgentType(lastEvent)
   return lastEvent.event !== 'stream_complete' && 
          !(lastEvent.event === 'agent_completion' && 
-           (lastEvent.data.agent_type === 'react_end' || 
-            lastEvent.data.agent_type === 'financial_analysis_end' || 
-            lastEvent.data.agent_type === 'sales_leads_end'))
+           (lastAgentType === 'react_end' || 
+            lastAgentType === 'financial_analysis_end' || 
+            lastAgentType === 'sales_leads_end'))
 })
 
 const hasCompletedEvents = computed(() => {
@@ -1345,7 +1347,7 @@ const finalResponseComponent = computed(() => {
   for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
     const event = props.streamingEvents[i]
     if (event.event === 'agent_completion') {
-      const agentType = event.data?.agent_type || event.agent_type
+      const agentType = getAgentType(event)
       
       switch (agentType) {
         case 'financial_analysis_end':
@@ -1370,25 +1372,18 @@ const finalResponseData = computed(() => {
   // Look for the final agent_completion event with the response data
   for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
     const event = props.streamingEvents[i]
-    if (event.event === 'agent_completion' && 
-        (event.data?.agent_type === 'financial_analysis_end' || 
-         event.data?.agent_type === 'sales_leads_end' || 
-         event.data?.agent_type === 'react_end' ||
-         event.agent_type === 'financial_analysis_end' ||
-         event.agent_type === 'sales_leads_end' ||
-         event.agent_type === 'react_end')) {
-      
-      // Try to parse the content as JSON
+    // Robust agent_type detection to ensure real-time updates
+    const agentType = getAgentType(event)
+    if (event.event === 'agent_completion' &&
+        (agentType === 'financial_analysis_end' ||
+         agentType === 'sales_leads_end' ||
+         agentType === 'react_end')) {
       try {
         const content = event.data?.content || event.content || ''
         if (typeof content === 'string' && content.trim().startsWith('{')) {
-          const parsed = JSON.parse(content)
-          return { content: parsed }
-        } else if (typeof content === 'object') {
-          return { content: content }
-        } else {
-          return { content: content }
+          return { content: JSON.parse(content) }
         }
+        return { content }
       } catch (error) {
         console.error('Error parsing final response data:', error)
         return { content: event.data?.content || event.content || '' }
@@ -1954,6 +1949,17 @@ function parsePythonStyleJSON(jsonString) {
   }
 }
 
+// Helper to reliably extract agent_type from different possible locations in the event object
+function getAgentType (event) {
+  if (!event) return null
+  return (
+    event?.data?.agent_type ||
+    event?.data?.additional_kwargs?.agent_type ||
+    event?.additional_kwargs?.agent_type ||
+    event?.agent_type ||
+    null
+  )
+}
 
   </script>
 
