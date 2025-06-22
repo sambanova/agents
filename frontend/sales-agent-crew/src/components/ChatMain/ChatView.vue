@@ -2004,24 +2004,31 @@ const filteredMessages = computed(() => {
       
       const msgId = msg.message_id;
       
-      // ALWAYS show user messages and AI messages as separate bubbles
-      // Check the message type directly, not just the message_id
-      if (msg.type === 'HumanMessage' || msg.type === 'AIMessage' || 
-          msg.agent_type === 'human' || msg.agent_type === 'react_end') {
+      // Decide whether this message should always render its own bubble
+      const agentType = msg.agent_type || msg.data?.additional_kwargs?.agent_type || msg.data?.agent_type
+
+      // Always separate genuine user inputs
+      if (msg.event === 'user_message' || agentType === 'human') {
         const uniqueKey = `${msg.type || msg.agent_type}_${msgId}_${index}`;
         grouped.set(uniqueKey, msg);
         return;
       }
-      
+
+      // Separate only the FINAL AI messages (react_end, financial_analysis_end)
+      if (agentType === 'react_end' || agentType === 'financial_analysis_end') {
+        const uniqueKey = `${agentType}_${msgId}_${index}`;
+        grouped.set(uniqueKey, msg);
+        return;
+      }
+
       // For tool responses and streaming chunks, group them if they belong to the same conversation turn
-      if (streamingEvents.includes(msg.event) && 
-          msgId && 
+      if (streamingEvents.includes(msg.event) &&
+          msgId &&
           messageIdCounts[msgId] > 1 &&
-          !userMessages.has(msgId) &&
-          !aiMessages.has(msgId)) {
-        
+          !userMessages.has(msgId)) {
+
         const groupKey = `streaming_${msgId}`;
-        
+
         if (!grouped.has(groupKey)) {
           grouped.set(groupKey, {
             type: 'streaming_group',
@@ -2030,35 +2037,36 @@ const filteredMessages = computed(() => {
             timestamp: msg.timestamp || new Date().toISOString()
           });
         }
-        
+
         const group = grouped.get(groupKey);
         if (group && group.events) {
           group.events.push(msg);
-          
-          // Add tool-related events to the streaming group for comprehensive processing
+
+          // Merge in any tool-related events we captured for this message id
           const toolKey = `tool_${msgId}`;
           if (toolRelatedMessages.has(toolKey)) {
             group.events.push(...toolRelatedMessages.get(toolKey));
-            // Sort events within the group by timestamp for proper timeline
-            group.events.sort((a, b) => {
-              const aTime = new Date(a.timestamp || 0).getTime();
-              const bTime = new Date(b.timestamp || 0).getTime();
-              return aTime - bTime;
-            });
           }
+
+          // Sort inside the group chronologically
+          group.events.sort((a, b) => {
+            const aTime = new Date(a.timestamp || 0).getTime();
+            const bTime = new Date(b.timestamp || 0).getTime();
+            return aTime - bTime;
+          });
         }
+        return;
       } else if (msg.isToolRelated) {
-        // For tool-related messages from loaded conversations, create a synthetic streaming group
+        // For tool-related messages from persisted histories, create/append to a synthetic streaming group
         const groupKey = `streaming_${msgId}`;
         if (!grouped.has(groupKey)) {
           grouped.set(groupKey, {
             type: 'streaming_group',
             message_id: msgId,
-            events: [msg], // Include the tool-related message in the events
+            events: [msg],
             timestamp: msg.timestamp || new Date().toISOString()
           });
         } else {
-          // Add to existing group
           const group = grouped.get(groupKey);
           if (group && group.events) {
             group.events.push(msg);
@@ -2069,11 +2077,13 @@ const filteredMessages = computed(() => {
             });
           }
         }
-      } else {
-        // For all other messages (loaded chats, standalone messages), show individually
-        const uniqueKey = `${msg.type || msg.event}_${msgId}_${index}`;
-        grouped.set(uniqueKey, msg);
+        return;
       }
+
+      // Fallback: render as individual bubble
+      const uniqueKey = `${msg.type || msg.event}_${msgId}_${index}`;
+      grouped.set(uniqueKey, msg);
+      
     });
     
     // Convert to array and sort by timestamp

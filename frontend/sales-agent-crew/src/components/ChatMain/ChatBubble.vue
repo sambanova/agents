@@ -657,6 +657,20 @@ const currentStreamingStatus = computed(() => {
     const event = events[i]
     const data = event.data
     
+    // Detect LangGraph subgraph invocation (react_subgraph agent type)
+    if (event.event === 'agent_completion' &&
+        (data.agent_type === 'react_subgraph' || data?.additional_kwargs?.agent_type === 'react_subgraph') &&
+        typeof data.content === 'string' && data.content.includes('<subgraph>')) {
+      const sgMatch = data.content.match(/<subgraph>([^<]+)<\/subgraph>/)
+      const inputMatch = data.content.match(/<subgraph_input>([^<]+)/)
+      if (sgMatch) {
+        const sgNameRaw = sgMatch[1]
+        const sgName = sgNameRaw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+        const query = inputMatch ? inputMatch[1].trim() : null
+        return `🤖 Calling ${sgName} Agent${query ? ' with: "' + query + '"' : ''}`
+      }
+    }
+    
     // Track current tool calls
     if (event.event === 'llm_stream_chunk' && data.content && data.content.includes('<tool>')) {
       const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
