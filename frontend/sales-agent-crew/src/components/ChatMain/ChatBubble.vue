@@ -1345,7 +1345,7 @@ const finalResponseComponent = computed(() => {
   for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
     const event = props.streamingEvents[i]
     if (event.event === 'agent_completion') {
-      const agentType = event.data.agent_type || event.agent_type
+      const agentType = event.data?.agent_type || event.agent_type
       
       switch (agentType) {
         case 'financial_analysis_end':
@@ -1371,22 +1371,27 @@ const finalResponseData = computed(() => {
   for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
     const event = props.streamingEvents[i]
     if (event.event === 'agent_completion' && 
-        (event.data.agent_type === 'financial_analysis_end' || 
-         event.data.agent_type === 'sales_leads_end' || 
-         event.data.agent_type === 'react_end')) {
+        (event.data?.agent_type === 'financial_analysis_end' || 
+         event.data?.agent_type === 'sales_leads_end' || 
+         event.data?.agent_type === 'react_end' ||
+         event.agent_type === 'financial_analysis_end' ||
+         event.agent_type === 'sales_leads_end' ||
+         event.agent_type === 'react_end')) {
       
       // Try to parse the content as JSON
       try {
-        const content = event.data.content || ''
+        const content = event.data?.content || event.content || ''
         if (typeof content === 'string' && content.trim().startsWith('{')) {
           const parsed = JSON.parse(content)
           return { content: parsed }
+        } else if (typeof content === 'object') {
+          return { content: content }
         } else {
           return { content: content }
         }
       } catch (error) {
         console.error('Error parsing final response data:', error)
-        return { content: event.data.content || '' }
+        return { content: event.data?.content || event.content || '' }
       }
     }
   }

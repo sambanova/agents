@@ -80,7 +80,7 @@
             :workflowData="
               workflowData.filter((item) => item.message_id === currentMsgId)
             "
-            v-if="isLoading"
+            v-if="isLoading && !hasActiveStreamingGroup"
             :isLoading="isLoading"
             :statusText="'Planning...'"
             :plannerText="
@@ -1688,6 +1688,11 @@ async function connectWebSocket() {
             agent_type: receivedData.agent_type,
             isFinalResponse: isFinalResponse
           });
+          
+          // Set loading to false when we receive a final response
+          if (isFinalResponse) {
+            isLoading.value = false;
+          }
         } else if (receivedData.event === 'llm_stream_chunk') {
           console.log('LLM stream chunk:', receivedData);
           const chunkId = receivedData.id;
@@ -1960,6 +1965,19 @@ watch(
   }
 );
 
+// Check if we have an active streaming group for the current message
+const hasActiveStreamingGroup = computed(() => {
+  if (!messagesData.value || messagesData.value.length === 0 || !currentMsgId.value) {
+    return false;
+  }
+  
+  // Check if any message in the current conversation turn has streaming events
+  return messagesData.value.some(msg => 
+    msg.message_id === currentMsgId.value && 
+    (msg.event === 'stream_start' || msg.event === 'agent_completion' || msg.event === 'llm_stream_chunk')
+  );
+});
+
 const filteredMessages = computed(() => {
   if (!messagesData.value || messagesData.value.length === 0) {
     return [];
@@ -1989,15 +2007,8 @@ const filteredMessages = computed(() => {
       }
       
       if (streamingEvents.includes(msg.event) && msg.message_id) {
-        // CRITICAL: Only count non-AI messages for grouping
-        // AI messages should never be grouped, so exclude them from the count
-        if (msg.type !== 'AIMessage' && 
-            msg.agent_type !== 'react_end' && 
-            msg.data?.agent_type !== 'react_end' &&
-            msg.data?.agent_type !== 'financial_analysis_end' &&
-            msg.data?.agent_type !== 'sales_leads_end') {
-          messageIdCounts[msg.message_id] = (messageIdCounts[msg.message_id] || 0) + 1;
-        }
+        // Count ALL streaming events for grouping - we want everything in one bubble
+        messageIdCounts[msg.message_id] = (messageIdCounts[msg.message_id] || 0) + 1;
         
         // Separate tool-related messages for comprehensive audit log and Daytona processing
         if (msg.isToolRelated || msg.isDaytonaRelated) {
@@ -2027,16 +2038,10 @@ const filteredMessages = computed(() => {
         return;
       }
 
-      // For tool responses, streaming chunks, AND final AI responses, group them if they belong to the same conversation turn
-      if ((streamingEvents.includes(msg.event) &&
+      // Group ALL streaming events for the same message_id (except user messages)
+      if (streamingEvents.includes(msg.event) &&
           msgId &&
-          messageIdCounts[msgId] > 1 &&
-          !userMessages.has(msgId)) ||
-          (agentType === 'react_end' || agentType === 'financial_analysis_end' || agentType === 'sales_leads_end') ||
-          (msg.event === 'agent_completion' && (
-            msg.data?.agent_type === 'react_end' || 
-            msg.data?.agent_type === 'financial_analysis_end' || 
-            msg.data?.agent_type === 'sales_leads_end'))) {
+          !userMessages.has(msgId)) {
 
         const groupKey = `streaming_${msgId}`;
 
@@ -2099,7 +2104,7 @@ const filteredMessages = computed(() => {
       
     });
     
-    // Convert to array and sort by timestamp
+        // Convert to array and sort by timestamp
     const result = Array.from(grouped.values()).sort((a, b) => {
       const aTime = new Date(a.timestamp || 0).getTime();
       const bTime = new Date(b.timestamp || 0).getTime();
