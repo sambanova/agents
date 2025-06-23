@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div v-if="showBubble">
     <!-- Handle streaming events -->
     <li v-if="props.streamingEvents" class="relative px-4 items-start gap-x-2 sm:gap-x-4">
       <div class="w-full relative flex items-center">
@@ -137,9 +137,22 @@
           </div>
         </div>
 
+        <!-- Model usage cards -->
+        <div v-if="workflowData && workflowData.length" class="px-3 pt-3 pb-1 bg-gray-50 border-b">
+          <WorkflowDataItem :workflowData="workflowData" />
+        </div>
+
         <!-- Actual Streaming Response Content -->
         <div class="p-4">
-          <div class="prose prose-sm max-w-none">
+          <!-- Render appropriate component for final response -->
+          <div v-if="finalResponseComponent && streamingResponseContent">
+            <component 
+              :is="finalResponseComponent" 
+              :parsed="finalResponseData" 
+            />
+          </div>
+          <!-- Fallback to simple markdown rendering -->
+          <div v-else class="prose prose-sm max-w-none">
             <div 
               v-if="streamingResponseContent"
               class="text-gray-800 whitespace-pre-wrap"
@@ -252,7 +265,7 @@
         </div>
         <!-- End Card -->
       </div>
-      <UserAvatar :type="user" />
+      <UserAvatar :type="'user'" />
     </li>
     
     <!-- For all other cases -->
@@ -303,13 +316,7 @@
         </div>
       </div>
       <div class="w-full bg-white">          
-        <AnalysisTimeline 
-          :isLoading="isLoading" 
-          :parsedData="parsedData" 
-          :workflowData="workflowData" 
-          :presentMetadata="parsedData.metadata" 
-          :plannerText="plannerText" 
-        />
+        <!-- Main response component -->
         <component :id="'chat-'+messageId" :is="selectedComponent" :parsed="parsedData" />
       </div>
     </li>
@@ -343,9 +350,12 @@
   import FinancialAnalysisComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisComponent.vue'
   import DeepResearchComponent from '@/components/ChatMain/ResponseTypes//DeepResearchComponent.vue'
   import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue'
-  import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'
-import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue'
-import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue'
+  import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue'
+  import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue'
+  import AssistantEndComponent from '@/components/ChatMain/ResponseTypes/AssistantEndComponent.vue'
+  import FinancialAnalysisEndComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisEndComponent.vue'
+  import SalesLeadsEndComponent from '@/components/ChatMain/ResponseTypes/SalesLeadsEndComponent.vue'
+  import WorkflowDataItem from '@/components/ChatMain/WorkflowDataItem.vue'
 
 // Icons for streaming timeline
 import {
@@ -381,6 +391,12 @@ import {
       // Format duration to 2 decimal places
       return duration?.toFixed(2);
     }
+  
+  function getTextAfterLastSlash(str) {
+    if (!str) return ''
+    if (!str.includes('/')) return str
+    return str.substring(str.lastIndexOf('/') + 1)
+  }
   
   // Define props
   const props = defineProps({
@@ -424,6 +440,11 @@ import {
   streamingEvents: {
     type: Array,
     default: null
+  },
+  
+  isLoading: {
+    type: Boolean,
+    default: false
   }
   
   })
@@ -475,8 +496,14 @@ return parsedData.metadata;
         return FinancialAnalysisComponent
       case 'deep_research':
         return DeepResearchComponent
+      case 'react_end':
+        return AssistantEndComponent
       case 'error':
         return ErrorComponent
+      case 'financial_analysis_end':
+        return FinancialAnalysisEndComponent
+      case 'sales_leads_end':
+        return SalesLeadsEndComponent
       default:
         return UnknownTypeComponent
     }
@@ -639,6 +666,20 @@ const currentStreamingStatus = computed(() => {
     const event = events[i]
     const data = event.data
     
+    // Detect LangGraph subgraph invocation (react_subgraph agent type)
+    if (event.event === 'agent_completion' &&
+        (data.agent_type === 'react_subgraph' || data?.additional_kwargs?.agent_type === 'react_subgraph') &&
+        typeof data.content === 'string' && data.content.includes('<subgraph>')) {
+      const sgMatch = data.content.match(/<subgraph>([^<]+)<\/subgraph>/)
+      const inputMatch = data.content.match(/<subgraph_input>([^<]+)/)
+      if (sgMatch) {
+        const sgNameRaw = sgMatch[1]
+        const sgName = sgNameRaw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+        const query = inputMatch ? inputMatch[1].trim() : null
+        return `🤖 Calling ${sgName} Agent${query ? ' with: "' + query + '"' : ''}`
+      }
+    }
+    
     // Track current tool calls
     if (event.event === 'llm_stream_chunk' && data.content && data.content.includes('<tool>')) {
       const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
@@ -723,10 +764,14 @@ const currentStreamingStatus = computed(() => {
     }
   }
   
-  // Check if we're done
+  // Check if we're done - include all completion agent types
   const lastEvent = events[events.length - 1]
+  const lastAgentType = getAgentType(lastEvent)
   if (lastEvent?.event === 'stream_complete' || 
-      (lastEvent?.event === 'agent_completion' && lastEvent.data.agent_type === 'react_end')) {
+      (lastEvent?.event === 'agent_completion' && 
+       (lastAgentType === 'react_end' || 
+        lastAgentType === 'financial_analysis_end' || 
+        lastAgentType === 'sales_leads_end'))) {
     return '✅ Response complete'
   }
   
@@ -765,7 +810,12 @@ const isCurrentlyStreaming = computed(() => {
   if (!props.streamingEvents || props.streamingEvents.length === 0) return true
   
   const lastEvent = props.streamingEvents[props.streamingEvents.length - 1]
-  return lastEvent.event !== 'stream_complete'
+  const lastAgentType = getAgentType(lastEvent)
+  return lastEvent.event !== 'stream_complete' && 
+         !(lastEvent.event === 'agent_completion' && 
+           (lastAgentType === 'react_end' || 
+            lastAgentType === 'financial_analysis_end' || 
+            lastAgentType === 'sales_leads_end'))
 })
 
 const hasCompletedEvents = computed(() => {
@@ -898,8 +948,6 @@ const auditLogEvents = computed(() => {
     return [];
   }
   
-
-  
   // First, deduplicate events to prevent duplicate audit log entries
   const uniqueEvents = [];
   const seenEventKeys = new Set();
@@ -935,233 +983,339 @@ const auditLogEvents = computed(() => {
     }
   });
   
-
-  console.log("uniqueEvents", uniqueEvents);
-
-const auditEvents = [];
-const streamingItems = [];
-let idx = 0;
-uniqueEvents.forEach((event, index) => {
-  const data = event.data;
-
-  // 1) initial filter
-  if (event.event === 'stream_start') return;
-  if (event.event === 'stream_complete') return;
-  if (event.event === 'agent_completion' && data.agent_type === 'human') return;
-  if (event.event === 'agent_completion' && data.agent_type === 'react_end') return;
-  if (event.event === 'llm_stream_chunk' && data.content && !data.content.includes('<tool>')) return;
-
-  if (!(event.isToolRelated || event.isDaytonaRelated) &&
-      !(event.event === 'agent_completion' && ['react_tool','tool_response'].includes(data.agent_type)) &&
-      !(event.event === 'agent_completion' && data.name)) {
-    // if none of the “always-include” conditions match, still include (because your final `return true`)
-    // So in this block we do nothing, allowing fall-through into mapping.
-  }
-
-  // 2) mapping
-  let title = '';
-  let details = '';
-  let dotClass = 'bg-gray-400';
-  let type = 'info';
-  let subItems = [];
-
-  switch (event.event) {
-    case 'llm_stream_chunk':
-      if (data.content && data.content.includes('<tool>')) {
-        const toolMatch  = data.content.match(/<tool>([^<]+)<\/tool>/);
-        const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/);
-
-        if (toolMatch) {
-          const tool  = toolMatch[1];
-          const query = inputMatch ? inputMatch[1].trim() : 'No query';
-
-          if (tool === 'search_tavily') {
-            title   = `🔍 Search Tavily`;
-            details = `Query: "${query}"`;
-          } else if (tool === 'arxiv') {
-            title   = `📚 Search arXiv`;
-            details = `Query: "${query}"`;
-          } else if (tool === 'DaytonaCodeSandbox') {
-            title   = `⚡ Execute Code`;
-            details = 'Running analysis in sandbox';
-          } else {
-            title   = `🔧 ${tool.replace('_', ' ')}`;
-            details = `Query: "${query}"`;
-          }
-          dotClass = 'bg-purple-500';
-          type     = 'tool_call';
-        }
-      }
-      break;
-
-    case 'agent_completion':
-
-
-      if (data.type === 'LiberalFunctionMessage' && data.name) {
-        // --- search_tavily result block ---
-        if (data.name === 'search_tavily' && Array.isArray(data.content)) {
-
-          
-          title = `✅ Found ${data.content.length} web sources`;
-          subItems = data.content.slice(0, 5).map((source, idx) => {
-            let displayTitle = source.title?.trim() || '';
-            let domain       = '';
-
-            if (!displayTitle && source.url) {
-              try {
-                domain       = new URL(source.url).hostname.replace(/^www\./, '');
-                displayTitle = domain;
-              } catch {
-                displayTitle = source.url;
+  return uniqueEvents
+    .filter(event => {
+      // Keep meaningful events, remove clutter - but include tool-related events
+      if (event.event === 'stream_start') return false
+      if (event.event === 'stream_complete') return false
+      if (event.event === 'agent_completion' && event.data.agent_type === 'human') return false
+      if (event.event === 'agent_completion' && event.data.agent_type === 'react_end') return false
+      if (event.event === 'llm_stream_chunk' && event.data.content && !event.data.content.includes('<tool>')) return false
+      
+      // Always include tool-related events
+      if (event.isToolRelated || event.isDaytonaRelated) return true
+      if (event.event === 'agent_completion' && (event.data.agent_type === 'react_tool' || event.data.agent_type === 'tool_response')) return true
+      if (event.event === 'agent_completion' && event.data.name) return true // Tool responses
+      
+      return true
+    })
+    .map((event, index) => {
+      const data = event.data
+      let title = ''
+      let details = ''
+      let dotClass = 'bg-gray-400'
+      let type = 'info'
+      let subItems = []
+      
+      switch (event.event) {
+        case 'llm_stream_chunk':
+          if (data.content && data.content.includes('<tool>')) {
+            const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
+            // Fixed regex to handle missing closing tag
+            const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
+            
+            if (toolMatch) {
+              const tool = toolMatch[1]
+              const query = inputMatch ? inputMatch[1].trim() : 'No query'
+              
+              if (tool === 'search_tavily') {
+                title = `🔍 Search Tavily`
+                details = `Query: "${query}"`
+              } else if (tool === 'arxiv') {
+                title = `📚 Search arXiv`
+                details = `Query: "${query}"`
+              } else if (tool === 'DaytonaCodeSandbox') {
+                title = `⚡ Execute Code`
+                details = 'Running analysis in sandbox'
+              } else {
+                title = `🔧 ${tool.replace('_', ' ')}`
+                details = `Query: "${query}"`
               }
-            } else if (source.url) {
-              domain = (() => {
-                try { return new URL(source.url).hostname.replace(/^www\./, ''); }
-                catch { return 'web'; }
-              })();
+              dotClass = 'bg-purple-500'
+              type = 'tool_call'
             }
-
-            return { id: `source-${idx}`, title: displayTitle, domain };
-          });
-
-          // old-style details
-          const sourceNames = subItems.slice(0, 3).map(i => i.title);
-          details = sourceNames.join(', ');
-          if (data.content.length > 3) {
-            details += `, and ${data.content.length - 3} more...`;
           }
-
-          dotClass = 'bg-green-500';
-          type     = 'tool_result';
-
-          // push full object immediately
-          const item = {
-            id:        `audit-${index}`,
-            title,
-            details,
-            subItems,
-            dotClass,
-            type,
-            event:     event.event,
-            timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
-            fullData:  data
-          };
-          auditEvents.push(item);
-          return;
-        }
-
-        // --- arxiv result block ---
-        if (data.name === 'arxiv') {
-
-          const papers = data.content?.includes('Title:')
-            ? data.content.split('Title:').length - 1
-            : 1;
-          title = `✅ Found ${papers} arXiv papers`;
-
-          const titleMatches = data.content.match(/Title: ([^\n]+)/g) || [];
-          details = titleMatches.slice(0, 2)
-            .map(t => t.replace('Title: ', '').trim())
-            .join(', ');
-          if (titleMatches.length > 2) {
-            details += `, and ${titleMatches.length - 2} more...`;
+          break
+          
+        case 'agent_completion':
+          // Handle both real-time and persistence cases for tool responses
+          if (data.type === 'LiberalFunctionMessage' && data.name) {
+            if (data.name === 'search_tavily') {
+              let sourcesArray = []
+              
+              // Parse sources from different possible formats
+              if (Array.isArray(data.content)) {
+                sourcesArray = data.content
+              } else if (typeof data.content === 'string') {
+                sourcesArray = parsePythonStyleJSON(data.content)
+                if (!Array.isArray(sourcesArray)) {
+                  sourcesArray = []
+                }
+              }
+              
+              if (sourcesArray.length > 0) {
+                title = `✅ Found ${sourcesArray.length} web sources`
+                
+                // Extract actual domains/titles from sources for sub-bullets
+                subItems = sourcesArray.slice(0, 5).map((source, idx) => {
+                  let displayTitle = 'Unknown Source'
+                  let domain = ''
+                  
+                  if (source.title && source.title.trim()) {
+                    displayTitle = source.title.trim()
+                  } else if (source.url) {
+                    try {
+                      const url = new URL(source.url)
+                      domain = url.hostname.replace('www.', '')
+                      displayTitle = domain
+                    } catch {
+                      displayTitle = source.url
+                    }
+                  }
+                  
+                  if (source.url) {
+                    try {
+                      domain = new URL(source.url).hostname.replace('www.', '')
+                    } catch {
+                      domain = 'web'
+                    }
+                  }
+                  
+                  return {
+                    id: `source-${idx}`,
+                    title: displayTitle,
+                    domain: domain
+                  }
+                })
+                
+                // Keep the old details for backward compatibility
+                const sourceNames = subItems.slice(0, 3).map(item => item.title)
+                details = sourceNames.join(', ')
+                if (sourcesArray.length > 3) details += `, and ${sourcesArray.length - 3} more...`
+                
+                dotClass = 'bg-green-500'
+                type = 'tool_result'
+              } else {
+                // Fallback if no sources found
+                title = `✅ Search Tavily completed`
+                details = 'No sources returned'
+                dotClass = 'bg-yellow-500'
+                type = 'tool_result'
+              }
+            } else if (data.name === 'arxiv') {
+              const papers = data.content && data.content.includes('Title:') ? 
+                data.content.split('Title:').length - 1 : 1
+              title = `✅ Found ${papers} arXiv papers`
+              
+              // Extract paper titles for sub-bullets with deduplication
+              const titleMatches = data.content.match(/Title: ([^\n]+)/g)
+              
+              if (titleMatches) {
+                // Deduplicate papers by title
+                const uniqueTitles = [...new Set(titleMatches.map(t => t.replace('Title: ', '').trim()))]
+                
+                details = uniqueTitles.slice(0, 2).join(', ')
+                if (uniqueTitles.length > 2) details += `, and ${uniqueTitles.length - 2} more...`
+                
+                subItems = uniqueTitles.slice(0, 5).map((title, idx) => ({
+                  id: `paper-${idx}`,
+                  title: title,
+                  domain: 'arxiv.org'
+                }))
+              }
+              
+              dotClass = 'bg-green-500'
+              type = 'tool_result'
+            } else if (data.name === 'DaytonaCodeSandbox') {
+              title = `✅ Code execution complete`
+              details = 'Generated charts and analysis'
+              dotClass = 'bg-green-500'
+              type = 'tool_result'
+            }
           }
-
-          subItems = titleMatches.slice(0, 5).map((t, idx) => ({
-            id:     `paper-${idx}`,
-            title:  t.replace('Title: ', '').trim(),
-            domain: 'arxiv.org'
-          }));
-
-          dotClass = 'bg-green-500';
-          type     = 'tool_result';
-
-          const item = {
-            id:        `audit-${index}`,
-            title,
-            details,
-            subItems,
-            dotClass,
-            type,
-            event:     event.event,
-            timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
-            fullData:  data
-          };
-          auditEvents.push(item);
-          return;
-        }
-
-        // --- DaytonaCodeSandbox completion ---
-        if (data.name === 'DaytonaCodeSandbox') {
-
-
-           const hasEvent = auditEvents.some(it => it.title === '⚡ Execute Code');
-         
-          title   = `✅ Code execution complete`;
-          details = 'Generated charts and analysis';
-          dotClass = 'bg-green-500';
-          type     = 'tool_result';
-        }
-      }else if(data.agent_type==="react_tool"){
-       const toolMatch  = data.content.match(/<tool>([^<]+)<\/tool>/);
-        const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/);
-
-        if (toolMatch) {
-          const tool  = toolMatch[1];
-          const query = inputMatch ? inputMatch[1].trim() : 'No query';
-
-          if (tool === 'search_tavily') {
-            title   = `🔍 Search Tavily`;
-            details = `Query: "${query}"`;
-          } else if (tool === 'arxiv') {
-            title   = `📚 Search arXiv`;
-            details = `Query: "${query}"`;
-          } else if (tool === 'DaytonaCodeSandbox') {
-            title   = `⚡ Execute Code`;
-            details = 'Running analysis in sandbox';
-          } else {
-            title   = `🔧 ${tool.replace('_', ' ')}`;
-            details = `Query: "${query}"`;
+          // ENHANCED: Handle tool calls from agent_completion (for persistence)
+          else if (data.agent_type === 'react_tool' && data.content && typeof data.content === 'string' && data.content.includes('<tool>')) {
+            const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
+            const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
+            
+            if (toolMatch) {
+              const tool = toolMatch[1]
+              const query = inputMatch ? inputMatch[1].trim() : 'No query'
+              
+              if (tool === 'search_tavily') {
+                title = `🔍 Search Tavily`
+                details = `Query: "${query}"`
+              } else if (tool === 'arxiv') {
+                title = `📚 Search arXiv`
+                details = `Query: "${query}"`
+              } else if (tool === 'DaytonaCodeSandbox') {
+                title = `⚡ Execute Code`
+                details = 'Running analysis in sandbox'
+              } else {
+                title = `🔧 ${tool.replace('_', ' ')}`
+                details = `Query: "${query}"`
+              }
+              dotClass = 'bg-purple-500'
+              type = 'tool_call'
+            }
           }
-          dotClass = 'bg-purple-500';
-          type     = 'tool_call';
-        }
-        
+          // Handle tool responses from agent_completion (for persistence) - ENHANCED FOR TAVILY
+          else if (data.agent_type === 'tool_response' && data.content) {
+            // This handles the case where tool responses are stored as agent_completion with agent_type: 'tool_response'
+            let sourcesArray = []
+            
+            if (typeof data.content === 'string') {
+              sourcesArray = parsePythonStyleJSON(data.content)
+              if (!Array.isArray(sourcesArray)) {
+                sourcesArray = []
+              }
+            }
+            
+            if (sourcesArray.length > 0) {
+              title = `✅ Found ${sourcesArray.length} web sources`
+              
+              // Extract actual domains/titles from sources for sub-bullets
+              subItems = sourcesArray.slice(0, 5).map((source, idx) => {
+                let displayTitle = 'Unknown Source'
+                let domain = ''
+                
+                if (source.title && source.title.trim()) {
+                  displayTitle = source.title.trim()
+                } else if (source.url) {
+                  try {
+                    const url = new URL(source.url)
+                    domain = url.hostname.replace('www.', '')
+                    displayTitle = domain
+                  } catch {
+                    displayTitle = source.url
+                  }
+                }
+                
+                if (source.url) {
+                  try {
+                    domain = new URL(source.url).hostname.replace('www.', '')
+                  } catch {
+                    domain = 'web'
+                  }
+                }
+                
+                return {
+                  id: `source-${idx}`,
+                  title: displayTitle,
+                  domain: domain
+                }
+              })
+              
+              const sourceNames = subItems.slice(0, 3).map(item => item.title)
+              details = sourceNames.join(', ')
+              if (sourcesArray.length > 3) details += `, and ${sourcesArray.length - 3} more...`
+              
+              dotClass = 'bg-green-500'
+              type = 'tool_result'
+            }
+          }
+          // CRITICAL FIX: Handle LiberalFunctionMessage that might not have name but has search_tavily data
+          else if (data.type === 'LiberalFunctionMessage' && !data.name && data.content && typeof data.content === 'string') {
+            // Check if this is a search_tavily response based on content structure
+            const contentArray = parsePythonStyleJSON(data.content)
+            if (Array.isArray(contentArray) && contentArray.length > 0 && contentArray[0]?.url) {
+              // This looks like a search result
+              title = `✅ Found ${contentArray.length} web sources`
+              
+              subItems = contentArray.slice(0, 5).map((source, idx) => {
+                let displayTitle = 'Unknown Source'
+                let domain = ''
+                
+                if (source.title && source.title.trim()) {
+                  displayTitle = source.title.trim()
+                } else if (source.url) {
+                  try {
+                    const url = new URL(source.url)
+                    domain = url.hostname.replace('www.', '')
+                    displayTitle = domain
+                  } catch {
+                    displayTitle = source.url
+                  }
+                }
+                
+                if (source.url) {
+                  try {
+                    domain = new URL(source.url).hostname.replace('www.', '')
+                  } catch {
+                    domain = 'web'
+                  }
+                }
+                
+                return {
+                  id: `source-${idx}`,
+                  title: displayTitle,
+                  domain: domain
+                }
+              })
+              
+              const sourceNames = subItems.slice(0, 3).map(item => item.title)
+              details = sourceNames.join(', ')
+              if (contentArray.length > 3) details += `, and ${contentArray.length - 3} more...`
+              
+              dotClass = 'bg-green-500'
+              type = 'tool_result'
+            }
+          }
+          break
       }
-      break;
-  }
-
-  // 3) default mapping for everything else
-  const defaultItem = {
-    id:        `audit-${index}`,
-    title,
-    details,
-    subItems,
-    dotClass,
-    type,
-    event:     event.event,
-    timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
-    fullData:  data
-  };
-
-  // 4) only push if we have a non-empty title
-  if (defaultItem.title) {
-    auditEvents.push(defaultItem);
-  }
-});
-
-return auditEvents;
-
-
+      
+      return {
+        id: `audit-${index}`,
+        title,
+        details,
+        subItems,
+        dotClass,
+        type,
+        event: event.event,
+        timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
+        fullData: data
+      }
+    })
+    .filter(event => event.title) // Only include events with titles
+    // ------------------------------------------------------------
+    // 🆕 2️⃣  Append workflow-based events so model metadata / counts
+    //      are ALWAYS included in the comprehensive audit log.
+    // ------------------------------------------------------------
+    .concat(
+      (() => {
+        if (!props.workflowData || props.workflowData.length === 0) return []
+        // Deduplicate by llm_name + task
+        const seen = new Set()
+        return props.workflowData.map((wf, i) => {
+          const key = `${wf.llm_name || 'model'}-${wf.task || 'task'}`
+          if (seen.has(key)) return null
+          seen.add(key)
+          return {
+            id: `wf-${key}-${i}`,
+            title: `🤖 ${wf.agent_name || getTextAfterLastSlash(wf.llm_name)}`,
+            details: `${wf.task || 'call'} (${wf.count || 1}×, ${wf.duration ? formattedDuration(wf.duration)+'s' : 'in-flight'})`,
+            dotClass: 'bg-indigo-500',
+            type: 'model_usage',
+            event: 'workflow_item',
+            timestamp: new Date().toISOString(),
+            fullData: wf
+          }
+        }).filter(Boolean)
+      })()
+    )
 })
 
 // Extract streaming response content with better parsing
 const streamingResponseContent = computed(() => {
   if (!props.streamingEvents) return ''
   
-  // First, look for the final completed response (react_end)
+  // First, look for the final completed response (react_end, financial_analysis_end, sales_leads_end)
   for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
     const event = props.streamingEvents[i]
-    if (event.event === 'agent_completion' && event.data.agent_type === 'react_end') {
+    if (event.event === 'agent_completion' && 
+        (event.data.agent_type === 'react_end' || 
+         event.data.agent_type === 'financial_analysis_end' || 
+         event.data.agent_type === 'sales_leads_end')) {
       return event.data.content || ''
     }
   }
@@ -1188,6 +1342,61 @@ const streamingResponseContent = computed(() => {
   return bestContent
 })
 
+// Get the final response component based on the agent_type
+const finalResponseComponent = computed(() => {
+  if (!props.streamingEvents) return null
+  
+  // Look for the final agent_completion event with a specific agent_type
+  for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
+    const event = props.streamingEvents[i]
+    if (event.event === 'agent_completion') {
+      const agentType = getAgentType(event)
+      
+      switch (agentType) {
+        case 'financial_analysis_end':
+          return FinancialAnalysisEndComponent
+        case 'sales_leads_end':
+          return SalesLeadsEndComponent
+        case 'react_end':
+          return AssistantEndComponent
+        default:
+          return null
+      }
+    }
+  }
+  
+  return null
+})
+
+// Get the final response data formatted for the component
+const finalResponseData = computed(() => {
+  if (!props.streamingEvents) return {}
+  
+  // Look for the final agent_completion event with the response data
+  for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
+    const event = props.streamingEvents[i]
+    // Robust agent_type detection to ensure real-time updates
+    const agentType = getAgentType(event)
+    if (event.event === 'agent_completion' &&
+        (agentType === 'financial_analysis_end' ||
+         agentType === 'sales_leads_end' ||
+         agentType === 'react_end')) {
+      try {
+        const content = event.data?.content || event.content || ''
+        if (typeof content === 'string' && content.trim().startsWith('{')) {
+          return { content: JSON.parse(content) }
+        }
+        return { content }
+      } catch (error) {
+        console.error('Error parsing final response data:', error)
+        return { content: event.data?.content || event.content || '' }
+      }
+    }
+  }
+  
+  return {}
+})
+
 
 
 // Extract sources from tool results with proper titles and domains
@@ -1197,72 +1406,133 @@ const toolSources = computed(() => {
   const sources = []
   
   props.streamingEvents.forEach(event => {
-    
-    if (event.event === 'agent_completion' && 
-        event.data.type === 'LiberalFunctionMessage' && 
-        event.data.name === 'search_tavily' &&
-        Array.isArray(event.data.content)) {
-      
-      event.data.content.forEach(source => {
-        let displayTitle = 'Unknown Source'
-        let domain = ''
+    // Handle Tavily sources - multiple formats for real-time vs persistence
+    if (event.event === 'agent_completion') {
+      // Format 1: LiberalFunctionMessage with name = 'search_tavily'
+      if (event.data.type === 'LiberalFunctionMessage' && event.data.name === 'search_tavily') {
+        let sourcesArray = []
         
-        // Try to get title first, fallback to domain
-        if (source.title && source.title.trim()) {
-          displayTitle = source.title.trim()
-        } else if (source.url) {
-          try {
-            const url = new URL(source.url)
-            domain = url.hostname.replace('www.', '')
-            displayTitle = domain
-          } catch {
-            displayTitle = source.url
+        // Parse sources from different possible formats
+        if (Array.isArray(event.data.content)) {
+          sourcesArray = event.data.content
+        } else if (typeof event.data.content === 'string') {
+          sourcesArray = parsePythonStyleJSON(event.data.content)
+          if (!Array.isArray(sourcesArray)) {
+            sourcesArray = []
           }
         }
         
-        // Extract domain for icon/display
-        if (source.url) {
-          try {
-            domain = new URL(source.url).hostname.replace('www.', '')
-          } catch {
-            domain = 'web'
-          }
-        }
-        
-        sources.push({
-          title: displayTitle || 'Untitled',
-          domain: domain || '',
-          url: source.url || '',
-          content: source.content ? source.content.substring(0, 200) + '...' : '',
-          type: 'web'
-        })
-      })
-    } else if (event.data.name === 'arxiv') {
-      // Parse arXiv results - remove the broken URL construction
-      const content = event.data.content || ''
-      const papers = content.split('Published:').slice(1)
-      
-      papers.forEach(paper => {
-        const titleMatch = paper.match(/Title: ([^\n]+)/)
-        const authorsMatch = paper.match(/Authors: ([^\n]+)/)
-        const urlMatch = paper.match(/URL: ([^\n]+)/)
-        const publishedMatch = paper.match(/Published: ([^\n]+)/)
-        
-        if (titleMatch) {
-          // Only use actual URLs from the content, don't construct fake ones
-          const arxivUrl = urlMatch ? urlMatch[1].trim() : ''
-          
-          sources.push({
-            title: titleMatch[1].trim() || 'Untitled Paper',
-            authors: authorsMatch ? authorsMatch[1].trim() : '',
-            domain: 'arxiv.org',
-            url: arxivUrl, // This might be empty if no URL is provided
-            content: paper.substring(0, 300) + '...',
-            type: 'arxiv',
-            published: publishedMatch ? publishedMatch[1].trim() : ''
+        if (sourcesArray.length > 0) {
+          sourcesArray.forEach(source => {
+            let displayTitle = 'Unknown Source'
+            let domain = ''
+            
+            // Try to get title first, fallback to domain
+            if (source.title && source.title.trim()) {
+              displayTitle = source.title.trim()
+            } else if (source.url) {
+              try {
+                const url = new URL(source.url)
+                domain = url.hostname.replace('www.', '')
+                displayTitle = domain
+              } catch {
+                displayTitle = source.url
+              }
+            }
+            
+            // Extract domain for icon/display
+            if (source.url) {
+              try {
+                domain = new URL(source.url).hostname.replace('www.', '')
+              } catch {
+                domain = 'web'
+              }
+            }
+            
+            sources.push({
+              title: displayTitle || 'Untitled',
+              domain: domain || '',
+              url: source.url || '',
+              content: source.content ? source.content.substring(0, 200) + '...' : '',
+              type: 'web'
+            })
           })
         }
-      })
+      }
+      // Format 2: agent_type = 'tool_response' (for persistence)
+      else if (event.data.agent_type === 'tool_response' && event.data.content) {
+        let sourcesArray = []
+        
+        if (typeof event.data.content === 'string') {
+          sourcesArray = parsePythonStyleJSON(event.data.content)
+          if (!Array.isArray(sourcesArray)) {
+            sourcesArray = []
+          }
+        }
+        
+        if (sourcesArray.length > 0) {
+          sourcesArray.forEach(source => {
+            let displayTitle = 'Unknown Source'
+            let domain = ''
+            
+            if (source.title && source.title.trim()) {
+              displayTitle = source.title.trim()
+            } else if (source.url) {
+              try {
+                const url = new URL(source.url)
+                domain = url.hostname.replace('www.', '')
+                displayTitle = domain
+              } catch {
+                displayTitle = source.url
+              }
+            }
+            
+            if (source.url) {
+              try {
+                domain = new URL(source.url).hostname.replace('www.', '')
+              } catch {
+                domain = 'web'
+              }
+            }
+            
+            sources.push({
+              title: displayTitle || 'Untitled',
+              domain: domain || '',
+              url: source.url || '',
+              content: source.content ? source.content.substring(0, 200) + '...' : '',
+              type: 'web'
+            })
+          })
+        }
+      }
+      // Handle arXiv sources
+      else if (event.data.name === 'arxiv') {
+        // Parse arXiv results - remove the broken URL construction
+        const content = event.data.content || ''
+        const papers = content.split('Published:').slice(1)
+        
+        papers.forEach(paper => {
+          const titleMatch = paper.match(/Title: ([^\n]+)/)
+          const authorsMatch = paper.match(/Authors: ([^\n]+)/)
+          const urlMatch = paper.match(/URL: ([^\n]+)/)
+          const publishedMatch = paper.match(/Published: ([^\n]+)/)
+          
+          if (titleMatch) {
+            // Only use actual URLs from the content, don't construct fake ones
+            const arxivUrl = urlMatch ? urlMatch[1].trim() : ''
+            
+            sources.push({
+              title: titleMatch[1].trim() || 'Untitled Paper',
+              authors: authorsMatch ? authorsMatch[1].trim() : '',
+              domain: 'arxiv.org',
+              url: arxivUrl, // This might be empty if no URL is provided
+              content: paper.substring(0, 300) + '...',
+              type: 'arxiv',
+              published: publishedMatch ? publishedMatch[1].trim() : ''
+            })
+          }
+        })
+      }
     }
   })
   
@@ -1648,9 +1918,74 @@ async function generateSelectablePDF() {
   }, 500) // A delay of 500ms; adjust if necessary
 }
 
+// Helper function to parse Python-style JSON with single quotes
+function parsePythonStyleJSON(jsonString) {
+  try {
+    // First try regular JSON parsing
+    return JSON.parse(jsonString);
+  } catch (e) {
+    // If that fails, try to handle Python-style single quotes
+    try {
+      // Use a more sophisticated approach to handle Python-style JSON
+      // This regex-based approach is more robust for handling nested quotes
+      let processedString = jsonString;
+      
+      // Replace Python-style single quotes with double quotes, but preserve escaped quotes
+      // This handles cases like: [{'url': 'https://example.com', 'content': 'The company\'s mission...'}]
+      processedString = processedString
+        .replace(/'/g, '"')  // Replace all single quotes with double quotes
+        .replace(/\\"/g, "'") // Restore escaped quotes back to single quotes
+        .replace(/"(\w+)":/g, '"$1":') // Ensure property names are double-quoted
+        .replace(/:\s*"([^"]*)"(?=\s*[,}])/g, ':"$1"'); // Ensure string values are properly quoted
+      
+      return JSON.parse(processedString);
+    } catch (e2) {
+      // If still failing, try using eval as last resort (safer than before)
+      try {
+        // This is a controlled eval - we know the source is from our backend
+        const result = eval('(' + jsonString + ')');
+        return result;
+      } catch (e3) {
+        console.error('Failed to parse JSON with all methods:', e3);
+        return null;
+      }
+    }
+  }
+}
 
+// Helper to reliably extract agent_type from different possible locations in the event object
+function getAgentType (event) {
+  if (!event) return null
+  return (
+    event?.data?.agent_type ||
+    event?.data?.additional_kwargs?.agent_type ||
+    event?.additional_kwargs?.agent_type ||
+    event?.agent_type ||
+    null
+  )
+}
 
+// Decide whether this bubble should be rendered (skip internal or debug-only messages)
+const showBubble = computed(() => {
+  // Always show if this bubble carries streamingEvents (status line)
+  if (props.streamingEvents) return true
 
+  // Empty or whitespace-only data – skip
+  if (!props.data || String(props.data).trim() === '') return false
+
+  // Raw subgraph payload – skip
+  if (String(props.data).includes('<subgraph')) return false
+
+  // Internal agent types we never surface
+  const internalTypes = ['react_subgraph', 'react_tool', 'tool_response', 'routing']
+  const agentType = parsedData.value?.agent_type
+  if (internalTypes.includes(agentType)) return false
+
+  // If component to be rendered is UnknownTypeComponent (and no streaming events), hide
+  if (selectedComponent.value === UnknownTypeComponent) return false
+
+  return true
+})
 
   </script>
 

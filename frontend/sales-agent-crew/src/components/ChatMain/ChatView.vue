@@ -80,7 +80,7 @@
             :workflowData="
               workflowData.filter((item) => item.message_id === currentMsgId)
             "
-            v-if="isLoading"
+            v-if="isLoading && !hasActiveStreamingGroup"
             :isLoading="isLoading"
             :statusText="'Planning...'"
             :plannerText="
@@ -739,9 +739,10 @@ async function filterChat(msgData) {
         
         // Only show user messages and final responses in main chat bubbles
         const isUserMessage = message.additional_kwargs?.agent_type === 'human';
-        const isFinalResponse = message.additional_kwargs?.agent_type === 'react_end';
+        const isFinalResponse = ['react_end', 'financial_analysis_end', 'sales_leads_end'].includes(message.additional_kwargs?.agent_type);
+        const isRegularAIMessage = message.type === 'AIMessage' && !isToolCall && !isToolResult && !isToolResponse;
         
-        if (!isUserMessage && !isFinalResponse) {
+        if (!isUserMessage && !isFinalResponse && !isRegularAIMessage) {
           return null; // Filter out intermediate agent responses that aren't tool-related
         }
         
@@ -1685,13 +1686,26 @@ async function connectWebSocket() {
           });
         } else if (receivedData.event === 'agent_completion') {
           console.log('Agent message stream:', receivedData);
+          
+          // Check if this is a final response event
+          const isFinalResponse = receivedData.agent_type === 'react_end' || 
+                                 receivedData.agent_type === 'financial_analysis_end' || 
+                                 receivedData.agent_type === 'sales_leads_end';
+          
           messagesData.value.push({
             event: 'agent_completion', 
             data: receivedData,
             message_id: currentMsgId.value,
             conversation_id: currentId.value,
-            timestamp: receivedData.timestamp || new Date().toISOString()
+            timestamp: receivedData.timestamp || new Date().toISOString(),
+            agent_type: receivedData.agent_type,
+            isFinalResponse: isFinalResponse
           });
+          
+          // Set loading to false when we receive a final response
+          if (isFinalResponse) {
+            isLoading.value = false;
+          }
         } else if (receivedData.event === 'llm_stream_chunk') {
           console.log('LLM stream chunk:', receivedData);
           const chunkId = receivedData.id;
@@ -1737,36 +1751,11 @@ async function connectWebSocket() {
             timestamp: new Date().toISOString()
           });
           isLoading.value = false;
-        }
-        // Handle legacy events
-        else if (
-          receivedData.event == 'user_message' ||
-          receivedData.event == 'completion'
-        ) {
-          try {
-            if (receivedData.event == 'completion') {
-              let metaDataComplettion = JSON.parse(receivedData.data);
-              completionMetaData.value = metaDataComplettion.metadata;
-              emit('metadataChanged', completionMetaData.value);
-            } else {
-              AutoScrollToBottom();
-            }
-          } catch (error) {
-            console.log('completionMetaData.value', error);
-            isLoading.value = false;
-          }
-          
-          // Ensure legacy messages have proper structure
-          const legacyMessage = {
-            event: receivedData.event,
+        } else if (receivedData.event === 'planner_chunk') {
+          addOrUpdatePlannerText({
+            message_id: currentMsgId.value,
             data: receivedData.data,
-            message_id: receivedData.message_id || currentMsgId.value,
-            conversation_id: receivedData.conversation_id || currentId.value,
-            timestamp: receivedData.timestamp || new Date().toISOString()
-          };
-          
-          messagesData.value.push(legacyMessage);
-          isLoading.value = false;
+          });
         } else if (receivedData.event === 'think') {
           let dataParsed = JSON.parse(receivedData.data);
           agentThoughtsData.value.push(dataParsed);
@@ -1790,11 +1779,6 @@ async function connectWebSocket() {
             console.log('model error', e);
             isLoading.value = false;
           }
-        } else if (receivedData.event === 'planner_chunk') {
-          addOrUpdatePlannerText({
-            message_id: currentMsgId.value,
-            data: receivedData.data,
-          });
         } else if (receivedData.event === 'planner') {
           let dataParsed = JSON.parse(receivedData.data);
           addOrUpdateModel(dataParsed.metadata);
@@ -1906,8 +1890,10 @@ function formatMessageData(msgItem) {
         // agent_completion events from LangGraph have structured data
         if (msgItem.data && typeof msgItem.data === 'object') {
           const formatted = {
+            content: msgItem.data.content || '',
+            data: msgItem.data.content || '',
             message: msgItem.data.content || '',
-            agent_type: msgItem.data.agent_type || 'assistant',
+            agent_type: msgItem.data.agent_type || msgItem.data.additional_kwargs?.agent_type || 'assistant',
             metadata: msgItem.data.response_metadata || null,
             additional_kwargs: msgItem.data.additional_kwargs || {},
             timestamp: msgItem.timestamp || new Date().toISOString(),
@@ -1993,6 +1979,19 @@ watch(
   }
 );
 
+// Check if we have an active streaming group for the current message
+const hasActiveStreamingGroup = computed(() => {
+  if (!messagesData.value || messagesData.value.length === 0 || !currentMsgId.value) {
+    return false;
+  }
+  
+  // Check if any message in the current conversation turn has streaming events
+  return messagesData.value.some(msg => 
+    msg.message_id === currentMsgId.value && 
+    (msg.event === 'stream_start' || msg.event === 'agent_completion' || msg.event === 'llm_stream_chunk')
+  );
+});
+
 const filteredMessages = computed(() => {
   if (!messagesData.value || messagesData.value.length === 0) {
     return [];
@@ -2000,15 +1999,29 @@ const filteredMessages = computed(() => {
 
   try {
     const grouped = new Map();
-    const streamingEvents = ['stream_start', 'agent_completion', 'llm_stream_chunk', 'stream_complete'];
+    const streamingEvents = ['stream_start', 'agent_completion', 'llm_stream_chunk', 'stream_complete', 'think', 'planner'];
     
-    // First pass: count streaming events by message_id and separate tool-related messages
+    // First pass: identify distinct conversation turns and streaming groups
     const messageIdCounts = {};
+    const userMessages = new Set(); // Track user messages
+    const aiMessages = new Set(); // Track AI messages
     const toolRelatedMessages = new Map(); // Store tool-related messages separately
     
     messagesData.value.forEach(msg => {
-      if (msg && streamingEvents.includes(msg.event) && msg.message_id) {
-        // Count all streaming events
+      if (!msg) return;
+      
+      // Identify user messages (these should always be separate)
+      if (msg.type === 'HumanMessage' || msg.agent_type === 'human') {
+        userMessages.add(msg.message_id);
+      }
+      
+      // Identify AI messages (these should be separate unless they're truly streaming)
+      if (msg.type === 'AIMessage' || msg.agent_type === 'react_end' || msg.agent_type === 'financial_analysis_end') {
+        aiMessages.add(msg.message_id);
+      }
+      
+      if (streamingEvents.includes(msg.event) && msg.message_id) {
+        // Count ALL streaming events for grouping - we want everything in one bubble
         messageIdCounts[msg.message_id] = (messageIdCounts[msg.message_id] || 0) + 1;
         
         // Separate tool-related messages for comprehensive audit log and Daytona processing
@@ -2026,51 +2039,64 @@ const filteredMessages = computed(() => {
     messagesData.value.forEach((msg, index) => {
       if (!msg) return; // Skip null/undefined messages
       
-      // For streaming events that appear multiple times with same message_id, group them
-      if (streamingEvents.includes(msg.event) && 
-          msg.message_id && 
-          messageIdCounts[msg.message_id] > 1) {
-        
-        const groupKey = `streaming_${msg.message_id}`;
-        
+      const msgId = msg.message_id;
+
+      
+      // Decide whether this message should always render its own bubble
+      const agentType = msg.agent_type || msg.data?.additional_kwargs?.agent_type || msg.data?.agent_type || msg.data?.agent_type
+
+      // Always separate genuine user inputs
+      if (msg.event === 'user_message' || agentType === 'human') {
+        const uniqueKey = `${msg.type || msg.agent_type}_${msgId}_${index}`;
+        grouped.set(uniqueKey, msg);
+        return;
+      }
+
+      // Group ALL streaming events for the same message_id (except user messages)
+      if (streamingEvents.includes(msg.event) &&
+          msgId &&
+          !userMessages.has(msgId)) {
+
+        const groupKey = `streaming_${msgId}`;
+
         if (!grouped.has(groupKey)) {
           grouped.set(groupKey, {
             type: 'streaming_group',
-            message_id: msg.message_id,
+            message_id: msgId,
             events: [],
             timestamp: msg.timestamp || new Date().toISOString()
           });
         }
-        
+
         const group = grouped.get(groupKey);
         if (group && group.events) {
           group.events.push(msg);
-          
-          // Add tool-related events to the streaming group for comprehensive processing
-          const toolKey = `tool_${msg.message_id}`;
+
+          // Merge in any tool-related events we captured for this message id
+          const toolKey = `tool_${msgId}`;
           if (toolRelatedMessages.has(toolKey)) {
             group.events.push(...toolRelatedMessages.get(toolKey));
-            // Sort events within the group by timestamp for proper timeline
-            group.events.sort((a, b) => {
-              const aTime = new Date(a.timestamp || 0).getTime();
-              const bTime = new Date(b.timestamp || 0).getTime();
-              return aTime - bTime;
-            });
           }
+
+          // Sort inside the group chronologically
+          group.events.sort((a, b) => {
+            const aTime = new Date(a.timestamp || 0).getTime();
+            const bTime = new Date(b.timestamp || 0).getTime();
+            return aTime - bTime;
+          });
         }
+        return;
       } else if (msg.isToolRelated) {
-        // For tool-related messages from loaded conversations, create a synthetic streaming group
-        
-        const groupKey = `streaming_${msg.message_id}`;
+        // For tool-related messages from persisted histories, create/append to a synthetic streaming group
+        const groupKey = `streaming_${msgId}`;
         if (!grouped.has(groupKey)) {
           grouped.set(groupKey, {
             type: 'streaming_group',
-            message_id: msg.message_id,
-            events: [msg], // Include the tool-related message in the events
+            message_id: msgId,
+            events: [msg],
             timestamp: msg.timestamp || new Date().toISOString()
           });
         } else {
-          // Add to existing group
           const group = grouped.get(groupKey);
           if (group && group.events) {
             group.events.push(msg);
@@ -2081,19 +2107,25 @@ const filteredMessages = computed(() => {
             });
           }
         }
-      } else {
-        // For all other messages (loaded chats, standalone messages), show individually
-        const uniqueKey = msg.conversation_id || `${msg.event}_${msg.message_id}_${index}` || msg.timestamp || `msg_${index}`;
+        return;
+      }
+
+      // Fallback: render as individual bubble - but only if it has content
+      if (msg.data?.content || msg.content || msg.event === 'user_message') {
+        const uniqueKey = `${msg.type || msg.event}_${msgId}_${index}`;
         grouped.set(uniqueKey, msg);
       }
+      
     });
     
-    // Convert to array and sort by timestamp
+        // Convert to array and sort by timestamp
     const result = Array.from(grouped.values()).sort((a, b) => {
       const aTime = new Date(a.timestamp || 0).getTime();
       const bTime = new Date(b.timestamp || 0).getTime();
       return aTime - bTime;
     });
+    
+
     
     return result;
   } catch (error) {

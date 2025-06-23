@@ -124,46 +124,67 @@
         </div>
       </div>
 
-      <!-- Charts Section -->
-      <div v-if="charts.length > 0" class="border-b">
+      <!-- Artifacts Section -->
+      <div v-if="artifacts.length > 0" class="border-b">
         <div class="p-4">
           <div class="flex items-center justify-between mb-3">
             <button
-              @click="toggleChartsSection"
+              @click="toggleArtifactsSection"
               class="flex items-center space-x-2 text-left hover:text-blue-600 transition-colors"
             >
-              <svg :class="{ 'rotate-90': chartsExpanded }" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg :class="{ 'rotate-90': artifactsExpanded }" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
               </svg>
-              <h4 class="font-medium text-gray-900">Generated Charts</h4>
-              <span class="text-xs text-gray-500">({{ charts.length }} chart{{ charts.length > 1 ? 's' : '' }})</span>
+              <h4 class="font-medium text-gray-900">Generated Artifacts</h4>
+              <span class="text-xs text-gray-500">({{ artifacts.length }} file{{ artifacts.length > 1 ? 's' : '' }})</span>
             </button>
           </div>
           
-          <div v-if="chartsExpanded" class="space-y-4">
+          <div v-if="artifactsExpanded" class="space-y-4">
             <div 
-              v-for="(chart, index) in charts" 
-              :key="chart.id"
+              v-for="(artifact, index) in artifacts" 
+              :key="artifact.id"
               class="bg-gray-50 rounded-lg overflow-hidden border hover:shadow-md transition-shadow cursor-pointer"
-              @click="expandChart(chart)"
+              @click="expandArtifact(artifact)"
             >
               <div class="p-3 border-b bg-white">
                 <div class="flex items-center justify-between">
-                  <h5 class="font-medium text-sm text-gray-900">{{ chart.title }}</h5>
+                  <div class="flex items-center space-x-2">
+                    <!-- File Type Icon -->
+                    <div class="w-6 h-6 flex items-center justify-center">
+                      <svg v-if="artifact.type === 'image'" class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                      </svg>
+                      <svg v-else-if="artifact.type === 'pdf'" class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                      </svg>
+                      <svg v-else-if="artifact.type === 'markdown'" class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                      </svg>
+                      <svg v-else-if="artifact.type === 'html'" class="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                      </svg>
+                      <svg v-else class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                      </svg>
+                    </div>
+                    <h5 class="font-medium text-sm text-gray-900">{{ artifact.title }}</h5>
+                    <span class="text-xs text-gray-500 uppercase">{{ artifact.type }}</span>
+                  </div>
                   <div class="flex items-center space-x-2">
                     <button
-                      @click.stop="downloadChart(chart)"
+                      @click.stop="downloadArtifact(artifact)"
                       class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100"
-                      title="Download chart"
+                      title="Download file"
                     >
                       <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                       </svg>
                     </button>
                     <button
-                      @click.stop="expandChart(chart)"
+                      @click.stop="expandArtifact(artifact)"
                       class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100"
-                      title="Expand chart"
+                      title="Expand file"
                     >
                       <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
@@ -174,67 +195,101 @@
               </div>
               
               <div class="p-4">
-                <div v-if="chart.loading" class="flex items-center justify-center h-40">
+                <div v-if="artifact.loading" class="flex items-center justify-center h-40">
                   <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                 </div>
+                
+                <!-- Image Preview -->
                 <img 
-                  v-else-if="chart.url"
-                  :src="chart.url" 
-                  :alt="chart.title"
+                  v-else-if="artifact.type === 'image' && artifact.url"
+                  :src="artifact.url" 
+                  :alt="artifact.title"
                   class="w-full h-auto rounded hover:opacity-90 transition-opacity"
-                  @load="chart.loading = false"
-                  @error="handleChartError(chart)"
+                  @load="artifact.loading = false"
+                  @error="handleArtifactError(artifact)"
                 />
+                
+                <!-- PDF Preview -->
+                <div v-else-if="artifact.type === 'pdf'" class="bg-gray-100 rounded-lg p-4 text-center hover:bg-gray-200 transition-colors">
+                  <svg class="w-12 h-12 mx-auto mb-2 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                  </svg>
+                  <p class="text-sm text-gray-600">PDF Document</p>
+                  <p class="text-xs text-gray-500 mt-1">Click to view</p>
+                </div>
+                
+                <!-- Markdown Preview -->
+                <div v-else-if="artifact.type === 'markdown'" class="bg-gray-100 rounded-lg p-4">
+                  <div class="flex items-center mb-2">
+                    <svg class="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                    </svg>
+                    <span class="text-sm text-gray-700">Markdown Document</span>
+                  </div>
+                  <div v-if="artifact.preview" class="text-xs text-gray-600 bg-white rounded p-2 font-mono">
+                    {{ artifact.preview }}
+                  </div>
+                  <p class="text-xs text-gray-500 mt-2">Click to view full content</p>
+                </div>
+                
+                <!-- HTML Preview -->
+                <div v-else-if="artifact.type === 'html'" class="bg-gray-100 rounded-lg p-4">
+                  <div class="flex items-center mb-2">
+                    <svg class="w-5 h-5 mr-2 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                    </svg>
+                    <span class="text-sm text-gray-700">HTML Document</span>
+                  </div>
+                  <div v-if="artifact.preview" class="text-xs text-gray-600 bg-white rounded p-2 font-mono">
+                    {{ artifact.preview }}
+                  </div>
+                  <p class="text-xs text-gray-500 mt-2">Click to view rendered content</p>
+                </div>
+                
+                <!-- Fallback -->
                 <div v-else class="flex items-center justify-center h-40 text-gray-500">
                   <div class="text-center">
                     <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
-                    <p class="text-sm">Chart not available</p>
+                    <p class="text-sm">File not available</p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
           
-          <!-- Collapsed Charts Preview -->
+          <!-- Collapsed Artifacts Preview -->
           <div v-else class="grid grid-cols-2 gap-2">
             <div 
-              v-for="(chart, index) in charts.slice(0, 4)" 
-              :key="chart.id"
+              v-for="(artifact, index) in artifacts.slice(0, 4)" 
+              :key="artifact.id"
               class="bg-gray-100 rounded p-2 text-center cursor-pointer hover:bg-gray-200 transition-colors"
-              @click="expandChart(chart)"
+              @click="expandArtifact(artifact)"
             >
-              <div class="text-xs text-gray-600 truncate">{{ chart.title }}</div>
+              <div class="flex items-center justify-center mb-1">
+                <svg v-if="artifact.type === 'image'" class="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+                <svg v-else-if="artifact.type === 'pdf'" class="w-3 h-3 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                <svg v-else-if="artifact.type === 'markdown'" class="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                </svg>
+                <svg v-else-if="artifact.type === 'html'" class="w-3 h-3 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                </svg>
+                <svg v-else class="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+              </div>
+              <div class="text-xs text-gray-600 truncate">{{ artifact.title }}</div>
             </div>
-            <div v-if="charts.length > 4" class="bg-gray-100 rounded p-2 text-center text-xs text-gray-500">
-              +{{ charts.length - 4 }} more
+            <div v-if="artifacts.length > 4" class="bg-gray-100 rounded p-2 text-center text-xs text-gray-500">
+              +{{ artifacts.length - 4 }} more
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- Analysis Results -->
-      <div v-if="analysisResults" class="p-4">
-        <div class="flex items-center justify-between mb-3">
-          <button
-            @click="toggleAnalysisSection"
-            class="flex items-center space-x-2 text-left hover:text-blue-600 transition-colors"
-          >
-            <svg :class="{ 'rotate-90': analysisExpanded }" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-            </svg>
-            <h4 class="font-medium text-gray-900">Analysis Results</h4>
-          </button>
-        </div>
-                 
-         <div v-if="analysisExpanded" class="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-           <div v-html="formattedAnalysis"></div>
-         </div>
-        
-        <!-- Collapsed Analysis Preview -->
-        <div v-else class="bg-gray-100 rounded-lg p-3">
-          <div class="text-sm text-gray-600">{{ analysisPreview }}</div>
         </div>
       </div>
 
@@ -288,21 +343,14 @@
           </svg>
         </div>
         
-        <!-- Charts Indicator -->
-        <div v-if="charts.length > 0" class="flex flex-col items-center">
-          <div class="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-lg" title="Charts Available">
+        <!-- Artifacts Indicator -->
+        <div v-if="artifacts.length > 0" class="flex flex-col items-center">
+          <div class="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-lg" title="Files Available">
             <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
           </div>
-          <span class="text-xs text-gray-500 mt-1">{{ charts.length }}</span>
-        </div>
-        
-        <!-- Analysis Indicator -->
-        <div v-if="analysisResults" class="flex items-center justify-center w-8 h-8 bg-purple-100 rounded-lg" title="Analysis Available">
-          <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
+          <span class="text-xs text-gray-500 mt-1">{{ artifacts.length }}</span>
         </div>
       </div>
     </div>
@@ -323,7 +371,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'expand-chart'])
+const emit = defineEmits(['close', 'expand-chart', 'expand-artifact'])
 
 // Reactive state
 const isCollapsed = ref(false)
@@ -332,14 +380,12 @@ const statusDetails = ref('')
 const isProcessing = ref(false)
 
 const codeContent = ref('')
-const analysisResults = ref('')
 const executionLog = ref([])
-const charts = ref([])
+const artifacts = ref([])
 
 // Section expansion states
 const codeExpanded = ref(true)
-const chartsExpanded = ref(true)
-const analysisExpanded = ref(true)
+const artifactsExpanded = ref(true)
 const logExpanded = ref(false)
 
 // Template refs
@@ -348,17 +394,8 @@ const codeContainer = ref(null)
 // Computed properties
 const statusDotClass = computed(() => {
   if (isProcessing.value) return 'bg-blue-500 animate-pulse'
-  if (charts.value.length > 0) return 'bg-green-500'
+  if (artifacts.value.length > 0) return 'bg-green-500'
   return 'bg-yellow-500'
-})
-
-
-
-// Removed highlightedCode computed property - using plain text display instead
-
-const formattedAnalysis = computed(() => {
-  if (!analysisResults.value) return ''
-  return formatMarkdown(analysisResults.value)
 })
 
 const codeLines = computed(() => {
@@ -369,12 +406,6 @@ const codePreview = computed(() => {
   if (!codeContent.value) return ''
   const lines = codeContent.value.split('\n')
   return lines.slice(0, 2).join(' | ') + (lines.length > 2 ? '...' : '')
-})
-
-const analysisPreview = computed(() => {
-  if (!analysisResults.value) return ''
-  const text = analysisResults.value.replace(/[#*`]/g, '').trim()
-  return text.length > 100 ? text.substring(0, 100) + '...' : text
 })
 
 // Watch for streaming events changes - ENHANCED FOR LOADED CONVERSATIONS
@@ -398,13 +429,13 @@ function processStreamingEvents(events) {
   if (!events || !Array.isArray(events)) return
 
   // Reset state when processing new events
-  charts.value = []
+  artifacts.value = []
   executionLog.value = []
   isProcessing.value = false
   
   let codeDetected = false
   let toolCallDetected = false
-  let chartCount = 0
+  let artifactCount = 0
 
   events.forEach((event, index) => {
     // Safety check for null/undefined events
@@ -487,138 +518,129 @@ function processStreamingEvents(events) {
             break;
           }
           
-          // Look for chart attachments, data URLs, and Redis chart references
+          // Look for file attachments, data URLs, and Redis file references
           const attachmentMatches = content.match(/!\[([^\]]*)\]\(attachment:([^)]+)\)/g)
           const dataUrlMatches = content.match(/!\[([^\]]*)\]\(data:image\/[^)]+\)/g)
-          const redisChartMatches = content.match(/!\[([^\]]*)\]\(redis-chart:([^:]+):([^)]+)\)/g)
+          const redisFileMatches = content.match(/!\[([^\]]*)\]\(redis-(?:chart|file):([^:]+):([^)]+)\)/g)
           
-          // Handle attachment-based charts (legacy)
-          if (attachmentMatches) {
-            attachmentMatches.forEach((match, idx) => {
-              const titleMatch = match.match(/!\[([^\]]*)\]/)
-              const idMatch = match.match(/attachment:([^)]+)/)
-              
-              if (idMatch) {
-                const chartId = idMatch[1]
-                const title = titleMatch && titleMatch[1] ? titleMatch[1] : `Chart ${idx + 1}`
+          // Look for PDF, Markdown, and HTML file patterns  
+          const pdfMatches = content.match(/!\[([^\]]*)\]\((?:attachment|redis-file):([^:)]+)(?::([^)]+))?\).*?\.pdf/gi)
+          const markdownMatches = content.match(/!\[([^\]]*)\]\((?:attachment|redis-file):([^:)]+)(?::([^)]+))?\).*?\.md/gi)
+          const htmlMatches = content.match(/!\[([^\]]*)\]\((?:attachment|redis-file):([^:)]+)(?::([^)]+))?\).*?\.html/gi)
+          
+                      // Handle attachment-based files (legacy)
+            if (attachmentMatches) {
+              attachmentMatches.forEach((match, idx) => {
+                const titleMatch = match.match(/!\[([^\]]*)\]/)
+                const idMatch = match.match(/attachment:([^)]+)/)
                 
-                // Check if chart with this ID already exists to prevent duplicates
-                const existingChart = charts.value.find(chart => chart.id === chartId)
-                if (existingChart) {
-                  console.log(`Skipping duplicate attachment chart with ID: ${chartId}`)
-                  return;
+                if (idMatch) {
+                  const fileId = idMatch[1]
+                  const title = titleMatch && titleMatch[1] ? titleMatch[1] : `File ${idx + 1}`
+                  
+                  // Check if file with this ID already exists to prevent duplicates
+                  const existingFile = artifacts.value.find(artifact => artifact.id === fileId)
+                  if (existingFile) {
+                    console.log(`Skipping duplicate attachment file with ID: ${fileId}`)
+                    return;
+                  }
+                  
+                  // Determine file type and create appropriate artifact
+                  const fileType = getFileType(title, fileId)
+                  // Use public URL format for authentication like images do
+                  // We need to get the current user_id - check if it's available in content or use a fallback
+                  const userId = getCurrentUserId() || 'current_user'
+                  const fileUrl = `/api/files/${fileId}/public?user_id=${userId}`
+                  
+                  artifacts.value.push({
+                    id: fileId,
+                    title: title,
+                    type: fileType,
+                    url: fileUrl,
+                    loading: false,
+                    downloadUrl: fileUrl,
+                    preview: null
+                  })
+                  artifactCount++
+                  console.log(`Added attachment file: ${title} (${fileType}) with ID: ${fileId}`)
                 }
-                
-                // Create real image URL instead of dummy SVG
-                const imageUrl = `/api/files/${chartId}` // Fixed path for API endpoint
-                
-                charts.value.push({
-                  id: chartId,
-                  title: title,
-                  url: imageUrl, // Use real backend URL
-                  loading: false,
-                  downloadUrl: imageUrl
-                })
-                chartCount++
-                console.log(`Added attachment chart: ${title} with ID: ${chartId}`)
-              }
-            })
-          }
-          
-          // Handle data URL-based charts (legacy)
-          if (dataUrlMatches) {
-            dataUrlMatches.forEach((match, idx) => {
-              const titleMatch = match.match(/!\[([^\]]*)\]/)
-              const urlMatch = match.match(/\]\(([^)]+)\)/)
-              
-              if (urlMatch) {
-                const dataUrl = urlMatch[1]
-                const title = titleMatch && titleMatch[1] ? titleMatch[1] : `Chart ${chartCount + idx + 1}`
-                
-                // Check if chart with this exact data URL already exists to prevent duplicates
-                const existingChart = charts.value.find(chart => chart.url === dataUrl)
-                if (existingChart) {
-                  console.log(`Skipping duplicate data URL chart: ${title}`)
-                  return;
-                }
-                
-                const chartId = `data_chart_${Date.now()}_${idx}`
-                
-                charts.value.push({
-                  id: chartId,
-                  title: title,
-                  url: dataUrl, // Use data URL directly
-                  loading: false,
-                  downloadUrl: dataUrl // Data URLs can be used for download too
-                })
-                chartCount++
-                console.log(`Added data URL chart: ${title}`)
-              }
-            })
-          }
-          
-          // Handle Redis chart references (new preferred method)
-          if (redisChartMatches) {
-            redisChartMatches.forEach((match, idx) => {
-              const titleMatch = match.match(/!\[([^\]]*)\]/)
-              const redisMatch = match.match(/redis-chart:([^:]+):([^)]+)/)
-              
-              if (redisMatch) {
-                const chartId = redisMatch[1]
-                const userId = redisMatch[2]
-                const title = titleMatch && titleMatch[1] ? titleMatch[1] : `Chart ${chartCount + idx + 1}`
-                
-                // Check if chart with this ID already exists to prevent duplicates
-                const existingChart = charts.value.find(chart => chart.id === chartId)
-                if (existingChart) {
-                  console.log(`Skipping duplicate Redis chart with ID: ${chartId}`)
-                  return;
-                }
-                
-                // Create public URL with user_id parameter
-                const imageUrl = `/api/files/${chartId}/public?user_id=${userId}`
-                
-                charts.value.push({
-                  id: chartId,
-                  title: title,
-                  url: imageUrl, // Use public endpoint
-                  loading: false,
-                  downloadUrl: imageUrl
-                })
-                chartCount++
-                console.log(`Added Redis chart: ${title} with ID: ${chartId} for user: ${userId}`)
-              }
-            })
-          }
-          
-          // Extract analysis text (everything before any image attachments)
-          let analysisText = content
-          
-          // Remove all image attachments (attachment URLs, data URLs, and Redis charts)
-          analysisText = analysisText.replace(/!\[[^\]]*\]\(attachment:[^)]+\)/g, '')
-          analysisText = analysisText.replace(/!\[[^\]]*\]\(data:image\/[^)]+\)/g, '')
-          analysisText = analysisText.replace(/!\[[^\]]*\]\(redis-chart:[^)]+\)/g, '')
-          
-          // Remove any remaining ![Chart or ![Image references
-          analysisText = analysisText.split('![Chart')[0].split('![Image')[0].split('![plot')[0]
-          
-          if (analysisText.trim()) {
-            analysisResults.value = analysisText.trim()
-          }
-          
-          updateStatus('✅ Analysis complete', `Generated ${chartCount} visualizations`)
-          // Extract analysis results from tool response content
-          if (eventData?.agent_type === 'tool_response' && content && typeof content === 'string') {
-            // Remove chart references and extract text analysis
-            const analysisText = content.replace(/!\[([^\]]*)\]\([^)]+\)/g, '').trim();
-            if (analysisText.length > 50) {
-              analysisResults.value = analysisText;
-              addToLog('Analysis results loaded from history', 'info', timestamp);
-              console.log('Extracted analysis results:', analysisText.substring(0, 100) + '...');
+              })
             }
-          }
           
-          addToLog(`Analysis completed with ${chartCount} charts`, 'success', timestamp)
+                      // Handle data URL-based images (legacy)
+            if (dataUrlMatches) {
+              dataUrlMatches.forEach((match, idx) => {
+                const titleMatch = match.match(/!\[([^\]]*)\]/)
+                const urlMatch = match.match(/\]\(([^)]+)\)/)
+                
+                if (urlMatch) {
+                  const dataUrl = urlMatch[1]
+                  const title = titleMatch && titleMatch[1] ? titleMatch[1] : `Image ${artifactCount + idx + 1}`
+                  
+                  // Check if file with this exact data URL already exists to prevent duplicates
+                  const existingFile = artifacts.value.find(artifact => artifact.url === dataUrl)
+                  if (existingFile) {
+                    console.log(`Skipping duplicate data URL image: ${title}`)
+                    return;
+                  }
+                  
+                  const fileId = `data_image_${Date.now()}_${idx}`
+                  
+                  artifacts.value.push({
+                    id: fileId,
+                    title: title,
+                    type: 'image',
+                    url: dataUrl, // Use data URL directly
+                    loading: false,
+                    downloadUrl: dataUrl, // Data URLs can be used for download too
+                    preview: null
+                  })
+                  artifactCount++
+                  console.log(`Added data URL image: ${title}`)
+                }
+              })
+            }
+          
+                      // Handle Redis file references (new preferred method)
+            if (redisFileMatches) {
+              redisFileMatches.forEach((match, idx) => {
+                const titleMatch = match.match(/!\[([^\]]*)\]/)
+                const redisMatch = match.match(/redis-(?:chart|file):([^:]+):([^)]+)/)
+                
+                if (redisMatch) {
+                  const fileId = redisMatch[1]
+                  const userId = redisMatch[2]
+                  const title = titleMatch && titleMatch[1] ? titleMatch[1] : `File ${artifactCount + idx + 1}`
+                  
+                  // Check if file with this ID already exists to prevent duplicates
+                  const existingFile = artifacts.value.find(artifact => artifact.id === fileId)
+                  if (existingFile) {
+                    console.log(`Skipping duplicate Redis file with ID: ${fileId}`)
+                    return;
+                  }
+                  
+                  // Determine file type and create appropriate artifact
+                  const fileType = getFileType(title, fileId)
+                  const fileUrl = `/api/files/${fileId}/public?user_id=${userId}`
+                  
+                  artifacts.value.push({
+                    id: fileId,
+                    title: title,
+                    type: fileType,
+                    url: fileUrl, // Use public endpoint
+                    loading: false,
+                    downloadUrl: fileUrl,
+                    preview: null
+                  })
+                  artifactCount++
+                  console.log(`Added Redis file: ${title} (${fileType}) with ID: ${fileId} for user: ${userId}`)
+                }
+              })
+            }
+          
+          updateStatus('✅ Analysis complete', `Generated ${artifactCount} artifacts`)
+          
+          addToLog(`Analysis completed with ${artifactCount} files`, 'success', timestamp)
           isProcessing.value = false
         }
         break
@@ -628,9 +650,9 @@ function processStreamingEvents(events) {
   // Set initial status if no specific events detected
   if (!codeDetected && !toolCallDetected) {
     updateStatus('⏳ Ready for analysis', 'Waiting for code execution')
-  } else if (codeDetected || chartCount > 0) {
+  } else if (codeDetected || artifactCount > 0) {
     // Update status to show loaded state
-    updateStatus('✅ Historical analysis loaded', `Code and ${chartCount} charts from conversation`)
+    updateStatus('✅ Historical analysis loaded', `Code and ${artifactCount} files from conversation`)
   }
 }
 
@@ -709,13 +731,51 @@ function createChartUrl(chartId, title) {
   }
 }
 
+function getCurrentUserId() {
+  // Try to extract user_id from existing Redis files in artifacts
+  for (const artifact of artifacts.value) {
+    if (artifact.url && artifact.url.includes('user_id=')) {
+      const match = artifact.url.match(/user_id=([^&]+)/)
+      if (match) {
+        return match[1]
+      }
+    }
+  }
+  
+  // Fallback: try to get from localStorage, sessionStorage, or other global state
+  // This might need to be adjusted based on your authentication system
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('user_id') || sessionStorage.getItem('user_id') || 'current_user'
+  }
+  
+  return 'current_user'
+}
+
+function getFileType(title, fileId) {
+  // Determine file type based on title or file extension
+  const lowerTitle = title.toLowerCase()
+  const lowerFileId = fileId.toLowerCase()
+  
+  if (lowerTitle.includes('.pdf') || lowerFileId.includes('.pdf')) {
+    return 'pdf'
+  } else if (lowerTitle.includes('.md') || lowerTitle.includes('markdown') || lowerFileId.includes('.md')) {
+    return 'markdown'
+  } else if (lowerTitle.includes('.html') || lowerTitle.includes('.htm') || lowerFileId.includes('.html') || lowerFileId.includes('.htm')) {
+    return 'html'
+  } else if (lowerTitle.includes('chart') || lowerTitle.includes('graph') || lowerTitle.includes('plot') || 
+             lowerTitle.includes('visualization') || lowerTitle.includes('diagram')) {
+    return 'image'
+  } else {
+    // Default to image for backward compatibility
+    return 'image'
+  }
+}
+
 function updateStatus(status, details = '') {
   currentStatus.value = status
   statusDetails.value = details
   isProcessing.value = status.includes('Executing') || status.includes('Running')
 }
-
-
 
 function addToLog(message, type = 'info', timestamp) {
   executionLog.value.push({
@@ -742,44 +802,7 @@ function highlightPythonCode(code) {
     .replace(/\n/g, '<br>')
 }
 
-function formatMarkdown(content) {
-  if (!content) return ''
-  
-  // Professional analysis formatting
-  let formatted = content
-    // Clean up the content first
-    .replace(/pr\w*\("([^"]+)"\)/g, '$1') // Remove print statements
-    .replace(/pr\w*\(f"([^"]+)"\)/g, '$1') // Remove f-print statements
-    .replace(/\\n/g, '\n') // Fix line breaks
-    
-    // Apply professional formatting for "Key Insights" section
-    .replace(/Key Insights:/gi, '<div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg font-bold text-lg mb-4">🔍 KEY INSIGHTS</div>')
-    
-    // Format numbered insights
-    .replace(/(\d+)\.\s+([^(\n]+)\s*(\([^)]+\))?/g, '<div class="mb-4 p-3 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg"><span class="font-semibold text-blue-800">$1.</span> <span class="text-gray-800">$2</span> <span class="text-blue-600 text-sm">$3</span></div>')
-    
-    // Format "Max Throughputs" section
-    .replace(/Max Throughputs:/gi, '<div class="mt-6 mb-4"><h3 class="text-lg font-semibold text-purple-800 border-l-4 border-purple-500 pl-3 mb-3">📊 PERFORMANCE METRICS</h3></div>')
-    
-    // Format model names and their metrics
-    .replace(/([A-Za-z-]+\d*[A-Za-z-]*\d*):\s*$/gm, '<div class="mt-4 mb-2"><h4 class="font-bold text-gray-900 bg-gray-100 px-3 py-2 rounded">$1</h4></div>')
-    
-    // Format metric lines (e.g., "150-char: 1117.8 TPS")
-    .replace(/([^:\n]+):\s*(\d+\.?\d*\s*[A-Z]+)/g, '<div class="ml-4 mb-1 flex justify-between items-center py-1"><span class="text-gray-700">$1:</span> <span class="font-semibold text-green-600 bg-green-50 px-2 py-1 rounded">$2</span></div>')
-    
-    // Format any remaining numbers with units
-    .replace(/(\d+\.?\d*)\s*(TPS|MB|GB|ms|seconds?)/g, '<span class="font-semibold text-blue-600">$1 $2</span>')
-    
-    // Format bullet points
-    .replace(/^-\s+(.+)$/gm, '<div class="flex items-start mb-2 ml-4"><span class="text-blue-500 mr-2">•</span><span class="text-gray-700">$1</span></div>')
-    
-    // Clean up extra spaces and line breaks, but preserve structure
-    .replace(/\n\s*\n/g, '<div class="my-3"></div>')
-    .replace(/\n/g, '<br>')
-  
-  // Wrap in professional container
-  return `<div class="prose prose-lg max-w-none text-gray-800 leading-relaxed bg-white p-6 rounded-lg border shadow-sm">${formatted}</div>`
-}
+
 
 function formatLogTime(timestamp) {
   return new Date(timestamp).toLocaleTimeString([], { 
@@ -812,12 +835,8 @@ function toggleCodeSection() {
   codeExpanded.value = !codeExpanded.value
 }
 
-function toggleChartsSection() {
-  chartsExpanded.value = !chartsExpanded.value
-}
-
-function toggleAnalysisSection() {
-  analysisExpanded.value = !analysisExpanded.value
+function toggleArtifactsSection() {
+  artifactsExpanded.value = !artifactsExpanded.value
 }
 
 function toggleLogSection() {
@@ -830,24 +849,61 @@ function copyCode() {
   }
 }
 
-function downloadChart(chart) {
-  if (chart.url) {
-    const link = document.createElement('a')
-    link.href = chart.url
-    link.download = `${chart.title.replace(/\s+/g, '_')}.png`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+function downloadArtifact(artifact) {
+  if (artifact.url) {
+    // For data URLs or external URLs, download directly
+    if (artifact.url.startsWith('data:') || artifact.url.startsWith('http')) {
+      const link = document.createElement('a')
+      link.href = artifact.url
+      const extension = getFileExtension(artifact.type)
+      link.download = `${artifact.title.replace(/\s+/g, '_')}.${extension}`
+      link.target = '_blank'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } else {
+      // For API URLs, open in new tab to trigger download
+      window.open(artifact.url, '_blank')
+    }
   }
 }
 
-function expandChart(chart) {
-  emit('expand-chart', chart)
+function getFileExtension(type) {
+  const extensions = {
+    'pdf': 'pdf',
+    'markdown': 'md',
+    'html': 'html',
+    'image': 'png'
+  }
+  return extensions[type] || 'txt'
 }
 
-function handleChartError(chart) {
-  chart.loading = false
-  addToLog(`Failed to load chart: ${chart.title}`, 'error', new Date().toISOString())
+function expandArtifact(artifact) {
+  // For PDFs, open in new tab instead of modal
+  if (artifact.type === 'pdf') {
+    window.open(artifact.url, '_blank')
+    return
+  }
+  
+  // For backward compatibility, emit both events with proper data structure
+  if (artifact.type === 'image') {
+    // Ensure the artifact has all properties the modal expects
+    const chartData = {
+      ...artifact,
+      // Make sure these properties exist for compatibility
+      id: artifact.id,
+      title: artifact.title,
+      url: artifact.url,
+      downloadUrl: artifact.downloadUrl || artifact.url
+    }
+    emit('expand-chart', chartData)  // Keep old event for images
+  }
+  emit('expand-artifact', artifact)
+}
+
+function handleArtifactError(artifact) {
+  artifact.loading = false
+  addToLog(`Failed to load file: ${artifact.title}`, 'error', new Date().toISOString())
 }
 
 // Lifecycle - ENHANCED FOR LOADED CONVERSATIONS
