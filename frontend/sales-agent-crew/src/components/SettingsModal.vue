@@ -238,18 +238,13 @@
             <label class="block text-sm font-medium text-gray-700 mb-2">
               Planner Model Selection
               <br>
-              <span class="text-red-500 text-sm">
-                (DeepSeek R1 8K Requires early access to API)
-              </span>
             </label>
             <select
               v-model="selectedModel"
               @change="handleModelSelection"
               class="block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
             >
-              <option value="llama-3.3-70b">Meta-Llama-3.3-70B-Instruct - 128K</option>
-              <option value="deepseek-r1">DeepSeek-R1 - 8K</option>
-              <option value="llama-3.1-405b">Meta-Llama-3.1-405B-Instruct - 16K</option>
+              <option value="DeepSeek V3">DeepSeek V3 - 32K</option>
             </select>
           </div>
 
@@ -349,7 +344,8 @@ const serperKey = ref('')
 const fireworksKey = ref('')
 const errorMessage = ref('')
 const successMessage = ref('')
-const selectedModel = ref('llama-3.3-70b')
+const selectedModel = ref('DeepSeek V3')
+const keysLoaded = ref(false)
 // Key visibility controls
 const sambanovaKeyVisible = ref(false)
 const exaKeyVisible = ref(false)
@@ -365,14 +361,61 @@ const missingKeys = ref({
 })
 
 
-// Load keys on mount and check if modal should be open
-onMounted(async () => {
-  await loadKeys()
- await checkRequiredKeys() // Ensure modal opens if needed
-  emitterMitt.on('check-keys', checkRequiredKeys);
-  emitterMitt.emit('keys-updated',  missingKeys.value );
+// ✅ Function to load saved keys
+const loadKeys = async () => {
+  if (!userId.value) return;
 
-})
+  try {
+    // Get all saved keys from localStorage
+    const savedSambanovaKey = localStorage.getItem(`sambanova_key_${userId.value}`);
+    const savedExaKey = localStorage.getItem(`exa_key_${userId.value}`);
+    const savedSerperKey = localStorage.getItem(`serper_key_${userId.value}`);
+    const savedFireworksKey = localStorage.getItem(`fireworks_key_${userId.value}`);
+    const savedModel = localStorage.getItem(`selected_model_${userId.value}`);
+
+    // Decrypt and set sambanova key (always available)
+    sambanovaKey.value = savedSambanovaKey ? await decryptKey(savedSambanovaKey) : '';
+    
+    // Decrypt and set other keys only if user keys are enabled
+    if (isUserKeysEnabled.value) {
+      exaKey.value = savedExaKey ? await decryptKey(savedExaKey) : '';
+      serperKey.value = savedSerperKey ? await decryptKey(savedSerperKey) : '';
+      fireworksKey.value = savedFireworksKey ? await decryptKey(savedFireworksKey) : '';
+    } else {
+      exaKey.value = '';
+      serperKey.value = '';
+      fireworksKey.value = '';
+    }
+
+    // Handle model selection
+    if (!savedModel || savedModel === 'null' || savedModel === 'undefined' || savedModel.trim() === '') {
+      selectedModel.value = 'DeepSeek V3';
+      localStorage.setItem(`selected_model_${userId.value}`, 'DeepSeek V3');
+    } else {
+      selectedModel.value = savedModel;
+      // Update localStorage with the normalized value
+      localStorage.setItem(`selected_model_${userId.value}`, savedModel);
+    }
+    
+  } catch (error) {
+    console.error('Failed to load keys:', error);
+    errorMessage.value = 'Failed to load saved keys';
+  }
+}
+
+// Load keys on mount and check if modal should be open
+watch(userId, async (newId) => {
+  if (newId) {
+    await loadKeys()
+    keysLoaded.value = true
+    checkRequiredKeys() // Ensure modal opens if needed
+    emitterMitt.emit('keys-updated', missingKeys.value)
+  }
+}, { immediate: true })
+
+onMounted(() => {
+  emitterMitt.on('check-keys', checkRequiredKeys);
+});
 
 
 // Watch for provider changes and check required keys dynamically
@@ -384,50 +427,21 @@ watch([exaKey, serperKey, sambanovaKey, fireworksKey], () => {
   // checkRequiredKeys()
 })
 
-// ✅ Function to load saved keys
-const loadKeys = async () => {
-  let savedExaKey = '';
-  let savedSerperKey = '';
-  let savedFireworksKey = '';
+// ✅ Function to check if required keys are missing
+const checkRequiredKeys = () => {
 
-  console.log(isUserKeysEnabled.value,isUserKeysEnabled.value)
-  if (!isUserKeysEnabled.value) {
+  if (!keysLoaded.value) return;
 
-    
-
-  } else {
-    savedExaKey = localStorage.getItem(`exa_key_${userId.value}`);
-    savedSerperKey = localStorage.getItem(`serper_key_${userId.value}`);
-    savedFireworksKey = localStorage.getItem(`fireworks_key_${userId.value}`);
+  missingKeys.value = {
+    exa: !exaKey.value&&isUserKeysEnabled.value,
+    serper: !serperKey.value&&isUserKeysEnabled.value,
+    sambanova: props.provider === 'sambanova' && !sambanovaKey.value,
+    fireworks: props.provider === 'fireworks' && !fireworksKey.value&&isUserKeysEnabled.value
   }
 
-  try {
-    const savedModel = localStorage.getItem(`selected_model_${userId.value}`);
-    const savedSambanovaKey = localStorage.getItem(`sambanova_key_${userId.value}`);
-    console.log("Try savedExaKey,savedSerperKey,savedFireworksKey",savedExaKey,savedSerperKey,savedFireworksKey)
+  isOpen.value = Object.values(missingKeys.value).some((missing) => missing)
+  emitterMitt.emit('keys-updated',  missingKeys.value );
 
-    sambanovaKey.value = savedSambanovaKey ? await decryptKey(savedSambanovaKey) : '';
-    exaKey.value = savedExaKey 
-      ? (!isUserKeysEnabled.value ? savedExaKey : await decryptKey(savedExaKey))
-      : '';
-    serperKey.value = savedSerperKey 
-      ? (!isUserKeysEnabled.value ? savedSerperKey : await decryptKey(savedSerperKey))
-      : '';
-    fireworksKey.value = savedFireworksKey 
-      ? (!isUserKeysEnabled.value ? savedFireworksKey : await decryptKey(savedFireworksKey))
-      : '';
-
-
-    // If no model was saved, save the default
-    if (!savedModel) {
-      localStorage.setItem(`selected_model_${userId.value}`, selectedModel.value);
-    } else {
-      selectedModel.value = savedModel;
-    }
-  } catch (error) {
-    console.error('Failed to load keys:', error);
-    errorMessage.value = 'Failed to load saved keys';
-  }
 }
 
 // Toggle key visibility
@@ -450,21 +464,6 @@ const toggleFireworksKeyVisibility = () => {
 const handleModelSelection = () => {
   localStorage.setItem(`selected_model_${userId.value}`, selectedModel.value)
   emit('keysUpdated')
-}
-// ✅ Function to check if required keys are missing
-const checkRequiredKeys = () => {
-
-
-  missingKeys.value = {
-    exa: !exaKey.value&&isUserKeysEnabled.value,
-    serper: !serperKey.value&&isUserKeysEnabled.value,
-    sambanova: props.provider === 'sambanova' && !sambanovaKey.value,
-    fireworks: props.provider === 'fireworks' && !fireworksKey.value&&isUserKeysEnabled.value
-  }
-
-  isOpen.value = Object.values(missingKeys.value).some((missing) => missing)
-  emitterMitt.emit('keys-updated',  missingKeys.value );
-
 }
 
 // ✅ Function to manually open modal
@@ -648,9 +647,9 @@ const clearSerperKey = async () => {
 
 }
 
-const updateAndCallEvents=async()=>{
+const updateAndCallEvents=()=>{
 
-  await checkRequiredKeys()
+  checkRequiredKeys()
 
   emit('keysUpdated')
   emitterMitt.emit('keys-updated',  missingKeys.value );
