@@ -121,9 +121,9 @@ async def astream_state_websocket(
 
             if new_messages:
                 # Send new messages via WebSocket
-                for msg in new_messages:
 
-                    converted_msg = convert_messages_to_dict([msg])[0]
+                converted_msgs = convert_messages_to_dict(new_messages)
+                for msg in converted_msgs:
 
                     await websocket_manager.send_message(
                         user_id,
@@ -131,7 +131,7 @@ async def astream_state_websocket(
                         {
                             "event": "agent_completion",
                             "run_id": root_run_id,
-                            **converted_msg,
+                            **msg,
                             "user_id": user_id,
                             "conversation_id": conversation_id,
                             "message_id": message_id,

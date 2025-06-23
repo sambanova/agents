@@ -511,12 +511,26 @@ class WebSocketConnectionManager(WebSocketInterface):
             websocket = self.connections.get(session_key)
 
             if "event" in data and data["event"] == "agent_completion":
-                was_saved = await self.message_storage.save_message_if_new(
-                    user_id, conversation_id, data
+
+                if "id" in data:
+                    is_new = await self.message_storage.is_message_new(
+                        user_id, conversation_id, data["id"]
+                    )
+
+                    if not is_new:
+                        return True  # Still successful, just skipped duplicate
+
+                current_usage = data.get("usage_metadata")
+                cumulative_usage = (
+                    await self.message_storage.update_and_get_cumulative_usage(
+                        user_id, conversation_id, current_usage
+                    )
                 )
 
-                if not was_saved:
-                    return True  # Still successful, just skipped duplicate
+                if cumulative_usage:
+                    data["cumulative_usage_metadata"] = cumulative_usage
+
+                await self.message_storage.save_message(user_id, conversation_id, data)
 
             if not websocket:
                 logger.info(

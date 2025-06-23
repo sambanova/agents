@@ -43,6 +43,23 @@ class RedisStorage:
         """Get the Redis key for user API keys"""
         return f"api_keys:{user_id}"
 
+    def _get_cumulative_usage_key(self, user_id: str, conversation_id: str) -> str:
+        """Get the Redis key for cumulative usage data"""
+        return f"cumulative_usage:{user_id}:{conversation_id}"
+
+    async def is_message_new(
+        self, user_id: str, conversation_id: str, message_id: str
+    ) -> bool:
+        """Check if a message is new"""
+
+        dedup_key = self._get_dedup_key(user_id, conversation_id)
+        is_new = await self.redis_client.hsetnx(dedup_key, message_id, "1", user_id)
+
+        if not is_new:
+            return False
+
+        return True
+
     async def save_message_if_new(
         self, user_id: str, conversation_id: str, message_data: Dict[str, Any]
     ) -> bool:
@@ -71,6 +88,21 @@ class RedisStorage:
             user_id,
         )
         return True
+
+    async def save_message(
+        self, user_id: str, conversation_id: str, message_data: Dict[str, Any]
+    ) -> None:
+        """
+        Save a message.
+        """
+        message_key = self._get_message_key(user_id, conversation_id)
+
+        # Save the message
+        await self.redis_client.rpush(
+            message_key,
+            json.dumps(message_data),
+            user_id,
+        )
 
     async def get_messages(
         self, user_id: str, conversation_id: str, start: int = 0, end: int = -1
@@ -457,3 +489,38 @@ class RedisStorage:
                 error=str(e),
                 exc_info=True,
             )
+
+    async def update_and_get_cumulative_usage(
+        self,
+        user_id: str,
+        conversation_id: str,
+        current_usage: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Updates and retrieves the cumulative usage for a session.
+        """
+        cumulative_usage_key = self._get_cumulative_usage_key(user_id, conversation_id)
+        # Fetch existing cumulative usage
+        existing_cumulative_usage_str = await self.redis_client.get(
+            cumulative_usage_key, user_id
+        )
+
+        if existing_cumulative_usage_str:
+            try:
+                cumulative_usage = json.loads(existing_cumulative_usage_str)
+            except json.JSONDecodeError:
+                cumulative_usage = {}
+        else:
+            cumulative_usage = {}
+
+        if current_usage:
+            for key, value in current_usage.items():
+                if isinstance(value, (int, float)):
+                    cumulative_usage[key] = cumulative_usage.get(key, 0) + value
+
+            # Store the updated cumulative usage back to Redis
+            await self.redis_client.set(
+                cumulative_usage_key, json.dumps(cumulative_usage), user_id
+            )
+
+        return cumulative_usage
