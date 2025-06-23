@@ -401,6 +401,9 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
         "image/svg",
         "application/pdf",
         "application/msword",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # PowerPoint
+        "text/html",
+        "text/markdown",
         "text/plain",
         "text/csv",
     ]
@@ -430,7 +433,7 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
             daytona = DaytonaClient(config)
 
             params = CreateSandboxFromSnapshotParams(
-                snapshot="cr.app.daytona.io/sbox-transient/data-analysis:0.0.7",
+                snapshot="data-analysis:0.0.8",
             )
 
             # Strip markdown formatting before processing
@@ -508,6 +511,9 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
             list_of_files_after_execution = await sandbox.fs.list_files(".")
             for file in list_of_files_after_execution:
                 mime_type, _ = mimetypes.guess_type(file.name)
+                # Handle markdown files specifically since mimetypes may not recognize .md extension
+                if mime_type is None and file.name.lower().endswith(".md"):
+                    mime_type = "text/markdown"
                 if file.name not in list_of_files and mime_type in supported_extensions:
                     file_id = str(uuid.uuid4())
                     content = await sandbox.fs.download_file(file.name)
