@@ -214,30 +214,6 @@
         </div>
       </div>
 
-      <!-- Analysis Results -->
-      <div v-if="analysisResults" class="p-4">
-        <div class="flex items-center justify-between mb-3">
-          <button
-            @click="toggleAnalysisSection"
-            class="flex items-center space-x-2 text-left hover:text-blue-600 transition-colors"
-          >
-            <svg :class="{ 'rotate-90': analysisExpanded }" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-            </svg>
-            <h4 class="font-medium text-gray-900">Analysis Results</h4>
-          </button>
-        </div>
-                 
-         <div v-if="analysisExpanded" class="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-           <div v-html="formattedAnalysis"></div>
-         </div>
-        
-        <!-- Collapsed Analysis Preview -->
-        <div v-else class="bg-gray-100 rounded-lg p-3">
-          <div class="text-sm text-gray-600">{{ analysisPreview }}</div>
-        </div>
-      </div>
-
       <!-- Execution Log -->
       <div v-if="executionLog.length > 0" class="p-4 border-t bg-gray-50">
         <div class="flex items-center justify-between mb-3">
@@ -297,13 +273,6 @@
           </div>
           <span class="text-xs text-gray-500 mt-1">{{ charts.length }}</span>
         </div>
-        
-        <!-- Analysis Indicator -->
-        <div v-if="analysisResults" class="flex items-center justify-center w-8 h-8 bg-purple-100 rounded-lg" title="Analysis Available">
-          <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
-        </div>
       </div>
     </div>
   </div>
@@ -332,14 +301,12 @@ const statusDetails = ref('')
 const isProcessing = ref(false)
 
 const codeContent = ref('')
-const analysisResults = ref('')
 const executionLog = ref([])
 const charts = ref([])
 
 // Section expansion states
 const codeExpanded = ref(true)
 const chartsExpanded = ref(true)
-const analysisExpanded = ref(true)
 const logExpanded = ref(false)
 
 // Template refs
@@ -352,15 +319,6 @@ const statusDotClass = computed(() => {
   return 'bg-yellow-500'
 })
 
-
-
-// Removed highlightedCode computed property - using plain text display instead
-
-const formattedAnalysis = computed(() => {
-  if (!analysisResults.value) return ''
-  return formatMarkdown(analysisResults.value)
-})
-
 const codeLines = computed(() => {
   return codeContent.value ? codeContent.value.split('\n').length : 0
 })
@@ -369,12 +327,6 @@ const codePreview = computed(() => {
   if (!codeContent.value) return ''
   const lines = codeContent.value.split('\n')
   return lines.slice(0, 2).join(' | ') + (lines.length > 2 ? '...' : '')
-})
-
-const analysisPreview = computed(() => {
-  if (!analysisResults.value) return ''
-  const text = analysisResults.value.replace(/[#*`]/g, '').trim()
-  return text.length > 100 ? text.substring(0, 100) + '...' : text
 })
 
 // Watch for streaming events changes - ENHANCED FOR LOADED CONVERSATIONS
@@ -591,32 +543,7 @@ function processStreamingEvents(events) {
             })
           }
           
-          // Extract analysis text (everything before any image attachments)
-          let analysisText = content
-          
-          // Remove all image attachments (attachment URLs, data URLs, and Redis charts)
-          analysisText = analysisText.replace(/!\[[^\]]*\]\(attachment:[^)]+\)/g, '')
-          analysisText = analysisText.replace(/!\[[^\]]*\]\(data:image\/[^)]+\)/g, '')
-          analysisText = analysisText.replace(/!\[[^\]]*\]\(redis-chart:[^)]+\)/g, '')
-          
-          // Remove any remaining ![Chart or ![Image references
-          analysisText = analysisText.split('![Chart')[0].split('![Image')[0].split('![plot')[0]
-          
-          if (analysisText.trim()) {
-            analysisResults.value = analysisText.trim()
-          }
-          
           updateStatus('✅ Analysis complete', `Generated ${chartCount} visualizations`)
-          // Extract analysis results from tool response content
-          if (eventData?.agent_type === 'tool_response' && content && typeof content === 'string') {
-            // Remove chart references and extract text analysis
-            const analysisText = content.replace(/!\[([^\]]*)\]\([^)]+\)/g, '').trim();
-            if (analysisText.length > 50) {
-              analysisResults.value = analysisText;
-              addToLog('Analysis results loaded from history', 'info', timestamp);
-              console.log('Extracted analysis results:', analysisText.substring(0, 100) + '...');
-            }
-          }
           
           addToLog(`Analysis completed with ${chartCount} charts`, 'success', timestamp)
           isProcessing.value = false
@@ -715,8 +642,6 @@ function updateStatus(status, details = '') {
   isProcessing.value = status.includes('Executing') || status.includes('Running')
 }
 
-
-
 function addToLog(message, type = 'info', timestamp) {
   executionLog.value.push({
     id: Date.now() + Math.random(),
@@ -742,44 +667,7 @@ function highlightPythonCode(code) {
     .replace(/\n/g, '<br>')
 }
 
-function formatMarkdown(content) {
-  if (!content) return ''
-  
-  // Professional analysis formatting
-  let formatted = content
-    // Clean up the content first
-    .replace(/pr\w*\("([^"]+)"\)/g, '$1') // Remove print statements
-    .replace(/pr\w*\(f"([^"]+)"\)/g, '$1') // Remove f-print statements
-    .replace(/\\n/g, '\n') // Fix line breaks
-    
-    // Apply professional formatting for "Key Insights" section
-    .replace(/Key Insights:/gi, '<div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg font-bold text-lg mb-4">🔍 KEY INSIGHTS</div>')
-    
-    // Format numbered insights
-    .replace(/(\d+)\.\s+([^(\n]+)\s*(\([^)]+\))?/g, '<div class="mb-4 p-3 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg"><span class="font-semibold text-blue-800">$1.</span> <span class="text-gray-800">$2</span> <span class="text-blue-600 text-sm">$3</span></div>')
-    
-    // Format "Max Throughputs" section
-    .replace(/Max Throughputs:/gi, '<div class="mt-6 mb-4"><h3 class="text-lg font-semibold text-purple-800 border-l-4 border-purple-500 pl-3 mb-3">📊 PERFORMANCE METRICS</h3></div>')
-    
-    // Format model names and their metrics
-    .replace(/([A-Za-z-]+\d*[A-Za-z-]*\d*):\s*$/gm, '<div class="mt-4 mb-2"><h4 class="font-bold text-gray-900 bg-gray-100 px-3 py-2 rounded">$1</h4></div>')
-    
-    // Format metric lines (e.g., "150-char: 1117.8 TPS")
-    .replace(/([^:\n]+):\s*(\d+\.?\d*\s*[A-Z]+)/g, '<div class="ml-4 mb-1 flex justify-between items-center py-1"><span class="text-gray-700">$1:</span> <span class="font-semibold text-green-600 bg-green-50 px-2 py-1 rounded">$2</span></div>')
-    
-    // Format any remaining numbers with units
-    .replace(/(\d+\.?\d*)\s*(TPS|MB|GB|ms|seconds?)/g, '<span class="font-semibold text-blue-600">$1 $2</span>')
-    
-    // Format bullet points
-    .replace(/^-\s+(.+)$/gm, '<div class="flex items-start mb-2 ml-4"><span class="text-blue-500 mr-2">•</span><span class="text-gray-700">$1</span></div>')
-    
-    // Clean up extra spaces and line breaks, but preserve structure
-    .replace(/\n\s*\n/g, '<div class="my-3"></div>')
-    .replace(/\n/g, '<br>')
-  
-  // Wrap in professional container
-  return `<div class="prose prose-lg max-w-none text-gray-800 leading-relaxed bg-white p-6 rounded-lg border shadow-sm">${formatted}</div>`
-}
+
 
 function formatLogTime(timestamp) {
   return new Date(timestamp).toLocaleTimeString([], { 
@@ -814,10 +702,6 @@ function toggleCodeSection() {
 
 function toggleChartsSection() {
   chartsExpanded.value = !chartsExpanded.value
-}
-
-function toggleAnalysisSection() {
-  analysisExpanded.value = !analysisExpanded.value
 }
 
 function toggleLogSection() {
