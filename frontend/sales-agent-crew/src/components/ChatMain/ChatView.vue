@@ -1310,31 +1310,26 @@ async function transcribeAudio(audioBlob) {
       )
     );
     const requestBody = {
-      model: 'Qwen2-Audio-7B-Instruct',
+      model: 'Whisper-Large-v3',
       messages: [
-        {
-          role: 'system',
-          content: 'You are an Automatic Speech Recognition tool.',
-        },
         {
           role: 'user',
           content: [
-            {
-              type: 'audio_content',
-              audio_content: {
-                content: `data:audio/webm;base64,${audioBase64}`,
-              },
+          {
+            type: 'text',
+            text: 'Transcribe the following audio',
+          },
+          {
+            type: 'audio_content',
+            audio_content: {
+              content: `data:audio/webm;base64,${audioBase64}`,
             },
+          },
           ],
         },
-        {
-          role: 'user',
-          content:
-            'Please transcribe the previous audio and only return the transcription.',
-        },
       ],
-      response_format: 'streaming',
       stream: true,
+      max_tokens: 200,
     };
     const response = await fetch(
       'https://api.sambanova.ai/v1/audio/reasoning',
