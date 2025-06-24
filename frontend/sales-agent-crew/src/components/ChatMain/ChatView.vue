@@ -1581,6 +1581,8 @@ const addMessage = async () => {
 
       socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
+      searchQuery.value = '';
+      selectedDocuments.value = [];
 
       console.log('Message sent after connecting:', messagePayload);
     } catch (error) {
@@ -1594,6 +1596,7 @@ const addMessage = async () => {
       socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
       searchQuery.value = '';
+      selectedDocuments.value = [];
     } catch (e) {
       console.error('ChatView error', e);
       isLoading.value = false;
