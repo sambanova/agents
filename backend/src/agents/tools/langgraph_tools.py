@@ -531,6 +531,17 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
                 if mime_type is None:
                     if file.name.lower().endswith(".md"):
                         mime_type = "text/markdown"
+                    elif file.name.lower().endswith((".pptx", ".ppt")):
+                        # Fallback for PowerPoint files when system mimetypes are missing
+                        mime_type = (
+                            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                            if file.name.lower().endswith(".pptx")
+                            else "application/vnd.ms-powerpoint"
+                        )
+                    elif file.name.lower().endswith(".pdf"):
+                        mime_type = "application/pdf"
+                    elif file.name.lower().endswith((".docx", ".doc")):
+                        mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
                 if file.name not in list_of_files and mime_type in supported_extensions:
                     file_id = str(uuid.uuid4())
