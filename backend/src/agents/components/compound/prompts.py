@@ -1,6 +1,5 @@
 from typing import List, Tuple
 
-
 rewoo_prompt = """For the following task, make plans that can solve the problem step by step. For each plan, indicate \
 which external tool together with tool input to retrieve evidence. You can store the evidence into a \
 variable #E that can be called by later tools. (Plan, #E1, Plan, #E2, Plan, ...)
@@ -57,6 +56,7 @@ You have access to the following tools:
 {tools}
 
 In order to use a tool, you can use <tool></tool> and <tool_input></tool_input> tags. You will then get back a response in the form <observation></observation>
+If you decide to use a tool or a subgraph, start your message with the tool or subgraph call.
 For example, if you have a tool called 'search' that could run a google search, in order to search for the weather in SF you would respond:
 
 <tool>search</tool><tool_input>weather in SF</tool_input>

@@ -154,7 +154,7 @@
                             Uploaded
                             {{
                               new Date(
-                                doc.upload_timestamp * 1000
+                                doc.created_at * 1000
                               ).toLocaleString()
                             }}
                             • {{ doc.num_chunks }} chunks
@@ -1414,7 +1414,6 @@ async function handleFileUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
   try {
-    uploadStatus.value = { type: 'info', message: 'Uploading document...' };
     const formData = new FormData();
     formData.append('file', file);
     const response = await axios.post(
@@ -1428,7 +1427,7 @@ async function handleFileUpload(event) {
     );
     // Store the uploaded document and update selection.
     const document = response.data.document || response.data.file;
-    uploadedDocuments.value.push(document);
+    uploadedDocuments.value.unshift(document);
     selectedDocuments.value.push(document.file_id);
     if (fileInput.value) {
       fileInput.value.value = '';

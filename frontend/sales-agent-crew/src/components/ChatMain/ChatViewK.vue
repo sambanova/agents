@@ -2228,7 +2228,7 @@ const filteredMessages = computed(() => {
                             Uploaded
                             {{
                               new Date(
-                                doc.upload_timestamp * 1000
+                                doc.created_at * 1000
                               ).toLocaleString()
                             }}
                             • {{ doc.num_chunks }} chunks
