@@ -1,4 +1,0 @@
-# This is a placeholder file for the community-charts/mlflow helm chart.
-# You can get the default values by running:
-# helm show values community-charts/mlflow > helm/mlflow.values.dev.yaml
-# And then customize it. 
