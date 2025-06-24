@@ -80,7 +80,7 @@
             :workflowData="
               workflowData.filter((item) => item.message_id === currentMsgId)
             "
-            v-if="isLoading && !hasActiveStreamingGroup"
+            v-if="isLoading && !hasActiveStreamingGroup && workflowData.length > 0"
             :isLoading="isLoading"
             :statusText="'Planning...'"
             :plannerText="
