@@ -402,7 +402,9 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
         "image/svg",
         "application/pdf",
         "application/msword",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # PowerPoint
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # PowerPoint (.pptx)
+        "application/vnd.ms-powerpoint",  # Legacy PowerPoint (.ppt)
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # Word (.docx)
         "text/html",
         "text/markdown",
         "text/plain",
@@ -715,6 +717,17 @@ print(f"{{file_extension.upper()}} content written to {{filename}}")
                         mime_type = "application/javascript"
                     elif file.name.lower().endswith(".json"):
                         mime_type = "application/json"
+                    elif file.name.lower().endswith( (".pptx", ".ppt") ):
+                        # Fallback for PowerPoint files when system mimetypes are missing
+                        mime_type = (
+                            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                            if file.name.lower().endswith(".pptx")
+                            else "application/vnd.ms-powerpoint"
+                        )
+                    elif file.name.lower().endswith(".pdf"):
+                        mime_type = "application/pdf"
+                    elif file.name.lower().endswith( (".docx", ".doc") ):
+                        mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 
                 if file.name not in list_of_files and mime_type in supported_extensions:
                     file_id = str(uuid.uuid4())
