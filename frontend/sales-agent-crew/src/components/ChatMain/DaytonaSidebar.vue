@@ -164,6 +164,14 @@
                       <svg v-else-if="artifact.type === 'html'" class="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
                       </svg>
+                      <svg v-else-if="artifact.type === 'powerpoint'" class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 8h8M8 12h8M8 16h4"></path>
+                      </svg>
+                      <svg v-else-if="artifact.type === 'csv'" class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9h6M9 12h6M9 15h6"></path>
+                      </svg>
                       <svg v-else class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                       </svg>
@@ -209,41 +217,177 @@
                   @error="handleArtifactError(artifact)"
                 />
                 
-                <!-- PDF Preview -->
-                <div v-else-if="artifact.type === 'pdf'" class="bg-gray-100 rounded-lg p-4 text-center hover:bg-gray-200 transition-colors">
-                  <svg class="w-12 h-12 mx-auto mb-2 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <!-- PDF Inline Viewer -->
+                <div v-else-if="artifact.type === 'pdf'" class="w-full inline-viewer">
+                  <div class="viewer-header rounded-lg p-2 mb-2">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center space-x-2">
+                        <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <span class="text-sm font-medium">PDF Viewer</span>
+                      </div>
+                      <button 
+                        @click.stop="downloadArtifact(artifact)"
+                        class="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 transition-colors"
+                      >
+                        Download
+                      </button>
+                    </div>
+                  </div>
+                  <iframe
+                    :src="artifact.url"
+                    class="w-full h-96 rounded border-2 border-gray-200"
+                    title="PDF Viewer"
+                    @load="artifact.loading = false"
+                    @error="handleArtifactError(artifact)"
+                  ></iframe>
+                </div>
+                
+                <!-- PowerPoint Download Interface -->
+                <div v-else-if="artifact.type === 'powerpoint'" class="bg-gray-100 rounded-lg p-4 text-center hover:bg-gray-200 transition-colors cursor-pointer"
+                     @click="downloadArtifact(artifact)">
+                  <svg class="w-12 h-12 mx-auto mb-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 8h8M8 12h8M8 16h4"></path>
                   </svg>
-                  <p class="text-sm text-gray-600">PDF Document</p>
-                  <p class="text-xs text-gray-500 mt-1">Click to view</p>
+                  <h4 class="text-sm font-medium text-gray-900 mb-1">PowerPoint Presentation</h4>
+                  <p class="text-xs text-gray-600 mb-3">{{ artifact.title }}</p>
+                  <button 
+                    @click.stop="downloadArtifact(artifact)"
+                    class="inline-flex items-center space-x-2 bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition-colors"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <span class="text-sm font-medium">Download Presentation</span>
+                  </button>
                 </div>
                 
-                <!-- Markdown Preview -->
-                <div v-else-if="artifact.type === 'markdown'" class="bg-gray-100 rounded-lg p-4">
-                  <div class="flex items-center mb-2">
-                    <svg class="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-                    </svg>
-                    <span class="text-sm text-gray-700">Markdown Document</span>
+                <!-- HTML Inline Viewer -->
+                <div v-else-if="artifact.type === 'html'" class="w-full inline-viewer">
+                  <div class="viewer-header rounded-lg p-2 mb-2">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center space-x-2">
+                        <svg class="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                        </svg>
+                        <span class="text-sm font-medium">HTML Viewer</span>
+                      </div>
+                      <div class="flex space-x-1">
+                        <button 
+                          @click.stop="openInNewTab(artifact.url)"
+                          class="text-xs bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600 transition-colors"
+                        >
+                          Open
+                        </button>
+                        <button 
+                          @click.stop="downloadArtifact(artifact)"
+                          class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600 transition-colors"
+                        >
+                          Download
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div v-if="artifact.preview" class="text-xs text-gray-600 bg-white rounded p-2 font-mono">
-                    {{ artifact.preview }}
-                  </div>
-                  <p class="text-xs text-gray-500 mt-2">Click to view full content</p>
+                  <iframe
+                    :src="artifact.url"
+                    class="w-full h-96 rounded border-2 border-gray-200"
+                    title="HTML Viewer"
+                    sandbox="allow-scripts allow-same-origin"
+                    @load="artifact.loading = false"
+                    @error="handleArtifactError(artifact)"
+                  ></iframe>
                 </div>
                 
-                <!-- HTML Preview -->
-                <div v-else-if="artifact.type === 'html'" class="bg-gray-100 rounded-lg p-4">
-                  <div class="flex items-center mb-2">
-                    <svg class="w-5 h-5 mr-2 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
-                    </svg>
-                    <span class="text-sm text-gray-700">HTML Document</span>
+                <!-- Markdown Inline Viewer -->
+                <div v-else-if="artifact.type === 'markdown'" class="w-full inline-viewer">
+                  <div class="viewer-header rounded-lg p-2 mb-2">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center space-x-2">
+                        <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                        </svg>
+                        <span class="text-sm font-medium">Markdown Viewer</span>
+                      </div>
+                      <button 
+                        @click.stop="downloadArtifact(artifact)"
+                        class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600 transition-colors"
+                      >
+                        Download
+                      </button>
+                    </div>
                   </div>
-                  <div v-if="artifact.preview" class="text-xs text-gray-600 bg-white rounded p-2 font-mono">
-                    {{ artifact.preview }}
+                  <div class="bg-white rounded border-2 border-gray-200 p-4 h-96 overflow-y-auto">
+                    <div v-if="artifact.content || artifact.preview" 
+                         class="prose prose-sm max-w-none"
+                         v-html="renderMarkdown(artifact.content || artifact.preview)"
+                    ></div>
+                    <div v-else class="flex items-center justify-center h-full text-gray-500">
+                      <div class="text-center">
+                        <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <p class="text-sm">Loading markdown content...</p>
+                      </div>
+                    </div>
                   </div>
-                  <p class="text-xs text-gray-500 mt-2">Click to view rendered content</p>
+                </div>
+                
+                <!-- CSV Inline Viewer -->
+                <div v-else-if="artifact.type === 'csv'" class="w-full inline-viewer">
+                  <div class="viewer-header rounded-lg p-2 mb-2">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center space-x-2">
+                        <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <span class="text-sm font-medium">CSV Data Viewer</span>
+                      </div>
+                      <button 
+                        @click.stop="downloadArtifact(artifact)"
+                        class="text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600 transition-colors"
+                      >
+                        Download
+                      </button>
+                    </div>
+                  </div>
+                  <div class="bg-white rounded border-2 border-gray-200 h-96 overflow-auto">
+                    <div v-if="artifact.csvData || artifact.content || artifact.preview" class="p-2">
+                      <table class="csv-table min-w-full text-left border-collapse text-xs">
+                        <tbody>
+                          <tr v-for="(row, idx) in parseCsvData(artifact)" :key="idx" 
+                              :class="idx === 0 ? 'bg-gray-50 font-medium' : 'hover:bg-gray-50'"
+                              class="border-b border-gray-200">
+                            <td v-for="(cell, cellIdx) in row" :key="cellIdx" 
+                                class="px-3 py-2 border-r border-gray-200 last:border-r-0">
+                              {{ cell }}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div v-else class="flex items-center justify-center h-full text-gray-500">
+                      <div class="text-center">
+                        <div v-if="artifact.loading" class="flex flex-col items-center">
+                          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mb-2"></div>
+                          <p class="text-sm">Loading CSV data...</p>
+                        </div>
+                        <div v-else>
+                          <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                          </svg>
+                          <p class="text-sm mb-2">Click here to load CSV data</p>
+                          <button 
+                            @click.stop="loadCsvContent(artifact)"
+                            class="text-xs bg-green-500 text-white px-3 py-2 rounded hover:bg-green-600 transition-colors"
+                          >
+                            Load Data
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 
                 <!-- Fallback -->
@@ -279,6 +423,13 @@
                 </svg>
                 <svg v-else-if="artifact.type === 'html'" class="w-3 h-3 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                </svg>
+                                 <svg v-else-if="artifact.type === 'powerpoint'" class="w-3 h-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 8h8M8 12h8M8 16h4"></path>
+                 </svg>
+                <svg v-else-if="artifact.type === 'csv'" class="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
                 <svg v-else class="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
@@ -423,6 +574,20 @@ watch(codeContent, () => {
     }
   })
 })
+
+// Watch for artifacts changes and auto-load CSV data
+watch(artifacts, (newArtifacts) => {
+  if (newArtifacts && newArtifacts.length > 0) {
+    newArtifacts.forEach(artifact => {
+      if (artifact.type === 'csv' && !artifact.csvData && !artifact.content && !artifact.loading) {
+        // Auto-load CSV data when artifact is added
+        nextTick(() => {
+          loadCsvContent(artifact)
+        })
+      }
+    })
+  }
+}, { deep: true })
 
 // Methods
 function processStreamingEvents(events) {
@@ -762,6 +927,13 @@ function getFileType(title, fileId) {
     return 'markdown'
   } else if (lowerTitle.includes('.html') || lowerTitle.includes('.htm') || lowerFileId.includes('.html') || lowerFileId.includes('.htm')) {
     return 'html'
+  } else if (lowerTitle.includes('.ppt') || lowerTitle.includes('.pptx') || lowerTitle.includes('powerpoint') || 
+             lowerFileId.includes('.ppt') || lowerFileId.includes('.pptx') || lowerFileId.includes('powerpoint') ||
+             lowerTitle.includes('presentation') || lowerTitle.includes('slides')) {
+    return 'powerpoint'
+  } else if (lowerTitle.includes('.csv') || lowerFileId.includes('.csv') || lowerTitle.includes('csv') ||
+             lowerTitle.includes('comma-separated') || lowerTitle.includes('spreadsheet')) {
+    return 'csv'
   } else if (lowerTitle.includes('chart') || lowerTitle.includes('graph') || lowerTitle.includes('plot') || 
              lowerTitle.includes('visualization') || lowerTitle.includes('diagram')) {
     return 'image'
@@ -802,7 +974,104 @@ function highlightPythonCode(code) {
     .replace(/\n/g, '<br>')
 }
 
+function parseCsvData(artifact) {
+  // Enhanced CSV parsing for full viewer - handle quoted fields and edge cases
+  const csvText = artifact.csvData || artifact.content || artifact.preview
+  if (!csvText) return []
+  
+  try {
+    const lines = csvText.split('\n').filter(line => line.trim()).slice(0, 50) // Show more rows
+    return lines.map(line => {
+      const cells = []
+      let current = ''
+      let inQuotes = false
+      let i = 0
+      
+      while (i < line.length && cells.length < 10) { // Show more columns
+        const char = line[i]
+        
+        if (char === '"' && (i === 0 || line[i-1] === ',')) {
+          inQuotes = true
+        } else if (char === '"' && inQuotes && (i === line.length - 1 || line[i+1] === ',')) {
+          inQuotes = false
+        } else if (char === ',' && !inQuotes) {
+          cells.push(current.trim())
+          current = ''
+          i++
+          continue
+        } else {
+          current += char
+        }
+        i++
+      }
+      
+      // Add the last cell
+      if (current || cells.length === 0) {
+        cells.push(current.trim())
+      }
+      
+      // Clean up cells - remove quotes and truncate long values
+      return cells.map(cell => {
+        cell = cell.replace(/^"|"$/g, '') // Remove surrounding quotes
+        return cell.length > 30 ? cell.substring(0, 27) + '...' : cell
+      })
+    })
+  } catch (error) {
+    console.warn('Error parsing CSV data:', error)
+    // Fallback to simple parsing
+    const lines = csvText.split('\n').filter(line => line.trim()).slice(0, 50)
+    return lines.map(line => 
+      line.split(',').slice(0, 10).map(cell => {
+        cell = cell.trim().replace(/^"|"$/g, '')
+        return cell.length > 30 ? cell.substring(0, 27) + '...' : cell
+      })
+    )
+  }
+}
 
+
+
+function openInNewTab(url) {
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
+
+async function loadCsvContent(artifact) {
+  if (artifact.csvData || artifact.content) return
+  
+  try {
+    artifact.loading = true
+    const response = await fetch(artifact.url)
+    if (response.ok) {
+      const csvText = await response.text()
+      artifact.csvData = csvText
+      artifact.loading = false
+    } else {
+      throw new Error('Failed to load CSV data')
+    }
+  } catch (error) {
+    console.error('Error loading CSV content:', error)
+    artifact.loading = false
+    addToLog(`Failed to load CSV data: ${artifact.title}`, 'error', new Date().toISOString())
+  }
+}
+
+function renderMarkdown(markdownText) {
+  if (!markdownText) return ''
+  
+  // Simple markdown to HTML conversion for basic formatting
+  // This is a basic implementation - you might want to use a proper markdown library
+  let html = markdownText
+    .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mt-4 mb-2">$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold mt-4 mb-2">$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-4 mb-2">$1</h1>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded text-sm">$1</code>')
+    .replace(/\n\n/g, '</p><p class="mb-2">')
+    .replace(/\n/g, '<br>')
+  
+  return `<p class="mb-2">${html}</p>`
+}
 
 function formatLogTime(timestamp) {
   return new Date(timestamp).toLocaleTimeString([], { 
@@ -873,17 +1142,16 @@ function getFileExtension(type) {
     'pdf': 'pdf',
     'markdown': 'md',
     'html': 'html',
+    'powerpoint': 'pptx',
+    'csv': 'csv',
     'image': 'png'
   }
   return extensions[type] || 'txt'
 }
 
 function expandArtifact(artifact) {
-  // For PDFs, open in new tab instead of modal
-  if (artifact.type === 'pdf') {
-    window.open(artifact.url, '_blank')
-    return
-  }
+  // All file types now have inline viewers in the sidebar
+  // Still support the expand-artifact event for full-screen modals if needed
   
   // For backward compatibility, emit both events with proper data structure
   if (artifact.type === 'image') {
@@ -898,6 +1166,12 @@ function expandArtifact(artifact) {
     }
     emit('expand-chart', chartData)  // Keep old event for images
   }
+  
+  // For CSV files, ensure data is loaded
+  if (artifact.type === 'csv' && !artifact.csvData && !artifact.content) {
+    loadCsvContent(artifact)
+  }
+  
   emit('expand-artifact', artifact)
 }
 
@@ -953,5 +1227,38 @@ onMounted(() => {
 
 .rotate-90 {
   transform: rotate(90deg);
+}
+
+/* Enhanced styles for inline viewers */
+.inline-viewer {
+  transition: all 0.3s ease;
+}
+
+.inline-viewer:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.viewer-header {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.csv-table {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+}
+
+.csv-table tbody tr:hover {
+  background-color: #f8fafc;
+}
+
+.prose h1, .prose h2, .prose h3 {
+  color: #1f2937;
+}
+
+.prose code {
+  background-color: #f3f4f6;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
 }
 </style> 
