@@ -47,9 +47,16 @@ MLFLOW_NAMESPACE = default
 # OpenEBS variables
 OPENEBS_NAMESPACE = openebs
 
+# Redis variables
+REDIS_HELM_REPO_NAME = bitnami
+REDIS_HELM_REPO_URL = https://charts.bitnami.com/bitnami
+REDIS_CHART_NAME = redis
+REDIS_RELEASE_NAME = redis-$(ENV)
+REDIS_NAMESPACE = redis-$(ENV)
+
 
 # Phony targets
-.PHONY: build-backend build-frontend push-backend push-frontend build push deploy install upgrade uninstall clean help install-postgres install-mlflow uninstall-mlflow
+.PHONY: build-backend build-frontend push-backend push-frontend build push deploy install upgrade uninstall clean help install-postgres install-mlflow uninstall-mlflow install-redis uninstall-redis
 
 # Build the backend Docker image
 build-backend:
@@ -156,6 +163,19 @@ install-openebs: ## Install OpenEBS storage engine
 		--namespace $(OPENEBS_NAMESPACE) \
 		-f ./openebs/values/$(ENV).yaml
 
+install-redis:
+	helm repo add $(REDIS_HELM_REPO_NAME) $(REDIS_HELM_REPO_URL) || true
+	helm repo update
+	kubectl create namespace $(REDIS_NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
+	helm upgrade --install $(REDIS_RELEASE_NAME) $(REDIS_HELM_REPO_NAME)/$(REDIS_CHART_NAME) \
+		--namespace $(REDIS_NAMESPACE) \
+		--set global.security.allowInsecureImages=true \
+		-f ./redis/values/$(ENV).yaml
+
+uninstall-redis:
+	helm uninstall $(REDIS_RELEASE_NAME) --namespace $(REDIS_NAMESPACE)
+	kubectl delete namespace $(REDIS_NAMESPACE) || true
+
 # Help message
 help:
 	@echo "Usage: make [target] [ENV=dev|prod] [TAG=custom-tag]"
@@ -182,6 +202,8 @@ help:
 	@echo "  install-mlflow  Install the mlflow chart"
 	@echo "  uninstall-mlflow Uninstall the mlflow chart"
 	@echo "  upgrade-mlflow  Upgrade the mlflow chart"
+	@echo "  install-redis   Install the redis chart"
+	@echo "  uninstall-redis Uninstall the redis chart"
 	@echo "  clean           Clean up Docker images"
 	@echo "  help            Display this help message"
 	@echo ""

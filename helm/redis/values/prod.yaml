@@ -1,0 +1,40 @@
+# Redis configuration
+auth:
+  enabled: false
+
+image:
+  repository: redis/redis-stack-server
+  tag: "7.4.0-v5"
+  pullPolicy: IfNotPresent
+
+master:
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: openebs-hostpath
+  
+  resources:
+    limits:
+      cpu: "2000m"
+      memory: "2Gi"
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 60
+  
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 20
+
+replica:
+  replicaCount: 0
+
+service:
+  type: ClusterIP
+  ports:
+    redis: 6379 
