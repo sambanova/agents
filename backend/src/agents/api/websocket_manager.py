@@ -305,7 +305,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                     user_message_input["data"], user_id, conversation_id
                 )
 
-                input_, model = await self.create_user_message_input(
+                input_, model, multimodal_input = await self.create_user_message_input(
                     user_id, user_message_input
                 )
 
@@ -317,6 +317,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                     message_id=user_message_input["message_id"],
                     llm_type=model,
                     doc_ids=tuple(user_message_input["document_ids"]),
+                    multimodal_input=multimodal_input,
                 )
 
                 # Stream the response directly via WebSocket
@@ -362,6 +363,7 @@ class WebSocketConnectionManager(WebSocketInterface):
 
     async def create_user_message_input(self, user_id: str, user_message_input: dict):
         image_content = []
+        multimodal_input = False
         for doc in user_message_input["document_ids"]:
             metadata = await self.message_storage.get_file_metadata(user_id, doc)
             format = metadata["format"].split("/")[0]
@@ -378,6 +380,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                             },
                         }
                     )
+                multimodal_input = True
 
         model = user_message_input["planner_model"]
         if len(image_content) > 0:
@@ -403,7 +406,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                 },
             )
 
-        return input_, model
+        return input_, model, multimodal_input
 
     async def handle_redis_messages(
         self, websocket: WebSocket, pubsub, user_id: str, conversation_id: str
@@ -553,6 +556,7 @@ class WebSocketConnectionManager(WebSocketInterface):
         message_id: str,
         llm_type: str,
         doc_ids: tuple,
+        multimodal_input: bool,
     ):
         # Add cleanup task
         self.cleanup_task: Optional[asyncio.Task] = None
@@ -612,6 +616,11 @@ class WebSocketConnectionManager(WebSocketInterface):
             config["configurable"][
                 "type==default/system_message"
             ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}"
+
+        if multimodal_input:
+            config["configurable"][
+                "type==default/system_message"
+            ] += " The user has provided an image. Use your multimodal capabilities to answer questions related to the image, do not use a tool to process the image."
 
         config["configurable"]["type==default/subgraphs"] = {
             "financial_analysis": {
