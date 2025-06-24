@@ -34,6 +34,7 @@ from langchain_core.tools import Tool
 from pydantic import BaseModel, ConfigDict, Field
 from redisvl.query.filter import Tag
 from typing_extensions import TypedDict
+import html
 
 logger = structlog.get_logger(__name__)
 
@@ -445,6 +446,18 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
             
             # Remove leading/trailing whitespace and empty lines
             code_str = code_str.strip()
+
+            # Decode HTML entities (e.g., &lt; &gt;)
+            if '&lt;' in code_str or '&gt;' in code_str or '&amp;' in code_str:
+                code_str = html.unescape(code_str)
+
+            # Remove any stray trailing '<' characters introduced by partial tag removal
+            code_str = re.sub(r"<+$", "", code_str).rstrip()
+            
+            # Remove any remaining partial <tool or </tool tokens without closing bracket
+            code_str = re.sub(r"</?tool[^>\n]*", "", code_str, flags=re.MULTILINE)
+            # Collapse excessive blank lines
+            code_str = re.sub(r"\n{3,}", "\n\n", code_str)
             
             # Validate that we still have executable code
             if not code_str or len(code_str.strip()) < 5:
@@ -571,6 +584,11 @@ print(f"{{file_extension.upper()}} content written to {{filename}}")
                     if next_tag != -1:
                         content = content[:next_tag+1] + '\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">' + content[next_tag+1:]
             
+            # Decode HTML entities if needed
+            if '&lt;' in content or '&gt;' in content or '&amp;' in content:
+                content = html.unescape(content)
+                content_lower = content.lower().strip()
+
             logger.info(f"HTML content validated and enhanced for {filename}")
             return content
             
@@ -740,12 +758,15 @@ print(f"{{file_extension.upper()}} content written to {{filename}}")
                                 # If content was modified, update the stored file
                                 if fixed_content != content_str:
                                     logger.info(f"HTML content was enhanced for {file.name}")
-                                    fixed_content_bytes = fixed_content.encode('utf-8')
+                                    fixed_content_bytes = fixed_content.encode('utf-8') if isinstance(fixed_content, str) else fixed_content
                                     
                                     # Update the file in the sandbox
                                     try:
-                                        await sandbox.fs.upload_file(file.name, fixed_content_bytes)
-                                        # Update Redis storage with fixed content
+                                        if hasattr(sandbox.fs, 'write_file'):
+                                            await sandbox.fs.write_file(file.name, fixed_content_bytes)
+                                        else:
+                                            await sandbox.fs.upload_file(file.name, fixed_content_bytes)
+                                        # Also update Redis storage with fixed content
                                         if redis_storage:
                                             await redis_storage.put_file(
                                                 user_id,
