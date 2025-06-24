@@ -7,6 +7,13 @@ image:
   tag: "7.4.0-v5"
   pullPolicy: IfNotPresent
 
+# Ensure Redis Stack modules are loaded
+commonConfiguration: |-
+  loadmodule /opt/redis-stack/lib/redisearch.so
+  loadmodule /opt/redis-stack/lib/rejson.so
+  loadmodule /opt/redis-stack/lib/redistimeseries.so
+  loadmodule /opt/redis-stack/lib/redisbloom.so
+
 master:
   persistence:
     enabled: true
