@@ -244,31 +244,24 @@
                   ></iframe>
                 </div>
                 
-                <!-- PowerPoint Inline Viewer -->
-                <div v-else-if="artifact.type === 'powerpoint'" class="w-full inline-viewer">
-                  <div class="viewer-header rounded-lg p-2 mb-2">
-                    <div class="flex items-center justify-between">
-                      <div class="flex items-center space-x-2">
-                        <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        </svg>
-                        <span class="text-sm font-medium">PowerPoint Viewer</span>
-                      </div>
-                      <button 
-                        @click.stop="downloadArtifact(artifact)"
-                        class="text-xs bg-purple-500 text-white px-2 py-1 rounded hover:bg-purple-600 transition-colors"
-                      >
-                        Download
-                      </button>
-                    </div>
-                  </div>
-                  <iframe
-                    :src="getPowerPointViewerUrl(artifact.url)"
-                    class="w-full h-96 rounded border-2 border-gray-200"
-                    title="PowerPoint Viewer"
-                    @load="artifact.loading = false"
-                    @error="handlePowerPointError(artifact)"
-                  ></iframe>
+                <!-- PowerPoint Download Interface -->
+                <div v-else-if="artifact.type === 'powerpoint'" class="bg-gray-100 rounded-lg p-4 text-center hover:bg-gray-200 transition-colors cursor-pointer"
+                     @click="downloadArtifact(artifact)">
+                  <svg class="w-12 h-12 mx-auto mb-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 8h8M8 12h8M8 16h4"></path>
+                  </svg>
+                  <h4 class="text-sm font-medium text-gray-900 mb-1">PowerPoint Presentation</h4>
+                  <p class="text-xs text-gray-600 mb-3">{{ artifact.title }}</p>
+                  <button 
+                    @click.stop="downloadArtifact(artifact)"
+                    class="inline-flex items-center space-x-2 bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition-colors"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <span class="text-sm font-medium">Download Presentation</span>
+                  </button>
                 </div>
                 
                 <!-- HTML Inline Viewer -->
@@ -376,16 +369,22 @@
                     </div>
                     <div v-else class="flex items-center justify-center h-full text-gray-500">
                       <div class="text-center">
-                        <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        </svg>
-                        <p class="text-sm">Loading CSV data...</p>
-                        <button 
-                          @click.stop="loadCsvContent(artifact)"
-                          class="text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600 transition-colors mt-2"
-                        >
-                          Load Data
-                        </button>
+                        <div v-if="artifact.loading" class="flex flex-col items-center">
+                          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mb-2"></div>
+                          <p class="text-sm">Loading CSV data...</p>
+                        </div>
+                        <div v-else>
+                          <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                          </svg>
+                          <p class="text-sm mb-2">Click here to load CSV data</p>
+                          <button 
+                            @click.stop="loadCsvContent(artifact)"
+                            class="text-xs bg-green-500 text-white px-3 py-2 rounded hover:bg-green-600 transition-colors"
+                          >
+                            Load Data
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -575,6 +574,20 @@ watch(codeContent, () => {
     }
   })
 })
+
+// Watch for artifacts changes and auto-load CSV data
+watch(artifacts, (newArtifacts) => {
+  if (newArtifacts && newArtifacts.length > 0) {
+    newArtifacts.forEach(artifact => {
+      if (artifact.type === 'csv' && !artifact.csvData && !artifact.content && !artifact.loading) {
+        // Auto-load CSV data when artifact is added
+        nextTick(() => {
+          loadCsvContent(artifact)
+        })
+      }
+    })
+  }
+}, { deep: true })
 
 // Methods
 function processStreamingEvents(events) {
@@ -1016,21 +1029,7 @@ function parseCsvData(artifact) {
   }
 }
 
-function getPowerPointViewerUrl(url) {
-  // For PowerPoint files, we can use Office Online Viewer
-  // This works for publicly accessible URLs
-  if (url.startsWith('http')) {
-    return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`
-  }
-  // For local/relative URLs, return the direct URL (may require backend support)
-  return url
-}
 
-function handlePowerPointError(artifact) {
-  console.warn('PowerPoint viewer failed, falling back to download')
-  artifact.loading = false
-  // You could set a fallback state here
-}
 
 function openInNewTab(url) {
   window.open(url, '_blank', 'noopener,noreferrer')
