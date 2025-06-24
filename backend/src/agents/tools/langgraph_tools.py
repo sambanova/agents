@@ -411,28 +411,175 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
 
     def strip_markdown_code_blocks(code_str):
         """
-        Strips markdown code block formatting from a code string.
-        Handles both ```python and ``` code blocks, as well as <|python_start|> and <|python_end|> tags.
+        Enhanced function to strip markdown code block formatting from a code string.
+        Handles multiple code block formats and common parsing issues that cause HTML generation problems.
         """
-        # Remove opening code block markers (```python, ```py, or just ```)
-        code_str = re.sub(r"^```(?:python|py)?\s*\n?", "", code_str, flags=re.MULTILINE)
+        if not isinstance(code_str, str):
+            return str(code_str).strip() if code_str is not None else ""
+        
+        # Store original for fallback
+        original_code = code_str
+        
+        try:
+            # Remove opening code block markers (```python, ```py, ```html, or just ```)
+            code_str = re.sub(r"^```(?:python|py|html|css|javascript|js)?\s*\n?", "", code_str, flags=re.MULTILINE)
 
-        # Remove closing code block markers
-        code_str = re.sub(r"\n?```\s*$", "", code_str, flags=re.MULTILINE)
+            # Remove closing code block markers
+            code_str = re.sub(r"\n?```\s*$", "", code_str, flags=re.MULTILINE)
 
-        # Remove <|python_start|> and <|python_end|> tags
-        code_str = re.sub(r"<\|python_start\|>\s*\n?", "", code_str, flags=re.MULTILINE)
-        code_str = re.sub(r"\n?\s*<\|python_end\|>", "", code_str, flags=re.MULTILINE)
+            # Remove <|python_start|> and <|python_end|> tags
+            code_str = re.sub(r"<\|python_start\|>\s*\n?", "", code_str, flags=re.MULTILINE)
+            code_str = re.sub(r"\n?\s*<\|python_end\|>", "", code_str, flags=re.MULTILINE)
 
-        # Remove '</tool_input' string that is used to indicate the end of the tool input note only one of the < is removed
-        code_str = re.sub(r"<tool_input", "", code_str, flags=re.MULTILINE)
-        code_str = re.sub(r"</tool_input", "", code_str, flags=re.MULTILINE)
+            # Handle tool_input tags more robustly - common source of HTML parsing errors
+            code_str = re.sub(r"<tool_input[^>]*>", "", code_str, flags=re.MULTILINE)
+            code_str = re.sub(r"</tool_input[^>]*>", "", code_str, flags=re.MULTILINE)
+            
+            # Remove incomplete tool tags that can break execution
+            code_str = re.sub(r"<tool[^>]*>.*?</tool[^>]*>", "", code_str, flags=re.DOTALL)
+            code_str = re.sub(r"</?tool[^>]*>", "", code_str, flags=re.MULTILINE)
+            
+            # Handle common XML/HTML artifacts that interfere with Python execution
+            code_str = re.sub(r"<\?xml[^>]*\?>", "", code_str, flags=re.MULTILINE)
+            code_str = re.sub(r"<!DOCTYPE[^>]*>", "", code_str, flags=re.MULTILINE)
+            
+            # Remove leading/trailing whitespace and empty lines
+            code_str = code_str.strip()
+            
+            # Validate that we still have executable code
+            if not code_str or len(code_str.strip()) < 5:
+                logger.warning("Code block stripping resulted in very short or empty code, using fallback")
+                return original_code.strip()
+                
+            # Basic syntax validation for Python code
+            lines = code_str.split('\n')
+            non_empty_lines = [line for line in lines if line.strip()]
+            
+            # If we have code but no Python-like content, it might be pure HTML/CSS
+            has_python_keywords = any(keyword in code_str.lower() for keyword in 
+                                    ['import', 'def', 'class', 'if', 'for', 'while', 'print', 'return'])
+            
+            if not has_python_keywords and len(non_empty_lines) > 0:
+                # Check if this looks like HTML/CSS/JS content
+                if any(tag in code_str.lower() for tag in ['<html', '<div', '<body', '<style', 'function']):
+                    logger.info("Detected non-Python code (HTML/CSS/JS), wrapping in file creation")
+                    # Wrap in Python code to write the content to a file
+                    file_extension = 'html'
+                    if '<style' in code_str.lower() or 'css' in original_code.lower():
+                        file_extension = 'css'
+                    elif 'function' in code_str.lower() or 'javascript' in original_code.lower():
+                        file_extension = 'js'
+                    
+                    wrapped_code = f'''
+# Auto-generated wrapper for {file_extension.upper()} content
+content = """
+{code_str}
+"""
 
-        return code_str.strip()
+filename = "generated_content.{file_extension}"
+with open(filename, "w", encoding="utf-8") as f:
+    f.write(content)
+
+print(f"{{file_extension.upper()}} content written to {{filename}}")
+'''
+                    return wrapped_code.strip()
+            
+            return code_str
+            
+        except Exception as e:
+            logger.error(f"Error in strip_markdown_code_blocks: {e}", exc_info=True)
+            return original_code.strip()
+
+    def validate_and_fix_html_content(content: str, filename: str) -> str:
+        """
+        Validates HTML content and attempts to fix common issues that prevent proper rendering.
+        """
+        try:
+            # Basic HTML structure validation and enhancement
+            content_lower = content.lower().strip()
+            
+            # Check if it's a complete HTML document
+            has_doctype = content_lower.startswith('<!doctype')
+            has_html_tag = '<html' in content_lower
+            has_head_tag = '<head' in content_lower
+            has_body_tag = '<body' in content_lower
+            
+            # If it's missing essential HTML structure, wrap it
+            if not has_html_tag and not has_doctype:
+                logger.info(f"Adding HTML structure to {filename}")
+                
+                # Detect if it's CSS or JavaScript
+                if '<style' in content_lower or 'css' in filename.lower():
+                    # Wrap CSS in proper HTML
+                    content = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generated CSS Content</title>
+    <style>
+{content}
+    </style>
+</head>
+<body>
+    <h1>CSS Styles Applied</h1>
+    <p>This document contains the generated CSS styles.</p>
+</body>
+</html>'''
+                elif '<script' in content_lower or 'javascript' in content_lower or filename.lower().endswith('.js'):
+                    # Wrap JavaScript in proper HTML
+                    content = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generated JavaScript Content</title>
+</head>
+<body>
+    <h1>JavaScript Application</h1>
+    <div id="app"></div>
+    <script>
+{content}
+    </script>
+</body>
+</html>'''
+                else:
+                    # Wrap general HTML content
+                    content = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generated Content</title>
+</head>
+<body>
+{content}
+</body>
+</html>'''
+            
+            # Fix common HTML issues
+            # Ensure proper charset declaration
+            if 'charset' not in content_lower and '<head' in content_lower:
+                content = content.replace('<head>', '<head>\n    <meta charset="UTF-8">')
+            
+            # Add viewport meta tag for mobile responsiveness
+            if 'viewport' not in content_lower and '<head' in content_lower:
+                charset_pos = content.lower().find('charset')
+                if charset_pos != -1:
+                    # Find end of charset meta tag
+                    next_tag = content.find('>', charset_pos)
+                    if next_tag != -1:
+                        content = content[:next_tag+1] + '\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">' + content[next_tag+1:]
+            
+            logger.info(f"HTML content validated and enhanced for {filename}")
+            return content
+            
+        except Exception as e:
+            logger.warning(f"Could not validate/fix HTML content for {filename}: {e}")
+            return content  # Return original content if validation fails
 
     async def async_run_daytona_code(code_to_run: str) -> str:
         try:
-
             config = DaytonaSDKConfig(api_key=api_key)
             daytona = DaytonaClient(config)
 
@@ -442,10 +589,30 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
 
             # Strip markdown formatting before processing
             clean_code = strip_markdown_code_blocks(code_to_run)
+            
+            # Validate the cleaned code
+            if not clean_code or len(clean_code.strip()) < 3:
+                return "Error: No valid code found after processing input. Please provide valid Python code."
+            
+            # Enhanced logging for debugging
+            logger.info(
+                "Processing code for execution",
+                original_length=len(code_to_run),
+                cleaned_length=len(clean_code),
+                first_100_chars=clean_code[:100],
+            )
+            
             patched_code, expected_filenames = patch_plot_code_str(clean_code)
             sandbox = await daytona.create(params=params)
             list_of_files = [f.name for f in await sandbox.fs.list_files(".")]
-            response = await sandbox.process.code_run(patched_code)
+            
+            # Execute the code with timeout and error handling
+            try:
+                response = await sandbox.process.code_run(patched_code)
+            except Exception as exec_error:
+                await daytona.close()
+                logger.error("Code execution failed in sandbox", error=str(exec_error), exc_info=True)
+                return f"Error during code execution: {str(exec_error)}"
 
             # Ensure result is a string, even if None or other types
             result_str = str(response.result) if response.result is not None else ""
@@ -458,6 +625,7 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
                     "Daytona code execution failed",
                     exit_code=response.exit_code,
                     error_detail=error_detail,
+                    original_code_preview=code_to_run[:200],
                 )
                 return f"Error (Exit Code {response.exit_code}): {error_detail}"
 
@@ -470,6 +638,7 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
             )
 
             generation_timestamp = time.time()
+            
             # Process expected filenames first
             for filename in expected_filenames:
                 mime_type, _ = mimetypes.guess_type(filename)
@@ -511,43 +680,103 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
                         exc_info=True,
                     )
 
-            # Download all new files
+            # Download all new files with enhanced HTML handling
             list_of_files_after_execution = await sandbox.fs.list_files(".")
             for file in list_of_files_after_execution:
                 mime_type, _ = mimetypes.guess_type(file.name)
-                # Handle markdown files specifically since mimetypes may not recognize .md extension
-                if mime_type is None and file.name.lower().endswith(".md"):
-                    mime_type = "text/markdown"
+                
+                # Enhanced MIME type detection for common web files
+                if mime_type is None:
+                    if file.name.lower().endswith(".md"):
+                        mime_type = "text/markdown"
+                    elif file.name.lower().endswith(".html") or file.name.lower().endswith(".htm"):
+                        mime_type = "text/html"
+                    elif file.name.lower().endswith(".css"):
+                        mime_type = "text/css"
+                    elif file.name.lower().endswith(".js"):
+                        mime_type = "application/javascript"
+                    elif file.name.lower().endswith(".json"):
+                        mime_type = "application/json"
+                
                 if file.name not in list_of_files and mime_type in supported_extensions:
                     file_id = str(uuid.uuid4())
-                    content = await sandbox.fs.download_file(file.name)
-                    logger.info(
-                        "Downloaded file from sandbox",
-                        filename=file.name,
-                        size_bytes=len(content),
-                    )
-
-                    # Store in Redis for backup/download purposes
-                    if redis_storage:
-                        await redis_storage.put_file(
-                            user_id,
-                            file_id,
-                            data=content,
+                    try:
+                        content = await sandbox.fs.download_file(file.name)
+                        logger.info(
+                            "Downloaded file from sandbox",
                             filename=file.name,
-                            format=mime_type,
-                            upload_timestamp=generation_timestamp,
-                            indexed=False,
-                            source="daytona",
+                            size_bytes=len(content),
+                            mime_type=mime_type,
                         )
 
-                    # For image files, use compact Redis references instead of data URLs
-                    if mime_type in images_formats:
-                        result_str += (
-                            f"\n\n![{file.name}](redis-chart:{file_id}:{user_id})"
+                        # Store in Redis for backup/download purposes
+                        if redis_storage:
+                            await redis_storage.put_file(
+                                user_id,
+                                file_id,
+                                data=content,
+                                filename=file.name,
+                                format=mime_type,
+                                upload_timestamp=generation_timestamp,
+                                indexed=False,
+                                source="daytona",
+                            )
+
+                        # For image files, use compact Redis references instead of data URLs
+                        if mime_type in images_formats:
+                            result_str += (
+                                f"\n\n![{file.name}](redis-chart:{file_id}:{user_id})"
+                            )
+                        elif mime_type == "text/html":
+                            # Special handling for HTML files to ensure proper rendering
+                            result_str += f"\n\n**HTML File Generated:** [{file.name}](attachment:{file_id})"
+                            # Try to validate and fix HTML content
+                            try:
+                                content_str = content.decode('utf-8') if isinstance(content, bytes) else str(content)
+                                
+                                # Validate and potentially fix the HTML content
+                                fixed_content = validate_and_fix_html_content(content_str, file.name)
+                                
+                                # If content was modified, update the stored file
+                                if fixed_content != content_str:
+                                    logger.info(f"HTML content was enhanced for {file.name}")
+                                    fixed_content_bytes = fixed_content.encode('utf-8')
+                                    
+                                    # Update the file in the sandbox
+                                    try:
+                                        await sandbox.fs.upload_file(file.name, fixed_content_bytes)
+                                        # Update Redis storage with fixed content
+                                        if redis_storage:
+                                            await redis_storage.put_file(
+                                                user_id,
+                                                file_id,
+                                                data=fixed_content_bytes,
+                                                filename=file.name,
+                                                format=mime_type,
+                                                upload_timestamp=generation_timestamp,
+                                                indexed=False,
+                                                source="daytona",
+                                            )
+                                    except Exception as upload_error:
+                                        logger.warning(f"Could not update fixed HTML file: {upload_error}")
+                                
+                                if '<html' in fixed_content.lower() or '<body' in fixed_content.lower():
+                                    result_str += f"\n\n📄 **Interactive HTML file created**: {file.name}"
+                                    logger.info(f"Valid HTML content detected in {file.name}")
+                                else:
+                                    result_str += f"\n\n⚠️ **Note**: {file.name} may not contain complete HTML structure"
+                            except Exception as html_check_error:
+                                logger.warning(f"Could not validate HTML content: {html_check_error}")
+                        else:
+                            # For non-image files, still use attachment reference
+                            result_str += f"\n\n![{file.name}](attachment:{file_id})"
+                    except Exception as e:
+                        logger.error(
+                            "Error downloading file from sandbox",
+                            filename=file.name,
+                            error=str(e),
+                            exc_info=True,
                         )
-                    else:
-                        # For non-image files, still use attachment reference
-                        result_str += f"\n\n![{file.name}](attachment:{file_id})"
 
             # Process charts from artifacts
             if hasattr(response.artifacts, "charts") and response.artifacts.charts:
@@ -606,10 +835,26 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
             # Clean up sandbox after processing everything
             await daytona.close()
 
+            # Final validation and enhancement of result
+            if not result_str.strip():
+                result_str = "Code executed successfully. Check the console output above for any results."
+            
+            # Add execution summary
+            files_created = len([f for f in list_of_files_after_execution if f.name not in list_of_files])
+            if files_created > 0:
+                result_str += f"\n\n✅ **Execution Summary**: {files_created} file(s) created successfully."
+
             return result_str
+            
         except Exception as e:
             logger.error("Daytona code execution failed", error=str(e), exc_info=True)
-            return f"Error during Daytona code execution: {str(e)}"
+            # Provide more helpful error messages
+            if "connection" in str(e).lower():
+                return f"Error: Could not connect to Daytona sandbox. Please check your API key and network connection."
+            elif "timeout" in str(e).lower():
+                return f"Error: Code execution timed out. Try simplifying your code or breaking it into smaller parts."
+            else:
+                return f"Error during Daytona code execution: {str(e)}"
 
     def sync_run_daytona_code_wrapper(code_to_run: str) -> str:
         return asyncio.run(async_run_daytona_code(code_to_run))
