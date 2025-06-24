@@ -157,7 +157,7 @@ const currentToolName = computed(() =>
 const description = computed(() =>
   props.currentStream
     .filter(i =>
-      i.content&&['stream_start','llm_stream_chunk','stream_complete'].includes(i.event) &&
+      i.content&&['llm_stream_chunk','stream_complete'].includes(i.event) &&
       !i.content.includes('<tool>')
     )
     .map(i => i.content)

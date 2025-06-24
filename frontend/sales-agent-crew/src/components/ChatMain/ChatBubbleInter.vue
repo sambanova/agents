@@ -374,8 +374,6 @@ const parsedData = computed(() => {
 })
 
 const selectedComponent = computed(() => {
-
-  alert(props?.data.agent_type)
   switch (props?.data?.agent_type) {
       case 'react_end':
       return AssistantEndComponent
@@ -507,7 +505,7 @@ async function generatePDFFromHtml() {
 const isStreamingEvent = computed(() => {
   return (
     props.event === 'agent_completion' ||
-    ['stream_start', 'llm_stream_chunk', 'stream_complete'].includes(props.event)
+    ['llm_stream_chunk', 'stream_complete'].includes(props.event)
   )
 })
 

@@ -530,13 +530,7 @@ function handleKeydownScroll(event) {
   }
 }
 
-// function AutoScrollToBottom() {
-//   nextTick(() => {
-//     if (container.value) {
-//       container.value.scrollTop = container.value.scrollHeight
-//     }
-//   })
-// }
+
 
 function AutoScrollToBottom(smoothScrollOff = false) {
   nextTick(() => {
@@ -833,10 +827,7 @@ async function filterChat(msgData) {
           timestamp: message.timestamp || new Date().toISOString()
         };
       }
-      // Skip stream_start events from persisted data as they're not needed for display
-      else if (message.event === 'stream_start') {
-        return null; // Will be filtered out
-      }
+
       // For any other events, include them as well
       else {
         return {
@@ -1680,12 +1671,8 @@ async function connectWebSocket() {
           return;
         }
 
-        // Handle new streaming events
-        if (receivedData.event === 'stream_start') {
-          console.log('Stream started:', receivedData);
-          // Don't add stream_start as a separate message - it's just a signal that streaming has begun
-          // The actual messages will come in subsequent agent_completion events
-        } else if (receivedData.event === 'agent_completion') {
+        // Handle streaming events
+        if (receivedData.event === 'agent_completion') {
           console.log('Agent message stream:', receivedData);
           
           // Check if this is a final response event
@@ -1794,8 +1781,6 @@ async function connectWebSocket() {
           });
 
           AutoScrollToBottom();
-        } else {
-          console.log('ping event fired: ', receivedData.event);
         }
         
         // Auto scroll after any message
@@ -1939,14 +1924,7 @@ function formatMessageData(msgItem) {
           is_streaming: true
         });
       
-      case 'stream_start':
-        // stream_start events are no longer added to messages array
-        return JSON.stringify({
-          message: '',
-          agent_type: 'system',
-          timestamp: msgItem.timestamp || new Date().toISOString(),
-          is_streaming: true
-        });
+
       
       default:
         return JSON.stringify({
