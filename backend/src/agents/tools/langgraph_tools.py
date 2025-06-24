@@ -424,6 +424,10 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
         code_str = re.sub(r"<\|python_start\|>\s*\n?", "", code_str, flags=re.MULTILINE)
         code_str = re.sub(r"\n?\s*<\|python_end\|>", "", code_str, flags=re.MULTILINE)
 
+        # Remove '</tool_input' string that is used to indicate the end of the tool input note only one of the < is removed
+        code_str = re.sub(r"<tool_input", "", code_str, flags=re.MULTILINE)
+        code_str = re.sub(r"</tool_input", "", code_str, flags=re.MULTILINE)
+
         return code_str.strip()
 
     async def async_run_daytona_code(code_to_run: str) -> str:

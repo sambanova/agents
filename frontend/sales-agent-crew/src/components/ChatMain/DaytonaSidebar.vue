@@ -164,6 +164,14 @@
                       <svg v-else-if="artifact.type === 'html'" class="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
                       </svg>
+                      <svg v-else-if="artifact.type === 'powerpoint'" class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 8h8M8 12h8M8 16h4"></path>
+                      </svg>
+                      <svg v-else-if="artifact.type === 'csv'" class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9h6M9 12h6M9 15h6"></path>
+                      </svg>
                       <svg v-else class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                       </svg>
@@ -246,6 +254,41 @@
                   <p class="text-xs text-gray-500 mt-2">Click to view rendered content</p>
                 </div>
                 
+                                 <!-- PowerPoint Preview -->
+                 <div v-else-if="artifact.type === 'powerpoint'" class="bg-gray-100 rounded-lg p-4 text-center hover:bg-gray-200 transition-colors">
+                   <svg class="w-12 h-12 mx-auto mb-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 8h8M8 12h8M8 16h4"></path>
+                   </svg>
+                   <p class="text-sm text-gray-600">PowerPoint Presentation</p>
+                   <p class="text-xs text-gray-500 mt-1">Click to download and view</p>
+                 </div>
+                
+                <!-- CSV Preview -->
+                <div v-else-if="artifact.type === 'csv'" class="bg-gray-100 rounded-lg p-4">
+                  <div class="flex items-center mb-2">
+                    <svg class="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <span class="text-sm text-gray-700">CSV Data File</span>
+                  </div>
+                  <div v-if="artifact.preview" class="text-xs text-gray-600 bg-white rounded p-2 font-mono overflow-x-auto">
+                    <table class="min-w-full text-left border-collapse">
+                      <tbody>
+                        <tr v-for="(row, idx) in parseCsvPreview(artifact.preview)" :key="idx" class="border-b border-gray-200">
+                          <td v-for="(cell, cellIdx) in row" :key="cellIdx" class="px-2 py-1 border-r border-gray-200 last:border-r-0">
+                            {{ cell }}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div v-else class="text-xs text-gray-600 bg-white rounded p-2">
+                    Comma-separated values data file
+                  </div>
+                  <p class="text-xs text-gray-500 mt-2">Click to download and open in spreadsheet app</p>
+                </div>
+                
                 <!-- Fallback -->
                 <div v-else class="flex items-center justify-center h-40 text-gray-500">
                   <div class="text-center">
@@ -279,6 +322,13 @@
                 </svg>
                 <svg v-else-if="artifact.type === 'html'" class="w-3 h-3 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                </svg>
+                                 <svg v-else-if="artifact.type === 'powerpoint'" class="w-3 h-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 8h8M8 12h8M8 16h4"></path>
+                 </svg>
+                <svg v-else-if="artifact.type === 'csv'" class="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
                 <svg v-else class="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
@@ -762,6 +812,13 @@ function getFileType(title, fileId) {
     return 'markdown'
   } else if (lowerTitle.includes('.html') || lowerTitle.includes('.htm') || lowerFileId.includes('.html') || lowerFileId.includes('.htm')) {
     return 'html'
+  } else if (lowerTitle.includes('.ppt') || lowerTitle.includes('.pptx') || lowerTitle.includes('powerpoint') || 
+             lowerFileId.includes('.ppt') || lowerFileId.includes('.pptx') || lowerFileId.includes('powerpoint') ||
+             lowerTitle.includes('presentation') || lowerTitle.includes('slides')) {
+    return 'powerpoint'
+  } else if (lowerTitle.includes('.csv') || lowerFileId.includes('.csv') || lowerTitle.includes('csv') ||
+             lowerTitle.includes('comma-separated') || lowerTitle.includes('spreadsheet')) {
+    return 'csv'
   } else if (lowerTitle.includes('chart') || lowerTitle.includes('graph') || lowerTitle.includes('plot') || 
              lowerTitle.includes('visualization') || lowerTitle.includes('diagram')) {
     return 'image'
@@ -802,7 +859,59 @@ function highlightPythonCode(code) {
     .replace(/\n/g, '<br>')
 }
 
-
+function parseCsvPreview(csvText) {
+  if (!csvText) return []
+  
+  // Enhanced CSV parsing for preview - handle quoted fields and edge cases
+  try {
+    const lines = csvText.split('\n').filter(line => line.trim()).slice(0, 5)
+    return lines.map(line => {
+      const cells = []
+      let current = ''
+      let inQuotes = false
+      let i = 0
+      
+      while (i < line.length && cells.length < 6) { // Limit to 6 columns
+        const char = line[i]
+        
+        if (char === '"' && (i === 0 || line[i-1] === ',')) {
+          inQuotes = true
+        } else if (char === '"' && inQuotes && (i === line.length - 1 || line[i+1] === ',')) {
+          inQuotes = false
+        } else if (char === ',' && !inQuotes) {
+          cells.push(current.trim())
+          current = ''
+          i++
+          continue
+        } else {
+          current += char
+        }
+        i++
+      }
+      
+      // Add the last cell
+      if (current || cells.length === 0) {
+        cells.push(current.trim())
+      }
+      
+      // Clean up cells - remove quotes and truncate long values
+      return cells.map(cell => {
+        cell = cell.replace(/^"|"$/g, '') // Remove surrounding quotes
+        return cell.length > 20 ? cell.substring(0, 17) + '...' : cell
+      })
+    })
+  } catch (error) {
+    console.warn('Error parsing CSV preview:', error)
+    // Fallback to simple parsing
+    const lines = csvText.split('\n').filter(line => line.trim()).slice(0, 5)
+    return lines.map(line => 
+      line.split(',').slice(0, 6).map(cell => {
+        cell = cell.trim().replace(/^"|"$/g, '')
+        return cell.length > 20 ? cell.substring(0, 17) + '...' : cell
+      })
+    )
+  }
+}
 
 function formatLogTime(timestamp) {
   return new Date(timestamp).toLocaleTimeString([], { 
@@ -873,14 +982,16 @@ function getFileExtension(type) {
     'pdf': 'pdf',
     'markdown': 'md',
     'html': 'html',
+    'powerpoint': 'pptx',
+    'csv': 'csv',
     'image': 'png'
   }
   return extensions[type] || 'txt'
 }
 
 function expandArtifact(artifact) {
-  // For PDFs, open in new tab instead of modal
-  if (artifact.type === 'pdf') {
+  // For PDFs and PowerPoints, open in new tab instead of modal
+  if (artifact.type === 'pdf' || artifact.type === 'powerpoint') {
     window.open(artifact.url, '_blank')
     return
   }
