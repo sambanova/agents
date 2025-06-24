@@ -726,7 +726,6 @@ async function filterChat(msgData) {
         
         if (isToolCall || isToolResult || isToolResponse || isDaytonaRelated) {
           // Preserve tool-related messages for comprehensive audit log and Daytona processing
-          console.log('Preserving tool-related message for audit log and Daytona processing:', message.additional_kwargs?.agent_type, message.name);
           
           // Create structured data for tool events matching the live streaming format
           const toolData = {
@@ -751,7 +750,7 @@ async function filterChat(msgData) {
         }
         
         // Only show user messages and final responses in main chat bubbles
-        const isUserMessage = message.additional_kwargs?.agent_type === 'human';
+        const isUserMessage = message.additional_kwargs?.agent_type === 'human' || message.type === 'HumanMessage';
         const isFinalResponse = ['react_end', 'financial_analysis_end', 'sales_leads_end'].includes(message.additional_kwargs?.agent_type);
         const isRegularAIMessage = message.type === 'AIMessage' && !isToolCall && !isToolResult && !isToolResponse;
         
@@ -759,11 +758,16 @@ async function filterChat(msgData) {
           return null; // Filter out intermediate agent responses that aren't tool-related
         }
         
-        // For human messages, convert to user_message event type
+        // For human messages, keep new format
         if (isUserMessage) {
           return {
-            event: 'user_message',
-            data: message.content || '',
+            event: 'agent_completion',
+            content: message.content || '',
+            additional_kwargs: message.additional_kwargs || {},
+            response_metadata: message.response_metadata || {},
+            type: message.type || 'HumanMessage',
+            name: message.name || null,
+            id: message.id || message.message_id,
             message_id: message.message_id,
             conversation_id: message.conversation_id,
             timestamp: message.timestamp || new Date().toISOString()
@@ -788,16 +792,7 @@ async function filterChat(msgData) {
           timestamp: message.timestamp || new Date().toISOString()
         };
       }
-      // For user_message events, keep existing behavior
-      else if (message.event === 'user_message') {
-        return {
-          event: 'user_message',
-          data: message.data,
-          message_id: message.message_id,
-          conversation_id: message.conversation_id,
-          timestamp: message.timestamp || new Date().toISOString()
-        };
-      }
+
       // Handle completion events (legacy)
       else if (message.event === 'completion') {
         return {
@@ -829,7 +824,7 @@ async function filterChat(msgData) {
         };
       }
       // Handle streaming events that might be in stored data - CRITICAL FOR PERSISTENCE
-      else if (['stream_start', 'llm_stream_chunk', 'stream_complete'].includes(message.event)) {
+      else if (['llm_stream_chunk', 'stream_complete'].includes(message.event)) {
         return {
           event: message.event,
           data: message.data || message,
@@ -837,6 +832,10 @@ async function filterChat(msgData) {
           conversation_id: message.conversation_id,
           timestamp: message.timestamp || new Date().toISOString()
         };
+      }
+      // Skip stream_start events from persisted data as they're not needed for display
+      else if (message.event === 'stream_start') {
+        return null; // Will be filtered out
       }
       // For any other events, include them as well
       else {
@@ -1011,16 +1010,17 @@ async function filterChat(msgData) {
   });
 
   let userMessages = messagesData.value
-    .filter((message) => message.event === 'user_message')
+    .filter((message) => 
+      message.additional_kwargs?.agent_type === 'human' || 
+      message.type === 'HumanMessage'
+    )
     .sort(
       (a, b) =>
         new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
 
-  console.log('userMessages', userMessages);
-
-  if (userMessages[0]?.data) {
-    chatName.value = userMessages[0].data;
+  if (userMessages[0]?.content) {
+    chatName.value = userMessages[0].content;
   }
 
   AutoScrollToBottom();
@@ -1683,14 +1683,8 @@ async function connectWebSocket() {
         // Handle new streaming events
         if (receivedData.event === 'stream_start') {
           console.log('Stream started:', receivedData);
-          // Add to messages for display
-          messagesData.value.push({
-            event: 'stream_start',
-            data: receivedData,
-            message_id: currentMsgId.value,
-            conversation_id: currentId.value,
-            timestamp: new Date().toISOString()
-          });
+          // Don't add stream_start as a separate message - it's just a signal that streaming has begun
+          // The actual messages will come in subsequent agent_completion events
         } else if (receivedData.event === 'agent_completion') {
           console.log('Agent message stream:', receivedData);
           
@@ -1879,14 +1873,23 @@ async function removeDocument(docId) {
 function formatMessageData(msgItem) {
   try {
     switch (msgItem.event) {
-      case 'user_message':
-        return JSON.stringify({
-          message: msgItem.data,
-          agent_type: 'user_proxy',
-          timestamp: msgItem.timestamp || new Date().toISOString()
-        });
-      
       case 'agent_completion':
+        // Check if this is a user message in new format
+        if (msgItem.additional_kwargs?.agent_type === 'human' || msgItem.type === 'HumanMessage') {
+          const formatted = {
+            content: msgItem.content || '',
+            data: msgItem.content || '',
+            message: msgItem.content || '',
+            agent_type: 'human',
+            metadata: msgItem.response_metadata || null,
+            additional_kwargs: msgItem.additional_kwargs || {},
+            timestamp: msgItem.timestamp || new Date().toISOString(),
+            type: msgItem.type || 'HumanMessage',
+            id: msgItem.id
+          };
+          return JSON.stringify(formatted);
+        }
+        
         // agent_completion events from LangGraph have structured data
         if (msgItem.data && typeof msgItem.data === 'object') {
           const formatted = {
@@ -1904,7 +1907,7 @@ function formatMessageData(msgItem) {
         }
         // Fallback for unexpected format
         return JSON.stringify({
-          message: msgItem.data || '',
+          message: msgItem.data || msgItem.content || '',
           agent_type: 'assistant',
           timestamp: msgItem.timestamp || new Date().toISOString()
         });
@@ -1928,11 +1931,19 @@ function formatMessageData(msgItem) {
         }
       
       case 'llm_stream_chunk':
-      case 'stream_start':
       case 'stream_complete':
         return JSON.stringify({
           message: msgItem.data?.content || msgItem.data,
           agent_type: 'assistant',
+          timestamp: msgItem.timestamp || new Date().toISOString(),
+          is_streaming: true
+        });
+      
+      case 'stream_start':
+        // stream_start events are no longer added to messages array
+        return JSON.stringify({
+          message: '',
+          agent_type: 'system',
           timestamp: msgItem.timestamp || new Date().toISOString(),
           is_streaming: true
         });
@@ -1988,7 +1999,7 @@ const hasActiveStreamingGroup = computed(() => {
   // Check if any message in the current conversation turn has streaming events
   return messagesData.value.some(msg => 
     msg.message_id === currentMsgId.value && 
-    (msg.event === 'stream_start' || msg.event === 'agent_completion' || msg.event === 'llm_stream_chunk')
+    (msg.event === 'agent_completion' || msg.event === 'llm_stream_chunk')
   );
 });
 
@@ -1999,7 +2010,7 @@ const filteredMessages = computed(() => {
 
   try {
     const grouped = new Map();
-    const streamingEvents = ['stream_start', 'agent_completion', 'llm_stream_chunk', 'stream_complete', 'think', 'planner'];
+    const streamingEvents = ['agent_completion', 'llm_stream_chunk', 'stream_complete', 'think', 'planner'];
     
     // First pass: identify distinct conversation turns and streaming groups
     const messageIdCounts = {};
@@ -2011,7 +2022,7 @@ const filteredMessages = computed(() => {
       if (!msg) return;
       
       // Identify user messages (these should always be separate)
-      if (msg.type === 'HumanMessage' || msg.agent_type === 'human') {
+      if (msg.type === 'HumanMessage' || msg.agent_type === 'human' || msg.additional_kwargs?.agent_type === 'human') {
         userMessages.add(msg.message_id);
       }
       
@@ -2041,12 +2052,11 @@ const filteredMessages = computed(() => {
       
       const msgId = msg.message_id;
 
-      
       // Decide whether this message should always render its own bubble
-      const agentType = msg.agent_type || msg.data?.additional_kwargs?.agent_type || msg.data?.agent_type || msg.data?.agent_type
+      const agentType = msg.agent_type || msg.additional_kwargs?.agent_type || msg.data?.additional_kwargs?.agent_type || msg.data?.agent_type
 
       // Always separate genuine user inputs
-      if (msg.event === 'user_message' || agentType === 'human') {
+      if (agentType === 'human' || msg.type === 'HumanMessage') {
         const uniqueKey = `${msg.type || msg.agent_type}_${msgId}_${index}`;
         grouped.set(uniqueKey, msg);
         return;
@@ -2111,7 +2121,7 @@ const filteredMessages = computed(() => {
       }
 
       // Fallback: render as individual bubble - but only if it has content
-      if (msg.data?.content || msg.content || msg.event === 'user_message') {
+      if (msg.data?.content || msg.content) {
         const uniqueKey = `${msg.type || msg.event}_${msgId}_${index}`;
         grouped.set(uniqueKey, msg);
       }

@@ -251,17 +251,37 @@
       </div>
     </li>
 
-    <!-- Check if event is 'user_message' -->
+    <!-- Human/User message -->
     <li
-      v-else-if="props.event === 'user_message'" 
+      v-else-if="isUserMessage" 
       class="flex px-4 items-start gap-x-2 sm:gap-x-4"
     >
       <div class="grow text-end space-y-3">
         <!-- Card -->
         <div class="inline-block flex justify-end">
-          <p class="text-[16px] text-left color-primary-brandGray max-w-[80%] w-auto">
-            {{ parsedData.message || props.data }}
-          </p>
+          <div class="text-[16px] text-left color-primary-brandGray max-w-[80%] w-auto space-y-2">
+            <!-- Handle content array format -->
+            <template v-if="userMessageContent.length > 0">
+              <template v-for="(item, index) in userMessageContent" :key="index">
+                <!-- Text content -->
+                <p v-if="item.type === 'text'">
+                  {{ item.text }}
+                </p>
+                <!-- Image content -->
+                <div v-else-if="item.type === 'image_url'">
+                  <img 
+                    :src="item.image_url.url" 
+                    alt="User uploaded image"
+                    class="max-w-xs max-h-48 rounded-lg shadow-sm object-contain mt-2"
+                  />
+                </div>
+              </template>
+            </template>
+            <!-- Fallback for simple text format -->
+            <p v-else>
+              {{ parsedData.message || parsedData.content || props.data }}
+            </p>
+          </div>
         </div>
         <!-- End Card -->
       </div>
@@ -1965,10 +1985,37 @@ function getAgentType (event) {
   )
 }
 
+// Parse user message content array for mixed text/image content
+const userMessageContent = computed(() => {
+  if (props.event === 'agent_completion' && 
+      (parsedData.value.additional_kwargs?.agent_type === 'human' || 
+       parsedData.value.type === 'HumanMessage')) {
+    
+    // Check if content is an array (with text and images)
+    if (Array.isArray(parsedData.value.content)) {
+      return parsedData.value.content
+    }
+  }
+  
+  return []
+})
+
+// Check if this is a user/human message
+const isUserMessage = computed(() => {
+  return (props.event === 'agent_completion' && 
+         (parsedData.value.additional_kwargs?.agent_type === 'human' ||
+          parsedData.value.type === 'HumanMessage'))
+})
+
+
+
 // Decide whether this bubble should be rendered (skip internal or debug-only messages)
 const showBubble = computed(() => {
   // Always show if this bubble carries streamingEvents (status line)
   if (props.streamingEvents) return true
+
+  // Always show user messages
+  if (isUserMessage.value) return true
 
   // Empty or whitespace-only data – skip
   if (!props.data || String(props.data).trim() === '') return false
