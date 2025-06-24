@@ -114,7 +114,7 @@ redis:
   namespace: redis
   image:
     repository: redis/redis-stack
-    tag: "7.2.0-v17"
+    tag: "7.4.0-v5"
     pullPolicy: IfNotPresent
   replicas: 1
   resources:

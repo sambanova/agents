@@ -209,7 +209,7 @@ const currentToolName = computed(() =>
 const description = computed(() => {
  return props.streamData
     .filter(i =>
-      i.content && ['stream_start', 'llm_stream_chunk', 'stream_complete'].includes(
+      i.content && ['llm_stream_chunk', 'stream_complete'].includes(
         i.event
       )&&!(i?.content.includes('<tool>')||i?.content.includes('< tool>'))
     )
@@ -276,10 +276,7 @@ const loading = ref(null)
 
 watch(props.loading, () => {
   nextTick(() => {
-   
-      console.console.log(("loading changed",loading));
-      
-    
+    console.log("loading changed", loading);
   })
 })
 

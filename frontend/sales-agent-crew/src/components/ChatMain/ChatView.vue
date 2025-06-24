@@ -80,7 +80,7 @@
             :workflowData="
               workflowData.filter((item) => item.message_id === currentMsgId)
             "
-            v-if="isLoading && !hasActiveStreamingGroup"
+            v-if="isLoading && !hasActiveStreamingGroup && workflowData.length > 0"
             :isLoading="isLoading"
             :statusText="'Planning...'"
             :plannerText="
@@ -136,14 +136,14 @@
                   <div class="flex space-x-4">
                     <div
                       v-for="doc in uploadedDocuments"
-                      :key="doc.id"
+                      :key="doc.file_id"
                       class="w-48 flex-shrink-0 p-2 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 relative group"
                     >
                       <div class="flex items-center space-x-3">
                         <input
                           type="checkbox"
-                          :checked="selectedDocuments.includes(doc.id)"
-                          @change="toggleDocumentSelection(doc.id)"
+                          :checked="selectedDocuments.includes(doc.file_id)"
+                          @change="toggleDocumentSelection(doc.file_id)"
                           class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                         />
                         <div class="w-48 overflow-hidden">
@@ -154,7 +154,7 @@
                             Uploaded
                             {{
                               new Date(
-                                doc.upload_timestamp * 1000
+                                doc.created_at * 1000
                               ).toLocaleString()
                             }}
                             • {{ doc.num_chunks }} chunks
@@ -162,7 +162,7 @@
                         </div>
                       </div>
                       <button
-                        @click="removeDocument(doc.id)"
+                        @click="removeDocument(doc.file_id)"
                         class="absolute top-1 right-1 bg-orange-300 text-white rounded-full p-1 transition-opacity opacity-0 group-hover:opacity-100"
                         title="Remove document"
                       >
@@ -172,6 +172,19 @@
                   </div>
                 </HorizontalScroll>
               </div>
+            </div>
+
+            <!-- Upload Status -->
+            <div
+              v-if="uploadStatus"
+              class="mt-2 text-sm text-center"
+              :class="{
+                'text-red-500': uploadStatus.type === 'error',
+                'text-green-600': uploadStatus.type === 'success',
+                'text-gray-500': uploadStatus.type === 'info',
+              }"
+            >
+              {{ uploadStatus.message }}
             </div>
 
             <!-- Input -->
@@ -205,7 +218,7 @@
                         ref="fileInput"
                         @change="handleFileUpload"
                         class="hidden"
-                        accept=".pdf,.doc,.docx,.csv,.xlsx,.xls"
+                        accept=".pdf,.doc,.docx,.csv,.xlsx,.xls,.jpeg,.jpg,.png,.gif,.webp"
                       />
                       <svg
                         v-if="!isUploading"
@@ -517,13 +530,7 @@ function handleKeydownScroll(event) {
   }
 }
 
-// function AutoScrollToBottom() {
-//   nextTick(() => {
-//     if (container.value) {
-//       container.value.scrollTop = container.value.scrollHeight
-//     }
-//   })
-// }
+
 
 function AutoScrollToBottom(smoothScrollOff = false) {
   nextTick(() => {
@@ -713,7 +720,6 @@ async function filterChat(msgData) {
         
         if (isToolCall || isToolResult || isToolResponse || isDaytonaRelated) {
           // Preserve tool-related messages for comprehensive audit log and Daytona processing
-          console.log('Preserving tool-related message for audit log and Daytona processing:', message.additional_kwargs?.agent_type, message.name);
           
           // Create structured data for tool events matching the live streaming format
           const toolData = {
@@ -738,7 +744,7 @@ async function filterChat(msgData) {
         }
         
         // Only show user messages and final responses in main chat bubbles
-        const isUserMessage = message.additional_kwargs?.agent_type === 'human';
+        const isUserMessage = message.additional_kwargs?.agent_type === 'human' || message.type === 'HumanMessage';
         const isFinalResponse = ['react_end', 'financial_analysis_end', 'sales_leads_end'].includes(message.additional_kwargs?.agent_type);
         const isRegularAIMessage = message.type === 'AIMessage' && !isToolCall && !isToolResult && !isToolResponse;
         
@@ -746,11 +752,16 @@ async function filterChat(msgData) {
           return null; // Filter out intermediate agent responses that aren't tool-related
         }
         
-        // For human messages, convert to user_message event type
+        // For human messages, keep new format
         if (isUserMessage) {
           return {
-            event: 'user_message',
-            data: message.content || '',
+            event: 'agent_completion',
+            content: message.content || '',
+            additional_kwargs: message.additional_kwargs || {},
+            response_metadata: message.response_metadata || {},
+            type: message.type || 'HumanMessage',
+            name: message.name || null,
+            id: message.id || message.message_id,
             message_id: message.message_id,
             conversation_id: message.conversation_id,
             timestamp: message.timestamp || new Date().toISOString()
@@ -775,16 +786,7 @@ async function filterChat(msgData) {
           timestamp: message.timestamp || new Date().toISOString()
         };
       }
-      // For user_message events, keep existing behavior
-      else if (message.event === 'user_message') {
-        return {
-          event: 'user_message',
-          data: message.data,
-          message_id: message.message_id,
-          conversation_id: message.conversation_id,
-          timestamp: message.timestamp || new Date().toISOString()
-        };
-      }
+
       // Handle completion events (legacy)
       else if (message.event === 'completion') {
         return {
@@ -816,7 +818,7 @@ async function filterChat(msgData) {
         };
       }
       // Handle streaming events that might be in stored data - CRITICAL FOR PERSISTENCE
-      else if (['stream_start', 'llm_stream_chunk', 'stream_complete'].includes(message.event)) {
+      else if (['llm_stream_chunk', 'stream_complete'].includes(message.event)) {
         return {
           event: message.event,
           data: message.data || message,
@@ -825,6 +827,7 @@ async function filterChat(msgData) {
           timestamp: message.timestamp || new Date().toISOString()
         };
       }
+
       // For any other events, include them as well
       else {
         return {
@@ -998,16 +1001,17 @@ async function filterChat(msgData) {
   });
 
   let userMessages = messagesData.value
-    .filter((message) => message.event === 'user_message')
+    .filter((message) => 
+      message.additional_kwargs?.agent_type === 'human' || 
+      message.type === 'HumanMessage'
+    )
     .sort(
       (a, b) =>
         new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
 
-  console.log('userMessages', userMessages);
-
-  if (userMessages[0]?.data) {
-    chatName.value = userMessages[0].data;
+  if (userMessages[0]?.content) {
+    chatName.value = userMessages[0].content;
   }
 
   AutoScrollToBottom();
@@ -1310,31 +1314,26 @@ async function transcribeAudio(audioBlob) {
       )
     );
     const requestBody = {
-      model: 'Qwen2-Audio-7B-Instruct',
+      model: 'Whisper-Large-v3',
       messages: [
-        {
-          role: 'system',
-          content: 'You are an Automatic Speech Recognition tool.',
-        },
         {
           role: 'user',
           content: [
-            {
-              type: 'audio_content',
-              audio_content: {
-                content: `data:audio/webm;base64,${audioBase64}`,
-              },
+          {
+            type: 'text',
+            text: 'Transcribe the following audio',
+          },
+          {
+            type: 'audio_content',
+            audio_content: {
+              content: `data:audio/webm;base64,${audioBase64}`,
             },
+          },
           ],
         },
-        {
-          role: 'user',
-          content:
-            'Please transcribe the previous audio and only return the transcription.',
-        },
       ],
-      response_format: 'streaming',
       stream: true,
+      max_tokens: 200,
     };
     const response = await fetch(
       'https://api.sambanova.ai/v1/audio/reasoning',
@@ -1415,7 +1414,6 @@ async function handleFileUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
   try {
-    uploadStatus.value = { type: 'info', message: 'Uploading document...' };
     const formData = new FormData();
     formData.append('file', file);
     const response = await axios.post(
@@ -1428,18 +1426,14 @@ async function handleFileUpload(event) {
       }
     );
     // Store the uploaded document and update selection.
-    const document = response.data.document;
-    uploadedDocuments.value.push(document);
-    selectedDocuments.value.push(document.id);
-    uploadStatus.value = {
-      type: 'success',
-      message: 'Document uploaded successfully!',
-    };
+    const document = response.data.document || response.data.file;
+    uploadedDocuments.value.unshift(document);
+    selectedDocuments.value.push(document.file_id);
     if (fileInput.value) {
       fileInput.value.value = '';
     }
   } catch (error) {
-    console.error('[SearchSection] Upload error:', error);
+    console.error('[ChatView] Upload error:', error);
     uploadStatus.value = {
       type: 'error',
       message: error.response?.data?.error || 'Failed to upload document',
@@ -1452,7 +1446,7 @@ async function handleFileUpload(event) {
 async function loadUserDocuments() {
   try {
     const response = await axios.get(
-      `${import.meta.env.VITE_API_URL}/documents`,
+      `${import.meta.env.VITE_API_URL}/files`,
       {
         headers: {
           Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
@@ -1563,7 +1557,7 @@ const addMessage = async () => {
 
   if (selectedDocuments.value && selectedDocuments.value.length > 0) {
     messagePayload.document_ids = selectedDocuments.value.map((doc) => {
-      return typeof doc === 'string' ? doc : doc.id;
+      return typeof doc === 'string' ? doc : doc.file_id;
     });
   } else {
     messagePayload.document_ids = [];
@@ -1577,6 +1571,8 @@ const addMessage = async () => {
 
       socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
+      searchQuery.value = '';
+      selectedDocuments.value = [];
 
       console.log('Message sent after connecting:', messagePayload);
     } catch (error) {
@@ -1590,6 +1586,7 @@ const addMessage = async () => {
       socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
       searchQuery.value = '';
+      selectedDocuments.value = [];
     } catch (e) {
       console.error('ChatView error', e);
       isLoading.value = false;
@@ -1673,18 +1670,8 @@ async function connectWebSocket() {
           return;
         }
 
-        // Handle new streaming events
-        if (receivedData.event === 'stream_start') {
-          console.log('Stream started:', receivedData);
-          // Add to messages for display
-          messagesData.value.push({
-            event: 'stream_start',
-            data: receivedData,
-            message_id: currentMsgId.value,
-            conversation_id: currentId.value,
-            timestamp: new Date().toISOString()
-          });
-        } else if (receivedData.event === 'agent_completion') {
+        // Handle streaming events
+        if (receivedData.event === 'agent_completion') {
           console.log('Agent message stream:', receivedData);
           
           // Check if this is a final response event
@@ -1793,8 +1780,6 @@ async function connectWebSocket() {
           });
 
           AutoScrollToBottom();
-        } else {
-          console.log('ping event fired: ', receivedData.event);
         }
         
         // Auto scroll after any message
@@ -1848,7 +1833,7 @@ function addOrUpdatePlannerText(newEntry) {
 
 async function removeDocument(docId) {
   try {
-    await axios.delete(`${import.meta.env.VITE_API_URL}/documents/${docId}`, {
+    await axios.delete(`${import.meta.env.VITE_API_URL}/files/${docId}`, {
       headers: {
         Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
       },
@@ -1858,17 +1843,10 @@ async function removeDocument(docId) {
       selectedDocuments.value.splice(selectedIndex, 1);
     }
     uploadedDocuments.value = uploadedDocuments.value.filter(
-      (doc) => doc.id !== docId
+      (doc) => doc.file_id !== docId
     );
-    uploadStatus.value = {
-      type: 'success',
-      message: 'Document removed successfully!',
-    };
-    setTimeout(() => {
-      uploadStatus.value = null;
-    }, 3000);
   } catch (error) {
-    console.error('[SearchSection] Error removing document:', error);
+    console.error('[ChatView] Error removing document:', error);
     uploadStatus.value = {
       type: 'error',
       message: error.response?.data?.error || 'Failed to remove document',
@@ -1879,14 +1857,23 @@ async function removeDocument(docId) {
 function formatMessageData(msgItem) {
   try {
     switch (msgItem.event) {
-      case 'user_message':
-        return JSON.stringify({
-          message: msgItem.data,
-          agent_type: 'user_proxy',
-          timestamp: msgItem.timestamp || new Date().toISOString()
-        });
-      
       case 'agent_completion':
+        // Check if this is a user message in new format
+        if (msgItem.additional_kwargs?.agent_type === 'human' || msgItem.type === 'HumanMessage') {
+          const formatted = {
+            content: msgItem.content || '',
+            data: msgItem.content || '',
+            message: msgItem.content || '',
+            agent_type: 'human',
+            metadata: msgItem.response_metadata || null,
+            additional_kwargs: msgItem.additional_kwargs || {},
+            timestamp: msgItem.timestamp || new Date().toISOString(),
+            type: msgItem.type || 'HumanMessage',
+            id: msgItem.id
+          };
+          return JSON.stringify(formatted);
+        }
+        
         // agent_completion events from LangGraph have structured data
         if (msgItem.data && typeof msgItem.data === 'object') {
           const formatted = {
@@ -1904,7 +1891,7 @@ function formatMessageData(msgItem) {
         }
         // Fallback for unexpected format
         return JSON.stringify({
-          message: msgItem.data || '',
+          message: msgItem.data || msgItem.content || '',
           agent_type: 'assistant',
           timestamp: msgItem.timestamp || new Date().toISOString()
         });
@@ -1928,7 +1915,6 @@ function formatMessageData(msgItem) {
         }
       
       case 'llm_stream_chunk':
-      case 'stream_start':
       case 'stream_complete':
         return JSON.stringify({
           message: msgItem.data?.content || msgItem.data,
@@ -1936,6 +1922,8 @@ function formatMessageData(msgItem) {
           timestamp: msgItem.timestamp || new Date().toISOString(),
           is_streaming: true
         });
+      
+
       
       default:
         return JSON.stringify({
@@ -1988,7 +1976,7 @@ const hasActiveStreamingGroup = computed(() => {
   // Check if any message in the current conversation turn has streaming events
   return messagesData.value.some(msg => 
     msg.message_id === currentMsgId.value && 
-    (msg.event === 'stream_start' || msg.event === 'agent_completion' || msg.event === 'llm_stream_chunk')
+    (msg.event === 'agent_completion' || msg.event === 'llm_stream_chunk')
   );
 });
 
@@ -1999,7 +1987,7 @@ const filteredMessages = computed(() => {
 
   try {
     const grouped = new Map();
-    const streamingEvents = ['stream_start', 'agent_completion', 'llm_stream_chunk', 'stream_complete', 'think', 'planner'];
+    const streamingEvents = ['agent_completion', 'llm_stream_chunk', 'stream_complete', 'think', 'planner'];
     
     // First pass: identify distinct conversation turns and streaming groups
     const messageIdCounts = {};
@@ -2011,7 +1999,7 @@ const filteredMessages = computed(() => {
       if (!msg) return;
       
       // Identify user messages (these should always be separate)
-      if (msg.type === 'HumanMessage' || msg.agent_type === 'human') {
+      if (msg.type === 'HumanMessage' || msg.agent_type === 'human' || msg.additional_kwargs?.agent_type === 'human') {
         userMessages.add(msg.message_id);
       }
       
@@ -2041,12 +2029,11 @@ const filteredMessages = computed(() => {
       
       const msgId = msg.message_id;
 
-      
       // Decide whether this message should always render its own bubble
-      const agentType = msg.agent_type || msg.data?.additional_kwargs?.agent_type || msg.data?.agent_type || msg.data?.agent_type
+      const agentType = msg.agent_type || msg.additional_kwargs?.agent_type || msg.data?.additional_kwargs?.agent_type || msg.data?.agent_type
 
       // Always separate genuine user inputs
-      if (msg.event === 'user_message' || agentType === 'human') {
+      if (agentType === 'human' || msg.type === 'HumanMessage') {
         const uniqueKey = `${msg.type || msg.agent_type}_${msgId}_${index}`;
         grouped.set(uniqueKey, msg);
         return;
@@ -2111,7 +2098,7 @@ const filteredMessages = computed(() => {
       }
 
       // Fallback: render as individual bubble - but only if it has content
-      if (msg.data?.content || msg.content || msg.event === 'user_message') {
+      if (msg.data?.content || msg.content) {
         const uniqueKey = `${msg.type || msg.event}_${msgId}_${index}`;
         grouped.set(uniqueKey, msg);
       }

@@ -8,8 +8,6 @@
         >
           <input
             type="file"
-            ref="fileInput"
-            @change="handleFileUpload"
             class="hidden"
             accept=".pdf,.doc,.docx,.csv,.xlsx,.xls"
           />
@@ -275,31 +273,6 @@
         </button>
       </div>
 
-      <!-- Upload Button -->
-      <div class="relative">
-        <input
-          type="file"
-          ref="fileInput"
-          @change="handleFileUpload"
-          class="hidden"
-          accept=".pdf,.doc,.docx,.csv,.xlsx,.xls"
-        />
-        <Popover
-          text="Upload Documents"
-          position="top"
-          color="bg-black text-white"
-        >
-          <button
-            @click="$refs.fileInput.click()"
-            :disabled="isLoading"
-            class="px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center"
-            title="Upload Document"
-          >
-            <DocumentArrowUpIcon class="w-5 h-5" />
-          </button>
-        </Popover>
-      </div>
-
       <button
         @click="performSearch"
         :disabled="isLoading || !searchQuery.trim()"
@@ -308,70 +281,6 @@
         <span v-if="!isLoading">Search</span>
         <span v-else>Searching...</span>
       </button>
-    </div>
-
-    <!-- Upload Status -->
-    <div
-      v-if="uploadStatus"
-      class="mt-2 text-sm"
-      :class="{
-        'text-red-600': uploadStatus.type === 'error',
-        'text-green-600': uploadStatus.type !== 'error',
-      }"
-    >
-      {{ uploadStatus.message }}
-    </div>
-
-    <!-- Recording Status -->
-    <div
-      v-if="isRecording"
-      class="mt-2 text-sm text-gray-600 flex items-center space-x-2"
-    >
-      <span
-        class="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse"
-      ></span>
-      <span>Recording... Click microphone to stop</span>
-    </div>
-
-    <!-- Uploaded Documents Section -->
-    <div v-if="uploadedDocuments.length > 0" class="mt-4">
-      <h3 class="text-sm font-medium text-gray-700 mb-2">Uploaded Documents</h3>
-      <div class="space-y-2">
-        <div
-          v-for="doc in uploadedDocuments"
-          :key="doc.id"
-          class="flex items-center justify-between p-2 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100"
-        >
-          <div class="flex items-center space-x-3">
-            <input
-              type="checkbox"
-              :checked="selectedDocuments.includes(doc.id)"
-              @change="toggleDocumentSelection(doc.id)"
-              class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-            />
-            <div>
-              <p class="text-sm font-medium text-gray-900">
-                {{ doc.filename }}
-              </p>
-              <p class="text-xs text-gray-500">
-                Uploaded
-                {{ new Date(doc.upload_timestamp * 1000).toLocaleString() }} •
-                {{ doc.num_chunks }} chunks
-              </p>
-            </div>
-          </div>
-          <button
-            @click="removeDocument(doc.id)"
-            class="p-1 text-gray-400 hover:text-red-500 rounded-full hover:bg-gray-200 transition-colors"
-            title="Remove document"
-          >
-            <XMarkIcon class="w-5 h-5" />
-          </button>
-        </div>
-      </div>
-      <p class="mt-2 text-xs text-gray-500">
-        Select documents to include in your search
-      </p>
     </div>
 
     <!-- Error Modal -->
@@ -389,9 +298,7 @@ import { useAuth } from '@clerk/vue';
 import { decryptKey } from '../utils/encryption';
 import ErrorModal from './ErrorModal.vue';
 import axios from 'axios';
-import { uploadDocument } from '../services/api';
 import Popover from '@/components/Common/UIComponents/CustomTooltip.vue';
-import { DocumentArrowUpIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
   keysUpdated: {
@@ -430,12 +337,6 @@ const exaKey = ref(null);
 const serperKey = ref(null);
 const errorMessage = ref('');
 const showErrorModal = ref(false);
-const fileInput = ref(null);
-const uploadStatus = ref(null);
-
-// Add new reactive state for documents
-const uploadedDocuments = ref([]);
-const selectedDocuments = ref([]);
 
 // Clerk
 const { userId } = useAuth();
@@ -476,7 +377,6 @@ async function loadKeys() {
 
 onMounted(async () => {
   await loadKeys();
-  await loadUserDocuments();
 });
 
 watch(
@@ -522,7 +422,6 @@ async function performSearch() {
     // 4) Execute the final query with selected documents
     const parameters = {
       ...routeResp.data.parameters,
-      document_ids: selectedDocuments.value,
     };
 
     const executeResp = await axios.post(
@@ -737,99 +636,6 @@ function cleanTranscription(transcribedText) {
     cleanedText = cleanedText.slice(1, -1).trim();
   }
   return cleanedText;
-}
-
-async function handleFileUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  try {
-    uploadStatus.value = { type: 'info', message: 'Uploading document...' };
-    const formData = new FormData();
-    formData.append('file', file);
-    const response = await axios.post(
-      `${import.meta.env.VITE_API_URL}/upload`,
-      formData,
-      {
-        headers: {
-          'x-user-id': userId.value || '',
-        },
-      }
-    );
-    // Store the uploaded document
-    const document = response.data.document;
-    uploadedDocuments.value.push(document);
-    selectedDocuments.value.push(document.id);
-    uploadStatus.value = {
-      type: 'success',
-      message: 'Document uploaded successfully!',
-    };
-
-    // Clear the file input
-    if (fileInput.value) {
-      fileInput.value.value = '';
-    }
-  } catch (error) {
-    console.error('[SearchSection] Upload error:', error);
-    uploadStatus.value = {
-      type: 'error',
-      message: error.response?.data?.error || 'Failed to upload document',
-    };
-  }
-}
-// Load user's documents on mount
-async function loadUserDocuments() {
-  try {
-    const response = await axios.get(
-      `${import.meta.env.VITE_API_URL}/documents`,
-      {
-        headers: {
-          Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
-        },
-      }
-    );
-    uploadedDocuments.value = response.data.documents;
-  } catch (error) {
-    console.error('[SearchSection] Error loading documents:', error);
-  }
-}
-function toggleDocumentSelection(docId) {
-  const index = selectedDocuments.value.indexOf(docId);
-  if (index === -1) {
-    selectedDocuments.value.push(docId);
-  } else {
-    selectedDocuments.value.splice(index, 1);
-  }
-}
-async function removeDocument(docId) {
-  try {
-    // Remove from backend
-    await axios.delete(
-      `${import.meta.env.VITE_API_URL}/documents/${userId.value}/${docId}`
-    );
-    // Remove from selected documents if it was selected
-    const selectedIndex = selectedDocuments.value.indexOf(docId);
-    if (selectedIndex !== -1) {
-      selectedDocuments.value.splice(selectedIndex, 1);
-    }
-    // Remove from uploaded documents list
-    uploadedDocuments.value = uploadedDocuments.value.filter(
-      (doc) => doc.id !== docId
-    );
-    // Show success message
-    uploadStatus.value = {
-      type: 'success',
-      message: 'Document removed successfully!',
-    };
-    setTimeout(() => {
-      uploadStatus.value = null;
-    }, 3000);
-  } catch (error) {
-    console.error('[SearchSection] Error removing document:', error);
-    uploadStatus.value = {
-      type: 'error',
-      message: error.response?.data?.error || 'Failed to remove document',
-    };
-  }
 }
 </script>
 

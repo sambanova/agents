@@ -712,20 +712,21 @@ function processStreamingEvents(events) {
                   
                   // Determine file type and create appropriate artifact
                   const fileType = getFileType(title, fileId)
-                  // Use public URL format for authentication like images do
-                  // We need to get the current user_id - check if it's available in content or use a fallback
-                  const userId = getCurrentUserId() || 'current_user'
-                  const fileUrl = `/api/files/${fileId}/public?user_id=${userId}`
+                  // Use authenticated endpoint, not public
+                  const fileUrl = `/api/files/${fileId}`
                   
-                  artifacts.value.push({
+                  const newArtifact = {
                     id: fileId,
                     title: title,
                     type: fileType,
                     url: fileUrl,
-                    loading: false,
+                    loading: true, // Set loading to true initially
                     downloadUrl: fileUrl,
                     preview: null
-                  })
+                  }
+                  artifacts.value.push(newArtifact)
+                  fetchArtifactContent(newArtifact);
+
                   artifactCount++
                   console.log(`Added attachment file: ${title} (${fileType}) with ID: ${fileId}`)
                 }
@@ -786,17 +787,20 @@ function processStreamingEvents(events) {
                   
                   // Determine file type and create appropriate artifact
                   const fileType = getFileType(title, fileId)
-                  const fileUrl = `/api/files/${fileId}/public?user_id=${userId}`
+                  const fileUrl = `/api/files/${fileId}`
                   
-                  artifacts.value.push({
+                  const newArtifact = {
                     id: fileId,
                     title: title,
                     type: fileType,
-                    url: fileUrl, // Use public endpoint
-                    loading: false,
+                    url: fileUrl, // Use authenticated endpoint
+                    loading: true, // Set loading to true initially
                     downloadUrl: fileUrl,
                     preview: null
-                  })
+                  }
+                  artifacts.value.push(newArtifact)
+                  fetchArtifactContent(newArtifact);
+                  
                   artifactCount++
                   console.log(`Added Redis file: ${title} (${fileType}) with ID: ${fileId} for user: ${userId}`)
                 }
@@ -1040,7 +1044,11 @@ async function loadCsvContent(artifact) {
   
   try {
     artifact.loading = true
-    const response = await fetch(artifact.url)
+    const response = await fetch(artifact.url, {
+        headers: {
+            'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+        }
+    })
     if (response.ok) {
       const csvText = await response.text()
       artifact.csvData = csvText
@@ -1118,22 +1126,44 @@ function copyCode() {
   }
 }
 
-function downloadArtifact(artifact) {
-  if (artifact.url) {
-    // For data URLs or external URLs, download directly
-    if (artifact.url.startsWith('data:') || artifact.url.startsWith('http')) {
-      const link = document.createElement('a')
-      link.href = artifact.url
-      const extension = getFileExtension(artifact.type)
-      link.download = `${artifact.title.replace(/\s+/g, '_')}.${extension}`
-      link.target = '_blank'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    } else {
-      // For API URLs, open in new tab to trigger download
-      window.open(artifact.url, '_blank')
-    }
+async function downloadArtifact(artifact) {
+  if (!artifact.url) return;
+
+  // For blob or data URLs, we can create a link and click it
+  if (artifact.url.startsWith('blob:') || artifact.url.startsWith('data:')) {
+    const link = document.createElement('a');
+    link.href = artifact.url;
+    const extension = getFileExtension(artifact.type);
+    link.download = `${artifact.title.replace(/\s+/g, '_')}.${extension}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    return;
+  }
+
+  // For API URLs that haven't been converted to blobs yet, fetch with auth
+  try {
+    const response = await fetch(artifact.url, {
+      headers: {
+        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+      }
+    });
+    if (!response.ok) throw new Error('Download failed');
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const extension = getFileExtension(artifact.type);
+    link.download = `${artifact.title.replace(/\s+/g, '_')}.${extension}`;
+    document.body.appendChild(link);
+    link.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(link);
+
+  } catch (error) {
+    console.error('Error downloading artifact:', error);
+    addToLog(`Failed to download: ${artifact.title}`, 'error', new Date().toISOString());
   }
 }
 
@@ -1178,6 +1208,58 @@ function expandArtifact(artifact) {
 function handleArtifactError(artifact) {
   artifact.loading = false
   addToLog(`Failed to load file: ${artifact.title}`, 'error', new Date().toISOString())
+}
+
+async function fetchArtifactContent(artifact) {
+  // Do nothing for data URLs or if content is already a blob
+  if (artifact.url.startsWith('data:') || artifact.url.startsWith('blob:')) {
+    artifact.loading = false;
+    return;
+  }
+
+  try {
+    const response = await fetch(artifact.url, {
+      headers: {
+        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch artifact: ${response.statusText}`);
+    }
+
+    const artifactIndex = artifacts.value.findIndex(a => a.id === artifact.id);
+    if (artifactIndex === -1) return;
+
+    // Create a new object to ensure reactivity is triggered
+    const updatedArtifact = { ...artifacts.value[artifactIndex] };
+
+    if (updatedArtifact.type === 'csv' || updatedArtifact.type === 'markdown') {
+      const textContent = await response.text();
+      updatedArtifact.content = textContent;
+      if (updatedArtifact.type === 'csv') {
+        updatedArtifact.csvData = textContent;
+      }
+    } else {
+      // For image, pdf, html, powerpoint etc.
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      updatedArtifact.url = blobUrl;
+      // Also update downloadUrl to the blob so it can be downloaded directly
+      updatedArtifact.downloadUrl = blobUrl;
+    }
+    
+    updatedArtifact.loading = false;
+    
+    // Replace the item in the array to ensure reactivity
+    artifacts.value[artifactIndex] = updatedArtifact;
+
+  } catch (error) {
+    console.error(`Error loading content for artifact ${artifact.title}:`, error);
+    addToLog(`Failed to load artifact: ${artifact.title}`, 'error', new Date().toISOString());
+    const artToUpdate = artifacts.value.find(a => a.id === artifact.id);
+    if(artToUpdate) artToUpdate.loading = false;
+  }
 }
 
 // Lifecycle - ENHANCED FOR LOADED CONVERSATIONS
