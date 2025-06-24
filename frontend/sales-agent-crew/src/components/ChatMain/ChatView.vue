@@ -136,14 +136,14 @@
                   <div class="flex space-x-4">
                     <div
                       v-for="doc in uploadedDocuments"
-                      :key="doc.id"
+                      :key="doc.file_id"
                       class="w-48 flex-shrink-0 p-2 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 relative group"
                     >
                       <div class="flex items-center space-x-3">
                         <input
                           type="checkbox"
-                          :checked="selectedDocuments.includes(doc.id)"
-                          @change="toggleDocumentSelection(doc.id)"
+                          :checked="selectedDocuments.includes(doc.file_id)"
+                          @change="toggleDocumentSelection(doc.file_id)"
                           class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                         />
                         <div class="w-48 overflow-hidden">
@@ -162,7 +162,7 @@
                         </div>
                       </div>
                       <button
-                        @click="removeDocument(doc.id)"
+                        @click="removeDocument(doc.file_id)"
                         class="absolute top-1 right-1 bg-orange-300 text-white rounded-full p-1 transition-opacity opacity-0 group-hover:opacity-100"
                         title="Remove document"
                       >
@@ -172,6 +172,19 @@
                   </div>
                 </HorizontalScroll>
               </div>
+            </div>
+
+            <!-- Upload Status -->
+            <div
+              v-if="uploadStatus"
+              class="mt-2 text-sm text-center"
+              :class="{
+                'text-red-500': uploadStatus.type === 'error',
+                'text-green-600': uploadStatus.type === 'success',
+                'text-gray-500': uploadStatus.type === 'info',
+              }"
+            >
+              {{ uploadStatus.message }}
             </div>
 
             <!-- Input -->
@@ -205,7 +218,7 @@
                         ref="fileInput"
                         @change="handleFileUpload"
                         class="hidden"
-                        accept=".pdf,.doc,.docx,.csv,.xlsx,.xls"
+                        accept=".pdf,.doc,.docx,.csv,.xlsx,.xls,.jpeg,.jpg,.png,.gif,.webp"
                       />
                       <svg
                         v-if="!isUploading"
@@ -1423,18 +1436,14 @@ async function handleFileUpload(event) {
       }
     );
     // Store the uploaded document and update selection.
-    const document = response.data.document;
+    const document = response.data.document || response.data.file;
     uploadedDocuments.value.push(document);
-    selectedDocuments.value.push(document.id);
-    uploadStatus.value = {
-      type: 'success',
-      message: 'Document uploaded successfully!',
-    };
+    selectedDocuments.value.push(document.file_id);
     if (fileInput.value) {
       fileInput.value.value = '';
     }
   } catch (error) {
-    console.error('[SearchSection] Upload error:', error);
+    console.error('[ChatView] Upload error:', error);
     uploadStatus.value = {
       type: 'error',
       message: error.response?.data?.error || 'Failed to upload document',
@@ -1447,7 +1456,7 @@ async function handleFileUpload(event) {
 async function loadUserDocuments() {
   try {
     const response = await axios.get(
-      `${import.meta.env.VITE_API_URL}/documents`,
+      `${import.meta.env.VITE_API_URL}/files`,
       {
         headers: {
           Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
@@ -1558,7 +1567,7 @@ const addMessage = async () => {
 
   if (selectedDocuments.value && selectedDocuments.value.length > 0) {
     messagePayload.document_ids = selectedDocuments.value.map((doc) => {
-      return typeof doc === 'string' ? doc : doc.id;
+      return typeof doc === 'string' ? doc : doc.file_id;
     });
   } else {
     messagePayload.document_ids = [];
@@ -1843,7 +1852,7 @@ function addOrUpdatePlannerText(newEntry) {
 
 async function removeDocument(docId) {
   try {
-    await axios.delete(`${import.meta.env.VITE_API_URL}/documents/${docId}`, {
+    await axios.delete(`${import.meta.env.VITE_API_URL}/files/${docId}`, {
       headers: {
         Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
       },
@@ -1853,17 +1862,10 @@ async function removeDocument(docId) {
       selectedDocuments.value.splice(selectedIndex, 1);
     }
     uploadedDocuments.value = uploadedDocuments.value.filter(
-      (doc) => doc.id !== docId
+      (doc) => doc.file_id !== docId
     );
-    uploadStatus.value = {
-      type: 'success',
-      message: 'Document removed successfully!',
-    };
-    setTimeout(() => {
-      uploadStatus.value = null;
-    }, 3000);
   } catch (error) {
-    console.error('[SearchSection] Error removing document:', error);
+    console.error('[ChatView] Error removing document:', error);
     uploadStatus.value = {
       type: 'error',
       message: error.response?.data?.error || 'Failed to remove document',
