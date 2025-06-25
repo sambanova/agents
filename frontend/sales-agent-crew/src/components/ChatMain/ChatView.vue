@@ -95,66 +95,74 @@
             />
             
             <!-- Token Usage Display for Final Messages -->
-            <div v-if="isFinalMessage(msgItem) && getMessageTokenUsage(msgItem)?.total_tokens > 0" class="mt-2">
-              <div class="bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-lg px-3 py-2 inline-block shadow-sm hover:shadow-md transition-shadow duration-200 max-w-full">
+            <div v-if="isFinalMessage(msgItem) && getRunSummary(msgItem)?.total_tokens > 0" class="mt-2">
+              <!-- Run Summary Metrics -->
+              <div class="bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-lg px-3 py-2 block shadow-sm hover:shadow-md transition-shadow duration-200 max-w-full w-fit">
                 <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-                  <!-- Input Tokens -->
-                  <div class="flex flex-col items-center min-w-[45px] sm:min-w-[50px]">
-                    <span class="text-xs font-semibold text-gray-800">{{ getMessageTokenUsage(msgItem).input_tokens.toLocaleString() }}</span>
-                    <span class="text-2xs text-gray-600">input</span>
-                  </div>
+                  <!-- Run Summary Label -->
                   
-                  <!-- Divider -->
-                  <div class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
-                  
-                  <!-- Output Tokens -->
-                  <div class="flex flex-col items-center min-w-[45px] sm:min-w-[50px]">
-                    <span class="text-xs font-semibold text-gray-800">{{ getMessageTokenUsage(msgItem).output_tokens.toLocaleString() }}</span>
-                    <span class="text-2xs text-gray-600">output</span>
-                  </div>
-                  
-                  <!-- Divider -->
-                  <div class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
-                  
-                  <!-- Total Tokens -->
-                  <div class="flex flex-col items-center min-w-[45px] sm:min-w-[50px]">
-                    <span class="text-xs font-semibold text-gray-800">{{ getMessageTokenUsage(msgItem).total_tokens.toLocaleString() }}</span>
-                    <span class="text-2xs text-gray-600">total</span>
-                  </div>
-                  
-                  <!-- Performance Metrics (if available) -->
-                  <template v-if="hasPerformanceMetrics(msgItem)">
+                                      <!-- Input Tokens -->
+                    <div class="flex flex-col items-center w-[50px] sm:w-[55px]">
+                      <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).input_tokens.toLocaleString() }}</span>
+                      <span class="text-2xs text-gray-600">input</span>
+                    </div>
+                    
+                    <!-- Divider -->
+                    <div class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
+                    
+                    <!-- Output Tokens -->
+                    <div class="flex flex-col items-center w-[50px] sm:w-[55px]">
+                      <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).output_tokens.toLocaleString() }}</span>
+                      <span class="text-2xs text-gray-600">output</span>
+                    </div>
+                    
+                    <!-- Divider -->
+                    <div class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
+                    
+                    <!-- Total Tokens -->
+                    <div class="flex flex-col items-center w-[50px] sm:w-[55px]">
+                      <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).total_tokens.toLocaleString() }}</span>
+                      <span class="text-2xs text-gray-600">total</span>
+                    </div>
+
+                  <!-- Performance Metrics Summary -->
+                  <template v-if="getRunSummary(msgItem).total_latency > 0">
                     <!-- Performance Section Divider -->
-                    <div class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
+                    <div class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
                     
-                    <!-- Total Duration -->
-                    <template v-if="getMessageResponseMetadata(msgItem).usage?.total_latency">
-                      <div class="flex flex-col items-center min-w-[40px] sm:min-w-[45px]">
-                        <span class="text-xs font-semibold text-gray-800">{{ (getMessageResponseMetadata(msgItem).usage.total_latency).toFixed(2) }}s</span>
-                        <span class="text-2xs text-gray-600">latency</span>
-                      </div>
-                      
-                      <!-- Divider after latency if there are more metrics -->
-                      <div v-if="getMessageResponseMetadata(msgItem).usage?.time_to_first_token || getMessageResponseMetadata(msgItem).usage?.completion_tokens_per_sec" class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
-                    </template>
+                    <!-- Total Latency -->
+                    <div class="flex flex-col items-center w-[45px] sm:w-[50px]">
+                      <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).total_latency.toFixed(2) }}s</span>
+                      <span class="text-2xs text-gray-600">latency</span>
+                    </div>
+
+                    <!-- Divider -->
+                    <div class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
                     
-                    <!-- Time to First Token -->
-                    <template v-if="getMessageResponseMetadata(msgItem).usage?.time_to_first_token">
-                      <div class="flex flex-col items-center min-w-[40px] sm:min-w-[45px]">
-                        <span class="text-xs font-semibold text-gray-800">{{ (getMessageResponseMetadata(msgItem).usage.time_to_first_token).toFixed(2) }}s</span>
-                        <span class="text-2xs text-gray-600">TTFT</span>
-                      </div>
-                      
-                      <!-- Divider after TTFT if there are more metrics -->
-                      <div v-if="getMessageResponseMetadata(msgItem).usage?.completion_tokens_per_sec" class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
-                    </template>
+                    <!-- Total Time to First Token -->
+                    <div v-if="getRunSummary(msgItem).total_ttft > 0" class="flex flex-col items-center w-[45px] sm:w-[50px]">
+                      <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).total_ttft.toFixed(2) }}s</span>
+                      <span class="text-2xs text-gray-600">TTFT</span>
+                    </div>
                     
-                    <!-- Output Tokens per Second -->
-                    <div v-if="getMessageResponseMetadata(msgItem).usage?.completion_tokens_per_sec" class="flex flex-col items-center min-w-[40px] sm:min-w-[45px]">
-                      <span class="text-xs font-semibold text-gray-800">{{ getMessageResponseMetadata(msgItem).usage.completion_tokens_per_sec.toFixed(1) }}</span>
-                      <span class="text-2xs text-gray-600">t/s</span>
+                    <!-- Divider -->
+                    <div v-if="getRunSummary(msgItem).total_ttft > 0 && getRunSummary(msgItem).avg_throughput > 0" class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
+                    
+                    <!-- Average Throughput -->
+                    <div v-if="getRunSummary(msgItem).avg_throughput > 0" class="flex flex-col items-center w-[45px] sm:w-[50px]">
+                      <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).avg_throughput.toFixed(1) }}</span>
+                      <span class="text-2xs text-gray-600">avg t/s</span>
                     </div>
                   </template>
+
+                  <!-- Divider -->
+                  <div class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
+                  
+                  <!-- Event Count -->
+                  <div class="flex flex-col items-center w-[40px] sm:w-[45px]">
+                    <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).event_count }}</span>
+                    <span class="text-2xs text-gray-600">events</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -712,6 +720,9 @@ watch(
         total_tokens: 0
       };
       
+      // Clear run metrics for new conversation
+      runMetrics.value.clear();
+      
       // Reset sidebar state when switching conversations
       showDaytonaSidebar.value = false;
       currentDaytonaEvents.value = [];
@@ -825,7 +836,53 @@ const cumulativeTokenUsage = ref({
   total_tokens: 0
 });
 
+// Track metrics per run_id
+const runMetrics = ref(new Map());
+
 async function filterChat(msgData) {
+  // First pass: identify conversation turns for run grouping
+  let currentRunId = null;
+  const messageToRunMap = new Map();
+  
+  // Sort messages by timestamp to ensure proper ordering
+  const sortedMessages = msgData.messages.sort((a, b) => 
+    new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
+  );
+  
+  sortedMessages.forEach(message => {
+    const isUserMessage = message.additional_kwargs?.agent_type === 'human' || message.type === 'HumanMessage';
+    
+    if (isUserMessage) {
+      // Start a new conversation turn
+      currentRunId = message.message_id;
+    }
+    
+    // Map this message to the current run
+    if (currentRunId) {
+      messageToRunMap.set(message.message_id, currentRunId);
+    }
+  });
+  
+
+
+  // Second pass: track ALL metrics for ALL messages BEFORE filtering
+  sortedMessages.forEach(message => {
+    // Count events that contribute to the conversation run
+    const shouldTrackEvent = ['agent_completion', 'think', 'planner', 'llm_stream_chunk', 'stream_complete'].includes(message.event);
+    
+    if (shouldTrackEvent) {
+      const runId = messageToRunMap.get(message.message_id) || message.message_id;
+      
+             // Track metrics if they exist (mainly for agent_completion events)
+       if (message.event === 'agent_completion' && message.usage_metadata) {
+         trackRunMetrics(runId, message.usage_metadata, message.response_metadata);
+       } else {
+         // Still count the event even without usage metadata
+         trackRunMetrics(runId, null, null);
+       }
+    }
+  });
+
   messagesData.value = msgData.messages
     .map(message => {
       // For agent_completion events, handle LangGraph format
@@ -907,6 +964,8 @@ async function filterChat(msgData) {
           conversation_id: message.conversation_id,
           timestamp: message.timestamp || new Date().toISOString()
         };
+        
+        // Metrics tracking is now done in the pre-filter pass above
         
         // Restore token usage data in the same structure as live messages
         if (message.usage_metadata || message.cumulative_usage_metadata || message.response_metadata) {
@@ -1894,6 +1953,11 @@ async function connectWebSocket() {
             if (receivedData.response_metadata?.usage) {
               Object.assign(messageData.response_metadata.usage, receivedData.response_metadata.usage);
             }
+            
+            // Track metrics for run summary
+            // Use currentMsgId as the run identifier to group all events from this conversation turn
+            const runId = currentMsgId.value;
+            trackRunMetrics(runId, receivedData.usage_metadata, receivedData.response_metadata);
           }
           
           // Still store cumulative usage separately for header display
@@ -2559,6 +2623,109 @@ function getMessageResponseMetadata(msgItem) {
   
   // Return null if no response metadata found
   return null
+}
+
+// Function to track metrics for a run_id
+function trackRunMetrics(runId, tokenUsage, responseMetadata) {
+  if (!runId) return;
+  
+  if (!runMetrics.value.has(runId)) {
+    runMetrics.value.set(runId, {
+      input_tokens: [],
+      output_tokens: [],
+      total_tokens: [],
+      latencies: [],
+      ttfts: [],
+      throughputs: [],
+      event_count: 0
+    });
+  }
+  
+  const runData = runMetrics.value.get(runId);
+  
+  // Track token usage
+  if (tokenUsage) {
+    if (tokenUsage.input_tokens > 0) runData.input_tokens.push(tokenUsage.input_tokens);
+    if (tokenUsage.output_tokens > 0) runData.output_tokens.push(tokenUsage.output_tokens);
+    if (tokenUsage.total_tokens > 0) runData.total_tokens.push(tokenUsage.total_tokens);
+  }
+  
+  // Track performance metrics
+  if (responseMetadata?.usage) {
+    if (responseMetadata.usage.total_latency > 0) {
+      runData.latencies.push(responseMetadata.usage.total_latency);
+    }
+    if (responseMetadata.usage.time_to_first_token > 0) {
+      runData.ttfts.push(responseMetadata.usage.time_to_first_token);
+    }
+    if (responseMetadata.usage.completion_tokens_per_sec > 0) {
+      runData.throughputs.push(responseMetadata.usage.completion_tokens_per_sec);
+    }
+  }
+  
+  // Always increment event count (even for events without token data)
+  runData.event_count++;
+}
+
+// Function to get run summary for display
+function getRunSummary(msgItem) {
+  // For final messages, we want to show the summary for the entire conversation turn
+  // Find the run ID by looking backwards in messagesData to find the user message that started this turn
+  let runId = null;
+  
+  if (msgItem.type === 'streaming_group') {
+    runId = msgItem.message_id;
+  } else {
+    // For individual messages, find the conversation turn they belong to
+    const currentMessageIndex = messagesData.value.findIndex(msg => 
+      msg.message_id === msgItem.message_id || 
+      (msg.type === 'streaming_group' && msg.message_id === msgItem.message_id)
+    );
+    
+    // Look backwards to find the user message that started this conversation turn
+    for (let i = currentMessageIndex; i >= 0; i--) {
+      const msg = messagesData.value[i];
+      const isUserMessage = msg.additional_kwargs?.agent_type === 'human' || 
+                           msg.type === 'HumanMessage' ||
+                           (msg.type === 'streaming_group' && msg.events?.some(e => 
+                             e.additional_kwargs?.agent_type === 'human' || e.type === 'HumanMessage'
+                           ));
+      
+      if (isUserMessage) {
+        runId = msg.message_id;
+        break;
+      }
+    }
+    
+    // Fallback to the message's own ID
+    if (!runId) {
+      runId = msgItem.message_id;
+    }
+  }
+  
+
+  
+  if (!runId || !runMetrics.value.has(runId)) {
+    return { input_tokens: 0, output_tokens: 0, total_tokens: 0, event_count: 0 };
+  }
+  
+  const runData = runMetrics.value.get(runId);
+  console.log('Run data for', runId, ':', runData);
+  
+  // Calculate sums and averages
+  const summary = {
+    input_tokens: runData.input_tokens.reduce((sum, val) => sum + val, 0),
+    output_tokens: runData.output_tokens.reduce((sum, val) => sum + val, 0),
+    total_tokens: runData.total_tokens.reduce((sum, val) => sum + val, 0),
+    total_latency: runData.latencies.reduce((sum, val) => sum + val, 0),
+    total_ttft: runData.ttfts.reduce((sum, val) => sum + val, 0),
+    avg_latency: runData.latencies.length > 0 ? runData.latencies.reduce((sum, val) => sum + val, 0) / runData.latencies.length : 0,
+    avg_throughput: runData.throughputs.length > 0 ? runData.throughputs.reduce((sum, val) => sum + val, 0) / runData.throughputs.length : 0,
+    event_count: runData.event_count
+  };
+  
+
+  return summary;
 }
 
 
