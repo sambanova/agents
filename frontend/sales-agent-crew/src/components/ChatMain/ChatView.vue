@@ -21,15 +21,15 @@
           <div class="flex items-center space-x-4">
             <!-- Token Usage Display -->
             <div v-if="cumulativeTokenUsage.total_tokens > 0" class="flex items-center space-x-2 text-sm text-gray-600">
-              <span class="font-medium">Chat Usage:</span>
+              <span class="font-medium">Chat Usage Tokens:</span>
               <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
-                {{ cumulativeTokenUsage.input_tokens.toLocaleString() }} input tokens
+                {{ cumulativeTokenUsage.input_tokens.toLocaleString() }} input
               </span>
               <span class="bg-gray-200 text-gray-800 px-2 py-1 rounded text-xs">
-                {{ cumulativeTokenUsage.output_tokens.toLocaleString() }} output tokens
+                {{ cumulativeTokenUsage.output_tokens.toLocaleString() }} output
               </span>
               <span class="bg-gray-300 text-gray-900 px-2 py-1 rounded text-xs">
-                {{ cumulativeTokenUsage.total_tokens.toLocaleString() }} total tokens
+                {{ cumulativeTokenUsage.total_tokens.toLocaleString() }} total
               </span>
             </div>
             
