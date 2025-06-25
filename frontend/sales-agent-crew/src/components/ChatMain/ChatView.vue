@@ -8,27 +8,27 @@
       <!-- Sticky Top Component -->
       <div
         v-if="chatName"
-        class="sticky h-auto min-h-[62px] top-0 z-10 bg-white p-4 shadow"
+        class="sticky top-0 z-10 bg-white p-4 shadow"
       >
-        <div class="flex items-center justify-between">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
           <!-- Left text -->
           <div
-            class="text-[16px] font-medium text-gray-800 line-clamp-1 overflow-hidden"
+            class="text-[16px] font-medium text-gray-800 line-clamp-1 overflow-hidden flex-shrink min-w-0"
           >
             {{ chatName }}
           </div>
           <!-- Right side - Token Usage and Buttons -->
-          <div class="flex items-center space-x-4">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 flex-shrink-0">
             <!-- Token Usage Display -->
-            <div v-if="cumulativeTokenUsage.total_tokens > 0" class="flex items-center space-x-2 text-sm text-gray-600">
-              <span class="font-medium">Chat Usage Tokens:</span>
-              <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
+            <div v-if="cumulativeTokenUsage.total_tokens > 0" class="flex flex-wrap items-center gap-1 sm:gap-2 text-sm text-gray-600">
+              <span class="font-medium whitespace-nowrap">Chat Usage Tokens:</span>
+              <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs whitespace-nowrap">
                 {{ cumulativeTokenUsage.input_tokens.toLocaleString() }} input
               </span>
-              <span class="bg-gray-200 text-gray-800 px-2 py-1 rounded text-xs">
+              <span class="bg-gray-200 text-gray-800 px-2 py-1 rounded text-xs whitespace-nowrap">
                 {{ cumulativeTokenUsage.output_tokens.toLocaleString() }} output
               </span>
-              <span class="bg-gray-300 text-gray-900 px-2 py-1 rounded text-xs">
+              <span class="bg-gray-300 text-gray-900 px-2 py-1 rounded text-xs whitespace-nowrap">
                 {{ cumulativeTokenUsage.total_tokens.toLocaleString() }} total
               </span>
             </div>
@@ -96,28 +96,28 @@
             
             <!-- Token Usage Display for Final Messages -->
             <div v-if="isFinalMessage(msgItem) && getMessageTokenUsage(msgItem)?.total_tokens > 0" class="mt-2">
-              <div class="bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-lg px-3 py-2 inline-block shadow-sm hover:shadow-md transition-shadow duration-200">
-                <div class="flex items-center space-x-3">
+              <div class="bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-lg px-3 py-2 inline-block shadow-sm hover:shadow-md transition-shadow duration-200 max-w-full">
+                <div class="flex flex-wrap items-center gap-2 sm:gap-3">
                   <!-- Input Tokens -->
-                  <div class="flex flex-col items-center min-w-[50px]">
+                  <div class="flex flex-col items-center min-w-[45px] sm:min-w-[50px]">
                     <span class="text-xs font-semibold text-gray-800">{{ getMessageTokenUsage(msgItem).input_tokens.toLocaleString() }}</span>
                     <span class="text-2xs text-gray-600">input</span>
                   </div>
                   
                   <!-- Divider -->
-                  <div class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
+                  <div class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
                   
                   <!-- Output Tokens -->
-                  <div class="flex flex-col items-center min-w-[50px]">
+                  <div class="flex flex-col items-center min-w-[45px] sm:min-w-[50px]">
                     <span class="text-xs font-semibold text-gray-800">{{ getMessageTokenUsage(msgItem).output_tokens.toLocaleString() }}</span>
                     <span class="text-2xs text-gray-600">output</span>
                   </div>
                   
                   <!-- Divider -->
-                  <div class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
+                  <div class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
                   
                   <!-- Total Tokens -->
-                  <div class="flex flex-col items-center min-w-[50px]">
+                  <div class="flex flex-col items-center min-w-[45px] sm:min-w-[50px]">
                     <span class="text-xs font-semibold text-gray-800">{{ getMessageTokenUsage(msgItem).total_tokens.toLocaleString() }}</span>
                     <span class="text-2xs text-gray-600">total</span>
                   </div>
@@ -125,32 +125,32 @@
                   <!-- Performance Metrics (if available) -->
                   <template v-if="hasPerformanceMetrics(msgItem)">
                     <!-- Performance Section Divider -->
-                    <div class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
+                    <div class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
                     
                     <!-- Total Duration -->
                     <template v-if="getMessageResponseMetadata(msgItem).usage?.total_latency">
-                      <div class="flex flex-col items-center min-w-[45px]">
+                      <div class="flex flex-col items-center min-w-[40px] sm:min-w-[45px]">
                         <span class="text-xs font-semibold text-gray-800">{{ (getMessageResponseMetadata(msgItem).usage.total_latency).toFixed(2) }}s</span>
                         <span class="text-2xs text-gray-600">latency</span>
                       </div>
                       
                       <!-- Divider after latency if there are more metrics -->
-                      <div v-if="getMessageResponseMetadata(msgItem).usage?.time_to_first_token || getMessageResponseMetadata(msgItem).usage?.completion_tokens_per_sec" class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
+                      <div v-if="getMessageResponseMetadata(msgItem).usage?.time_to_first_token || getMessageResponseMetadata(msgItem).usage?.completion_tokens_per_sec" class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
                     </template>
                     
                     <!-- Time to First Token -->
                     <template v-if="getMessageResponseMetadata(msgItem).usage?.time_to_first_token">
-                      <div class="flex flex-col items-center min-w-[45px]">
+                      <div class="flex flex-col items-center min-w-[40px] sm:min-w-[45px]">
                         <span class="text-xs font-semibold text-gray-800">{{ (getMessageResponseMetadata(msgItem).usage.time_to_first_token).toFixed(2) }}s</span>
                         <span class="text-2xs text-gray-600">TTFT</span>
                       </div>
                       
                       <!-- Divider after TTFT if there are more metrics -->
-                      <div v-if="getMessageResponseMetadata(msgItem).usage?.completion_tokens_per_sec" class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
+                      <div v-if="getMessageResponseMetadata(msgItem).usage?.completion_tokens_per_sec" class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
                     </template>
                     
                     <!-- Output Tokens per Second -->
-                    <div v-if="getMessageResponseMetadata(msgItem).usage?.completion_tokens_per_sec" class="flex flex-col items-center min-w-[45px]">
+                    <div v-if="getMessageResponseMetadata(msgItem).usage?.completion_tokens_per_sec" class="flex flex-col items-center min-w-[40px] sm:min-w-[45px]">
                       <span class="text-xs font-semibold text-gray-800">{{ getMessageResponseMetadata(msgItem).usage.completion_tokens_per_sec.toFixed(1) }}</span>
                       <span class="text-2xs text-gray-600">t/s</span>
                     </div>
