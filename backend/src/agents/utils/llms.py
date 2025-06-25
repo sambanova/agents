@@ -3,15 +3,16 @@ from functools import lru_cache
 from urllib.parse import urlparse
 
 import httpx
-from langchain_sambanova import ChatSambaNovaCloud
+import structlog
 from langchain_fireworks import ChatFireworks
+from langchain_sambanova import ChatSambaNovaCloud
 
-# from agents.utils.logging import logger
+logger = structlog.get_logger(__name__)
 
 
 @lru_cache(maxsize=4)
 def get_sambanova_llm(api_key: str, model: str = "Meta-Llama-3.3-70B-Instruct"):
-    # logger.info("Initializing SambaNova LLM", model=model, llm_provider="sambanova")
+    logger.info("Initializing SambaNova LLM", model=model, llm_provider="sambanova")
 
     try:
         llm = ChatSambaNovaCloud(
@@ -21,28 +22,28 @@ def get_sambanova_llm(api_key: str, model: str = "Meta-Llama-3.3-70B-Instruct"):
             sambanova_api_key=api_key,
         )
 
-        # logger.info(
-        #     "SambaNova LLM initialized successfully",
-        #     model=model,
-        #     llm_provider="sambanova",
-        #     max_tokens=8192,
-        # )
+        logger.info(
+            "SambaNova LLM initialized successfully",
+            model=model,
+            llm_provider="sambanova",
+            max_tokens=8192,
+        )
 
     except Exception as e:
-        # logger.error(
-        #     "Failed to initialize SambaNova LLM",
-        #     model=model,
-        #     llm_provider="sambanova",
-        #     error={"type": type(e).__name__, "message": str(e)},
-        #     exc_info=True,
-        # )
+        logger.error(
+            "Failed to initialize SambaNova LLM",
+            model=model,
+            llm_provider="sambanova",
+            error={"type": type(e).__name__, "message": str(e)},
+            exc_info=True,
+        )
         raise e
     return llm
 
 
 @lru_cache(maxsize=4)
 def get_fireworks_llm(api_key: str, model: str = "fireworks-llama-3.3-70b"):
-    # logger.info("Initializing Fireworks LLM", model=model, llm_provider="fireworks")
+    logger.info("Initializing Fireworks LLM", model=model, llm_provider="fireworks")
 
     try:
         llm = ChatFireworks(
@@ -51,19 +52,19 @@ def get_fireworks_llm(api_key: str, model: str = "fireworks-llama-3.3-70b"):
             api_key=api_key,
         )
 
-        # logger.info(
-        #     "Fireworks LLM initialized successfully",
-        #     model=model,
-        #     llm_provider="fireworks",
-        # )
+        logger.info(
+            "Fireworks LLM initialized successfully",
+            model=model,
+            llm_provider="fireworks",
+        )
 
     except Exception as e:
-        # logger.error(
-        #     "Failed to initialize Fireworks LLM",
-        #     model=model,
-        #     llm_provider="fireworks",
-        #     error={"type": type(e).__name__, "message": str(e)},
-        #     exc_info=True,
-        # )
+        logger.error(
+            "Failed to initialize Fireworks LLM",
+            model=model,
+            llm_provider="fireworks",
+            error={"type": type(e).__name__, "message": str(e)},
+            exc_info=True,
+        )
         raise e
     return llm

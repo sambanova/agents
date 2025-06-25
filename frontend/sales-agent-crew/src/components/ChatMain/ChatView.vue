@@ -8,27 +8,27 @@
       <!-- Sticky Top Component -->
       <div
         v-if="chatName"
-        class="sticky h-auto min-h-[62px] top-0 z-10 bg-white p-4 shadow"
+        class="sticky top-0 z-10 bg-white p-4 shadow"
       >
-        <div class="flex items-center justify-between">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
           <!-- Left text -->
           <div
-            class="text-[16px] font-medium text-gray-800 line-clamp-1 overflow-hidden"
+            class="text-[16px] font-medium text-gray-800 line-clamp-1 overflow-hidden flex-shrink min-w-0"
           >
             {{ chatName }}
           </div>
           <!-- Right side - Token Usage and Buttons -->
-          <div class="flex items-center space-x-4">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 flex-shrink-0">
             <!-- Token Usage Display -->
-            <div v-if="cumulativeTokenUsage.total_tokens > 0" class="flex items-center space-x-2 text-sm text-gray-600">
-              <span class="font-medium">Chat Usage Tokens:</span>
-              <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
+            <div v-if="cumulativeTokenUsage.total_tokens > 0" class="flex flex-wrap items-center gap-1 sm:gap-2 text-sm text-gray-600">
+              <span class="font-medium whitespace-nowrap">Chat Usage Tokens:</span>
+              <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs whitespace-nowrap">
                 {{ cumulativeTokenUsage.input_tokens.toLocaleString() }} input
               </span>
-              <span class="bg-gray-200 text-gray-800 px-2 py-1 rounded text-xs">
+              <span class="bg-gray-200 text-gray-800 px-2 py-1 rounded text-xs whitespace-nowrap">
                 {{ cumulativeTokenUsage.output_tokens.toLocaleString() }} output
               </span>
-              <span class="bg-gray-300 text-gray-900 px-2 py-1 rounded text-xs">
+              <span class="bg-gray-300 text-gray-900 px-2 py-1 rounded text-xs whitespace-nowrap">
                 {{ cumulativeTokenUsage.total_tokens.toLocaleString() }} total
               </span>
             </div>
@@ -95,66 +95,74 @@
             />
             
             <!-- Token Usage Display for Final Messages -->
-            <div v-if="isFinalMessage(msgItem) && getMessageTokenUsage(msgItem)?.total_tokens > 0" class="mt-2">
-              <div class="bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-lg px-3 py-2 inline-block shadow-sm hover:shadow-md transition-shadow duration-200">
-                <div class="flex items-center space-x-3">
-                  <!-- Input Tokens -->
-                  <div class="flex flex-col items-center min-w-[50px]">
-                    <span class="text-xs font-semibold text-gray-800">{{ getMessageTokenUsage(msgItem).input_tokens.toLocaleString() }}</span>
-                    <span class="text-2xs text-gray-600">input</span>
-                  </div>
+            <div v-if="isFinalMessage(msgItem) && getRunSummary(msgItem)?.total_tokens > 0" class="mt-2">
+              <!-- Run Summary Metrics -->
+              <div class="bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-lg px-3 py-2 block shadow-sm hover:shadow-md transition-shadow duration-200 max-w-full w-fit">
+                <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                  <!-- Run Summary Label -->
                   
-                  <!-- Divider -->
-                  <div class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
-                  
-                  <!-- Output Tokens -->
-                  <div class="flex flex-col items-center min-w-[50px]">
-                    <span class="text-xs font-semibold text-gray-800">{{ getMessageTokenUsage(msgItem).output_tokens.toLocaleString() }}</span>
-                    <span class="text-2xs text-gray-600">output</span>
-                  </div>
-                  
-                  <!-- Divider -->
-                  <div class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
-                  
-                  <!-- Total Tokens -->
-                  <div class="flex flex-col items-center min-w-[50px]">
-                    <span class="text-xs font-semibold text-gray-800">{{ getMessageTokenUsage(msgItem).total_tokens.toLocaleString() }}</span>
-                    <span class="text-2xs text-gray-600">total</span>
-                  </div>
-                  
-                  <!-- Performance Metrics (if available) -->
-                  <template v-if="hasPerformanceMetrics(msgItem)">
+                                      <!-- Input Tokens -->
+                    <div class="flex flex-col items-center w-[50px] sm:w-[55px]">
+                      <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).input_tokens.toLocaleString() }}</span>
+                      <span class="text-2xs text-gray-600">input</span>
+                    </div>
+                    
+                    <!-- Divider -->
+                    <div class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
+                    
+                    <!-- Output Tokens -->
+                    <div class="flex flex-col items-center w-[50px] sm:w-[55px]">
+                      <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).output_tokens.toLocaleString() }}</span>
+                      <span class="text-2xs text-gray-600">output</span>
+                    </div>
+                    
+                    <!-- Divider -->
+                    <div class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
+                    
+                    <!-- Total Tokens -->
+                    <div class="flex flex-col items-center w-[50px] sm:w-[55px]">
+                      <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).total_tokens.toLocaleString() }}</span>
+                      <span class="text-2xs text-gray-600">total</span>
+                    </div>
+
+                  <!-- Performance Metrics Summary -->
+                  <template v-if="getRunSummary(msgItem).total_latency > 0">
                     <!-- Performance Section Divider -->
-                    <div class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
+                    <div class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
                     
-                    <!-- Total Duration -->
-                    <template v-if="getMessageResponseMetadata(msgItem).usage?.total_latency">
-                      <div class="flex flex-col items-center min-w-[45px]">
-                        <span class="text-xs font-semibold text-gray-800">{{ (getMessageResponseMetadata(msgItem).usage.total_latency).toFixed(2) }}s</span>
-                        <span class="text-2xs text-gray-600">latency</span>
-                      </div>
-                      
-                      <!-- Divider after latency if there are more metrics -->
-                      <div v-if="getMessageResponseMetadata(msgItem).usage?.time_to_first_token || getMessageResponseMetadata(msgItem).usage?.completion_tokens_per_sec" class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
-                    </template>
+                    <!-- Total Latency -->
+                    <div class="flex flex-col items-center w-[45px] sm:w-[50px]">
+                      <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).total_latency.toFixed(2) }}s</span>
+                      <span class="text-2xs text-gray-600">latency</span>
+                    </div>
+
+                    <!-- Divider -->
+                    <div class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
                     
-                    <!-- Time to First Token -->
-                    <template v-if="getMessageResponseMetadata(msgItem).usage?.time_to_first_token">
-                      <div class="flex flex-col items-center min-w-[45px]">
-                        <span class="text-xs font-semibold text-gray-800">{{ (getMessageResponseMetadata(msgItem).usage.time_to_first_token).toFixed(2) }}s</span>
-                        <span class="text-2xs text-gray-600">TTFT</span>
-                      </div>
-                      
-                      <!-- Divider after TTFT if there are more metrics -->
-                      <div v-if="getMessageResponseMetadata(msgItem).usage?.completion_tokens_per_sec" class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
-                    </template>
+                    <!-- Total Time to First Token -->
+                    <div v-if="getRunSummary(msgItem).total_ttft > 0" class="flex flex-col items-center w-[45px] sm:w-[50px]">
+                      <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).total_ttft.toFixed(2) }}s</span>
+                      <span class="text-2xs text-gray-600">TTFT</span>
+                    </div>
                     
-                    <!-- Output Tokens per Second -->
-                    <div v-if="getMessageResponseMetadata(msgItem).usage?.completion_tokens_per_sec" class="flex flex-col items-center min-w-[45px]">
-                      <span class="text-xs font-semibold text-gray-800">{{ getMessageResponseMetadata(msgItem).usage.completion_tokens_per_sec.toFixed(1) }}</span>
-                      <span class="text-2xs text-gray-600">t/s</span>
+                    <!-- Divider -->
+                    <div v-if="getRunSummary(msgItem).total_ttft > 0 && getRunSummary(msgItem).avg_throughput > 0" class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
+                    
+                    <!-- Average Throughput -->
+                    <div v-if="getRunSummary(msgItem).avg_throughput > 0" class="flex flex-col items-center w-[45px] sm:w-[50px]">
+                      <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).avg_throughput.toFixed(1) }}</span>
+                      <span class="text-2xs text-gray-600">avg t/s</span>
                     </div>
                   </template>
+
+                  <!-- Divider -->
+                  <div class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
+                  
+                  <!-- Event Count -->
+                  <div class="flex flex-col items-center w-[40px] sm:w-[45px]">
+                    <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).event_count }}</span>
+                    <span class="text-2xs text-gray-600">events</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -520,8 +528,6 @@ import {
   inject,
   computed,
 } from 'vue';
-import { marked } from 'marked';
-import hljs from 'highlight.js';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
@@ -542,9 +548,7 @@ import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue';
 
 // Inject the shared selectedOption from MainLayout.vue.
 const selectedOption = inject('selectedOption');
-const eventData = ref(null);
 async function handleButtonClick(data) {
-  eventData.value = data.message;
   chatName.value = '';
   
   // Create new chat instead of just going to home
@@ -605,7 +609,6 @@ watch(
   { immediate: true }
 );
 
-const newMessage = ref(''); // User input field
 const socket = ref(null); // WebSocket reference
 const container = ref(null);
 const isExpanded = ref(false);
@@ -620,17 +623,6 @@ function handleKeyDown(e) {
     e.preventDefault();
 
     addMessage();
-  }
-}
-
-function handleKeydownScroll(event) {
-  const container = scrollContainer.value;
-  if (!container) return;
-  const scrollAmount = 100;
-  if (event.key === 'ArrowRight') {
-    container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-  } else if (event.key === 'ArrowLeft') {
-    container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
   }
 }
 
@@ -683,12 +675,8 @@ const props = defineProps({
   },
 });
 
-const messages = ref([]);
-const draftMessage = ref('');
-const assistantThinking = ref(false);
 const isLoading = ref(false);
 const initialLoading = ref(false);
-const messagesContainer = ref(null);
 
 // Conversation change watcher:
 watch(
@@ -711,6 +699,9 @@ watch(
         output_tokens: 0,
         total_tokens: 0
       };
+      
+      // Clear run metrics for new conversation
+      runMetrics.value.clear();
       
       // Reset sidebar state when switching conversations
       showDaytonaSidebar.value = false;
@@ -739,30 +730,7 @@ watch(
   }
 );
 
-async function loadFullHistory() {
-  if (!props.conversationId) return;
-  try {
-    const resp = await axios.get(
-      `${import.meta.env.VITE_API_URL}/newsletter_chat/history/${
-        props.conversationId
-      }`,
-      {
-        headers: { 'x-user-id': props.userId },
-      }
-    );
-    const data = resp.data;
-    if (Array.isArray(data.messages)) {
-      messages.value = data.messages.map(parseMessage);
-    } else {
-      messages.value = [];
-    }
-    await nextTick();
-    scrollToBottom();
-  } catch (err) {
-    console.error('[ChatView] Error loading conversation history:', err);
-    messages.value = [];
-  }
-}
+
 
 const checkAndOpenSettings = () => {
   emitterMitt.emit('check-keys', { message: 'check keys!' });
@@ -825,7 +793,53 @@ const cumulativeTokenUsage = ref({
   total_tokens: 0
 });
 
+// Track metrics per run_id
+const runMetrics = ref(new Map());
+
 async function filterChat(msgData) {
+  // First pass: identify conversation turns for run grouping
+  let currentRunId = null;
+  const messageToRunMap = new Map();
+  
+  // Sort messages by timestamp to ensure proper ordering
+  const sortedMessages = msgData.messages.sort((a, b) => 
+    new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
+  );
+  
+  sortedMessages.forEach(message => {
+    const isUserMessage = message.additional_kwargs?.agent_type === 'human' || message.type === 'HumanMessage';
+    
+    if (isUserMessage) {
+      // Start a new conversation turn
+      currentRunId = message.message_id;
+    }
+    
+    // Map this message to the current run
+    if (currentRunId) {
+      messageToRunMap.set(message.message_id, currentRunId);
+    }
+  });
+  
+
+
+  // Second pass: track ALL metrics for ALL messages BEFORE filtering
+  sortedMessages.forEach(message => {
+    // Count events that contribute to the conversation run
+    const shouldTrackEvent = ['agent_completion', 'think', 'planner', 'llm_stream_chunk', 'stream_complete'].includes(message.event);
+    
+    if (shouldTrackEvent) {
+      const runId = messageToRunMap.get(message.message_id) || message.message_id;
+      
+             // Track metrics if they exist (mainly for agent_completion events)
+       if (message.event === 'agent_completion' && message.usage_metadata) {
+         trackRunMetrics(runId, message.usage_metadata, message.response_metadata);
+       } else {
+         // Still count the event even without usage metadata
+         trackRunMetrics(runId, null, null);
+       }
+    }
+  });
+
   messagesData.value = msgData.messages
     .map(message => {
       // For agent_completion events, handle LangGraph format
@@ -907,6 +921,8 @@ async function filterChat(msgData) {
           conversation_id: message.conversation_id,
           timestamp: message.timestamp || new Date().toISOString()
         };
+        
+        // Metrics tracking is now done in the pre-filter pass above
         
         // Restore token usage data in the same structure as live messages
         if (message.usage_metadata || message.cumulative_usage_metadata || message.response_metadata) {
@@ -1191,81 +1207,9 @@ async function filterChat(msgData) {
   await nextTick();
 }
 
-function renderMarkdown(content) {
-  marked.setOptions({
-    gfm: true,
-    breaks: true,
-    smartypants: true,
-    highlight(code, lang) {
-      if (lang && hljs.getLanguage(lang)) {
-        return hljs.highlight(code, { language: lang }).value;
-      }
-      return hljs.highlightAuto(code).value;
-    },
-  });
-  return marked(content || '');
-}
 
-function parseMessage(msg) {
-  return {
-    ...msg,
-    typing: false,
-    formattedContent: renderMarkdown(msg.content),
-  };
-}
 
-async function sendMessage() {
-  const txt = draftMessage.value.trim();
-  if (!txt || !props.conversationId) return;
 
-  const userMsg = {
-    role: 'user',
-    content: txt,
-    typing: false,
-    formattedContent: renderMarkdown(txt),
-  };
-  messages.value.push(userMsg);
-  draftMessage.value = '';
-  assistantThinking.value = true;
-  await nextTick();
-  scrollToBottom();
-
-  try {
-    const resp = await axios.post(
-      `${import.meta.env.VITE_API_URL}/newsletter_chat/message/${
-        props.conversationId
-      }`,
-      { message: txt },
-      { headers: { 'x-user-id': props.userId } }
-    );
-    const assistantReply = resp.data.assistant_response || '';
-    const assistantMsg = {
-      role: 'assistant',
-      content: assistantReply,
-      typing: false,
-      formattedContent: renderMarkdown(assistantReply),
-    };
-    messages.value.push(assistantMsg);
-  } catch (err) {
-    console.error('[ChatView] Error sending message:', err);
-    messages.value.push({
-      role: 'assistant',
-      content: 'Error: Could not process your message.',
-      typing: false,
-      formattedContent: 'Error: Could not process your message.',
-    });
-  } finally {
-    assistantThinking.value = false;
-    await nextTick();
-    scrollToBottom();
-  }
-}
-
-function scrollToBottom() {
-  if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
-  }
-}
 
 // Reactive state for voice and file uploads
 const searchQuery = ref('');
@@ -1277,7 +1221,6 @@ const exaKey = ref(null);
 const serperKey = ref(null);
 const fireworksKey = ref(null);
 const errorMessage = ref('');
-const showErrorModal = ref(false);
 const fileInput = ref(null);
 const uploadStatus = ref(null);
 const isUploading = ref(false);
@@ -1286,7 +1229,6 @@ const isUploading = ref(false);
 const uploadedDocuments = ref([]);
 const selectedDocuments = ref([]);
 const manualSocketClose = ref(false);
-const showStreamingDetails = ref(true); // Toggle for showing streaming messages
 
 // Clerk
 const { userId } = useAuth();
@@ -1365,63 +1307,11 @@ watch(
   { immediate: true }
 );
 
-const missingKeys = computed(() => {
-  const missing = [];
-  if (!sambanovaKey.value) missing.push('SambaNova');
-  if (!exaKey.value) missing.push('Exa');
-  if (!serperKey.value) missing.push('Serper');
-  return missing;
-});
+
 
 const statusText = ref('Loading...');
 const plannerTextData = ref([]);
-async function performSearch() {
-  try {
-    emit('searchStart', 'routing_query');
-    const routeResp = await axios.post(
-      `${import.meta.env.VITE_API_URL}/route`,
-      { query: searchQuery.value },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-sambanova-key': sambanovaKey.value || '',
-          'x-user-id': userId.value || '',
-          'x-run-id': props.runId || '',
-        },
-      }
-    );
-    const detectedType = routeResp.data.type;
-    emit('searchStart', detectedType || 'unknown');
-    const parameters = {
-      ...routeResp.data.parameters,
-      document_ids: selectedDocuments.value,
-    };
-    const executeResp = await axios.post(
-      `${import.meta.env.VITE_API_URL}/execute/${detectedType}`,
-      parameters,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-sambanova-key': sambanovaKey.value || '',
-          'x-serper-key': serperKey.value || '',
-          'x-exa-key': exaKey.value || '',
-          'x-user-id': userId.value || '',
-          'x-run-id': props.runId || '',
-          'x-session-id': props.sessionId || '',
-        },
-      }
-    );
-    emit('searchComplete', {
-      type: detectedType,
-      query: searchQuery.value,
-      results: executeResp.data,
-    });
-    searchQuery.value = '';
-  } catch (error) {
-    console.error('[SearchSection] performSearch error:', error);
-    emit('searchError', error);
-  }
-}
+
 
 function toggleRecording() {
   if (isRecording.value) {
@@ -1894,6 +1784,11 @@ async function connectWebSocket() {
             if (receivedData.response_metadata?.usage) {
               Object.assign(messageData.response_metadata.usage, receivedData.response_metadata.usage);
             }
+            
+            // Track metrics for run summary
+            // Use currentMsgId as the run identifier to group all events from this conversation turn
+            const runId = currentMsgId.value;
+            trackRunMetrics(runId, receivedData.usage_metadata, receivedData.response_metadata);
           }
           
           // Still store cumulative usage separately for header display
@@ -2155,34 +2050,7 @@ function formatMessageData(msgItem) {
   }
 }
 
-function scrollNewMessageToMiddle() {
-  nextTick(() => {
-    const containerEl = container.value;
-    if (!containerEl) return;
-    // Query the <ul> element inside the container
-    const messageListEl = containerEl.querySelector('ul');
-    if (!messageListEl) return;
-    // Get the last message element
-    const lastMessageEl = messageListEl.lastElementChild;
-    if (!lastMessageEl) return;
 
-    // Calculate the new scrollTop:
-    // lastMessageEl.offsetTop gives the distance from container top to the new message.
-    // Add half its height, then subtract half the container height to center it.
-    const targetScrollTop =
-      lastMessageEl.offsetTop +
-      lastMessageEl.offsetHeight / 2 -
-      containerEl.clientHeight / 2;
-
-    containerEl.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
-  });
-}
-watch(
-  () => messagesData.value.length,
-  () => {
-    scrollNewMessageToMiddle();
-  }
-);
 
 // Check if we have an active streaming group for the current message
 const hasActiveStreamingGroup = computed(() => {
@@ -2516,16 +2384,7 @@ function getMessageTokenUsage(msgItem) {
   return { input_tokens: 0, output_tokens: 0, total_tokens: 0 }
 }
 
-// Function to check if performance metrics are available for a message
-function hasPerformanceMetrics(msgItem) {
-  const metadata = getMessageResponseMetadata(msgItem);
-  const usage = metadata?.usage;
-  return usage && (
-    usage.total_latency || 
-    usage.time_to_first_token || 
-    usage.completion_tokens_per_sec
-  );
-}
+
 
 // Function to extract response metadata for a specific message
 function getMessageResponseMetadata(msgItem) {
@@ -2559,6 +2418,109 @@ function getMessageResponseMetadata(msgItem) {
   
   // Return null if no response metadata found
   return null
+}
+
+// Function to track metrics for a run_id
+function trackRunMetrics(runId, tokenUsage, responseMetadata) {
+  if (!runId) return;
+  
+  if (!runMetrics.value.has(runId)) {
+    runMetrics.value.set(runId, {
+      input_tokens: [],
+      output_tokens: [],
+      total_tokens: [],
+      latencies: [],
+      ttfts: [],
+      throughputs: [],
+      event_count: 0
+    });
+  }
+  
+  const runData = runMetrics.value.get(runId);
+  
+  // Track token usage
+  if (tokenUsage) {
+    if (tokenUsage.input_tokens > 0) runData.input_tokens.push(tokenUsage.input_tokens);
+    if (tokenUsage.output_tokens > 0) runData.output_tokens.push(tokenUsage.output_tokens);
+    if (tokenUsage.total_tokens > 0) runData.total_tokens.push(tokenUsage.total_tokens);
+  }
+  
+  // Track performance metrics
+  if (responseMetadata?.usage) {
+    if (responseMetadata.usage.total_latency > 0) {
+      runData.latencies.push(responseMetadata.usage.total_latency);
+    }
+    if (responseMetadata.usage.time_to_first_token > 0) {
+      runData.ttfts.push(responseMetadata.usage.time_to_first_token);
+    }
+    if (responseMetadata.usage.completion_tokens_per_sec > 0) {
+      runData.throughputs.push(responseMetadata.usage.completion_tokens_per_sec);
+    }
+  }
+  
+  // Always increment event count (even for events without token data)
+  runData.event_count++;
+}
+
+// Function to get run summary for display
+function getRunSummary(msgItem) {
+  // For final messages, we want to show the summary for the entire conversation turn
+  // Find the run ID by looking backwards in messagesData to find the user message that started this turn
+  let runId = null;
+  
+  if (msgItem.type === 'streaming_group') {
+    runId = msgItem.message_id;
+  } else {
+    // For individual messages, find the conversation turn they belong to
+    const currentMessageIndex = messagesData.value.findIndex(msg => 
+      msg.message_id === msgItem.message_id || 
+      (msg.type === 'streaming_group' && msg.message_id === msgItem.message_id)
+    );
+    
+    // Look backwards to find the user message that started this conversation turn
+    for (let i = currentMessageIndex; i >= 0; i--) {
+      const msg = messagesData.value[i];
+      const isUserMessage = msg.additional_kwargs?.agent_type === 'human' || 
+                           msg.type === 'HumanMessage' ||
+                           (msg.type === 'streaming_group' && msg.events?.some(e => 
+                             e.additional_kwargs?.agent_type === 'human' || e.type === 'HumanMessage'
+                           ));
+      
+      if (isUserMessage) {
+        runId = msg.message_id;
+        break;
+      }
+    }
+    
+    // Fallback to the message's own ID
+    if (!runId) {
+      runId = msgItem.message_id;
+    }
+  }
+  
+
+  
+  if (!runId || !runMetrics.value.has(runId)) {
+    return { input_tokens: 0, output_tokens: 0, total_tokens: 0, event_count: 0 };
+  }
+  
+  const runData = runMetrics.value.get(runId);
+  console.log('Run data for', runId, ':', runData);
+  
+  // Calculate sums and averages
+  const summary = {
+    input_tokens: runData.input_tokens.reduce((sum, val) => sum + val, 0),
+    output_tokens: runData.output_tokens.reduce((sum, val) => sum + val, 0),
+    total_tokens: runData.total_tokens.reduce((sum, val) => sum + val, 0),
+    total_latency: runData.latencies.reduce((sum, val) => sum + val, 0),
+    total_ttft: runData.ttfts.reduce((sum, val) => sum + val, 0),
+    avg_latency: runData.latencies.length > 0 ? runData.latencies.reduce((sum, val) => sum + val, 0) / runData.latencies.length : 0,
+    avg_throughput: runData.throughputs.length > 0 ? runData.throughputs.reduce((sum, val) => sum + val, 0) / runData.throughputs.length : 0,
+    event_count: runData.event_count
+  };
+  
+
+  return summary;
 }
 
 
