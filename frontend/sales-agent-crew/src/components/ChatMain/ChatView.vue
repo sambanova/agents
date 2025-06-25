@@ -528,8 +528,6 @@ import {
   inject,
   computed,
 } from 'vue';
-import { marked } from 'marked';
-import hljs from 'highlight.js';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
@@ -550,9 +548,7 @@ import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue';
 
 // Inject the shared selectedOption from MainLayout.vue.
 const selectedOption = inject('selectedOption');
-const eventData = ref(null);
 async function handleButtonClick(data) {
-  eventData.value = data.message;
   chatName.value = '';
   
   // Create new chat instead of just going to home
@@ -613,7 +609,6 @@ watch(
   { immediate: true }
 );
 
-const newMessage = ref(''); // User input field
 const socket = ref(null); // WebSocket reference
 const container = ref(null);
 const isExpanded = ref(false);
@@ -628,17 +623,6 @@ function handleKeyDown(e) {
     e.preventDefault();
 
     addMessage();
-  }
-}
-
-function handleKeydownScroll(event) {
-  const container = scrollContainer.value;
-  if (!container) return;
-  const scrollAmount = 100;
-  if (event.key === 'ArrowRight') {
-    container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-  } else if (event.key === 'ArrowLeft') {
-    container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
   }
 }
 
@@ -691,12 +675,8 @@ const props = defineProps({
   },
 });
 
-const messages = ref([]);
-const draftMessage = ref('');
-const assistantThinking = ref(false);
 const isLoading = ref(false);
 const initialLoading = ref(false);
-const messagesContainer = ref(null);
 
 // Conversation change watcher:
 watch(
@@ -750,30 +730,7 @@ watch(
   }
 );
 
-async function loadFullHistory() {
-  if (!props.conversationId) return;
-  try {
-    const resp = await axios.get(
-      `${import.meta.env.VITE_API_URL}/newsletter_chat/history/${
-        props.conversationId
-      }`,
-      {
-        headers: { 'x-user-id': props.userId },
-      }
-    );
-    const data = resp.data;
-    if (Array.isArray(data.messages)) {
-      messages.value = data.messages.map(parseMessage);
-    } else {
-      messages.value = [];
-    }
-    await nextTick();
-    scrollToBottom();
-  } catch (err) {
-    console.error('[ChatView] Error loading conversation history:', err);
-    messages.value = [];
-  }
-}
+
 
 const checkAndOpenSettings = () => {
   emitterMitt.emit('check-keys', { message: 'check keys!' });
@@ -1250,81 +1207,9 @@ async function filterChat(msgData) {
   await nextTick();
 }
 
-function renderMarkdown(content) {
-  marked.setOptions({
-    gfm: true,
-    breaks: true,
-    smartypants: true,
-    highlight(code, lang) {
-      if (lang && hljs.getLanguage(lang)) {
-        return hljs.highlight(code, { language: lang }).value;
-      }
-      return hljs.highlightAuto(code).value;
-    },
-  });
-  return marked(content || '');
-}
 
-function parseMessage(msg) {
-  return {
-    ...msg,
-    typing: false,
-    formattedContent: renderMarkdown(msg.content),
-  };
-}
 
-async function sendMessage() {
-  const txt = draftMessage.value.trim();
-  if (!txt || !props.conversationId) return;
 
-  const userMsg = {
-    role: 'user',
-    content: txt,
-    typing: false,
-    formattedContent: renderMarkdown(txt),
-  };
-  messages.value.push(userMsg);
-  draftMessage.value = '';
-  assistantThinking.value = true;
-  await nextTick();
-  scrollToBottom();
-
-  try {
-    const resp = await axios.post(
-      `${import.meta.env.VITE_API_URL}/newsletter_chat/message/${
-        props.conversationId
-      }`,
-      { message: txt },
-      { headers: { 'x-user-id': props.userId } }
-    );
-    const assistantReply = resp.data.assistant_response || '';
-    const assistantMsg = {
-      role: 'assistant',
-      content: assistantReply,
-      typing: false,
-      formattedContent: renderMarkdown(assistantReply),
-    };
-    messages.value.push(assistantMsg);
-  } catch (err) {
-    console.error('[ChatView] Error sending message:', err);
-    messages.value.push({
-      role: 'assistant',
-      content: 'Error: Could not process your message.',
-      typing: false,
-      formattedContent: 'Error: Could not process your message.',
-    });
-  } finally {
-    assistantThinking.value = false;
-    await nextTick();
-    scrollToBottom();
-  }
-}
-
-function scrollToBottom() {
-  if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
-  }
-}
 
 // Reactive state for voice and file uploads
 const searchQuery = ref('');
@@ -1336,7 +1221,6 @@ const exaKey = ref(null);
 const serperKey = ref(null);
 const fireworksKey = ref(null);
 const errorMessage = ref('');
-const showErrorModal = ref(false);
 const fileInput = ref(null);
 const uploadStatus = ref(null);
 const isUploading = ref(false);
@@ -1345,7 +1229,6 @@ const isUploading = ref(false);
 const uploadedDocuments = ref([]);
 const selectedDocuments = ref([]);
 const manualSocketClose = ref(false);
-const showStreamingDetails = ref(true); // Toggle for showing streaming messages
 
 // Clerk
 const { userId } = useAuth();
@@ -1424,63 +1307,11 @@ watch(
   { immediate: true }
 );
 
-const missingKeys = computed(() => {
-  const missing = [];
-  if (!sambanovaKey.value) missing.push('SambaNova');
-  if (!exaKey.value) missing.push('Exa');
-  if (!serperKey.value) missing.push('Serper');
-  return missing;
-});
+
 
 const statusText = ref('Loading...');
 const plannerTextData = ref([]);
-async function performSearch() {
-  try {
-    emit('searchStart', 'routing_query');
-    const routeResp = await axios.post(
-      `${import.meta.env.VITE_API_URL}/route`,
-      { query: searchQuery.value },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-sambanova-key': sambanovaKey.value || '',
-          'x-user-id': userId.value || '',
-          'x-run-id': props.runId || '',
-        },
-      }
-    );
-    const detectedType = routeResp.data.type;
-    emit('searchStart', detectedType || 'unknown');
-    const parameters = {
-      ...routeResp.data.parameters,
-      document_ids: selectedDocuments.value,
-    };
-    const executeResp = await axios.post(
-      `${import.meta.env.VITE_API_URL}/execute/${detectedType}`,
-      parameters,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-sambanova-key': sambanovaKey.value || '',
-          'x-serper-key': serperKey.value || '',
-          'x-exa-key': exaKey.value || '',
-          'x-user-id': userId.value || '',
-          'x-run-id': props.runId || '',
-          'x-session-id': props.sessionId || '',
-        },
-      }
-    );
-    emit('searchComplete', {
-      type: detectedType,
-      query: searchQuery.value,
-      results: executeResp.data,
-    });
-    searchQuery.value = '';
-  } catch (error) {
-    console.error('[SearchSection] performSearch error:', error);
-    emit('searchError', error);
-  }
-}
+
 
 function toggleRecording() {
   if (isRecording.value) {
@@ -2219,34 +2050,7 @@ function formatMessageData(msgItem) {
   }
 }
 
-function scrollNewMessageToMiddle() {
-  nextTick(() => {
-    const containerEl = container.value;
-    if (!containerEl) return;
-    // Query the <ul> element inside the container
-    const messageListEl = containerEl.querySelector('ul');
-    if (!messageListEl) return;
-    // Get the last message element
-    const lastMessageEl = messageListEl.lastElementChild;
-    if (!lastMessageEl) return;
 
-    // Calculate the new scrollTop:
-    // lastMessageEl.offsetTop gives the distance from container top to the new message.
-    // Add half its height, then subtract half the container height to center it.
-    const targetScrollTop =
-      lastMessageEl.offsetTop +
-      lastMessageEl.offsetHeight / 2 -
-      containerEl.clientHeight / 2;
-
-    containerEl.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
-  });
-}
-watch(
-  () => messagesData.value.length,
-  () => {
-    scrollNewMessageToMiddle();
-  }
-);
 
 // Check if we have an active streaming group for the current message
 const hasActiveStreamingGroup = computed(() => {
@@ -2580,16 +2384,7 @@ function getMessageTokenUsage(msgItem) {
   return { input_tokens: 0, output_tokens: 0, total_tokens: 0 }
 }
 
-// Function to check if performance metrics are available for a message
-function hasPerformanceMetrics(msgItem) {
-  const metadata = getMessageResponseMetadata(msgItem);
-  const usage = metadata?.usage;
-  return usage && (
-    usage.total_latency || 
-    usage.time_to_first_token || 
-    usage.completion_tokens_per_sec
-  );
-}
+
 
 // Function to extract response metadata for a specific message
 function getMessageResponseMetadata(msgItem) {
