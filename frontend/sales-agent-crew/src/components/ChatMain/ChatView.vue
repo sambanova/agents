@@ -71,11 +71,13 @@
             :key="msgItem.conversation_id || msgItem.message_id || msgItem.timestamp || Math.random()"
             :event="msgItem.event || 'unknown'"
             :data="formatMessageData(msgItem)"
-            :messageId="msgItem.message_id || msgItem.messageId || ''"
-            :provider="provider"
-            :currentMsgId="currentMsgId || ''"
+            :messageId="msgItem.message_id || msgItem.messageId || msgItem.id"
             :streamingEvents="msgItem.type === 'streaming_group' ? msgItem.events : null"
+            :sidebarOpen="showDaytonaSidebar"
+            @open-daytona-sidebar="handleOpenDaytonaSidebar"
+            @open-artifact-canvas="handleOpenArtifactCanvas"
           />
+          
           <ChatLoaderBubble
             :workflowData="
               workflowData.filter((item) => item.message_id === currentMsgId)
@@ -91,10 +93,28 @@
             :provider="provider"
             :messageId="currentMsgId"
           />
-
+          
+          <LoadingText v-if="isLoading" />
+          
           <!-- End Chat Bubble -->
         </transition-group>
       </div>
+
+      <!-- Single Daytona Sidebar at ChatView level (persistent across messages) -->
+      <DaytonaSidebar 
+        :isOpen="showDaytonaSidebar"
+        :streamingEvents="currentDaytonaEvents"
+        @close="closeDaytonaSidebar"
+        @expand-chart="openArtifact"
+        @sidebar-state-changed="emit('daytona-sidebar-state-changed', $event)"
+      />
+      
+      <!-- Artifact Canvas Modal (fallback for non-Daytona artifacts) -->
+      <ArtifactCanvas 
+        :isOpen="showArtifactCanvas"
+        :artifact="selectedArtifact"
+        @close="closeArtifactCanvas"
+      />
 
       <!-- Documents Section -->
       <div class="sticky z-1000 bottom-0 left-0 right-0 bg-white p-2">
@@ -435,6 +455,8 @@ import { XMarkIcon } from '@heroicons/vue/24/outline';
 import HorizontalScroll from '@/components/Common/UIComponents/HorizontalScroll.vue';
 import emitterMitt from '@/utils/eventBus.js';
 import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue';
+import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue';
+import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue';
 
 // Inject the shared selectedOption from MainLayout.vue.
 const selectedOption = inject('selectedOption');
@@ -554,6 +576,7 @@ const emit = defineEmits([
   'searchError',
   'openSettings',
   'agentThoughtsDataChanged',
+  'daytona-sidebar-state-changed',
 ]);
 const props = defineProps({
   conversationId: {
@@ -601,6 +624,13 @@ watch(
       searchQuery.value = '';
       chatName.value = '';
       isLoading.value = false;
+      
+      // Reset sidebar state when switching conversations
+      showDaytonaSidebar.value = false;
+      currentDaytonaEvents.value = [];
+      showArtifactCanvas.value = false;
+      selectedArtifact.value = null;
+      daytonaSidebarClosed.value = false; // Reset manual close flag for new conversation
 
       // Load new conversation data
       if (newId) {
@@ -2127,6 +2157,111 @@ const filteredMessages = computed(() => {
     return messagesData.value || [];
   }
 });
+
+// Single Daytona sidebar state management (moved from ChatBubble)
+const showDaytonaSidebar = ref(false)
+const currentDaytonaEvents = ref([])
+const daytonaSidebarClosed = ref(false) // Track if user manually closed it
+
+// Artifact canvas state
+const showArtifactCanvas = ref(false)
+const selectedArtifact = ref(null)
+
+// Functions for managing the single DaytonaSidebar
+function closeDaytonaSidebar() {
+  showDaytonaSidebar.value = false
+  daytonaSidebarClosed.value = true // Mark as manually closed
+}
+
+function handleOpenDaytonaSidebar(specificEvents = null) {
+  console.log('Opening Daytona sidebar...')
+  showDaytonaSidebar.value = true
+  daytonaSidebarClosed.value = false
+  
+  // Use specific events if provided, otherwise collect all events
+  if (specificEvents && specificEvents.length > 0) {
+    console.log('Using specific events for this message:', specificEvents.length)
+    currentDaytonaEvents.value = specificEvents
+  } else {
+    console.log('No specific events provided, collecting all events')
+    updateCurrentDaytonaEvents()
+  }
+  console.log('Current Daytona events:', currentDaytonaEvents.value.length)
+}
+
+function handleOpenArtifactCanvas(artifact) {
+  openArtifact(artifact)
+}
+
+function openArtifact(artifact) {
+  selectedArtifact.value = artifact
+  showArtifactCanvas.value = true
+}
+
+function closeArtifactCanvas() {
+  showArtifactCanvas.value = false
+  selectedArtifact.value = null
+}
+
+// Watch for Daytona activity across all messages and manage single sidebar
+const isDaytonaActiveGlobal = computed(() => {
+  return filteredMessages.value.some(msg => {
+    if (msg.type === 'streaming_group' && msg.events) {
+      return msg.events.some(event => {
+        // Check for Daytona tool calls in streaming content
+        if (event.event === 'llm_stream_chunk' && event.data?.content) {
+          return event.data.content.includes('<tool>DaytonaCodeSandbox</tool>')
+        }
+        
+        // Check for Daytona tool results
+        if (event.event === 'agent_completion' && event.data?.name === 'DaytonaCodeSandbox') {
+          return true
+        }
+        
+        // Check our custom flag for loaded conversations
+        if (event.isDaytonaRelated) {
+          return true
+        }
+        
+        return false
+      })
+    }
+    return false
+  })
+})
+
+// Watch for Daytona activity and automatically open sidebar
+watch(isDaytonaActiveGlobal, (isActive) => {
+  if (isActive && !daytonaSidebarClosed.value) {
+    showDaytonaSidebar.value = true
+    updateCurrentDaytonaEvents()
+    // Close artifact canvas if it's open since we're using sidebar now
+    showArtifactCanvas.value = false
+  }
+})
+
+// Also watch filteredMessages to update Daytona events when new messages arrive
+watch(filteredMessages, () => {
+  if (showDaytonaSidebar.value) {
+    updateCurrentDaytonaEvents()
+  }
+}, { deep: true })
+
+// Function to collect all Daytona-related events from all messages
+function updateCurrentDaytonaEvents() {
+  const allDaytonaEvents = []
+  filteredMessages.value.forEach(msg => {
+    if (msg.type === 'streaming_group' && msg.events) {
+      const daytonaEvents = msg.events.filter(event => {
+        return (event.event === 'llm_stream_chunk' && event.data?.content?.includes('DaytonaCodeSandbox')) ||
+               (event.event === 'agent_completion' && event.data?.name === 'DaytonaCodeSandbox') ||
+               event.isDaytonaRelated
+      })
+      allDaytonaEvents.push(...daytonaEvents)
+    }
+  })
+  currentDaytonaEvents.value = allDaytonaEvents
+}
 </script>
 
 <style scoped>

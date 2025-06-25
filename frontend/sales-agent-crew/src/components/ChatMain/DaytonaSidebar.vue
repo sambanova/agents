@@ -522,7 +522,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'expand-chart', 'expand-artifact'])
+const emit = defineEmits(['close', 'expand-chart', 'expand-artifact', 'sidebar-state-changed'])
 
 // Reactive state
 const isCollapsed = ref(false)
@@ -1274,6 +1274,25 @@ onMounted(() => {
   if (props.streamingEvents && props.streamingEvents.length > 0) {
     console.log('DaytonaSidebar: Processing existing streaming events on mount:', props.streamingEvents.length);
     processStreamingEvents(props.streamingEvents);
+  }
+})
+
+// Watch for sidebar open/close state changes and emit to parent
+watch(() => props.isOpen, (newState) => {
+  emit('sidebar-state-changed', { 
+    isOpen: newState, 
+    isCollapsed: isCollapsed.value,
+    width: newState ? (isCollapsed.value ? 64 : '50%') : 0
+  })
+}, { immediate: true })
+
+watch(isCollapsed, (newCollapsed) => {
+  if (props.isOpen) {
+    emit('sidebar-state-changed', { 
+      isOpen: props.isOpen, 
+      isCollapsed: newCollapsed,
+      width: newCollapsed ? 64 : '50%'
+    })
   }
 })
 </script>

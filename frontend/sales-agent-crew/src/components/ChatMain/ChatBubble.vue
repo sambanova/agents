@@ -334,25 +334,12 @@
       </div>
     </li>
 
-    <!-- Daytona Sidebar (replaces Artifact Canvas for Daytona operations) -->
-    <DaytonaSidebar 
-      :isOpen="showDaytonaSidebar"
-      :streamingEvents="streamingEvents"
-      @close="closeDaytonaSidebar"
-      @expand-chart="openArtifact"
-    />
-    
-    <!-- Artifact Canvas Modal (fallback for non-Daytona artifacts) -->
-    <ArtifactCanvas 
-      :isOpen="showArtifactCanvas"
-      :artifact="selectedArtifact"
-      @close="closeArtifactCanvas"
-    />
+    <!-- Daytona Sidebar and Artifact Canvas now managed at ChatView level -->
   </div>
 </template>
   
   <script setup>
-  import { computed, defineProps, ref,watch,nextTick, provide } from 'vue'
+  import { computed, defineProps, ref,watch,nextTick, provide, defineEmits } from 'vue'
   
   import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
   import AssistantComponent from '@/components/ChatMain/ResponseTypes/AssistantComponent.vue'
@@ -363,8 +350,6 @@
   import FinancialAnalysisComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisComponent.vue'
   import DeepResearchComponent from '@/components/ChatMain/ResponseTypes//DeepResearchComponent.vue'
   import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue'
-  import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue'
-  import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue'
   import AssistantEndComponent from '@/components/ChatMain/ResponseTypes/AssistantEndComponent.vue'
   import FinancialAnalysisEndComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisEndComponent.vue'
   import SalesLeadsEndComponent from '@/components/ChatMain/ResponseTypes/SalesLeadsEndComponent.vue'
@@ -459,9 +444,20 @@ import {
   isLoading: {
     type: Boolean,
     default: false
+  },
+  
+  sidebarOpen: {
+    type: Boolean,
+    default: false
   }
   
   })
+  
+  // Sidebar management moved to ChatView level
+  
+  // Define emits for communicating with parent ChatView
+  const emit = defineEmits(['open-daytona-sidebar', 'open-artifact-canvas'])
+  
   const presentMetadata = computed(() => {
 
 
@@ -543,80 +539,21 @@ function toggleAuditLog() {
   showAuditLog.value = !showAuditLog.value
 }
 
-const selectedArtifact = ref(null)
-const showArtifactCanvas = ref(false)
-const showDaytonaSidebar = ref(false)
-const daytonaSidebarClosed = ref(false) // Track if user manually closed it
+// Sidebar state now managed at ChatView level
 
+// Functions to communicate with ChatView for sidebar control
 function openArtifact(artifact) {
-  // For Daytona charts, create a simple image viewer instead of using ArtifactCanvas
-  if (artifact && artifact.url && (artifact.url.includes('/api/files/') || artifact.url.startsWith('data:image/'))) {
-    // Create a simple image modal overlay
-    const modal = document.createElement('div')
-    modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75'
-    modal.style.zIndex = '9999'
-    
-    const container = document.createElement('div')
-    container.className = 'relative max-w-5xl max-h-[90vh] p-4'
-    
-    const img = document.createElement('img')
-    img.src = artifact.url
-    img.alt = artifact.title || 'Chart'
-    img.className = 'max-w-full max-h-full object-contain rounded-lg shadow-2xl'
-    
-    const closeBtn = document.createElement('button')
-    closeBtn.innerHTML = '×'
-    closeBtn.className = 'absolute top-2 right-2 text-white text-4xl hover:bg-white hover:bg-opacity-20 rounded-full w-12 h-12 flex items-center justify-center transition-colors'
-    
-    const title = document.createElement('div')
-    title.textContent = artifact.title || 'Chart'
-    title.className = 'absolute bottom-4 left-4 text-white bg-black bg-opacity-50 px-3 py-2 rounded-lg text-sm font-medium'
-    
-    container.appendChild(img)
-    container.appendChild(closeBtn)
-    container.appendChild(title)
-    modal.appendChild(container)
-    
-    // Close handlers
-    const closeModal = () => {
-      document.body.removeChild(modal)
-      document.removeEventListener('keydown', handleEscape)
-    }
-    
-    const handleEscape = (e) => {
-      if (e.key === 'Escape') closeModal()
-    }
-    
-    closeBtn.addEventListener('click', closeModal)
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) closeModal()
-    })
-    document.addEventListener('keydown', handleEscape)
-    
-    document.body.appendChild(modal)
-  } else {
-    // Fallback to original ArtifactCanvas for other types
-    selectedArtifact.value = artifact
-    showArtifactCanvas.value = true
-  }
-}
-
-function closeArtifactCanvas() {
-  showArtifactCanvas.value = false
-  selectedArtifact.value = null
-}
-
-function closeDaytonaSidebar() {
-  showDaytonaSidebar.value = false
-  daytonaSidebarClosed.value = true // Mark as manually closed
+  emit('open-artifact-canvas', artifact)
 }
 
 function reopenDaytonaSidebar() {
-  showDaytonaSidebar.value = true
-  daytonaSidebarClosed.value = false
+  console.log('ChatBubble: Reopening Daytona sidebar, emitting event...')
+  // Pass the specific streaming events from this message
+  emit('open-daytona-sidebar', props.streamingEvents)
+  console.log('ChatBubble: Event emitted')
 }
 
-// Detect Daytona usage and automatically open sidebar - ENHANCED FOR LOADED CONVERSATIONS
+// Detect Daytona usage for showing controls - ENHANCED FOR LOADED CONVERSATIONS
 const isDaytonaActive = computed(() => {
   if (!props.streamingEvents || !Array.isArray(props.streamingEvents)) {
     // For loaded conversations, check if any workflow data indicates Daytona usage
@@ -650,673 +587,37 @@ const isDaytonaActive = computed(() => {
   })
 })
 
-// Watch for Daytona activity and automatically open sidebar
-watch(isDaytonaActive, (isActive) => {
-  if (isActive && !daytonaSidebarClosed.value) {
-    showDaytonaSidebar.value = true
-    // Close artifact canvas if it's open since we're using sidebar now
-    showArtifactCanvas.value = false
-  }
-})
-
-// Advanced streaming parsing and status
-const currentStreamingStatus = computed(() => {
-  if (!props.streamingEvents || props.streamingEvents.length === 0) {
-    // For loaded conversations, show completion status if we have workflow data
-    if (props.workflowData && props.workflowData.length > 0) {
-      return '✅ Response complete';
-    }
-    return '⏳ Starting...';
-  }
+// Get artifacts for display (keeping the existing computed property)
+const artifacts = computed(() => {
+  if (!props.streamingEvents) return []
   
-  const events = props.streamingEvents
-  let currentTool = null
-  let toolQuery = null
-  
-  // Process events chronologically to find the LATEST completion status
-  let latestCompletionStatus = null
-  
-  for (let i = 0; i < events.length; i++) {
-    const event = events[i]
-    const data = event.data
-    
-    // Detect LangGraph subgraph invocation (react_subgraph agent type)
-    if (event.event === 'agent_completion' &&
-        (data.agent_type === 'react_subgraph' || data?.additional_kwargs?.agent_type === 'react_subgraph') &&
-        typeof data.content === 'string' && data.content.includes('<subgraph>')) {
-      const sgMatch = data.content.match(/<subgraph>([^<]+)<\/subgraph>/)
-      const inputMatch = data.content.match(/<subgraph_input>([^<]+)/)
-      if (sgMatch) {
-        const sgNameRaw = sgMatch[1]
-        const sgName = sgNameRaw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-        const query = inputMatch ? inputMatch[1].trim() : null
-        return `🤖 Calling ${sgName} Agent${query ? ' with: "' + query + '"' : ''}`
-      }
-    }
-    
-    // Track current tool calls
-    if (event.event === 'llm_stream_chunk' && data.content && data.content.includes('<tool>')) {
-      const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
-      const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
-      
-      if (toolMatch) {
-        currentTool = toolMatch[1]
-        toolQuery = inputMatch ? inputMatch[1].trim() : null
-      }
-    }
-    
-    // Update latest completion status when we find tool results
-    if (event.event === 'agent_completion' && data.type === 'LiberalFunctionMessage' && data.name) {
-      if (data.name === 'search_tavily' && Array.isArray(data.content)) {
-        const resultCount = data.content.length
-        const sources = data.content.slice(0, 3)
-        const sourceNames = sources.map(source => {
-          if (source.title && source.title.trim()) {
-            return source.title.trim()
-          } else if (source.url) {
-            try {
-              return new URL(source.url).hostname.replace('www.', '')
-            } catch {
-              return source.url
-            }
-          }
-          return 'Unknown source'
-        })
-        
-        let status = `✅ Found ${resultCount} web sources`
-        if (sourceNames.length > 0) {
-          status += `\n• ${sourceNames.join('\n• ')}`
-          if (resultCount > 3) status += `\n• and ${resultCount - 3} more...`
-        }
-        latestCompletionStatus = status
-      } else if (data.name === 'arxiv') {
-        const papers = data.content && data.content.includes('Title:') ? 
-          data.content.split('Title:').length - 1 : 1
-        
-        const titleMatches = data.content.match(/Title: ([^\n]+)/g)
-        let status = `✅ Found ${papers} arXiv papers`
-        if (titleMatches) {
-          const titles = titleMatches.slice(0, 2).map(t => t.replace('Title: ', '').trim())
-          status += `\n• ${titles.join('\n• ')}`
-          if (titleMatches.length > 2) status += `\n• and ${titleMatches.length - 2} more...`
-        }
-        latestCompletionStatus = status
-      } else if (data.name === 'DaytonaCodeSandbox') {
-        latestCompletionStatus = `✅ Code execution complete\n• Generated charts and analysis`
-      }
-    }
-  }
-  
-  // Return latest completion status if we have one
-  if (latestCompletionStatus) {
-    return latestCompletionStatus
-  }
-  
-  // Check if we're streaming response
-  for (let i = events.length - 1; i >= 0; i--) {
-    const event = events[i]
-    const data = event.data
-    
-    if (event.event === 'llm_stream_chunk' && 
-        data.content && 
-        data.content.trim() && 
-        !data.content.includes('<tool>')) {
-      return '📝 Streaming response...'
-    }
-  }
-  
-  // Return current tool status if we have one and no completion
-  if (currentTool) {
-    if (currentTool === 'search_tavily') {
-      return `🔍 Searching web: "${toolQuery || 'query'}"`
-    } else if (currentTool === 'arxiv') {
-      return `📚 Searching arXiv: "${toolQuery || 'query'}"`
-    } else if (currentTool === 'DaytonaCodeSandbox') {
-      return `⚡ Executing code in sandbox`
-    } else {
-      return `🔧 Using ${currentTool.replace('_', ' ')}: "${toolQuery || 'executing'}"`
-    }
-  }
-  
-  // Check if we're done - include all completion agent types
-  const lastEvent = events[events.length - 1]
-  const lastAgentType = getAgentType(lastEvent)
-  if (lastEvent?.event === 'stream_complete' || 
-      (lastEvent?.event === 'agent_completion' && 
-       (lastAgentType === 'react_end' || 
-        lastAgentType === 'financial_analysis_end' || 
-        lastAgentType === 'sales_leads_end'))) {
-    return '✅ Response complete'
-  }
-  
-  return '💭 Processing...'
-})
-
-const currentStatusDot = computed(() => {
-  const status = currentStreamingStatus.value
-  if (status.includes('✅')) return 'bg-green-500'
-  if (status.includes('🔍') || status.includes('📚') || status.includes('⚡')) return 'bg-purple-500 animate-pulse'
-  if (status.includes('📝')) return 'bg-blue-500 animate-pulse'
-  if (status.includes('💭')) return 'bg-yellow-500 animate-pulse'
-  return 'bg-gray-500 animate-pulse'
-})
-
-// Show spinning gear animation when tools are actively running
-const showStatusAnimation = computed(() => {
-  if (!props.streamingEvents || props.streamingEvents.length === 0) return false
-  
-  const status = currentStreamingStatus.value
-  // Show animation when we're searching, executing, or processing (not when complete)
-  return status.includes('🔍') || status.includes('📚') || status.includes('⚡') || 
-         status.includes('💭') || status.includes('Processing')
-})
-
-// Show bouncing dots for searching operations
-const showSearchingAnimation = computed(() => {
-  if (!props.streamingEvents || props.streamingEvents.length === 0) return false
-  
-  const status = currentStreamingStatus.value
-  // Show bouncing dots specifically for search operations
-  return status.includes('🔍 Searching') || status.includes('📚 Searching')
-})
-
-const isCurrentlyStreaming = computed(() => {
-  if (!props.streamingEvents || props.streamingEvents.length === 0) return true
-  
-  const lastEvent = props.streamingEvents[props.streamingEvents.length - 1]
-  const lastAgentType = getAgentType(lastEvent)
-  return lastEvent.event !== 'stream_complete' && 
-         !(lastEvent.event === 'agent_completion' && 
-           (lastAgentType === 'react_end' || 
-            lastAgentType === 'financial_analysis_end' || 
-            lastAgentType === 'sales_leads_end'))
-})
-
-const hasCompletedEvents = computed(() => {
-  if (!props.streamingEvents || props.streamingEvents.length === 0) {
-    // For loaded conversations, check if we have any tool-related or completion events
-    if (props.workflowData && props.workflowData.length > 0) return true;
-    if (props.metadata && Object.keys(props.metadata).length > 0) return true;
-    return false;
-  }
-  
-  // Check for any completed tool executions, final responses, or tool-related events
-  return props.streamingEvents.some(event => 
-    (event.event === 'agent_completion' && event.data.type === 'LiberalFunctionMessage') ||
-    (event.event === 'agent_completion' && event.data.name === 'DaytonaCodeSandbox') ||
-    (event.event === 'agent_completion' && event.data.name === 'search_tavily') ||
-    (event.event === 'agent_completion' && event.data.name === 'arxiv') ||
-    (event.event === 'stream_complete') ||
-    (event.event === 'agent_completion' && event.data.agent_type === 'react_end') ||
-    (event.isToolRelated || event.isDaytonaRelated) || // Check our custom flags
-    event.event === 'agent_completion' || event.event === 'stream_complete'
-  )
-})
-
-// Check if we're currently streaming the LLM response (not tools)
-const isStreamingResponse = computed(() => {
-  if (!props.streamingEvents || props.streamingEvents.length === 0) return false
-  
-  const events = props.streamingEvents
-  
-  // Check if we have completed tool execution AND have LLM response content
-  const hasCompletedTools = events.some(event => 
-    event.event === 'agent_completion' && 
-    event.data.type === 'LiberalFunctionMessage'
-  )
-  
-  const hasResponseContent = events.some(event => 
-    event.event === 'llm_stream_chunk' && 
-    event.data.content && 
-    !event.data.content.includes('<tool>')
-  )
-  
-  // We're in "streaming response" mode if tools are done and we have response content
-  return hasCompletedTools && hasResponseContent
-})
-
-// Summary for when we've moved to response streaming - ENHANCED FOR LOADED CONVERSATIONS
-const finalStatusSummary = computed(() => {
-  if (!props.streamingEvents || props.streamingEvents.length === 0) {
-    
-    // For loaded conversations, generate summary from workflow data
-    if (props.workflowData && props.workflowData.length > 0) {
-      const completedTasks = props.workflowData.map(workflow => {
-        if (workflow.tool_name === 'DaytonaCodeSandbox' || workflow.task === 'code_execution') {
-          return 'Code execution complete';
-        } else if (workflow.tool_name === 'search_tavily' || workflow.task === 'web_search') {
-          return 'Web search complete';
-        } else if (workflow.tool_name === 'arxiv' || workflow.task === 'arxiv_search') {
-          return 'arXiv search complete';
-        } else {
-          return `${workflow.agent_name || 'Task'} complete`;
-        }
-      });
-      
-      if (completedTasks.length > 0) {
-        return `✅ ${completedTasks.join(' • ')}`;
-      }
-    }
-    return 'Details';
-  }
-  
-  let completedTools = []
+  const charts = []
   
   props.streamingEvents.forEach(event => {
     if (event.event === 'agent_completion' && 
-        event.data.type === 'LiberalFunctionMessage' && 
-        event.data.name) {
+        event.data.name === 'DaytonaCodeSandbox' &&
+        event.data.content) {
       
-      if (event.data.name === 'search_tavily' && Array.isArray(event.data.content)) {
-        completedTools.push(`Found ${event.data.content.length} web sources`)
-      } else if (event.data.name === 'arxiv') {
-        const papers = event.data.content && event.data.content.includes('Title:') ? 
-          event.data.content.split('Title:').length - 1 : 1
-        completedTools.push(`Found ${papers} arXiv papers`)
-      } else if (event.data.name === 'DaytonaCodeSandbox') {
-        completedTools.push('Code execution complete')
+      const content = event.data.content
+      const chartMatches = content.match(/!\[Chart \d+\]\(attachment:([^)]+)\)/g)
+      
+      if (chartMatches) {
+        chartMatches.forEach((match, index) => {
+          const idMatch = match.match(/attachment:([^)]+)/)
+          if (idMatch) {
+            charts.push({
+              id: idMatch[1],
+              title: `Chart ${index + 1}`,
+              type: 'chart',
+              details: 'Generated from data analysis'
+            })
+          }
+        })
       }
     }
   })
   
-  if (completedTools.length > 0) {
-    return `✅ ${completedTools.join(' • ')}`
-  }
-  
-  return 'Details'
-})
-
-// Comprehensive audit log with filtered meaningful events - ENHANCED FOR LOADED CONVERSATIONS
-const auditLogEvents = computed(() => {
-  
-  
-  if (!props.streamingEvents || props.streamingEvents.length === 0) {
-    // For loaded conversations without streaming events, create synthetic audit log from workflow data
-    if (props.workflowData && props.workflowData.length > 0) {
-      console.log('Creating synthetic audit log from workflow data');
-      
-      // Deduplicate workflow data based on task and tool name
-      const uniqueWorkflows = [];
-      const seenWorkflowKeys = new Set();
-      
-      props.workflowData.forEach(workflow => {
-        const workflowKey = `${workflow.agent_name || 'Agent'}-${workflow.task || 'Task'}-${workflow.tool_name || 'NoTool'}`;
-        if (!seenWorkflowKeys.has(workflowKey)) {
-          seenWorkflowKeys.add(workflowKey);
-          uniqueWorkflows.push(workflow);
-        }
-      });
-      
-      return uniqueWorkflows.map((workflow, index) => ({
-        id: `synthetic-audit-${index}`,
-        title: `✅ ${workflow.agent_name || 'Agent'} - ${workflow.task || 'Task'}`,
-        details: workflow.tool_name ? `Tool: ${workflow.tool_name}` : 'Completed successfully',
-        subItems: [],
-        dotClass: workflow.task === 'code_execution' ? 'bg-purple-500' : 'bg-green-500',
-        type: 'tool_result',
-        event: 'workflow_item',
-        timestamp: new Date().toISOString(),
-        fullData: workflow
-      }));
-    }
-    return [];
-  }
-  
-  // First, deduplicate events to prevent duplicate audit log entries
-  const uniqueEvents = [];
-  const seenEventKeys = new Set();
-  
-  props.streamingEvents.forEach(event => {
-    // Create a unique key based on event content for deduplication
-    let eventKey = '';
-    
-    if (event.event === 'llm_stream_chunk' && event.data?.content?.includes('<tool>')) {
-      // For tool calls, use tool name + timestamp
-      const toolMatch = event.data.content.match(/<tool>([^<]+)<\/tool>/);
-      if (toolMatch) {
-        eventKey = `tool-${toolMatch[1]}-${event.data.timestamp || event.timestamp}`;
-      }
-    } else if (event.event === 'agent_completion' && event.data?.name) {
-      // For tool responses, use tool name + content hash for deduplication
-      const contentHash = event.data.content ? String(event.data.content).substring(0, 50) : '';
-      eventKey = `completion-${event.data.name}-${contentHash}`;
-    } else if (event.event === 'agent_completion' && event.data?.agent_type) {
-      // For other agent completions, use agent_type + timestamp
-      eventKey = `agent-${event.data.agent_type}-${event.data.timestamp || event.timestamp}`;
-    } else {
-      // For other events, use event type + timestamp
-      eventKey = `${event.event}-${event.data?.timestamp || event.timestamp}`;
-    }
-    
-    // Only add if we haven't seen this event key before
-    if (!seenEventKeys.has(eventKey)) {
-      seenEventKeys.add(eventKey);
-      uniqueEvents.push(event);
-    } else {
-      console.log(`Skipping duplicate audit log event: ${eventKey}`);
-    }
-  });
-  
-  return uniqueEvents
-    .filter(event => {
-      // Keep meaningful events, remove clutter - but include tool-related events
-      if (event.event === 'stream_start') return false
-      if (event.event === 'stream_complete') return false
-      if (event.event === 'agent_completion' && event.data.agent_type === 'human') return false
-      if (event.event === 'agent_completion' && event.data.agent_type === 'react_end') return false
-      if (event.event === 'llm_stream_chunk' && event.data.content && !event.data.content.includes('<tool>')) return false
-      
-      // Always include tool-related events
-      if (event.isToolRelated || event.isDaytonaRelated) return true
-      if (event.event === 'agent_completion' && (event.data.agent_type === 'react_tool' || event.data.agent_type === 'tool_response')) return true
-      if (event.event === 'agent_completion' && event.data.name) return true // Tool responses
-      
-      return true
-    })
-    .map((event, index) => {
-      const data = event.data
-      let title = ''
-      let details = ''
-      let dotClass = 'bg-gray-400'
-      let type = 'info'
-      let subItems = []
-      
-      switch (event.event) {
-        case 'llm_stream_chunk':
-          if (data.content && data.content.includes('<tool>')) {
-            const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
-            // Fixed regex to handle missing closing tag
-            const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
-            
-            if (toolMatch) {
-              const tool = toolMatch[1]
-              const query = inputMatch ? inputMatch[1].trim() : 'No query'
-              
-              if (tool === 'search_tavily') {
-                title = `🔍 Search Tavily`
-                details = `Query: "${query}"`
-              } else if (tool === 'arxiv') {
-                title = `📚 Search arXiv`
-                details = `Query: "${query}"`
-              } else if (tool === 'DaytonaCodeSandbox') {
-                title = `⚡ Execute Code`
-                details = 'Running analysis in sandbox'
-              } else {
-                title = `🔧 ${tool.replace('_', ' ')}`
-                details = `Query: "${query}"`
-              }
-              dotClass = 'bg-purple-500'
-              type = 'tool_call'
-            }
-          }
-          break
-          
-        case 'agent_completion':
-          // Handle both real-time and persistence cases for tool responses
-          if (data.type === 'LiberalFunctionMessage' && data.name) {
-            if (data.name === 'search_tavily') {
-              let sourcesArray = []
-              
-              // Parse sources from different possible formats
-              if (Array.isArray(data.content)) {
-                sourcesArray = data.content
-              } else if (typeof data.content === 'string') {
-                sourcesArray = parsePythonStyleJSON(data.content)
-                if (!Array.isArray(sourcesArray)) {
-                  sourcesArray = []
-                }
-              }
-              
-              if (sourcesArray.length > 0) {
-                title = `✅ Found ${sourcesArray.length} web sources`
-                
-                // Extract actual domains/titles from sources for sub-bullets
-                subItems = sourcesArray.slice(0, 5).map((source, idx) => {
-                  let displayTitle = 'Unknown Source'
-                  let domain = ''
-                  
-                  if (source.title && source.title.trim()) {
-                    displayTitle = source.title.trim()
-                  } else if (source.url) {
-                    try {
-                      const url = new URL(source.url)
-                      domain = url.hostname.replace('www.', '')
-                      displayTitle = domain
-                    } catch {
-                      displayTitle = source.url
-                    }
-                  }
-                  
-                  if (source.url) {
-                    try {
-                      domain = new URL(source.url).hostname.replace('www.', '')
-                    } catch {
-                      domain = 'web'
-                    }
-                  }
-                  
-                  return {
-                    id: `source-${idx}`,
-                    title: displayTitle,
-                    domain: domain
-                  }
-                })
-                
-                // Keep the old details for backward compatibility
-                const sourceNames = subItems.slice(0, 3).map(item => item.title)
-                details = sourceNames.join(', ')
-                if (sourcesArray.length > 3) details += `, and ${sourcesArray.length - 3} more...`
-                
-                dotClass = 'bg-green-500'
-                type = 'tool_result'
-              } else {
-                // Fallback if no sources found
-                title = `✅ Search Tavily completed`
-                details = 'No sources returned'
-                dotClass = 'bg-yellow-500'
-                type = 'tool_result'
-              }
-            } else if (data.name === 'arxiv') {
-              const papers = data.content && data.content.includes('Title:') ? 
-                data.content.split('Title:').length - 1 : 1
-              title = `✅ Found ${papers} arXiv papers`
-              
-              // Extract paper titles for sub-bullets with deduplication
-              const titleMatches = data.content.match(/Title: ([^\n]+)/g)
-              
-              if (titleMatches) {
-                // Deduplicate papers by title
-                const uniqueTitles = [...new Set(titleMatches.map(t => t.replace('Title: ', '').trim()))]
-                
-                details = uniqueTitles.slice(0, 2).join(', ')
-                if (uniqueTitles.length > 2) details += `, and ${uniqueTitles.length - 2} more...`
-                
-                subItems = uniqueTitles.slice(0, 5).map((title, idx) => ({
-                  id: `paper-${idx}`,
-                  title: title,
-                  domain: 'arxiv.org'
-                }))
-              }
-              
-              dotClass = 'bg-green-500'
-              type = 'tool_result'
-            } else if (data.name === 'DaytonaCodeSandbox') {
-              title = `✅ Code execution complete`
-              details = 'Generated charts and analysis'
-              dotClass = 'bg-green-500'
-              type = 'tool_result'
-            }
-          }
-          // ENHANCED: Handle tool calls from agent_completion (for persistence)
-          else if (data.agent_type === 'react_tool' && data.content && typeof data.content === 'string' && data.content.includes('<tool>')) {
-            const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
-            const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
-            
-            if (toolMatch) {
-              const tool = toolMatch[1]
-              const query = inputMatch ? inputMatch[1].trim() : 'No query'
-              
-              if (tool === 'search_tavily') {
-                title = `🔍 Search Tavily`
-                details = `Query: "${query}"`
-              } else if (tool === 'arxiv') {
-                title = `📚 Search arXiv`
-                details = `Query: "${query}"`
-              } else if (tool === 'DaytonaCodeSandbox') {
-                title = `⚡ Execute Code`
-                details = 'Running analysis in sandbox'
-              } else {
-                title = `🔧 ${tool.replace('_', ' ')}`
-                details = `Query: "${query}"`
-              }
-              dotClass = 'bg-purple-500'
-              type = 'tool_call'
-            }
-          }
-          // Handle tool responses from agent_completion (for persistence) - ENHANCED FOR TAVILY
-          else if (data.agent_type === 'tool_response' && data.content) {
-            // This handles the case where tool responses are stored as agent_completion with agent_type: 'tool_response'
-            let sourcesArray = []
-            
-            if (typeof data.content === 'string') {
-              sourcesArray = parsePythonStyleJSON(data.content)
-              if (!Array.isArray(sourcesArray)) {
-                sourcesArray = []
-              }
-            }
-            
-            if (sourcesArray.length > 0) {
-              title = `✅ Found ${sourcesArray.length} web sources`
-              
-              // Extract actual domains/titles from sources for sub-bullets
-              subItems = sourcesArray.slice(0, 5).map((source, idx) => {
-                let displayTitle = 'Unknown Source'
-                let domain = ''
-                
-                if (source.title && source.title.trim()) {
-                  displayTitle = source.title.trim()
-                } else if (source.url) {
-                  try {
-                    const url = new URL(source.url)
-                    domain = url.hostname.replace('www.', '')
-                    displayTitle = domain
-                  } catch {
-                    displayTitle = source.url
-                  }
-                }
-                
-                if (source.url) {
-                  try {
-                    domain = new URL(source.url).hostname.replace('www.', '')
-                  } catch {
-                    domain = 'web'
-                  }
-                }
-                
-                return {
-                  id: `source-${idx}`,
-                  title: displayTitle,
-                  domain: domain
-                }
-              })
-              
-              const sourceNames = subItems.slice(0, 3).map(item => item.title)
-              details = sourceNames.join(', ')
-              if (sourcesArray.length > 3) details += `, and ${sourcesArray.length - 3} more...`
-              
-              dotClass = 'bg-green-500'
-              type = 'tool_result'
-            }
-          }
-          // CRITICAL FIX: Handle LiberalFunctionMessage that might not have name but has search_tavily data
-          else if (data.type === 'LiberalFunctionMessage' && !data.name && data.content && typeof data.content === 'string') {
-            // Check if this is a search_tavily response based on content structure
-            const contentArray = parsePythonStyleJSON(data.content)
-            if (Array.isArray(contentArray) && contentArray.length > 0 && contentArray[0]?.url) {
-              // This looks like a search result
-              title = `✅ Found ${contentArray.length} web sources`
-              
-              subItems = contentArray.slice(0, 5).map((source, idx) => {
-                let displayTitle = 'Unknown Source'
-                let domain = ''
-                
-                if (source.title && source.title.trim()) {
-                  displayTitle = source.title.trim()
-                } else if (source.url) {
-                  try {
-                    const url = new URL(source.url)
-                    domain = url.hostname.replace('www.', '')
-                    displayTitle = domain
-                  } catch {
-                    displayTitle = source.url
-                  }
-                }
-                
-                if (source.url) {
-                  try {
-                    domain = new URL(source.url).hostname.replace('www.', '')
-                  } catch {
-                    domain = 'web'
-                  }
-                }
-                
-                return {
-                  id: `source-${idx}`,
-                  title: displayTitle,
-                  domain: domain
-                }
-              })
-              
-              const sourceNames = subItems.slice(0, 3).map(item => item.title)
-              details = sourceNames.join(', ')
-              if (contentArray.length > 3) details += `, and ${contentArray.length - 3} more...`
-              
-              dotClass = 'bg-green-500'
-              type = 'tool_result'
-            }
-          }
-          break
-      }
-      
-      return {
-        id: `audit-${index}`,
-        title,
-        details,
-        subItems,
-        dotClass,
-        type,
-        event: event.event,
-        timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
-        fullData: data
-      }
-    })
-    .filter(event => event.title) // Only include events with titles
-    // ------------------------------------------------------------
-    // 🆕 2️⃣  Append workflow-based events so model metadata / counts
-    //      are ALWAYS included in the comprehensive audit log.
-    // ------------------------------------------------------------
-    .concat(
-      (() => {
-        if (!props.workflowData || props.workflowData.length === 0) return []
-        // Deduplicate by llm_name + task
-        const seen = new Set()
-        return props.workflowData.map((wf, i) => {
-          const key = `${wf.llm_name || 'model'}-${wf.task || 'task'}`
-          if (seen.has(key)) return null
-          seen.add(key)
-          return {
-            id: `wf-${key}-${i}`,
-            title: `🤖 ${wf.agent_name || getTextAfterLastSlash(wf.llm_name)}`,
-            details: `${wf.task || 'call'} (${wf.count || 1}×, ${wf.duration ? formattedDuration(wf.duration)+'s' : 'in-flight'})`,
-            dotClass: 'bg-indigo-500',
-            type: 'model_usage',
-            event: 'workflow_item',
-            timestamp: new Date().toISOString(),
-            fullData: wf
-          }
-        }).filter(Boolean)
-      })()
-    )
+  return charts
 })
 
 // Extract streaming response content with better parsing
@@ -1568,38 +869,6 @@ const hasArtifacts = computed(() => {
     event.data.content &&
     event.data.content.includes('![Chart')
   )
-})
-
-const artifacts = computed(() => {
-  if (!props.streamingEvents) return []
-  
-  const charts = []
-  
-  props.streamingEvents.forEach(event => {
-    if (event.event === 'agent_completion' && 
-        event.data.name === 'DaytonaCodeSandbox' &&
-        event.data.content) {
-      
-      const content = event.data.content
-      const chartMatches = content.match(/!\[Chart \d+\]\(attachment:([^)]+)\)/g)
-      
-      if (chartMatches) {
-        chartMatches.forEach((match, index) => {
-          const idMatch = match.match(/attachment:([^)]+)/)
-          if (idMatch) {
-            charts.push({
-              id: idMatch[1],
-              title: `Chart ${index + 1}`,
-              type: 'chart',
-              details: 'Generated from data analysis'
-            })
-          }
-        })
-      }
-    }
-  })
-  
-  return charts
 })
 
 // Modal state for artifact display already defined below
@@ -1945,6 +1214,299 @@ const showBubble = computed(() => {
 
   return true
 })
+
+// Sidebar state management moved to ChatView level
+
+ // Track if the sidebar should be shown (controlled by parent ChatView)
+ const showDaytonaSidebar = computed(() => {
+   return props.sidebarOpen
+   })
+
+// Streaming status and audit log properties that were accidentally removed
+const currentStreamingStatus = computed(() => {
+  if (!props.streamingEvents || props.streamingEvents.length === 0) {
+    // For loaded conversations, show completion status if we have workflow data
+    if (props.workflowData && props.workflowData.length > 0) {
+      return '✅ Response complete';
+    }
+    return '⏳ Starting...';
+  }
+  
+  const events = props.streamingEvents
+  let currentTool = null
+  let toolQuery = null
+  
+  // Process events chronologically to find the LATEST completion status
+  let latestCompletionStatus = null
+  
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i]
+    const data = event.data
+    
+    // Track current tool calls
+    if (event.event === 'llm_stream_chunk' && data.content && data.content.includes('<tool>')) {
+      const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
+      const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
+      
+      if (toolMatch) {
+        currentTool = toolMatch[1]
+        toolQuery = inputMatch ? inputMatch[1].trim() : null
+      }
+    }
+    
+    // Update latest completion status when we find tool results
+    if (event.event === 'agent_completion' && data.type === 'LiberalFunctionMessage' && data.name) {
+      if (data.name === 'search_tavily' && Array.isArray(data.content)) {
+        const resultCount = data.content.length
+        latestCompletionStatus = `✅ Found ${resultCount} web sources`
+      } else if (data.name === 'arxiv') {
+        const papers = data.content && data.content.includes('Title:') ? 
+          data.content.split('Title:').length - 1 : 1
+        latestCompletionStatus = `✅ Found ${papers} arXiv papers`
+      } else if (data.name === 'DaytonaCodeSandbox') {
+        latestCompletionStatus = `✅ Code execution complete`
+      }
+    }
+  }
+  
+  // Return latest completion status if we have one
+  if (latestCompletionStatus) {
+    return latestCompletionStatus
+  }
+  
+  // Check if we're streaming response
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i]
+    const data = event.data
+    
+    if (event.event === 'llm_stream_chunk' && 
+        data.content && 
+        data.content.trim() && 
+        !data.content.includes('<tool>')) {
+      return '📝 Streaming response...'
+    }
+  }
+  
+  // Return current tool status if we have one and no completion
+  if (currentTool) {
+    if (currentTool === 'search_tavily') {
+      return `🔍 Searching web: "${toolQuery || 'query'}"`
+    } else if (currentTool === 'arxiv') {
+      return `📚 Searching arXiv: "${toolQuery || 'query'}"`
+    } else if (currentTool === 'DaytonaCodeSandbox') {
+      return `⚡ Executing code in sandbox`
+    } else {
+      return `🔧 Using ${currentTool.replace('_', ' ')}: "${toolQuery || 'executing'}"`
+    }
+  }
+  
+  // Check if we're done
+  const lastEvent = events[events.length - 1]
+  if (lastEvent?.event === 'stream_complete') {
+    return '✅ Response complete'
+  }
+  
+  return '💭 Processing...'
+})
+
+const isStreamingResponse = computed(() => {
+  if (!props.streamingEvents || props.streamingEvents.length === 0) return false
+  
+  const events = props.streamingEvents
+  
+  // Check if we have completed tool execution AND have LLM response content
+  const hasCompletedTools = events.some(event => 
+    event.event === 'agent_completion' && 
+    event.data.type === 'LiberalFunctionMessage'
+  )
+  
+  const hasResponseContent = events.some(event => 
+    event.event === 'llm_stream_chunk' && 
+    event.data.content && 
+    !event.data.content.includes('<tool>')
+  )
+  
+  // We're in "streaming response" mode if tools are done and we have response content
+  return hasCompletedTools && hasResponseContent
+})
+
+const finalStatusSummary = computed(() => {
+  if (!props.streamingEvents || props.streamingEvents.length === 0) {
+    // For loaded conversations, generate summary from workflow data
+    if (props.workflowData && props.workflowData.length > 0) {
+      const completedTasks = props.workflowData.map(workflow => {
+        if (workflow.tool_name === 'DaytonaCodeSandbox' || workflow.task === 'code_execution') {
+          return 'Code execution complete';
+        } else if (workflow.tool_name === 'search_tavily' || workflow.task === 'web_search') {
+          return 'Web search complete';
+        } else if (workflow.tool_name === 'arxiv' || workflow.task === 'arxiv_search') {
+          return 'arXiv search complete';
+        } else {
+          return `${workflow.agent_name || 'Task'} complete`;
+        }
+      });
+      
+      if (completedTasks.length > 0) {
+        return `✅ ${completedTasks.join(' • ')}`;
+      }
+    }
+    return 'Details';
+  }
+  
+  let completedTools = []
+  
+  props.streamingEvents.forEach(event => {
+    if (event.event === 'agent_completion' && 
+        event.data.type === 'LiberalFunctionMessage' && 
+        event.data.name) {
+      
+      if (event.data.name === 'search_tavily' && Array.isArray(event.data.content)) {
+        completedTools.push(`Found ${event.data.content.length} web sources`)
+      } else if (event.data.name === 'arxiv') {
+        const papers = event.data.content && event.data.content.includes('Title:') ? 
+          event.data.content.split('Title:').length - 1 : 1
+        completedTools.push(`Found ${papers} arXiv papers`)
+      } else if (event.data.name === 'DaytonaCodeSandbox') {
+        completedTools.push('Code execution complete')
+      }
+    }
+  })
+  
+  if (completedTools.length > 0) {
+    return `✅ ${completedTools.join(' • ')}`
+  }
+  
+  return 'Details'
+})
+
+const showSearchingAnimation = computed(() => {
+  if (!props.streamingEvents || props.streamingEvents.length === 0) return false
+  
+  const status = currentStreamingStatus.value
+  // Show bouncing dots specifically for search operations
+  return status.includes('🔍 Searching') || status.includes('📚 Searching')
+})
+
+const hasCompletedEvents = computed(() => {
+  if (!props.streamingEvents || props.streamingEvents.length === 0) {
+    // For loaded conversations, check if we have any tool-related or completion events
+    if (props.workflowData && props.workflowData.length > 0) return true;
+    return false;
+  }
+  
+  // Check for any completed tool executions, final responses, or tool-related events
+  return props.streamingEvents.some(event => 
+    (event.event === 'agent_completion' && event.data.type === 'LiberalFunctionMessage') ||
+    (event.event === 'agent_completion' && event.data.name === 'DaytonaCodeSandbox') ||
+    (event.event === 'agent_completion' && event.data.name === 'search_tavily') ||
+    (event.event === 'agent_completion' && event.data.name === 'arxiv') ||
+    (event.event === 'stream_complete') ||
+    (event.event === 'agent_completion' && event.data.agent_type === 'react_end') ||
+    (event.isToolRelated || event.isDaytonaRelated) || // Check our custom flags
+    event.event === 'agent_completion' || event.event === 'stream_complete'
+  )
+})
+
+const auditLogEvents = computed(() => {
+  if (!props.streamingEvents || props.streamingEvents.length === 0) {
+    // For loaded conversations without streaming events, create synthetic audit log from workflow data
+    if (props.workflowData && props.workflowData.length > 0) {
+      return props.workflowData.map((workflow, index) => ({
+        id: `synthetic-audit-${index}`,
+        title: `✅ ${workflow.agent_name || 'Agent'} - ${workflow.task || 'Task'}`,
+        details: workflow.tool_name ? `Tool: ${workflow.tool_name}` : 'Completed successfully',
+        subItems: [],
+        dotClass: workflow.task === 'code_execution' ? 'bg-purple-500' : 'bg-green-500',
+        type: 'tool_result',
+        event: 'workflow_item',
+        timestamp: new Date().toISOString(),
+        fullData: workflow
+      }));
+    }
+    return [];
+  }
+  
+  return props.streamingEvents
+    .filter(event => {
+      // Keep meaningful events
+      if (event.event === 'stream_start') return false
+      if (event.event === 'stream_complete') return false
+      if (event.event === 'agent_completion' && event.data.agent_type === 'human') return false
+      if (event.event === 'agent_completion' && event.data.agent_type === 'react_end') return false
+      if (event.event === 'llm_stream_chunk' && event.data.content && !event.data.content.includes('<tool>')) return false
+      
+      return true
+    })
+    .map((event, index) => {
+      const data = event.data
+      let title = ''
+      let details = ''
+      let dotClass = 'bg-gray-400'
+      let type = 'info'
+      
+      if (event.event === 'llm_stream_chunk' && data.content && data.content.includes('<tool>')) {
+        const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
+        const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
+        
+        if (toolMatch) {
+          const tool = toolMatch[1]
+          const query = inputMatch ? inputMatch[1].trim() : 'No query'
+          
+          if (tool === 'search_tavily') {
+            title = `🔍 Search Tavily`
+            details = `Query: "${query}"`
+          } else if (tool === 'arxiv') {
+            title = `📚 Search arXiv`
+            details = `Query: "${query}"`
+          } else if (tool === 'DaytonaCodeSandbox') {
+            title = `⚡ Execute Code`
+            details = 'Running analysis in sandbox'
+          } else {
+            title = `🔧 ${tool.replace('_', ' ')}`
+            details = `Query: "${query}"`
+          }
+          dotClass = 'bg-purple-500'
+          type = 'tool_call'
+        }
+      } else if (event.event === 'agent_completion' && data.type === 'LiberalFunctionMessage' && data.name) {
+        if (data.name === 'search_tavily') {
+          const resultCount = Array.isArray(data.content) ? data.content.length : 0
+          title = `✅ Found ${resultCount} web sources`
+          details = resultCount > 0 ? 'Search completed successfully' : 'No sources found'
+          dotClass = 'bg-green-500'
+          type = 'tool_result'
+        } else if (data.name === 'arxiv') {
+          const papers = data.content && data.content.includes('Title:') ? 
+            data.content.split('Title:').length - 1 : 1
+          title = `✅ Found ${papers} arXiv papers`
+          dotClass = 'bg-green-500'
+          type = 'tool_result'
+        } else if (data.name === 'DaytonaCodeSandbox') {
+          title = `✅ Code execution complete`
+          details = 'Generated charts and analysis'
+          dotClass = 'bg-green-500'
+          type = 'tool_result'
+        }
+      }
+      
+      return {
+        id: `audit-${index}`,
+        title,
+        details,
+        subItems: [],
+        dotClass,
+        type,
+        event: event.event,
+        timestamp: data.timestamp || event.timestamp || new Date().toISOString(),
+        fullData: data
+      }
+    })
+    .filter(event => event.title) // Only include events with titles
+})
+
+function closeArtifactCanvas() {
+  // Implementation of closeArtifactCanvas function
+}
 
   </script>
 

@@ -28,6 +28,7 @@
       <!-- MAIN CONTENT WRAPPER -->
       <main
         class="overflow-hidden transition-all duration-300 border border-primary-brandFrame rounded-lg relative flex-1 flex flex-col h-full"
+        :style="mainContentStyle"
       >
         <div class="flex-1 h-full bg-white">
           <!-- If chatMode => show chat UI, else show old workflow UI -->
@@ -40,6 +41,7 @@
                 :userId="clerkUserId"
                 class="flex-1"
                 @agentThoughtsDataChanged="agentThoughtsDataChanged"
+                @daytona-sidebar-state-changed="handleDaytonaSidebarStateChange"
               />
             </div>
 
@@ -188,6 +190,13 @@ const chatSidebarComp = ChatSidebar;
 // Reactive states
 const chatMode = ref(false); // Controls Chat vs Workflow mode
 const selectedConversationId = ref(''); // If chatMode, which conversation is active?
+
+// Daytona sidebar state management
+const daytonaSidebarState = ref({
+  isOpen: false,
+  isCollapsed: false,
+  width: 0
+})
 
 const isLoading = ref(false);
 const loadingMessage = ref('');
@@ -469,6 +478,23 @@ const hasResults = computed(() => {
   }
   return false;
 });
+
+// Computed style for main content adjustment
+const mainContentStyle = computed(() => {
+  if (!daytonaSidebarState.value.isOpen) {
+    return {}
+  }
+  
+  const sidebarWidth = daytonaSidebarState.value.isCollapsed ? '64px' : '50%'
+  return {
+    marginRight: sidebarWidth
+  }
+})
+
+// Handler for sidebar state changes
+function handleDaytonaSidebarStateChange(sidebarState) {
+  daytonaSidebarState.value = sidebarState
+}
 </script>
 
 <style scoped>
