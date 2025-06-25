@@ -663,7 +663,7 @@ watch(isDaytonaActive, (isActive) => {
     // Close artifact canvas if it's open since we're using sidebar now
     showArtifactCanvas.value = false
   }
-}, { immediate: true })
+})
 
 // Advanced streaming parsing and status
 const currentStreamingStatus = computed(() => {
