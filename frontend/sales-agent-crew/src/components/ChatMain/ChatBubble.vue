@@ -148,7 +148,7 @@
           <div class="prose prose-sm max-w-none">
             <div 
               v-if="streamingResponseContent"
-              class="text-gray-800 whitespace-pre-wrap"
+              class="text-gray-800"
               v-html="renderMarkdown(streamingResponseContent)"
             ></div>
             <div 
@@ -252,7 +252,7 @@
       <div class="grow text-end space-y-3">
         <!-- Card -->
         <div class="inline-block flex justify-end">
-          <div class="text-[16px] text-left color-primary-brandGray max-w-[80%] w-auto space-y-2">
+          <div class="text-sm text-left color-primary-brandGray max-w-[80%] w-auto space-y-2">
             <!-- Handle content array format -->
             <template v-if="userMessageContent.length > 0">
               <template v-for="(item, index) in userMessageContent" :key="index">

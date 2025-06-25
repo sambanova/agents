@@ -6,7 +6,7 @@
     <!-- Use consistent markdown rendering like the streaming section -->
     <div class="prose prose-sm max-w-none">
       <div 
-        class="text-gray-800 whitespace-pre-wrap"
+        class="text-gray-800"
         v-html="renderMarkdown(parsed?.content || '')"
       ></div>
     </div>
