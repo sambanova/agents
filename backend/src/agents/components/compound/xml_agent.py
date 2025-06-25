@@ -528,6 +528,7 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             # Create function message
             function_message = LiberalFunctionMessage(
                 content=response if len(response) > 0 else "No response from tool",
+                response_metadata={"usage": {"total_latency": duration}},
                 name=action.tool,
                 additional_kwargs={
                     "timestamp": datetime.now(timezone.utc).isoformat(),

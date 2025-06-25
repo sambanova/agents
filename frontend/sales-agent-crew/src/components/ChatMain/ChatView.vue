@@ -830,13 +830,22 @@ async function filterChat(msgData) {
     if (shouldTrackEvent) {
       const runId = messageToRunMap.get(message.message_id) || message.message_id;
       
-             // Track metrics if they exist (mainly for agent_completion events)
-       if (message.event === 'agent_completion' && message.usage_metadata) {
-         trackRunMetrics(runId, message.usage_metadata, message.response_metadata);
-       } else {
-         // Still count the event even without usage metadata
-         trackRunMetrics(runId, null, null);
-       }
+      // Track metrics if they exist (for agent_completion events)
+      if (message.event === 'agent_completion') {
+        // Check if we have token usage or performance metrics to track
+        const hasUsageMetadata = message.usage_metadata;
+        const hasPerformanceMetrics = message.response_metadata?.usage;
+        
+        if (hasUsageMetadata || hasPerformanceMetrics) {
+          trackRunMetrics(runId, message.usage_metadata, message.response_metadata);
+        } else {
+          // Still count the event even without usage metadata
+          trackRunMetrics(runId, null, null);
+        }
+      } else {
+        // For other events, still count the event even without usage metadata
+        trackRunMetrics(runId, null, null);
+      }
     }
   });
 
