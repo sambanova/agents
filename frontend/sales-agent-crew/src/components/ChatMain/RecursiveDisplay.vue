@@ -10,9 +10,8 @@
         </span>
         <span v-else> {{ formatKey(key) }}:{{ val }} </span>
         <br />
+        <span v-if="index < Object.keys(value).length - 1">, </span>
       </span>
-
-      <span v-if="index < Object.keys(value).length - 1">, </span>
     </div>
 
     <!-- If value is an object (and not inline), render as a table -->
