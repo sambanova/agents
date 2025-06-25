@@ -39,7 +39,7 @@
 
     <!-- Conversation details -->
     <div class="w-full relative h-full">
-      <div class="text-md capitalize color-primary-brandGray truncate">
+      <div class="text-sm capitalize color-primary-brandGray truncate">
         {{ conversation.name ? conversation.name : 'New Chat' }}
       </div>
     </div>
