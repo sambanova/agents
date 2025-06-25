@@ -7,46 +7,37 @@
     >
       <!-- Sticky Top Component -->
       <div
-        v-if="chatName"
+        v-if="cumulativeTokenUsage.total_tokens > 0"
         class="sticky top-0 z-10 bg-white p-4 shadow"
       >
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
-          <!-- Left text -->
-          <div
-            class="text-[16px] font-medium text-gray-800 line-clamp-1 overflow-hidden flex-shrink min-w-0"
-          >
-            {{ chatName }}
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-4">
+          <!-- Token Usage Display -->
+          <div class="flex flex-wrap items-center gap-1 sm:gap-2 text-sm text-gray-600">
+            <span class="font-medium whitespace-nowrap">Chat Usage Tokens:</span>
+            <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs whitespace-nowrap">
+              {{ cumulativeTokenUsage.input_tokens.toLocaleString() }} input
+            </span>
+            <span class="bg-gray-200 text-gray-800 px-2 py-1 rounded text-xs whitespace-nowrap">
+              {{ cumulativeTokenUsage.output_tokens.toLocaleString() }} output
+            </span>
+            <span class="bg-gray-300 text-gray-900 px-2 py-1 rounded text-xs whitespace-nowrap">
+              {{ cumulativeTokenUsage.total_tokens.toLocaleString() }} total
+            </span>
           </div>
-          <!-- Right side - Token Usage and Buttons -->
-          <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 flex-shrink-0">
-            <!-- Token Usage Display -->
-            <div v-if="cumulativeTokenUsage.total_tokens > 0" class="flex flex-wrap items-center gap-1 sm:gap-2 text-sm text-gray-600">
-              <span class="font-medium whitespace-nowrap">Chat Usage Tokens:</span>
-              <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs whitespace-nowrap">
-                {{ cumulativeTokenUsage.input_tokens.toLocaleString() }} input
-              </span>
-              <span class="bg-gray-200 text-gray-800 px-2 py-1 rounded text-xs whitespace-nowrap">
-                {{ cumulativeTokenUsage.output_tokens.toLocaleString() }} output
-              </span>
-              <span class="bg-gray-300 text-gray-900 px-2 py-1 rounded text-xs whitespace-nowrap">
-                {{ cumulativeTokenUsage.total_tokens.toLocaleString() }} total
-              </span>
-            </div>
-            
-            <!-- Right buttons -->
-            <div class="flex hidden space-x-2">
-              <button
-                class="text-sm h-[30px] py-1 px-2.5 bg-[#EE7624] text-white rounded"
-              >
-                View full report
-              </button>
-              <button
-                @click="genPDF"
-                class="text-sm h-[30px] py-1 px-2.5 bg-[#EAECF0] text-[#344054] rounded"
-              >
-                Download PDF
-              </button>
-            </div>
+          
+          <!-- Right buttons -->
+          <div class="flex hidden space-x-2">
+            <button
+              class="text-sm h-[30px] py-1 px-2.5 bg-[#EE7624] text-white rounded"
+            >
+              View full report
+            </button>
+            <button
+              @click="genPDF"
+              class="text-sm h-[30px] py-1 px-2.5 bg-[#EAECF0] text-[#344054] rounded"
+            >
+              Download PDF
+            </button>
           </div>
         </div>
       </div>
