@@ -3,9 +3,13 @@
   
   <div class="assistant-message">
     
-    <!-- Wrap generated HTML in a container so our styles apply -->
-    <!-- <div class="markdown-content" v-html="formattedText(parsed?.message||'')"></div> -->
-         <div class="markdown-content" v-html="renderMarkdown(parsed?.content||'')"></div>
+    <!-- Use consistent markdown rendering like the streaming section -->
+    <div class="prose prose-sm max-w-none">
+      <div 
+        class="text-gray-800 whitespace-pre-wrap"
+        v-html="renderMarkdown(parsed?.content || '')"
+      ></div>
+    </div>
 
   </div>
 </template>
@@ -13,6 +17,7 @@
 <script>
 import { marked } from 'marked'
 import { formattedText } from '@/utils/formatText'
+import { renderMarkdown } from '@/utils/markdownRenderer'
 
 export default {
   props: {
@@ -24,10 +29,7 @@ export default {
   },
   methods: {
     formattedText,  // Register the imported function here.
-     renderMarkdown(mdText) {
-  // marked.parse(...) converts Markdown → safe-ish HTML
-  return marked.parse(mdText)
-}
+    renderMarkdown, // Use the shared markdown renderer
   },
   computed: {
     formattedTextOld() {
