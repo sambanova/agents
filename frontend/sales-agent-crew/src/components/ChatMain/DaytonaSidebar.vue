@@ -1,5 +1,5 @@
 <template>
-  <div v-if="isOpen" class="fixed inset-y-0 right-0 bg-white border-l border-gray-200 shadow-2xl z-50 overflow-hidden transition-all duration-300" 
+  <div v-if="isOpen" class="fixed inset-y-0 right-0 flex flex-col bg-white border-l border-gray-200 shadow-2xl z-50 overflow-hidden transition-all duration-300" 
        :class="{ 'w-1/2': !isCollapsed, 'w-16': isCollapsed }">
     
     <!-- Header -->
@@ -591,237 +591,243 @@ watch(artifacts, (newArtifacts) => {
 
 // Methods
 function processStreamingEvents(events) {
-  if (!events || !Array.isArray(events)) return
+  try {
+    if (!events || !Array.isArray(events)) return
 
-  // Reset state when processing new events
-  artifacts.value = []
-  executionLog.value = []
-  isProcessing.value = false
-  
-  let codeDetected = false
-  let toolCallDetected = false
-  let artifactCount = 0
+    // Reset state when processing new events
+    artifacts.value = []
+    executionLog.value = []
+    isProcessing.value = false
+    
+    let codeDetected = false
+    let toolCallDetected = false
+    let artifactCount = 0
 
-  events.forEach((event, index) => {
-    // Safety check for null/undefined events
-    if (!event || typeof event !== 'object') {
-      console.log(`Skipping invalid event at index ${index}:`, event);
-      return;
-    }
-    
-    const timestamp = event.data?.timestamp || event.timestamp || new Date().toISOString()
-    
-    switch (event.event) {
-      case 'llm_stream_chunk':
-        // Extract Python code from tool input - this is the key fix
-        if (event.data?.content) {
-          const content = event.data.content
+    events.forEach((event, index) => {
+      // Safety check for null/undefined events
+      if (!event || typeof event !== 'object') {
+        console.log(`Skipping invalid event at index ${index}:`, event);
+        return;
+      }
+      
+      const timestamp = event.data?.timestamp || event.timestamp || new Date().toISOString()
+      
+      switch (event.event) {
+        case 'llm_stream_chunk':
+          // Extract Python code from tool input - this is the key fix
+          if (event.data?.content) {
+            const content = event.data.content
+            
+            // Look for tool calls with code input - this is where the actual code is
+            if (content.includes('<tool>DaytonaCodeSandbox</tool>')) {
+              // Extract the code from tool_input
+              const toolInputMatch = content.match(/<tool_input>([\s\S]*?)(?:<\/tool_input>|$)/);
+              if (toolInputMatch && toolInputMatch[1]) {
+                const extractedCode = toolInputMatch[1].trim()
+                // Only update if this is actual Python code (contains import, def, plt, etc.)
+                if (extractedCode.includes('import') || extractedCode.includes('def ') || 
+                    extractedCode.includes('plt.') || extractedCode.includes('matplotlib') ||
+                    extractedCode.includes('numpy') || extractedCode.includes('pandas')) {
+                  codeContent.value = extractedCode
+                  codeDetected = true
+                  updateStatus('📝 Code generated', 'Python analysis script ready')
+                  addToLog('Code generation detected', 'info', timestamp)
+                }
+              }
+              
+              toolCallDetected = true
+              updateStatus('⚡ Executing code', 'Running in Daytona sandbox')
+              addToLog('Tool call to DaytonaCodeSandbox detected', 'info', timestamp)
+              // Remove automatic progress - let it complete naturally
+            }
+            
+            // Also check for code blocks in regular content
+            const codeMatch = content.match(/```python\n([\s\S]*?)```/)
+            if (codeMatch && codeMatch[1] && !codeDetected) {
+              codeContent.value = codeMatch[1].trim()
+              codeDetected = true
+            }
+          }
+          break
           
-          // Look for tool calls with code input - this is where the actual code is
-          if (content.includes('<tool>DaytonaCodeSandbox</tool>')) {
-            // Extract the code from tool_input
-            const toolInputMatch = content.match(/<tool_input>([\s\S]*?)(?:<\/tool_input>|$)/);
-            if (toolInputMatch && toolInputMatch[1]) {
-              const extractedCode = toolInputMatch[1].trim()
-              // Only update if this is actual Python code (contains import, def, plt, etc.)
-              if (extractedCode.includes('import') || extractedCode.includes('def ') || 
-                  extractedCode.includes('plt.') || extractedCode.includes('matplotlib') ||
-                  extractedCode.includes('numpy') || extractedCode.includes('pandas')) {
-                codeContent.value = extractedCode
-                codeDetected = true
-                updateStatus('📝 Code generated', 'Python analysis script ready')
-                addToLog('Code generation detected', 'info', timestamp)
+        case 'agent_completion':
+          // Handle both streaming and loaded conversation agent_completion events
+          const eventData = event.data || event;
+          
+          if (eventData?.name === 'DaytonaCodeSandbox' || eventData?.agent_type === 'tool_response' || eventData?.agent_type === 'react_tool') {
+            console.log('Processing Daytona agent_completion event:', eventData);
+            
+            // Handle tool call (react_tool) - extract code from tool input
+            if (eventData?.agent_type === 'react_tool' && eventData.content && String(eventData.content).includes('DaytonaCodeSandbox')) {
+              const contentStr = String(eventData.content);
+              const toolInputMatch = contentStr.match(/<tool_input>([\s\S]*?)(?:<\/tool_input>|$)/);
+              if (toolInputMatch && toolInputMatch[1]) {
+                const extractedCode = toolInputMatch[1].trim()
+                if (extractedCode.includes('import') || extractedCode.includes('def ') || 
+                    extractedCode.includes('plt.') || extractedCode.includes('matplotlib') ||
+                    extractedCode.includes('numpy') || extractedCode.includes('pandas')) {
+                  codeContent.value = extractedCode
+                  codeDetected = true
+                  updateStatus('📝 Code loaded from history', 'Python analysis script')
+                  addToLog('Code loaded from conversation history', 'info', timestamp)
+                  console.log('Extracted code from tool call:', extractedCode.substring(0, 100) + '...');
+                }
               }
             }
             
-            toolCallDetected = true
-            updateStatus('⚡ Executing code', 'Running in Daytona sandbox')
-            addToLog('Tool call to DaytonaCodeSandbox detected', 'info', timestamp)
-            // Remove automatic progress - let it complete naturally
-          }
-          
-          // Also check for code blocks in regular content
-          const codeMatch = content.match(/```python\n([\s\S]*?)```/)
-          if (codeMatch && codeMatch[1] && !codeDetected) {
-            codeContent.value = codeMatch[1].trim()
-            codeDetected = true
-          }
-        }
-        break
-        
-      case 'agent_completion':
-        // Handle both streaming and loaded conversation agent_completion events
-        const eventData = event.data || event;
-        
-        if (eventData?.name === 'DaytonaCodeSandbox' || eventData?.agent_type === 'tool_response' || eventData?.agent_type === 'react_tool') {
-          console.log('Processing Daytona agent_completion event:', eventData);
-          
-          // Handle tool call (react_tool) - extract code from tool input
-          if (eventData?.agent_type === 'react_tool' && eventData.content && String(eventData.content).includes('DaytonaCodeSandbox')) {
-            const contentStr = String(eventData.content);
-            const toolInputMatch = contentStr.match(/<tool_input>([\s\S]*?)(?:<\/tool_input>|$)/);
-            if (toolInputMatch && toolInputMatch[1]) {
-              const extractedCode = toolInputMatch[1].trim()
-              if (extractedCode.includes('import') || extractedCode.includes('def ') || 
-                  extractedCode.includes('plt.') || extractedCode.includes('matplotlib') ||
-                  extractedCode.includes('numpy') || extractedCode.includes('pandas')) {
-                codeContent.value = extractedCode
-                codeDetected = true
-                updateStatus('📝 Code loaded from history', 'Python analysis script')
-                addToLog('Code loaded from conversation history', 'info', timestamp)
-                console.log('Extracted code from tool call:', extractedCode.substring(0, 100) + '...');
-              }
+            // Extract charts from Daytona response (tool_response)
+            const content = String(eventData.content || '')
+            
+            // Only process if content is a valid string
+            if (!content || content.length === 0) {
+              console.log('No content to process for charts');
+              break;
             }
-          }
-          
-          // Extract charts from Daytona response (tool_response)
-          const content = String(eventData.content || '')
-          
-          // Only process if content is a valid string
-          if (!content || content.length === 0) {
-            console.log('No content to process for charts');
-            break;
-          }
-          
-          // Look for file attachments, data URLs, and Redis file references
-          const attachmentMatches = content.match(/!\[([^\]]*)\]\(attachment:([^)]+)\)/g)
-          const dataUrlMatches = content.match(/!\[([^\]]*)\]\(data:image\/[^)]+\)/g)
-          const redisFileMatches = content.match(/!\[([^\]]*)\]\(redis-(?:chart|file):([^:]+):([^)]+)\)/g)
-          
-          // Look for PDF, Markdown, and HTML file patterns  
-          const pdfMatches = content.match(/!\[([^\]]*)\]\((?:attachment|redis-file):([^:)]+)(?::([^)]+))?\).*?\.pdf/gi)
-          const markdownMatches = content.match(/!\[([^\]]*)\]\((?:attachment|redis-file):([^:)]+)(?::([^)]+))?\).*?\.md/gi)
-          const htmlMatches = content.match(/!\[([^\]]*)\]\((?:attachment|redis-file):([^:)]+)(?::([^)]+))?\).*?\.html/gi)
-          
-                      // Handle attachment-based files (legacy)
-            if (attachmentMatches) {
-              attachmentMatches.forEach((match, idx) => {
-                const titleMatch = match.match(/!\[([^\]]*)\]/)
-                const idMatch = match.match(/attachment:([^)]+)/)
-                
-                if (idMatch) {
-                  const fileId = idMatch[1]
-                  const title = titleMatch && titleMatch[1] ? titleMatch[1] : `File ${idx + 1}`
+            
+            // Look for file attachments, data URLs, and Redis file references
+            const attachmentMatches = content.match(/!\[([^\]]*)\]\(attachment:([^)]+)\)/g)
+            const dataUrlMatches = content.match(/!\[([^\]]*)\]\(data:image\/[^)]+\)/g)
+            const redisFileMatches = content.match(/!\[([^\]]*)\]\(redis-(?:chart|file):([^:]+):([^)]+)\)/g)
+            
+            // Look for PDF, Markdown, and HTML file patterns  
+            const pdfMatches = content.match(/!\[([^\]]*)\]\((?:attachment|redis-file):([^:)]+)(?::([^)]+))?\).*?\.pdf/gi)
+            const markdownMatches = content.match(/!\[([^\]]*)\]\((?:attachment|redis-file):([^:)]+)(?::([^)]+))?\).*?\.md/gi)
+            const htmlMatches = content.match(/!\[([^\]]*)\]\((?:attachment|redis-file):([^:)]+)(?::([^)]+))?\).*?\.html/gi)
+            
+                        // Handle attachment-based files (legacy)
+              if (attachmentMatches) {
+                attachmentMatches.forEach((match, idx) => {
+                  const titleMatch = match.match(/!\[([^\]]*)\]/)
+                  const idMatch = match.match(/attachment:([^)]+)/)
                   
-                  // Check if file with this ID already exists to prevent duplicates
-                  const existingFile = artifacts.value.find(artifact => artifact.id === fileId)
-                  if (existingFile) {
-                    console.log(`Skipping duplicate attachment file with ID: ${fileId}`)
-                    return;
-                  }
-                  
-                  // Determine file type and create appropriate artifact
-                  const fileType = getFileType(title, fileId)
-                  // Use authenticated endpoint, not public
-                  const fileUrl = `/api/files/${fileId}`
-                  
-                  const newArtifact = {
-                    id: fileId,
-                    title: title,
-                    type: fileType,
-                    url: fileUrl,
-                    loading: true, // Set loading to true initially
-                    downloadUrl: fileUrl,
-                    preview: null
-                  }
-                  artifacts.value.push(newArtifact)
-                  fetchArtifactContent(newArtifact);
+                  if (idMatch) {
+                    const fileId = idMatch[1]
+                    const title = titleMatch && titleMatch[1] ? titleMatch[1] : `File ${idx + 1}`
+                    
+                    // Check if file with this ID already exists to prevent duplicates
+                    const existingFile = artifacts.value.find(artifact => artifact.id === fileId)
+                    if (existingFile) {
+                      console.log(`Skipping duplicate attachment file with ID: ${fileId}`)
+                      return;
+                    }
+                    
+                    // Determine file type and create appropriate artifact
+                    const fileType = getFileType(title, fileId)
+                    // Use authenticated endpoint, not public
+                    const fileUrl = `/api/files/${fileId}`
+                    
+                    const newArtifact = {
+                      id: fileId,
+                      title: title,
+                      type: fileType,
+                      url: fileUrl,
+                      loading: true, // Set loading to true initially
+                      downloadUrl: fileUrl,
+                      preview: null
+                    }
+                    artifacts.value.push(newArtifact)
+                    fetchArtifactContent(newArtifact);
 
-                  artifactCount++
-                  console.log(`Added attachment file: ${title} (${fileType}) with ID: ${fileId}`)
-                }
-              })
-            }
-          
-                      // Handle data URL-based images (legacy)
-            if (dataUrlMatches) {
-              dataUrlMatches.forEach((match, idx) => {
-                const titleMatch = match.match(/!\[([^\]]*)\]/)
-                const urlMatch = match.match(/\]\(([^)]+)\)/)
-                
-                if (urlMatch) {
-                  const dataUrl = urlMatch[1]
-                  const title = titleMatch && titleMatch[1] ? titleMatch[1] : `Image ${artifactCount + idx + 1}`
-                  
-                  // Check if file with this exact data URL already exists to prevent duplicates
-                  const existingFile = artifacts.value.find(artifact => artifact.url === dataUrl)
-                  if (existingFile) {
-                    console.log(`Skipping duplicate data URL image: ${title}`)
-                    return;
+                    artifactCount++
+                    console.log(`Added attachment file: ${title} (${fileType}) with ID: ${fileId}`)
                   }
+                })
+              }
+            
+                        // Handle data URL-based images (legacy)
+              if (dataUrlMatches) {
+                dataUrlMatches.forEach((match, idx) => {
+                  const titleMatch = match.match(/!\[([^\]]*)\]/)
+                  const urlMatch = match.match(/\]\(([^)]+)\)/)
                   
-                  const fileId = `data_image_${Date.now()}_${idx}`
-                  
-                  artifacts.value.push({
-                    id: fileId,
-                    title: title,
-                    type: 'image',
-                    url: dataUrl, // Use data URL directly
-                    loading: false,
-                    downloadUrl: dataUrl, // Data URLs can be used for download too
-                    preview: null
-                  })
-                  artifactCount++
-                  console.log(`Added data URL image: ${title}`)
-                }
-              })
-            }
-          
-                      // Handle Redis file references (new preferred method)
-            if (redisFileMatches) {
-              redisFileMatches.forEach((match, idx) => {
-                const titleMatch = match.match(/!\[([^\]]*)\]/)
-                const redisMatch = match.match(/redis-(?:chart|file):([^:]+):([^)]+)/)
-                
-                if (redisMatch) {
-                  const fileId = redisMatch[1]
-                  const userId = redisMatch[2]
-                  const title = titleMatch && titleMatch[1] ? titleMatch[1] : `File ${artifactCount + idx + 1}`
-                  
-                  // Check if file with this ID already exists to prevent duplicates
-                  const existingFile = artifacts.value.find(artifact => artifact.id === fileId)
-                  if (existingFile) {
-                    console.log(`Skipping duplicate Redis file with ID: ${fileId}`)
-                    return;
+                  if (urlMatch) {
+                    const dataUrl = urlMatch[1]
+                    const title = titleMatch && titleMatch[1] ? titleMatch[1] : `Image ${artifactCount + idx + 1}`
+                    
+                    // Check if file with this exact data URL already exists to prevent duplicates
+                    const existingFile = artifacts.value.find(artifact => artifact.url === dataUrl)
+                    if (existingFile) {
+                      console.log(`Skipping duplicate data URL image: ${title}`)
+                      return;
+                    }
+                    
+                    const fileId = `data_image_${Date.now()}_${idx}`
+                    
+                    artifacts.value.push({
+                      id: fileId,
+                      title: title,
+                      type: 'image',
+                      url: dataUrl, // Use data URL directly
+                      loading: false,
+                      downloadUrl: dataUrl, // Data URLs can be used for download too
+                      preview: null
+                    })
+                    artifactCount++
+                    console.log(`Added data URL image: ${title}`)
                   }
+                })
+              }
+            
+                        // Handle Redis file references (new preferred method)
+              if (redisFileMatches) {
+                redisFileMatches.forEach((match, idx) => {
+                  const titleMatch = match.match(/!\[([^\]]*)\]/)
+                  const redisMatch = match.match(/redis-(?:chart|file):([^:]+):([^)]+)/)
                   
-                  // Determine file type and create appropriate artifact
-                  const fileType = getFileType(title, fileId)
-                  const fileUrl = `/api/files/${fileId}`
-                  
-                  const newArtifact = {
-                    id: fileId,
-                    title: title,
-                    type: fileType,
-                    url: fileUrl, // Use authenticated endpoint
-                    loading: true, // Set loading to true initially
-                    downloadUrl: fileUrl,
-                    preview: null
+                  if (redisMatch) {
+                    const fileId = redisMatch[1]
+                    const userId = redisMatch[2]
+                    const title = titleMatch && titleMatch[1] ? titleMatch[1] : `File ${artifactCount + idx + 1}`
+                    
+                    // Check if file with this ID already exists to prevent duplicates
+                    const existingFile = artifacts.value.find(artifact => artifact.id === fileId)
+                    if (existingFile) {
+                      console.log(`Skipping duplicate Redis file with ID: ${fileId}`)
+                      return;
+                    }
+                    
+                    // Determine file type and create appropriate artifact
+                    const fileType = getFileType(title, fileId)
+                    const fileUrl = `/api/files/${fileId}`
+                    
+                    const newArtifact = {
+                      id: fileId,
+                      title: title,
+                      type: fileType,
+                      url: fileUrl, // Use authenticated endpoint
+                      loading: true, // Set loading to true initially
+                      downloadUrl: fileUrl,
+                      preview: null
+                    }
+                    artifacts.value.push(newArtifact)
+                    fetchArtifactContent(newArtifact);
+                    
+                    artifactCount++
+                    console.log(`Added Redis file: ${title} (${fileType}) with ID: ${fileId} for user: ${userId}`)
                   }
-                  artifacts.value.push(newArtifact)
-                  fetchArtifactContent(newArtifact);
-                  
-                  artifactCount++
-                  console.log(`Added Redis file: ${title} (${fileType}) with ID: ${fileId} for user: ${userId}`)
-                }
-              })
-            }
-          
-          updateStatus('✅ Analysis complete', `Generated ${artifactCount} artifacts`)
-          
-          addToLog(`Analysis completed with ${artifactCount} files`, 'success', timestamp)
-          isProcessing.value = false
-        }
-        break
+                })
+              }
+            
+            updateStatus('✅ Analysis complete', `Generated ${artifactCount} artifacts`)
+            
+            addToLog(`Analysis completed with ${artifactCount} files`, 'success', timestamp)
+            isProcessing.value = false
+          }
+          break
+      }
+    })
+    
+    // Set initial status if no specific events detected
+    if (!codeDetected && !toolCallDetected) {
+      updateStatus('⏳ Ready for analysis', 'Waiting for code execution')
+    } else if (codeDetected || artifactCount > 0) {
+      // Update status to show loaded state
+      updateStatus('✅ Historical analysis loaded', `Code and ${artifactCount} files from conversation`)
     }
-  })
-  
-  // Set initial status if no specific events detected
-  if (!codeDetected && !toolCallDetected) {
-    updateStatus('⏳ Ready for analysis', 'Waiting for code execution')
-  } else if (codeDetected || artifactCount > 0) {
-    // Update status to show loaded state
-    updateStatus('✅ Historical analysis loaded', `Code and ${artifactCount} files from conversation`)
+  } catch (error) {
+    console.error('Error processing streaming events in DaytonaSidebar:', error);
+    updateStatus('❌ Error', 'Failed to process conversation history.')
+    addToLog('Error processing streaming events: ' + error.message, 'error', new Date().toISOString())
   }
 }
 

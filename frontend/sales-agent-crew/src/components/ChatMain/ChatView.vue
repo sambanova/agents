@@ -1675,9 +1675,8 @@ async function connectWebSocket() {
           console.log('Agent message stream:', receivedData);
           
           // Check if this is a final response event
-          const isFinalResponse = receivedData.agent_type === 'react_end' || 
-                                 receivedData.agent_type === 'financial_analysis_end' || 
-                                 receivedData.agent_type === 'sales_leads_end';
+          const isFinalResponse = receivedData.additional_kwargs?.agent_type === 'react_end' || 
+                                 receivedData.additional_kwargs?.agent_type === 'financial_analysis_end';
           
           messagesData.value.push({
             event: 'agent_completion', 
@@ -1856,6 +1855,9 @@ async function removeDocument(docId) {
 
 function formatMessageData(msgItem) {
   try {
+    if (msgItem.agent_type === 'financial_analysis_end' || msgItem.additional_kwargs?.agent_type === 'financial_analysis_end') {
+      console.log('🔧 Formatting financial analysis final result:', msgItem);
+    }
     switch (msgItem.event) {
       case 'agent_completion':
         // Check if this is a user message in new format
@@ -2031,7 +2033,7 @@ const filteredMessages = computed(() => {
 
       // Decide whether this message should always render its own bubble
       const agentType = msg.agent_type || msg.additional_kwargs?.agent_type || msg.data?.additional_kwargs?.agent_type || msg.data?.agent_type
-
+      
       // Always separate genuine user inputs
       if (agentType === 'human' || msg.type === 'HumanMessage') {
         const uniqueKey = `${msg.type || msg.agent_type}_${msgId}_${index}`;
@@ -2040,9 +2042,13 @@ const filteredMessages = computed(() => {
       }
 
       // Group ALL streaming events for the same message_id (except user messages)
+      // But exclude only financial_analysis_end from grouping since it doesn't stream first
+      const shouldExcludeFromGrouping = agentType === 'financial_analysis_end';
+      
       if (streamingEvents.includes(msg.event) &&
           msgId &&
-          !userMessages.has(msgId)) {
+          !userMessages.has(msgId) &&
+          !shouldExcludeFromGrouping) {
 
         const groupKey = `streaming_${msgId}`;
 
