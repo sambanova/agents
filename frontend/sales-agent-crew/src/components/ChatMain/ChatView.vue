@@ -8,7 +8,7 @@
       <!-- Sticky Top Component -->
       <div
         v-if="chatName"
-        class="sticky h-[62px] top-0 z-10 bg-white p-4 shadow"
+        class="sticky h-auto min-h-[62px] top-0 z-10 bg-white p-4 shadow"
       >
         <div class="flex items-center justify-between">
           <!-- Left text -->
@@ -17,19 +17,36 @@
           >
             {{ chatName }}
           </div>
-          <!-- Right buttons -->
-          <div class="flex hidden space-x-2">
-            <button
-              class="text-sm h-[30px] py-1 px-2.5 bg-[#EE7624] text-white rounded"
-            >
-              View full report
-            </button>
-            <button
-              @click="genPDF"
-              class="text-sm h-[30px] py-1 px-2.5 bg-[#EAECF0] text-[#344054] rounded"
-            >
-              Download PDF
-            </button>
+          <!-- Right side - Token Usage and Buttons -->
+          <div class="flex items-center space-x-4">
+            <!-- Token Usage Display -->
+            <div v-if="cumulativeTokenUsage.total_tokens > 0" class="flex items-center space-x-2 text-sm text-gray-600">
+              <span class="font-medium">Chat Usage Tokens:</span>
+              <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
+                {{ cumulativeTokenUsage.input_tokens.toLocaleString() }} input
+              </span>
+              <span class="bg-gray-200 text-gray-800 px-2 py-1 rounded text-xs">
+                {{ cumulativeTokenUsage.output_tokens.toLocaleString() }} output
+              </span>
+              <span class="bg-gray-300 text-gray-900 px-2 py-1 rounded text-xs">
+                {{ cumulativeTokenUsage.total_tokens.toLocaleString() }} total
+              </span>
+            </div>
+            
+            <!-- Right buttons -->
+            <div class="flex hidden space-x-2">
+              <button
+                class="text-sm h-[30px] py-1 px-2.5 bg-[#EE7624] text-white rounded"
+              >
+                View full report
+              </button>
+              <button
+                @click="genPDF"
+                class="text-sm h-[30px] py-1 px-2.5 bg-[#EAECF0] text-[#344054] rounded"
+              >
+                Download PDF
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -55,28 +72,93 @@
           class="mt-16 max-w-4xl w-full mx-auto space-y-5"
         >
           <!-- Chat Bubble -->
-          <ChatBubble
-            v-for="msgItem in filteredMessages"
-            :metadata="completionMetaData || {}"
-            :workflowData="
-              workflowData.filter(
-                (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
-              )
-            "
-            :plannerText="
-              plannerTextData.filter(
-                (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
-              )[0]?.data || ''
-            "
-            :key="msgItem.conversation_id || msgItem.message_id || msgItem.timestamp || Math.random()"
-            :event="msgItem.event || 'unknown'"
-            :data="formatMessageData(msgItem)"
-            :messageId="msgItem.message_id || msgItem.messageId || msgItem.id"
-            :streamingEvents="msgItem.type === 'streaming_group' ? msgItem.events : null"
-            :sidebarOpen="showDaytonaSidebar"
-            @open-daytona-sidebar="handleOpenDaytonaSidebar"
-            @open-artifact-canvas="handleOpenArtifactCanvas"
-          />
+          <li v-for="msgItem in filteredMessages" :key="msgItem.conversation_id || msgItem.message_id || msgItem.timestamp || Math.random()">
+            <ChatBubble
+              :metadata="completionMetaData || {}"
+              :workflowData="
+                workflowData.filter(
+                  (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
+                )
+              "
+              :plannerText="
+                plannerTextData.filter(
+                  (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
+                )[0]?.data || ''
+              "
+              :event="msgItem.event || 'unknown'"
+              :data="formatMessageData(msgItem)"
+              :messageId="msgItem.message_id || msgItem.messageId || msgItem.id"
+              :streamingEvents="msgItem.type === 'streaming_group' ? msgItem.events : null"
+              :sidebarOpen="showDaytonaSidebar"
+              @open-daytona-sidebar="handleOpenDaytonaSidebar"
+              @open-artifact-canvas="handleOpenArtifactCanvas"
+            />
+            
+            <!-- Token Usage Display for Final Messages -->
+            <div v-if="isFinalMessage(msgItem) && getMessageTokenUsage(msgItem)?.total_tokens > 0" class="mt-2">
+              <div class="bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-lg px-3 py-2 inline-block shadow-sm hover:shadow-md transition-shadow duration-200">
+                <div class="flex items-center space-x-3">
+                  <!-- Input Tokens -->
+                  <div class="flex flex-col items-center min-w-[50px]">
+                    <span class="text-xs font-semibold text-gray-800">{{ getMessageTokenUsage(msgItem).input_tokens.toLocaleString() }}</span>
+                    <span class="text-2xs text-gray-600">input</span>
+                  </div>
+                  
+                  <!-- Divider -->
+                  <div class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
+                  
+                  <!-- Output Tokens -->
+                  <div class="flex flex-col items-center min-w-[50px]">
+                    <span class="text-xs font-semibold text-gray-800">{{ getMessageTokenUsage(msgItem).output_tokens.toLocaleString() }}</span>
+                    <span class="text-2xs text-gray-600">output</span>
+                  </div>
+                  
+                  <!-- Divider -->
+                  <div class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
+                  
+                  <!-- Total Tokens -->
+                  <div class="flex flex-col items-center min-w-[50px]">
+                    <span class="text-xs font-semibold text-gray-800">{{ getMessageTokenUsage(msgItem).total_tokens.toLocaleString() }}</span>
+                    <span class="text-2xs text-gray-600">total</span>
+                  </div>
+                  
+                  <!-- Performance Metrics (if available) -->
+                  <template v-if="hasPerformanceMetrics(msgItem)">
+                    <!-- Performance Section Divider -->
+                    <div class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
+                    
+                    <!-- Total Duration -->
+                    <template v-if="getMessageResponseMetadata(msgItem).usage?.total_latency">
+                      <div class="flex flex-col items-center min-w-[45px]">
+                        <span class="text-xs font-semibold text-gray-800">{{ (getMessageResponseMetadata(msgItem).usage.total_latency).toFixed(2) }}s</span>
+                        <span class="text-2xs text-gray-600">latency</span>
+                      </div>
+                      
+                      <!-- Divider after latency if there are more metrics -->
+                      <div v-if="getMessageResponseMetadata(msgItem).usage?.time_to_first_token || getMessageResponseMetadata(msgItem).usage?.completion_tokens_per_sec" class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
+                    </template>
+                    
+                    <!-- Time to First Token -->
+                    <template v-if="getMessageResponseMetadata(msgItem).usage?.time_to_first_token">
+                      <div class="flex flex-col items-center min-w-[45px]">
+                        <span class="text-xs font-semibold text-gray-800">{{ (getMessageResponseMetadata(msgItem).usage.time_to_first_token).toFixed(2) }}s</span>
+                        <span class="text-2xs text-gray-600">TTFT</span>
+                      </div>
+                      
+                      <!-- Divider after TTFT if there are more metrics -->
+                      <div v-if="getMessageResponseMetadata(msgItem).usage?.completion_tokens_per_sec" class="h-6 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
+                    </template>
+                    
+                    <!-- Output Tokens per Second -->
+                    <div v-if="getMessageResponseMetadata(msgItem).usage?.completion_tokens_per_sec" class="flex flex-col items-center min-w-[45px]">
+                      <span class="text-xs font-semibold text-gray-800">{{ getMessageResponseMetadata(msgItem).usage.completion_tokens_per_sec.toFixed(1) }}</span>
+                      <span class="text-2xs text-gray-600">t/s</span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </li>
           
           <ChatLoaderBubble
             :workflowData="
@@ -624,6 +706,11 @@ watch(
       searchQuery.value = '';
       chatName.value = '';
       isLoading.value = false;
+      cumulativeTokenUsage.value = {
+        input_tokens: 0,
+        output_tokens: 0,
+        total_tokens: 0
+      };
       
       // Reset sidebar state when switching conversations
       showDaytonaSidebar.value = false;
@@ -732,6 +819,11 @@ const messagesData = ref([]);
 const workflowData = ref([]);
 const completionMetaData = ref(null);
 const agentThoughtsData = ref([]);
+const cumulativeTokenUsage = ref({
+  input_tokens: 0,
+  output_tokens: 0,
+  total_tokens: 0
+});
 
 async function filterChat(msgData) {
   messagesData.value = msgData.messages
@@ -808,13 +900,42 @@ async function filterChat(msgData) {
           agent_type: message.additional_kwargs?.agent_type || 'assistant'
         };
         
-        return {
+        const restoredMessage = {
           event: 'agent_completion',
           data: messageContent,
           message_id: message.message_id,
           conversation_id: message.conversation_id,
           timestamp: message.timestamp || new Date().toISOString()
         };
+        
+        // Restore token usage data in the same structure as live messages
+        if (message.usage_metadata || message.cumulative_usage_metadata || message.response_metadata) {
+          if (!restoredMessage.response_metadata) {
+            restoredMessage.response_metadata = {};
+          }
+          if (!restoredMessage.response_metadata.usage) {
+            restoredMessage.response_metadata.usage = {};
+          }
+          
+          // Store token usage data from historical message
+          if (message.usage_metadata) {
+            restoredMessage.response_metadata.usage.input_tokens = message.usage_metadata.input_tokens || 0;
+            restoredMessage.response_metadata.usage.output_tokens = message.usage_metadata.output_tokens || 0;
+            restoredMessage.response_metadata.usage.total_tokens = message.usage_metadata.total_tokens || 0;
+          }
+          
+          // Store performance metrics if they exist
+          if (message.response_metadata?.usage) {
+            Object.assign(restoredMessage.response_metadata.usage, message.response_metadata.usage);
+          }
+          
+          // Store cumulative usage separately for header display
+          if (message.cumulative_usage_metadata) {
+            restoredMessage.cumulative_usage_metadata = message.cumulative_usage_metadata;
+          }
+        }
+        
+        return restoredMessage;
       }
 
       // Handle completion events (legacy)
@@ -991,6 +1112,28 @@ async function filterChat(msgData) {
       console.error('Failed to parse completion data:', error);
     }
   });
+
+  // Process agent_completion events for cumulative token usage restoration
+  let latestCumulativeUsage = null;
+  
+  msgData.messages
+    .filter((message) => message.event === 'agent_completion')
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+    .forEach((completion) => {
+      // Check for cumulative_usage_metadata for header display
+      if (completion.cumulative_usage_metadata) {
+        latestCumulativeUsage = completion.cumulative_usage_metadata;
+      }
+    });
+  
+  // Restore the latest cumulative token usage for header display
+  if (latestCumulativeUsage) {
+    cumulativeTokenUsage.value = {
+      input_tokens: latestCumulativeUsage.input_tokens || 0,
+      output_tokens: latestCumulativeUsage.output_tokens || 0,
+      total_tokens: latestCumulativeUsage.total_tokens || 0
+    };
+  }
 
   AutoScrollToBottom();
 
@@ -1704,11 +1847,24 @@ async function connectWebSocket() {
         if (receivedData.event === 'agent_completion') {
           console.log('Agent message stream:', receivedData);
           
+          // Update cumulative token usage if present
+          if (receivedData.cumulative_usage_metadata) {
+            cumulativeTokenUsage.value = {
+              input_tokens: receivedData.cumulative_usage_metadata.input_tokens || 0,
+              output_tokens: receivedData.cumulative_usage_metadata.output_tokens || 0,
+              total_tokens: receivedData.cumulative_usage_metadata.total_tokens || 0
+            };
+            console.log('Updated cumulative token usage:', cumulativeTokenUsage.value);
+          }
+          
+
+          
           // Check if this is a final response event
           const isFinalResponse = receivedData.additional_kwargs?.agent_type === 'react_end' || 
                                  receivedData.additional_kwargs?.agent_type === 'financial_analysis_end';
           
-          messagesData.value.push({
+          // Create message object and attach token usage data directly to it
+          const messageData = {
             event: 'agent_completion', 
             data: receivedData,
             message_id: currentMsgId.value,
@@ -1716,7 +1872,36 @@ async function connectWebSocket() {
             timestamp: receivedData.timestamp || new Date().toISOString(),
             agent_type: receivedData.agent_type,
             isFinalResponse: isFinalResponse
-          });
+          };
+          
+          // Store token usage and performance metrics together in response_metadata.usage
+          if (receivedData.usage_metadata || receivedData.response_metadata) {
+            if (!messageData.response_metadata) {
+              messageData.response_metadata = {};
+            }
+            if (!messageData.response_metadata.usage) {
+              messageData.response_metadata.usage = {};
+            }
+            
+            // Store token usage data
+            if (receivedData.usage_metadata) {
+              messageData.response_metadata.usage.input_tokens = receivedData.usage_metadata.input_tokens || 0;
+              messageData.response_metadata.usage.output_tokens = receivedData.usage_metadata.output_tokens || 0;
+              messageData.response_metadata.usage.total_tokens = receivedData.usage_metadata.total_tokens || 0;
+            }
+            
+            // Store performance metrics if they exist
+            if (receivedData.response_metadata?.usage) {
+              Object.assign(messageData.response_metadata.usage, receivedData.response_metadata.usage);
+            }
+          }
+          
+          // Still store cumulative usage separately for header display
+          if (receivedData.cumulative_usage_metadata) {
+            messageData.cumulative_usage_metadata = receivedData.cumulative_usage_metadata;
+          }
+          
+          messagesData.value.push(messageData);
           
           // Set loading to false when we receive a final response
           if (isFinalResponse) {
@@ -2012,6 +2197,8 @@ const hasActiveStreamingGroup = computed(() => {
   );
 });
 
+
+
 const filteredMessages = computed(() => {
   if (!messagesData.value || messagesData.value.length === 0) {
     return [];
@@ -2262,6 +2449,119 @@ function updateCurrentDaytonaEvents() {
   })
   currentDaytonaEvents.value = allDaytonaEvents
 }
+
+// Function to check if a message is a final message that should show current token usage
+function isFinalMessage(msgItem) {
+  // Check for final response events in streaming groups
+  if (msgItem.type === 'streaming_group' && msgItem.events) {
+    return msgItem.events.some(event => {
+      const agentType = event.data?.additional_kwargs?.agent_type || event.data?.agent_type || event.additional_kwargs?.agent_type
+      return agentType === 'react_end' || 
+             agentType === 'financial_analysis_end' || 
+             agentType === 'sales_leads_end' ||
+             event.isFinalResponse
+    })
+  }
+  
+  // Check for direct final response messages
+  const agentType = msgItem.data?.additional_kwargs?.agent_type || 
+                   msgItem.data?.agent_type || 
+                   msgItem.additional_kwargs?.agent_type ||
+                   msgItem.agent_type
+  
+  return agentType === 'react_end' || 
+         agentType === 'financial_analysis_end' || 
+         agentType === 'sales_leads_end' ||
+         msgItem.isFinalResponse
+}
+
+// Function to extract token usage for a specific message
+function getMessageTokenUsage(msgItem) {
+  // For streaming groups, look for the final agent_completion event
+  if (msgItem.type === 'streaming_group' && msgItem.events) {
+    // Find the last agent_completion event with token usage in response_metadata.usage
+    for (let i = msgItem.events.length - 1; i >= 0; i--) {
+      const event = msgItem.events[i]
+      
+      // Check if token usage is stored in response_metadata.usage (same as performance metrics)
+      if (event.response_metadata?.usage && event.response_metadata.usage.total_tokens > 0) {
+        return {
+          input_tokens: event.response_metadata.usage.input_tokens || 0,
+          output_tokens: event.response_metadata.usage.output_tokens || 0,
+          total_tokens: event.response_metadata.usage.total_tokens || 0
+        }
+      }
+      
+      // Fallback: check other possible locations
+      if (event.data?.response_metadata?.usage && event.data.response_metadata.usage.total_tokens > 0) {
+        return {
+          input_tokens: event.data.response_metadata.usage.input_tokens || 0,
+          output_tokens: event.data.response_metadata.usage.output_tokens || 0,
+          total_tokens: event.data.response_metadata.usage.total_tokens || 0
+        }
+      }
+    }
+  }
+  
+  // For direct messages, check response_metadata.usage first (same as performance metrics)
+  if (msgItem.response_metadata?.usage && msgItem.response_metadata.usage.total_tokens > 0) {
+    return {
+      input_tokens: msgItem.response_metadata.usage.input_tokens || 0,
+      output_tokens: msgItem.response_metadata.usage.output_tokens || 0,
+      total_tokens: msgItem.response_metadata.usage.total_tokens || 0
+    }
+  }
+  
+  // Return empty if no token data found
+  return { input_tokens: 0, output_tokens: 0, total_tokens: 0 }
+}
+
+// Function to check if performance metrics are available for a message
+function hasPerformanceMetrics(msgItem) {
+  const metadata = getMessageResponseMetadata(msgItem);
+  const usage = metadata?.usage;
+  return usage && (
+    usage.total_latency || 
+    usage.time_to_first_token || 
+    usage.completion_tokens_per_sec
+  );
+}
+
+// Function to extract response metadata for a specific message
+function getMessageResponseMetadata(msgItem) {
+  // For streaming groups, look for the final agent_completion event
+  if (msgItem.type === 'streaming_group' && msgItem.events) {
+    // Find the last agent_completion event with response_metadata
+    for (let i = msgItem.events.length - 1; i >= 0; i--) {
+      const event = msgItem.events[i]
+      
+      let responseMetadata = null
+      
+      // Check if the event itself has response metadata (new direct attachment)
+      if (event.response_metadata) {
+        responseMetadata = event.response_metadata
+      } else if (event.data?.response_metadata) {
+        responseMetadata = event.data.response_metadata
+      }
+      
+      if (responseMetadata) {
+        return responseMetadata
+      }
+    }
+  }
+  
+  // For direct messages, check the message itself (including new direct attachment)
+  if (msgItem.response_metadata) {
+    return msgItem.response_metadata
+  } else if (msgItem.data?.response_metadata) {
+    return msgItem.data.response_metadata
+  }
+  
+  // Return null if no response metadata found
+  return null
+}
+
+
 </script>
 
 <style scoped>
@@ -2274,5 +2574,11 @@ function updateCurrentDaytonaEvents() {
 .chat-enter-active,
 .chat-leave-active {
   transition: all 0.3s ease;
+}
+
+/* Extra small text size */
+.text-2xs {
+  font-size: 0.625rem; /* 10px */
+  line-height: 0.75rem; /* 12px */
 }
 </style>
