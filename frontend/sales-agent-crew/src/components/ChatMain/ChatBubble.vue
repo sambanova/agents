@@ -247,7 +247,7 @@
     <!-- Human/User message -->
     <li
       v-else-if="isUserMessage" 
-      class="flex px-4 items-start gap-x-2 sm:gap-x-4"
+      class="flex px-4 items-center gap-x-2 sm:gap-x-4"
     >
       <div class="grow text-end space-y-3">
         <!-- Card -->
