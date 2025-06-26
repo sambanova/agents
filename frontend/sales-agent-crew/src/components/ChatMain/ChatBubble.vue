@@ -1312,7 +1312,7 @@ const currentStreamingStatus = computed(() => {
         'deep_research_writer': '◆ Writing content',
         'deep_research_grader': '◈ Evaluating quality',
         'deep_research_end': '✓ Research complete',
-        'react_subgraph_deep_research': '◐ Deep research'
+        'react_subgraph_deep_research': '◐ Deep research started'
       };
       
       if (deepResearchMap[agentType]) {
