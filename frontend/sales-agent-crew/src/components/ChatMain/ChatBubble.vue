@@ -18,18 +18,6 @@
         <div class="flex items-start justify-between p-3 bg-gray-50 rounded-t-lg border-b status-bar">
           <div class="flex items-start space-x-3 flex-1">
             <div class="flex items-center space-x-2">
-              <div :class="currentStatusDot" class="w-2 h-2 rounded-full mt-1 flex-shrink-0"></div>
-              <div v-if="showStatusAnimation" class="mt-0.5">
-                <svg 
-                  class="w-3 h-3 text-gray-500 animate-spin" 
-                  viewBox="0 0 24 24" 
-                  fill="none" 
-                  stroke="currentColor"
-                >
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
             </div>
             <div v-if="isStreamingResponse" class="text-sm text-gray-700 transition-all duration-300">
               {{ finalStatusSummary }}
@@ -81,7 +69,7 @@
             >
               <div class="flex items-center space-x-2">
                 <div class="w-8 h-8 bg-purple-500 rounded flex items-center justify-center">
-                  <span class="text-xs text-white">📊</span>
+                  <span class="text-xs text-white">◆</span>
                 </div>
                 <div>
                   <div class="text-xs font-medium text-gray-900">{{ artifact.title }}</div>
@@ -147,17 +135,10 @@
           <!-- Always use markdown rendering for text content to ensure consistent formatting -->
           <div class="prose prose-sm max-w-none">
             <div 
-              v-if="streamingResponseContent"
+              v-if="streamingResponseContent && typeof streamingResponseContent === 'string'"
               class="text-gray-800"
               v-html="renderMarkdown(streamingResponseContent)"
             ></div>
-            <div 
-              v-else-if="isCurrentlyStreaming && !streamingResponseContent"
-              class="flex items-center space-x-2 text-gray-500"
-            >
-              <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-              <span class="text-sm italic">Generating response...</span>
-            </div>
           </div>
 
           <!-- Inline Sources (minimalist) - MOVED TO AFTER RESPONSE -->
@@ -171,9 +152,9 @@
                   rel="noopener noreferrer"
                   class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs text-gray-700 hover:text-gray-900 transition-colors border border-gray-200 hover:border-gray-300"
                 >
-                  <span v-if="source.type === 'web'">🌐</span>
-                  <span v-else-if="source.type === 'arxiv'">📚</span>
-                  <span v-else>📄</span>
+                  <span v-if="source.type === 'web'">○</span>
+                  <span v-else-if="source.type === 'arxiv'">▫</span>
+                  <span v-else>•</span>
                   <span class="truncate max-w-[180px]">{{ source.title || 'Untitled' }}</span>
                   <span v-if="source.domain && source.domain !== source.title && source.type === 'web'" class="text-gray-500 text-xs">
                     • {{ source.domain }}
@@ -186,9 +167,9 @@
                   v-else-if="source && !source.url"
                   class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 rounded-lg text-xs text-gray-700 border border-gray-200"
                 >
-                  <span v-if="source.type === 'web'">🌐</span>
-                  <span v-else-if="source.type === 'arxiv'">📚</span>
-                  <span v-else>📄</span>
+                  <span v-if="source.type === 'web'">○</span>
+                  <span v-else-if="source.type === 'arxiv'">▫</span>
+                  <span v-else>•</span>
                   <span class="truncate max-w-[180px]">{{ source.title || 'Untitled' }}</span>
                 </div>
               </template>
@@ -210,6 +191,11 @@
                 {{ artifact.title }}
               </button>
             </div>
+          </div>
+          
+          <!-- Final Response Component for specialized responses (financial_analysis_end, etc.) -->
+          <div v-if="finalResponseComponent && finalResponseData">
+            <component :is="finalResponseComponent" :parsed="finalResponseData" />
           </div>
           
           <!-- Daytona Status Indicator and Controls -->
@@ -292,7 +278,7 @@
               {{ provider==="sambanova"?"SambaNova":provider }} Agent
               <!-- Menu button: visible on hover -->
               <button
-                v-if="parsedData.agent_type==='sales_leads'||parsedData.agent_type==='financial_analysis'||parsedData.agent_type==='deep_research'"
+                v-if="parsedData?.agent_type==='sales_leads'||parsedData?.agent_type==='financial_analysis'||parsedData?.agent_type==='deep_research'"
                 type="button"
                 class="group-hover:opacity-100 transition-opacity duration-200"
                 @click.stop="toggleMenu"
@@ -328,7 +314,7 @@
           </div>
         </div>
       </div>
-      <div class="w-full bg-white">          
+      <div v-if="selectedComponent" class="w-full bg-white">          
         <!-- Main response component -->
         <component :id="'chat-'+messageId" :is="selectedComponent" :parsed="parsedData" />
       </div>
@@ -365,9 +351,10 @@ import {
 
 
   import html2canvas from "html2canvas";
-  import jsPDF from "jspdf";
-  import html2pdf from 'html2pdf.js'
-  import { renderMarkdown } from '@/utils/markdownRenderer'
+import jsPDF from "jspdf";
+import html2pdf from 'html2pdf.js'
+import { renderMarkdown } from '@/utils/markdownRenderer'
+import { isFinalAgentType } from '@/utils/globalFunctions.js'
 
 
   function fetchProvider() {
@@ -449,6 +436,11 @@ import {
   sidebarOpen: {
     type: Boolean,
     default: false
+  },
+  
+  isInDeepResearch: {
+    type: Boolean,
+    default: false
   }
   
   })
@@ -483,8 +475,10 @@ return parsedData.metadata;
   
   // Parse the JSON string safely
   const parsedData = computed(() => {
+    if (!props.data) return {}
     try {
-      return JSON.parse(props.data)
+      const parsed = JSON.parse(props.data)
+      return parsed || {}
     } catch (error) {
       console.error('Error parsing data in ChatBubble:', error)
       return {}
@@ -622,19 +616,35 @@ const artifacts = computed(() => {
 
 // Extract streaming response content with better parsing
 const streamingResponseContent = computed(() => {
-  if (!props.streamingEvents) return ''
+  if (!props.streamingEvents || !Array.isArray(props.streamingEvents)) return ''
   
-  // First, look for the final completed response (react_end, financial_analysis_end, sales_leads_end)
-  for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
-    const event = props.streamingEvents[i]
-    if (event.event === 'agent_completion' && 
-        (event.data.agent_type === 'react_end' || 
-         event.data.agent_type === 'financial_analysis_end' || 
-         event.data.agent_type === 'sales_leads_end')) {
-      return event.data.content || ''
+  try {
+    // First, look for the final completed response (react_end, financial_analysis_end, sales_leads_end, deep_research_interrupt)
+    for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
+      const event = props.streamingEvents[i]
+      if (!event || !event.data) continue
+      
+      const agentType = getAgentType(event)
+      if (event.event === 'agent_completion' && 
+          isFinalAgentType(agentType)) {
+        // Special handling for final agent types that have specialized components
+        // Don't show in streaming content as they have their own specialized components
+        if (agentType === 'financial_analysis_end' || 
+            agentType === 'sales_leads_end' || 
+            agentType === 'react_end') {
+          return ''
+        }
+        // For deep_research_interrupt and other final responses, ensure content is a string
+        const content = event.data?.content || event.content || ''
+        return typeof content === 'string' ? content : ''
+      }
     }
+  } catch (error) {
+    console.error('Error processing streaming content:', error)
+    return ''
   }
   
+  // Default behavior for non-deep-research flows
   // If no completed response, find the largest streaming content that's not a tool call
   let bestContent = ''
   let maxLength = 0
@@ -642,10 +652,17 @@ const streamingResponseContent = computed(() => {
   props.streamingEvents.forEach(event => {
     if (event.event === 'llm_stream_chunk' && 
         event.data.content && 
-        !event.data.content.includes('<tool>') &&
+        !event.data.content.includes('<tool>') && 
+        !event.data.content.includes('<subgraph>') &&
         event.data.content.trim()) {
       
       const content = event.data.content.trim()
+
+      if (props.isInDeepResearch) {
+        console.log('Deep research flow detected, hiding main content')
+        return ''
+      }
+
       // Prefer longer content as it's likely the main response
       if (content.length > maxLength) {
         maxLength = content.length
@@ -659,12 +676,14 @@ const streamingResponseContent = computed(() => {
 
 // Get the final response component based on the agent_type
 const finalResponseComponent = computed(() => {
-  if (!props.streamingEvents) return null
+  if (!props.streamingEvents || !Array.isArray(props.streamingEvents)) return null
   
-  // Look for the final agent_completion event with a specific agent_type
-  for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
-    const event = props.streamingEvents[i]
-    if (event.event === 'agent_completion') {
+  try {
+    // Look for the final agent_completion event with a specific agent_type
+    for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
+      const event = props.streamingEvents[i]
+      if (!event || event.event !== 'agent_completion') continue
+      
       const agentType = getAgentType(event)
       
       switch (agentType) {
@@ -675,9 +694,11 @@ const finalResponseComponent = computed(() => {
         case 'react_end':
           return AssistantEndComponent
         default:
-          return null
+          continue
       }
     }
+  } catch (error) {
+    console.error('Error getting final response component:', error)
   }
   
   return null
@@ -693,9 +714,7 @@ const finalResponseData = computed(() => {
     // Robust agent_type detection to ensure real-time updates
     const agentType = getAgentType(event)
     if (event.event === 'agent_completion' &&
-        (agentType === 'financial_analysis_end' ||
-         agentType === 'sales_leads_end' ||
-         agentType === 'react_end')) {
+        isFinalAgentType(agentType)) {
       try {
         const content = event.data?.content || event.content || ''
         
@@ -1156,26 +1175,34 @@ function parsePythonStyleJSON(jsonString) {
 
 // Helper to reliably extract agent_type from different possible locations in the event object
 function getAgentType (event) {
-  if (!event) return null
-  return (
-    event?.data?.agent_type ||
-    event?.data?.additional_kwargs?.agent_type ||
-    event?.additional_kwargs?.agent_type ||
-    event?.agent_type ||
-    null
-  )
+  if (!event || typeof event !== 'object') return null
+  try {
+    return (
+      event?.data?.agent_type ||
+      event?.data?.additional_kwargs?.agent_type ||
+      event?.additional_kwargs?.agent_type ||
+      event?.agent_type ||
+      null
+    )
+  } catch (error) {
+    return null
+  }
 }
 
 // Parse user message content array for mixed text/image content
 const userMessageContent = computed(() => {
-  if (props.event === 'agent_completion' && 
-      (parsedData.value.additional_kwargs?.agent_type === 'human' || 
-       parsedData.value.type === 'HumanMessage')) {
-    
-    // Check if content is an array (with text and images)
-    if (Array.isArray(parsedData.value.content)) {
-      return parsedData.value.content
+  try {
+    if (props.event === 'agent_completion' && 
+        (parsedData.value?.additional_kwargs?.agent_type === 'human' || 
+         parsedData.value?.type === 'HumanMessage')) {
+      
+      // Check if content is an array (with text and images)
+      if (Array.isArray(parsedData.value?.content)) {
+        return parsedData.value.content
+      }
     }
+  } catch (error) {
+    console.error('Error parsing user message content:', error)
   }
   
   return []
@@ -1183,36 +1210,45 @@ const userMessageContent = computed(() => {
 
 // Check if this is a user/human message
 const isUserMessage = computed(() => {
-  return (props.event === 'agent_completion' && 
-         (parsedData.value.additional_kwargs?.agent_type === 'human' ||
-          parsedData.value.type === 'HumanMessage'))
+  try {
+    return (props.event === 'agent_completion' && 
+           (parsedData.value?.additional_kwargs?.agent_type === 'human' ||
+            parsedData.value?.type === 'HumanMessage'))
+  } catch (error) {
+    return false
+  }
 })
 
 
 
 // Decide whether this bubble should be rendered (skip internal or debug-only messages)
 const showBubble = computed(() => {
-  // Always show if this bubble carries streamingEvents (status line)
-  if (props.streamingEvents) return true
+  try {
+    // Always show if this bubble carries streamingEvents (status line)
+    if (props.streamingEvents) return true
 
-  // Always show user messages
-  if (isUserMessage.value) return true
+    // Always show user messages
+    if (isUserMessage.value) return true
 
-  // Empty or whitespace-only data – skip
-  if (!props.data || String(props.data).trim() === '') return false
+    // Empty or whitespace-only data – skip
+    if (!props.data || String(props.data).trim() === '') return false
 
-  // Raw subgraph payload – skip
-  if (String(props.data).includes('<subgraph')) return false
+    // Raw subgraph payload – skip
+    if (String(props.data).includes('<subgraph')) return false
 
-  // Internal agent types we never surface
-  const internalTypes = ['react_subgraph', 'react_tool', 'tool_response', 'routing']
-  const agentType = parsedData.value?.agent_type
-  if (internalTypes.includes(agentType)) return false
+    // Internal agent types we never surface
+    const internalTypes = ['react_subgraph', 'react_tool', 'tool_response', 'routing']
+    const agentType = parsedData.value?.agent_type
+    if (internalTypes.includes(agentType)) return false
 
-  // If component to be rendered is UnknownTypeComponent (and no streaming events), hide
-  if (selectedComponent.value === UnknownTypeComponent) return false
+    // If component to be rendered is UnknownTypeComponent (and no streaming events), hide
+    if (selectedComponent.value === UnknownTypeComponent) return false
 
-  return true
+    return true
+  } catch (error) {
+    console.error('Error in showBubble computed:', error)
+    return false
+  }
 })
 
 // Sidebar state management moved to ChatView level
@@ -1224,89 +1260,93 @@ const showBubble = computed(() => {
 
 // Streaming status and audit log properties that were accidentally removed
 const currentStreamingStatus = computed(() => {
+  // Handle cases with no streaming events
   if (!props.streamingEvents || props.streamingEvents.length === 0) {
-    // For loaded conversations, show completion status if we have workflow data
-    if (props.workflowData && props.workflowData.length > 0) {
-      return '✅ Response complete';
-    }
-    return '⏳ Starting...';
+    return props.workflowData?.length > 0 ? '✓ Response complete' : '○ Starting...';
   }
   
-  const events = props.streamingEvents
-  let currentTool = null
-  let toolQuery = null
+  const events = props.streamingEvents;
+  let currentTool = null;
+  let toolQuery = null;
+  let latestCompletion = null;
+  let hasStreamingContent = false;
   
-  // Process events chronologically to find the LATEST completion status
-  let latestCompletionStatus = null
-  
-  for (let i = 0; i < events.length; i++) {
-    const event = events[i]
-    const data = event.data
+  // Single pass through events to gather all necessary information
+  events.forEach(event => {
+    const data = event.data;
     
-    // Track current tool calls
-    if (event.event === 'llm_stream_chunk' && data.content && data.content.includes('<tool>')) {
-      const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
-      const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
+    // Track tool calls
+    if (event.event === 'llm_stream_chunk' && data.content?.includes('<tool>')) {
+      const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/);
+      const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/);
       
       if (toolMatch) {
-        currentTool = toolMatch[1]
-        toolQuery = inputMatch ? inputMatch[1].trim() : null
+        currentTool = toolMatch[1];
+        toolQuery = inputMatch?.[1]?.trim();
       }
     }
     
-    // Update latest completion status when we find tool results
+        // Track tool completions
     if (event.event === 'agent_completion' && data.type === 'LiberalFunctionMessage' && data.name) {
-      if (data.name === 'search_tavily' && Array.isArray(data.content)) {
-        const resultCount = data.content.length
-        latestCompletionStatus = `✅ Found ${resultCount} web sources`
-      } else if (data.name === 'arxiv') {
-        const papers = data.content && data.content.includes('Title:') ? 
-          data.content.split('Title:').length - 1 : 1
-        latestCompletionStatus = `✅ Found ${papers} arXiv papers`
-      } else if (data.name === 'DaytonaCodeSandbox') {
-        latestCompletionStatus = `✅ Code execution complete`
+      const { name, content } = data;
+      if (name === 'search_tavily' && Array.isArray(content)) {
+        latestCompletion = `✓ Found ${content.length} web sources`;
+      } else if (name === 'arxiv') {
+        const papers = content?.includes('Title:') ? content.split('Title:').length - 1 : 1;
+        latestCompletion = `✓ Found ${papers} arXiv papers`;
+      } else if (name === 'DaytonaCodeSandbox') {
+        latestCompletion = `✓ Code execution complete`;
       }
     }
-  }
-  
-  // Return latest completion status if we have one
-  if (latestCompletionStatus) {
-    return latestCompletionStatus
-  }
-  
-  // Check if we're streaming response
-  for (let i = events.length - 1; i >= 0; i--) {
-    const event = events[i]
-    const data = event.data
     
+    // Track deep research events
+    if (event.event === 'agent_completion') {
+      const agentType = data.additional_kwargs?.agent_type || data.agent_type;
+      const deepResearchMap = {
+        'deep_research_search_queries_plan': '◦ Planning search queries',
+        'deep_research_search_queries_plan_fixed': '↻ Plan format corrected',
+        'deep_research_search_sections': '▫ Creating research sections',
+        'deep_research_interrupt': '○ User feedback required',
+        'deep_research_search_queries_section': '• Section search queries',
+        'deep_research_search_queries_section_fixed': '↻ Section format corrected',
+        'deep_research_writer': '◆ Writing content',
+        'deep_research_grader': '◈ Evaluating quality',
+        'deep_research_end': '✓ Research complete',
+        'react_subgraph_deep_research': '◐ Deep research started'
+      };
+      
+      if (deepResearchMap[agentType]) {
+        latestCompletion = deepResearchMap[agentType];
+      }
+    }
+    
+    // Check for streaming response content
     if (event.event === 'llm_stream_chunk' && 
-        data.content && 
-        data.content.trim() && 
+        data.content?.trim() && 
         !data.content.includes('<tool>')) {
-      return '📝 Streaming response...'
+      hasStreamingContent = true;
     }
-  }
+  });
   
-  // Return current tool status if we have one and no completion
+  // Return status based on priority
+  if (latestCompletion) return latestCompletion;
+  if (hasStreamingContent) return '◆ Streaming response...';
+  
+  // Show current tool status
   if (currentTool) {
-    if (currentTool === 'search_tavily') {
-      return `🔍 Searching web: "${toolQuery || 'query'}"`
-    } else if (currentTool === 'arxiv') {
-      return `📚 Searching arXiv: "${toolQuery || 'query'}"`
-    } else if (currentTool === 'DaytonaCodeSandbox') {
-      return `⚡ Executing code in sandbox`
-    } else {
-      return `🔧 Using ${currentTool.replace('_', ' ')}: "${toolQuery || 'executing'}"`
-    }
+    const toolMap = {
+      'search_tavily': `○ Searching web: "${toolQuery || 'query'}"`,
+      'arxiv': `▫ Searching arXiv: "${toolQuery || 'query'}"`,
+      'DaytonaCodeSandbox': `◐ Executing code in sandbox`
+    };
+    return toolMap[currentTool] || `• Using ${currentTool.replace('_', ' ')}: "${toolQuery || 'executing'}"`;
   }
   
-  // Check if we're done
-  const lastEvent = events[events.length - 1]
-  if (lastEvent?.event === 'stream_complete') {
-    return '✅ Response complete'
-  }
+  // Final fallbacks
+  const lastEvent = events[events.length - 1];
+  if (lastEvent?.event === 'stream_complete') return '✓ Response complete';
   
-  return '💭 Processing...'
+  return '◦ Processing...';
 })
 
 const isStreamingResponse = computed(() => {
@@ -1347,7 +1387,7 @@ const finalStatusSummary = computed(() => {
       });
       
       if (completedTasks.length > 0) {
-        return `✅ ${completedTasks.join(' • ')}`;
+        return `✓ ${completedTasks.join(' • ')}`;
       }
     }
     return 'Details';
@@ -1373,7 +1413,7 @@ const finalStatusSummary = computed(() => {
   })
   
   if (completedTools.length > 0) {
-    return `✅ ${completedTools.join(' • ')}`
+    return `✓ ${completedTools.join(' • ')}`
   }
   
   return 'Details'
@@ -1384,7 +1424,7 @@ const showSearchingAnimation = computed(() => {
   
   const status = currentStreamingStatus.value
   // Show bouncing dots specifically for search operations
-  return status.includes('🔍 Searching') || status.includes('📚 Searching')
+  return status.includes('○ Searching') || status.includes('▫ Searching')
 })
 
 const hasCompletedEvents = computed(() => {
@@ -1401,7 +1441,7 @@ const hasCompletedEvents = computed(() => {
     (event.event === 'agent_completion' && event.data.name === 'search_tavily') ||
     (event.event === 'agent_completion' && event.data.name === 'arxiv') ||
     (event.event === 'stream_complete') ||
-    (event.event === 'agent_completion' && event.data.agent_type === 'react_end') ||
+    (event.event === 'agent_completion' && isFinalAgentType(event.data.agent_type)) ||
     (event.isToolRelated || event.isDaytonaRelated) || // Check our custom flags
     event.event === 'agent_completion' || event.event === 'stream_complete'
   )
@@ -1413,10 +1453,10 @@ const auditLogEvents = computed(() => {
     if (props.workflowData && props.workflowData.length > 0) {
       return props.workflowData.map((workflow, index) => ({
         id: `synthetic-audit-${index}`,
-        title: `✅ ${workflow.agent_name || 'Agent'} - ${workflow.task || 'Task'}`,
+        title: `✓ ${workflow.agent_name || 'Agent'} - ${workflow.task || 'Task'}`,
         details: workflow.tool_name ? `Tool: ${workflow.tool_name}` : 'Completed successfully',
         subItems: [],
-        dotClass: workflow.task === 'code_execution' ? 'bg-purple-500' : 'bg-green-500',
+        dotClass: 'bg-gray-400',
         type: 'tool_result',
         event: 'workflow_item',
         timestamp: new Date().toISOString(),
@@ -1432,7 +1472,21 @@ const auditLogEvents = computed(() => {
       if (event.event === 'stream_start') return false
       if (event.event === 'stream_complete') return false
       if (event.event === 'agent_completion' && event.data.agent_type === 'human') return false
-      if (event.event === 'agent_completion' && event.data.agent_type === 'react_end') return false
+      if (event.event === 'agent_completion' && isFinalAgentType(event.data.agent_type)) return false
+      
+      // Special handling for deep research events - include all phases except final in audit log
+      const agentType = getAgentType(event)
+      if (agentType === 'deep_research_search_queries_plan' || 
+          agentType === 'deep_research_search_queries_plan_fixed' ||
+          agentType === 'deep_research_search_sections' ||
+          agentType === 'deep_research_search_queries_section' ||
+          agentType === 'deep_research_search_queries_section_fixed' ||
+          agentType === 'deep_research_writer' ||
+          agentType === 'deep_research_grader' ||
+          agentType === 'react_subgraph_deep_research') {
+        return true // Include deep research phases in audit log
+      }
+      
       if (event.event === 'llm_stream_chunk' && event.data.content && !event.data.content.includes('<tool>')) return false
       
       return true
@@ -1453,39 +1507,83 @@ const auditLogEvents = computed(() => {
           const query = inputMatch ? inputMatch[1].trim() : 'No query'
           
           if (tool === 'search_tavily') {
-            title = `🔍 Search Tavily`
+            title = `Search Tavily`
             details = `Query: "${query}"`
           } else if (tool === 'arxiv') {
-            title = `📚 Search arXiv`
+            title = `Search arXiv`
             details = `Query: "${query}"`
           } else if (tool === 'DaytonaCodeSandbox') {
-            title = `⚡ Execute Code`
+            title = `Execute Code`
             details = 'Running analysis in sandbox'
           } else {
-            title = `🔧 ${tool.replace('_', ' ')}`
+            title = `${tool.replace('_', ' ')}`
             details = `Query: "${query}"`
           }
-          dotClass = 'bg-purple-500'
+          dotClass = 'bg-gray-400'
           type = 'tool_call'
         }
       } else if (event.event === 'agent_completion' && data.type === 'LiberalFunctionMessage' && data.name) {
         if (data.name === 'search_tavily') {
           const resultCount = Array.isArray(data.content) ? data.content.length : 0
-          title = `✅ Found ${resultCount} web sources`
+          title = `Found ${resultCount} web sources`
           details = resultCount > 0 ? 'Search completed successfully' : 'No sources found'
-          dotClass = 'bg-green-500'
+          dotClass = 'bg-gray-400'
           type = 'tool_result'
         } else if (data.name === 'arxiv') {
           const papers = data.content && data.content.includes('Title:') ? 
             data.content.split('Title:').length - 1 : 1
-          title = `✅ Found ${papers} arXiv papers`
-          dotClass = 'bg-green-500'
+          title = `Found ${papers} arXiv papers`
+          dotClass = 'bg-gray-400'
           type = 'tool_result'
         } else if (data.name === 'DaytonaCodeSandbox') {
-          title = `✅ Code execution complete`
+          title = `Code execution complete`
           details = 'Generated charts and analysis'
-          dotClass = 'bg-green-500'
+          dotClass = 'bg-gray-400'
           type = 'tool_result'
+        }
+      } else if (event.event === 'agent_completion') {
+        // Handle deep research agent types
+        const agentType = getAgentType(event)
+        if (agentType === 'react_subgraph_deep_research') {
+          title = `Deep Research Started`
+          details = 'Initializing comprehensive research workflow'
+          dotClass = 'bg-gray-400'
+          type = 'deep_research_start'
+        } else if (agentType === 'deep_research_search_queries_plan') {
+          title = 'Research Planning'
+          details = 'Generating search queries and research strategy'
+          dotClass = 'bg-gray-400'
+          type = 'deep_research_planning'
+        } else if (agentType === 'deep_research_search_queries_plan_fixed') {
+          title = `Research Plan Refined`
+          details = 'Optimizing search queries for better results'
+          dotClass = 'bg-gray-400'
+          type = 'deep_research_planning'
+        } else if (agentType === 'deep_research_search_sections') {
+          title = `▫ Research Sections Defined`
+          details = 'Organizing research into structured sections'
+          dotClass = 'bg-gray-400'
+          type = 'deep_research_sections'
+        } else if (agentType === 'deep_research_search_queries_section') {
+          title = `Section Search Queries`
+          details = 'Generating search queries for each section of the plan'
+          dotClass = 'bg-gray-400'
+          type = 'deep_research_section_queries'
+        } else if (agentType === 'deep_research_search_queries_section_fixed') {
+          title = `Section Queries Refined`
+          details = 'Retrying section format that was incorrect'
+          dotClass = 'bg-gray-400'
+          type = 'deep_research_section_queries_fixed'
+        } else if (agentType === 'deep_research_writer') {
+          title = `Content Generation`
+          details = 'Generating written content for a section'
+          dotClass = 'bg-gray-400'
+          type = 'deep_research_writer'
+        } else if (agentType === 'deep_research_grader') {
+          title = `Quality Evaluation`
+          details = 'Evaluating section quality and completeness'
+          dotClass = 'bg-gray-400'
+          type = 'deep_research_grader'
         }
       }
       

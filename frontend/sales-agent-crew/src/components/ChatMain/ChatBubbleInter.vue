@@ -228,6 +228,7 @@ import { formattedText } from '@/utils/formatText'
 import { marked } from 'marked'
 import StatusAnimationBox from './StatusAnimationBox.vue'
 import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue'
+import { isFinalAgentType } from '@/utils/globalFunctions.js'
 function fetchProvider() {
   if (!props.workflowData || !Array.isArray(props.workflowData)) {
     return null

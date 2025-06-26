@@ -363,7 +363,7 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                     content.split("<subgraph>")[1].split("</subgraph>")[0].strip()
                 )
                 if subgraph_name:
-                    additional_kwargs["agent_type"] = "react_subgraph"
+                    additional_kwargs["agent_type"] = "react_subgraph_" + subgraph_name
                     last_message.additional_kwargs = additional_kwargs
                     return f"subgraph_{subgraph_name}"
             except (IndexError, ValueError):

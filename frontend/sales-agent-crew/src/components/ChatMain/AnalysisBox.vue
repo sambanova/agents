@@ -107,6 +107,7 @@ import WorkflowDataItem from '@/components/ChatMain/WorkflowDataItem.vue'
 import TimeLineAssitance from '@/components/ChatMain/TimeLineAssitance.vue'
 import MetaDataH from '@/components/ChatMain/MetaDataH.vue'
 import LinkChips from '@/components/ChatMain/LinkChips.vue'
+import { isFinalAgentType } from '@/utils/globalFunctions.js'
 const isOpen = ref(false)
 const props = defineProps({
   streamData: { type: Array, default: () => [] },
@@ -172,7 +173,7 @@ const hasCompletedEvents = computed(() => {
     (event.event === 'agent_completion' && event.data.name === 'search_tavily') ||
     (event.event === 'agent_completion' && event.data.name === 'arxiv') ||
     (event.event === 'stream_complete') ||
-    (event.event === 'agent_completion' && event.data.agent_type === 'react_end') ||
+    (event.event === 'agent_completion' && isFinalAgentType(event.data.agent_type)) ||
     (event.isToolRelated || event.isDaytonaRelated) || // Check our custom flags
     event.event === 'agent_completion' || event.event === 'stream_complete'
   )

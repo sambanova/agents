@@ -513,7 +513,11 @@ class WebSocketConnectionManager(WebSocketInterface):
             session_key = f"{user_id}:{conversation_id}"
             websocket = self.connections.get(session_key)
 
-            if "event" in data and data["event"] == "agent_completion":
+            if "event" in data and data["event"] in [
+                "agent_completion",
+                "stream_complete",
+                "stream_start",
+            ]:
 
                 if "id" in data:
                     is_new = await self.message_storage.is_message_new(
