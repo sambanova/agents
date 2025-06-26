@@ -126,22 +126,10 @@
         </div>
 
         <!-- Model usage cards -->
-        <div v-if="workflowData && workflowData.length || deepResearchPdfFileId" class="px-3 pt-3 pb-1 bg-gray-50 border-b">
+        <div v-if="workflowData && workflowData.length" class="px-3 pt-3 pb-1 bg-gray-50 border-b">
           <div class="flex items-start justify-between">
-            <div v-if="workflowData && workflowData.length" class="flex-1">
+            <div class="flex-1">
               <WorkflowDataItem :workflowData="workflowData" />
-            </div>
-            <!-- PDF Download Button for Deep Research -->
-            <div v-if="deepResearchPdfFileId" class="ml-3">
-              <button 
-                @click="downloadPdf(deepResearchPdfFileId, deepResearchPdfFilename)"
-                class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs text-gray-700 hover:text-gray-900 transition-colors border border-gray-200 hover:border-gray-300"
-              >
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
-                PDF Report
-              </button>
             </div>
           </div>
         </div>
@@ -243,6 +231,19 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
               </svg>
             </div>
+          </div>
+
+          <!-- PDF Download Button for Deep Research - Moved to bottom -->
+          <div v-if="deepResearchPdfFileId" class="mt-4 flex justify-center">
+            <button 
+              @click="downloadPdf(deepResearchPdfFileId, deepResearchPdfFilename)"
+              class="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg text-sm text-white font-medium transition-colors shadow-sm hover:shadow-md"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+              Download PDF Report
+            </button>
           </div>
         </div>
       </div>
