@@ -37,6 +37,7 @@
 
 <script setup>
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
+import { isFinalAgentType } from '@/utils/globalFunctions.js'
 
 const props = defineProps({
   title: {
@@ -217,7 +218,7 @@ const currentStreamingStatus = computed(() => {
   // Check if we're done
   const lastEvent = events[events.length - 1]
   if (lastEvent?.event === 'stream_complete' || 
-      (lastEvent?.event === 'agent_completion' && lastEvent.data.agent_type === 'react_end')) {
+      (lastEvent?.event === 'agent_completion' && isFinalAgentType(lastEvent.data.agent_type))) {
     return '✅ Response complete'
   }
   

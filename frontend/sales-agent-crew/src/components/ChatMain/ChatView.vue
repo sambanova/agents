@@ -535,6 +535,7 @@ import emitterMitt from '@/utils/eventBus.js';
 import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue';
 import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue';
 import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue';
+import { isFinalAgentType, shouldExcludeFromGrouping } from '@/utils/globalFunctions.js';
 
 // Inject the shared selectedOption from MainLayout.vue.
 const selectedOption = inject('selectedOption');
@@ -879,7 +880,7 @@ async function filterChat(msgData) {
         
         // Only show user messages and final responses in main chat bubbles
         const isUserMessage = message.additional_kwargs?.agent_type === 'human' || message.type === 'HumanMessage';
-        const isFinalResponse = ['react_end', 'financial_analysis_end', 'sales_leads_end'].includes(message.additional_kwargs?.agent_type);
+        const isFinalResponse = isFinalAgentType(message.additional_kwargs?.agent_type);
         const isRegularAIMessage = message.type === 'AIMessage' && !isToolCall && !isToolResult && !isToolResponse;
         
         if (!isUserMessage && !isFinalResponse && !isRegularAIMessage) {
@@ -1744,14 +1745,11 @@ async function connectWebSocket() {
             };
             console.log('Updated cumulative token usage:', cumulativeTokenUsage.value);
           }
-          
+      
 
           
           // Check if this is a final response event
-          const isFinalResponse = receivedData.additional_kwargs?.agent_type === 'react_end' || 
-                                 receivedData.additional_kwargs?.agent_type === 'financial_analysis_end';
-
-
+          const isFinalResponse = isFinalAgentType(receivedData.additional_kwargs?.agent_type);
           
           // Create message object and attach token usage data directly to it
           const messageData = {
@@ -1990,11 +1988,30 @@ function formatMessageData(msgItem) {
         
         // agent_completion events from LangGraph have structured data
         if (msgItem.data && typeof msgItem.data === 'object') {
+          const agentType = msgItem.data.agent_type || msgItem.data.additional_kwargs?.agent_type || 'assistant';
+          
+          // Special handling for financial_analysis_end - preserve structured data
+          if (agentType === 'financial_analysis_end') {
+            const formatted = {
+              content: msgItem.data.content, // Keep the full structured content for FinancialAnalysisEndComponent
+              data: msgItem.data.content,
+              message: msgItem.data.content,
+              agent_type: agentType,
+              metadata: msgItem.data.response_metadata || null,
+              additional_kwargs: msgItem.data.additional_kwargs || {},
+              timestamp: msgItem.timestamp || new Date().toISOString(),
+              type: msgItem.data.type || 'AIMessage',
+              id: msgItem.data.id
+            };
+            return JSON.stringify(formatted);
+          }
+          
+          // Default handling for other agent types
           const formatted = {
             content: msgItem.data.content || '',
             data: msgItem.data.content || '',
             message: msgItem.data.content || '',
-            agent_type: msgItem.data.agent_type || msgItem.data.additional_kwargs?.agent_type || 'assistant',
+            agent_type: agentType,
             metadata: msgItem.data.response_metadata || null,
             additional_kwargs: msgItem.data.additional_kwargs || {},
             timestamp: msgItem.timestamp || new Date().toISOString(),
@@ -2093,7 +2110,7 @@ const filteredMessages = computed(() => {
       }
       
       // Identify AI messages (these should be separate unless they're truly streaming)
-      if (msg.type === 'AIMessage' || msg.agent_type === 'react_end' || msg.agent_type === 'financial_analysis_end') {
+      if (msg.type === 'AIMessage' || isFinalAgentType(msg.agent_type)) {
         aiMessages.add(msg.message_id);
       }
       
@@ -2114,7 +2131,10 @@ const filteredMessages = computed(() => {
     
     // Second pass: group or separate messages
     messagesData.value.forEach((msg, index) => {
-      if (!msg) return; // Skip null/undefined messages
+      if (!msg || msg === null || msg === undefined) {
+        console.warn('Skipping null/undefined message at index:', index);
+        return; // Skip null/undefined messages
+      }
       
       const msgId = msg.message_id;
 
@@ -2130,16 +2150,9 @@ const filteredMessages = computed(() => {
         return;
       }
 
-      // Group ALL streaming events for the same message_id (except user messages)  
-      // But exclude only financial_analysis_end from grouping since it doesn't stream first
-      const shouldExcludeFromGrouping = agentType === 'financial_analysis_end';
-      
-
-
       if (streamingEvents.includes(msg.event) &&
           msgId &&
-          !(agentType === 'human' || msg.type === 'HumanMessage') &&
-          !shouldExcludeFromGrouping) {
+          !(agentType === 'human' || msg.type === 'HumanMessage')) {
 
         const groupKey = `streaming_${msgId}`;
 
@@ -2210,13 +2223,16 @@ const filteredMessages = computed(() => {
       return aTime - bTime;
     });
 
-
+    console.log("debug result", result)
 
     return result;
   } catch (error) {
     console.error('Error in filteredMessages computed:', error);
-    // Fallback: return messages as-is if there's an error
-    return messagesData.value || [];
+    console.error('messagesData.value:', messagesData.value);
+    // Fallback: return safe messages array filtering out null/undefined values
+    const safeMessages = (messagesData.value || []).filter(msg => msg !== null && msg !== undefined);
+    console.log('Returning safe messages:', safeMessages);
+    return safeMessages;
   }
 });
 
@@ -2331,10 +2347,7 @@ function isFinalMessage(msgItem) {
   if (msgItem.type === 'streaming_group' && msgItem.events) {
     return msgItem.events.some(event => {
       const agentType = event.data?.additional_kwargs?.agent_type || event.data?.agent_type || event.additional_kwargs?.agent_type
-      return agentType === 'react_end' || 
-             agentType === 'financial_analysis_end' || 
-             agentType === 'sales_leads_end' ||
-             event.isFinalResponse
+      return isFinalAgentType(agentType) || event.isFinalResponse
     })
   }
   
@@ -2344,10 +2357,7 @@ function isFinalMessage(msgItem) {
                    msgItem.additional_kwargs?.agent_type ||
                    msgItem.agent_type
   
-  return agentType === 'react_end' || 
-         agentType === 'financial_analysis_end' || 
-         agentType === 'sales_leads_end' ||
-         msgItem.isFinalResponse
+  return isFinalAgentType(agentType) || msgItem.isFinalResponse
 }
 
 // Function to extract token usage for a specific message

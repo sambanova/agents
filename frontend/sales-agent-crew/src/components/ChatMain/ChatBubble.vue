@@ -146,7 +146,7 @@
           <!-- Always use markdown rendering for text content to ensure consistent formatting -->
           <div class="prose prose-sm max-w-none">
             <div 
-              v-if="streamingResponseContent"
+              v-if="streamingResponseContent && typeof streamingResponseContent === 'string'"
               class="text-gray-800"
               v-html="renderMarkdown(streamingResponseContent)"
             ></div>
@@ -202,6 +202,11 @@
                 {{ artifact.title }}
               </button>
             </div>
+          </div>
+          
+          <!-- Final Response Component for specialized responses (financial_analysis_end, etc.) -->
+          <div v-if="finalResponseComponent && finalResponseData">
+            <component :is="finalResponseComponent" :parsed="finalResponseData" />
           </div>
           
           <!-- Daytona Status Indicator and Controls -->
@@ -357,9 +362,10 @@ import {
 
 
   import html2canvas from "html2canvas";
-  import jsPDF from "jspdf";
-  import html2pdf from 'html2pdf.js'
-  import { renderMarkdown } from '@/utils/markdownRenderer'
+import jsPDF from "jspdf";
+import html2pdf from 'html2pdf.js'
+import { renderMarkdown } from '@/utils/markdownRenderer'
+import { isFinalAgentType } from '@/utils/globalFunctions.js'
 
 
   function fetchProvider() {
@@ -620,10 +626,15 @@ const streamingResponseContent = computed(() => {
   for (let i = props.streamingEvents.length - 1; i >= 0; i--) {
     const event = props.streamingEvents[i]
     if (event.event === 'agent_completion' && 
-        (event.data.agent_type === 'react_end' || 
-         event.data.agent_type === 'financial_analysis_end' || 
-         event.data.agent_type === 'sales_leads_end')) {
-      return event.data.content || ''
+        isFinalAgentType(event.data.agent_type)) {
+      // Special handling for financial_analysis_end - don't show in streaming content
+      // as it has its own specialized component
+      if (event.data.agent_type === 'financial_analysis_end') {
+        return ''
+      }
+      // For other final responses, ensure content is a string
+      const content = event.data.content || ''
+      return typeof content === 'string' ? content : ''
     }
   }
   
@@ -686,9 +697,7 @@ const finalResponseData = computed(() => {
     // Robust agent_type detection to ensure real-time updates
     const agentType = getAgentType(event)
     if (event.event === 'agent_completion' &&
-        (agentType === 'financial_analysis_end' ||
-         agentType === 'sales_leads_end' ||
-         agentType === 'react_end')) {
+        isFinalAgentType(agentType)) {
       try {
         const content = event.data?.content || event.content || ''
         
@@ -1394,7 +1403,7 @@ const hasCompletedEvents = computed(() => {
     (event.event === 'agent_completion' && event.data.name === 'search_tavily') ||
     (event.event === 'agent_completion' && event.data.name === 'arxiv') ||
     (event.event === 'stream_complete') ||
-    (event.event === 'agent_completion' && event.data.agent_type === 'react_end') ||
+    (event.event === 'agent_completion' && isFinalAgentType(event.data.agent_type)) ||
     (event.isToolRelated || event.isDaytonaRelated) || // Check our custom flags
     event.event === 'agent_completion' || event.event === 'stream_complete'
   )
@@ -1425,7 +1434,7 @@ const auditLogEvents = computed(() => {
       if (event.event === 'stream_start') return false
       if (event.event === 'stream_complete') return false
       if (event.event === 'agent_completion' && event.data.agent_type === 'human') return false
-      if (event.event === 'agent_completion' && event.data.agent_type === 'react_end') return false
+      if (event.event === 'agent_completion' && isFinalAgentType(event.data.agent_type)) return false
       if (event.event === 'llm_stream_chunk' && event.data.content && !event.data.content.includes('<tool>')) return false
       
       return true
