@@ -1186,20 +1186,24 @@ function getFileExtension(type) {
 }
 
 function expandArtifact(artifact) {
+  console.log('Expanding artifact:', artifact)
+  
   // All file types now have inline viewers in the sidebar
   // Still support the expand-artifact event for full-screen modals if needed
   
   // For backward compatibility, emit both events with proper data structure
   if (artifact.type === 'image') {
     // Ensure the artifact has all properties the modal expects
+    // ArtifactCanvas expects type 'chart' for images, so we need to adapt the data
     const chartData = {
       ...artifact,
-      // Make sure these properties exist for compatibility
+      type: 'chart', // Change type to 'chart' for ArtifactCanvas compatibility
       id: artifact.id,
       title: artifact.title,
       url: artifact.url,
       downloadUrl: artifact.downloadUrl || artifact.url
     }
+    console.log('Emitting expand-chart with data:', chartData)
     emit('expand-chart', chartData)  // Keep old event for images
   }
   

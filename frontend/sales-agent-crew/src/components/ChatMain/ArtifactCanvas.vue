@@ -1,16 +1,30 @@
 <template>
-  <div v-if="isOpen" class="fixed inset-0 z-50 overflow-y-auto" @click="handleBackdropClick">
-    <div class="flex min-h-screen items-center justify-center p-4">
-      <!-- Backdrop -->
-      <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity"></div>
-      
-      <!-- Modal -->
-      <div class="relative w-full max-w-6xl bg-white rounded-lg shadow-xl" @click.stop>
-        <!-- Header -->
-        <div class="flex items-center justify-between p-4 border-b">
-          <h3 class="text-lg font-semibold text-gray-900">
-            {{ artifact?.title || 'Artifact View' }}
-          </h3>
+  <!-- Full overlay with proper z-index and focus management -->
+  <div 
+    v-if="isOpen" 
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+    style="background-color: rgba(0, 0, 0, 0.5);"
+    @click="handleBackdropClick"
+    @keydown.esc="$emit('close')"
+    tabindex="-1"
+    ref="modalOverlay"
+  >
+    <!-- Modal -->
+    <div 
+      class="relative w-full max-w-6xl bg-white rounded-lg shadow-xl transform transition-all duration-200 scale-100"
+      @click.stop
+      role="dialog"
+      aria-modal="true"
+      :aria-labelledby="'modal-title-' + (artifact?.id || 'artifact')"
+    >
+      <!-- Header -->
+      <div class="flex items-center justify-between p-4 border-b">
+        <h3 
+          class="text-lg font-semibold text-gray-900"
+          :id="'modal-title-' + (artifact?.id || 'artifact')"
+        >
+          {{ artifact?.title || 'Artifact View' }}
+        </h3>
           <button 
             @click="$emit('close')"
             class="p-2 hover:bg-gray-100 rounded-full transition-colors"
@@ -96,14 +110,13 @@
           >
             Close
           </button>
-        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 
 const props = defineProps({
   isOpen: {
@@ -120,6 +133,7 @@ const emit = defineEmits(['close'])
 
 const chartUrl = ref('')
 const htmlContent = ref('')
+const modalOverlay = ref(null)
 
 // Watch for artifact changes to load content
 watch(() => props.artifact, (newArtifact) => {
@@ -127,6 +141,17 @@ watch(() => props.artifact, (newArtifact) => {
     loadArtifactContent(newArtifact)
   }
 }, { immediate: true })
+
+// Focus management for proper modal behavior
+watch(() => props.isOpen, (isOpen) => {
+  if (isOpen) {
+    nextTick(() => {
+      if (modalOverlay.value) {
+        modalOverlay.value.focus()
+      }
+    })
+  }
+})
 
 const canDownload = computed(() => {
   return props.artifact?.type === 'chart' && chartUrl.value
@@ -137,11 +162,17 @@ function loadArtifactContent(artifact) {
   
   switch (artifact.type) {
     case 'chart':
-      // For charts, we need to construct the URL from the attachment ID
-      if (artifact.id) {
-        // This would typically be a URL to your backend that serves the chart
+      // For charts/images, use the actual URL from the artifact
+      if (artifact.url) {
+        chartUrl.value = artifact.url
+        console.log('Loading chart URL:', artifact.url)
+      } else if (artifact.id) {
+        // Fallback: construct URL from the attachment ID
         chartUrl.value = `/api/artifacts/${artifact.id}`
-        // For now, we'll use a placeholder
+        console.log('Using fallback chart URL:', chartUrl.value)
+      } else {
+        console.warn('No URL or ID found for chart artifact:', artifact)
+        // Use a placeholder only as last resort
         chartUrl.value = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="100%" height="100%" fill="#f0f0f0"/><text x="50%" y="50%" text-anchor="middle" fill="#666">Chart: ' + artifact.title + '</text></svg>')}`
       }
       break
@@ -191,11 +222,6 @@ if (typeof window !== 'undefined') {
 </script>
 
 <style scoped>
-/* Ensure modal appears above everything */
-.fixed {
-  z-index: 9999;
-}
-
 /* Smooth transitions */
 .transition-opacity {
   transition: opacity 0.2s ease-in-out;
