@@ -80,6 +80,7 @@
               :data="formatMessageData(msgItem)"
               :messageId="msgItem.message_id || msgItem.messageId || msgItem.id"
               :streamingEvents="msgItem.type === 'streaming_group' ? msgItem.events : null"
+              :provider="provider"
               :sidebarOpen="showDaytonaSidebar"
               @open-daytona-sidebar="handleOpenDaytonaSidebar"
               @open-artifact-canvas="handleOpenArtifactCanvas"
@@ -2126,7 +2127,7 @@ const filteredMessages = computed(() => {
         return;
       }
 
-      // Group ALL streaming events for the same message_id (except user messages)
+      // Group ALL streaming events for the same message_id (except user messages)  
       // But exclude only financial_analysis_end from grouping since it doesn't stream first
       const shouldExcludeFromGrouping = agentType === 'financial_analysis_end';
       
@@ -2505,7 +2506,6 @@ function getRunSummary(msgItem) {
   }
   
   const runData = runMetrics.value.get(runId);
-  console.log('Run data for', runId, ':', runData);
   
   // Calculate sums and averages
   const summary = {

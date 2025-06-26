@@ -19,7 +19,7 @@
           <div class="flex items-start space-x-3 flex-1">
             <div class="flex items-center space-x-2">
               <div :class="currentStatusDot" class="w-2 h-2 rounded-full mt-1 flex-shrink-0"></div>
-              <div v-if="showStatusAnimation" class="mt-0.5">
+              <div v-if="showSearchingAnimation" class="mt-0.5">
                 <svg 
                   class="w-3 h-3 text-gray-500 animate-spin" 
                   viewBox="0 0 24 24" 
