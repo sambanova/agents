@@ -1,9 +1,16 @@
 FROM python:3.11-slim-bookworm AS dependencies
 
-# Install system dependencies for uv
+# Install system dependencies for uv and weasyprint
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     build-essential \
+    libglib2.0-0 \
+    libcairo2 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libgdk-pixbuf-2.0-0 \
+    libffi-dev \
+    shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
 # Install UV
@@ -18,6 +25,17 @@ COPY pyproject.toml uv.lock* ./
 RUN /root/.local/bin/uv sync --no-dev --no-install-project
 
 FROM python:3.11-slim-bookworm
+
+# Install runtime dependencies for weasyprint
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libcairo2 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libgdk-pixbuf-2.0-0 \
+    libffi-dev \
+    shared-mime-info \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
