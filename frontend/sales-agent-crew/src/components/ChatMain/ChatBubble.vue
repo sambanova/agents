@@ -18,17 +18,6 @@
         <div class="flex items-start justify-between p-3 bg-gray-50 rounded-t-lg border-b status-bar">
           <div class="flex items-start space-x-3 flex-1">
             <div class="flex items-center space-x-2">
-              <div v-if="showSearchingAnimation" class="mt-0.5">
-                <svg 
-                  class="w-3 h-3 text-gray-500 animate-spin" 
-                  viewBox="0 0 24 24" 
-                  fill="none" 
-                  stroke="currentColor"
-                >
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
             </div>
             <div v-if="isStreamingResponse" class="text-sm text-gray-700 transition-all duration-300">
               {{ finalStatusSummary }}
@@ -80,7 +69,7 @@
             >
               <div class="flex items-center space-x-2">
                 <div class="w-8 h-8 bg-purple-500 rounded flex items-center justify-center">
-                  <span class="text-xs text-white">📊</span>
+                  <span class="text-xs text-white">◆</span>
                 </div>
                 <div>
                   <div class="text-xs font-medium text-gray-900">{{ artifact.title }}</div>
@@ -163,9 +152,9 @@
                   rel="noopener noreferrer"
                   class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs text-gray-700 hover:text-gray-900 transition-colors border border-gray-200 hover:border-gray-300"
                 >
-                  <span v-if="source.type === 'web'">🌐</span>
-                  <span v-else-if="source.type === 'arxiv'">📚</span>
-                  <span v-else>📄</span>
+                  <span v-if="source.type === 'web'">○</span>
+                  <span v-else-if="source.type === 'arxiv'">▫</span>
+                  <span v-else>•</span>
                   <span class="truncate max-w-[180px]">{{ source.title || 'Untitled' }}</span>
                   <span v-if="source.domain && source.domain !== source.title && source.type === 'web'" class="text-gray-500 text-xs">
                     • {{ source.domain }}
@@ -178,9 +167,9 @@
                   v-else-if="source && !source.url"
                   class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 rounded-lg text-xs text-gray-700 border border-gray-200"
                 >
-                  <span v-if="source.type === 'web'">🌐</span>
-                  <span v-else-if="source.type === 'arxiv'">📚</span>
-                  <span v-else>📄</span>
+                  <span v-if="source.type === 'web'">○</span>
+                  <span v-else-if="source.type === 'arxiv'">▫</span>
+                  <span v-else>•</span>
                   <span class="truncate max-w-[180px]">{{ source.title || 'Untitled' }}</span>
                 </div>
               </template>
@@ -1273,7 +1262,7 @@ const showBubble = computed(() => {
 const currentStreamingStatus = computed(() => {
   // Handle cases with no streaming events
   if (!props.streamingEvents || props.streamingEvents.length === 0) {
-    return props.workflowData?.length > 0 ? '✅ Response complete' : '⏳ Starting...';
+    return props.workflowData?.length > 0 ? '✓ Response complete' : '○ Starting...';
   }
   
   const events = props.streamingEvents;
@@ -1297,16 +1286,37 @@ const currentStreamingStatus = computed(() => {
       }
     }
     
-    // Track tool completions
+        // Track tool completions
     if (event.event === 'agent_completion' && data.type === 'LiberalFunctionMessage' && data.name) {
       const { name, content } = data;
       if (name === 'search_tavily' && Array.isArray(content)) {
-        latestCompletion = `✅ Found ${content.length} web sources`;
+        latestCompletion = `✓ Found ${content.length} web sources`;
       } else if (name === 'arxiv') {
         const papers = content?.includes('Title:') ? content.split('Title:').length - 1 : 1;
-        latestCompletion = `✅ Found ${papers} arXiv papers`;
+        latestCompletion = `✓ Found ${papers} arXiv papers`;
       } else if (name === 'DaytonaCodeSandbox') {
-        latestCompletion = `✅ Code execution complete`;
+        latestCompletion = `✓ Code execution complete`;
+      }
+    }
+    
+    // Track deep research events
+    if (event.event === 'agent_completion') {
+      const agentType = data.additional_kwargs?.agent_type || data.agent_type;
+      const deepResearchMap = {
+        'deep_research_search_queries_plan': '◦ Planning search queries',
+        'deep_research_search_queries_plan_fixed': '↻ Plan format corrected',
+        'deep_research_search_sections': '▫ Creating research sections',
+        'deep_research_interrupt': '○ User feedback required',
+        'deep_research_search_queries_section': '• Section search queries',
+        'deep_research_search_queries_section_fixed': '↻ Section format corrected',
+        'deep_research_writer': '◆ Writing content',
+        'deep_research_grader': '◈ Evaluating quality',
+        'deep_research_end': '✓ Research complete',
+        'react_subgraph_deep_research': '◐ Deep research'
+      };
+      
+      if (deepResearchMap[agentType]) {
+        latestCompletion = deepResearchMap[agentType];
       }
     }
     
@@ -1320,23 +1330,23 @@ const currentStreamingStatus = computed(() => {
   
   // Return status based on priority
   if (latestCompletion) return latestCompletion;
-  if (hasStreamingContent) return '📝 Streaming response...';
+  if (hasStreamingContent) return '◆ Streaming response...';
   
   // Show current tool status
   if (currentTool) {
     const toolMap = {
-      'search_tavily': `🔍 Searching web: "${toolQuery || 'query'}"`,
-      'arxiv': `📚 Searching arXiv: "${toolQuery || 'query'}"`,
-      'DaytonaCodeSandbox': `⚡ Executing code in sandbox`
+      'search_tavily': `○ Searching web: "${toolQuery || 'query'}"`,
+      'arxiv': `▫ Searching arXiv: "${toolQuery || 'query'}"`,
+      'DaytonaCodeSandbox': `◐ Executing code in sandbox`
     };
-    return toolMap[currentTool] || `🔧 Using ${currentTool.replace('_', ' ')}: "${toolQuery || 'executing'}"`;
+    return toolMap[currentTool] || `• Using ${currentTool.replace('_', ' ')}: "${toolQuery || 'executing'}"`;
   }
   
   // Final fallbacks
   const lastEvent = events[events.length - 1];
-  if (lastEvent?.event === 'stream_complete') return '✅ Response complete';
+  if (lastEvent?.event === 'stream_complete') return '✓ Response complete';
   
-  return '💭 Processing...';
+  return '◦ Processing...';
 })
 
 const isStreamingResponse = computed(() => {
@@ -1377,7 +1387,7 @@ const finalStatusSummary = computed(() => {
       });
       
       if (completedTasks.length > 0) {
-        return `✅ ${completedTasks.join(' • ')}`;
+        return `✓ ${completedTasks.join(' • ')}`;
       }
     }
     return 'Details';
@@ -1403,7 +1413,7 @@ const finalStatusSummary = computed(() => {
   })
   
   if (completedTools.length > 0) {
-    return `✅ ${completedTools.join(' • ')}`
+    return `✓ ${completedTools.join(' • ')}`
   }
   
   return 'Details'
@@ -1414,7 +1424,7 @@ const showSearchingAnimation = computed(() => {
   
   const status = currentStreamingStatus.value
   // Show bouncing dots specifically for search operations
-  return status.includes('🔍 Searching') || status.includes('📚 Searching')
+  return status.includes('○ Searching') || status.includes('▫ Searching')
 })
 
 const hasCompletedEvents = computed(() => {
@@ -1443,10 +1453,10 @@ const auditLogEvents = computed(() => {
     if (props.workflowData && props.workflowData.length > 0) {
       return props.workflowData.map((workflow, index) => ({
         id: `synthetic-audit-${index}`,
-        title: `✅ ${workflow.agent_name || 'Agent'} - ${workflow.task || 'Task'}`,
+        title: `✓ ${workflow.agent_name || 'Agent'} - ${workflow.task || 'Task'}`,
         details: workflow.tool_name ? `Tool: ${workflow.tool_name}` : 'Completed successfully',
         subItems: [],
-        dotClass: workflow.task === 'code_execution' ? 'bg-purple-500' : 'bg-green-500',
+        dotClass: 'bg-gray-400',
         type: 'tool_result',
         event: 'workflow_item',
         timestamp: new Date().toISOString(),
@@ -1497,82 +1507,82 @@ const auditLogEvents = computed(() => {
           const query = inputMatch ? inputMatch[1].trim() : 'No query'
           
           if (tool === 'search_tavily') {
-            title = `🔍 Search Tavily`
+            title = `Search Tavily`
             details = `Query: "${query}"`
           } else if (tool === 'arxiv') {
-            title = `📚 Search arXiv`
+            title = `Search arXiv`
             details = `Query: "${query}"`
           } else if (tool === 'DaytonaCodeSandbox') {
-            title = `⚡ Execute Code`
+            title = `Execute Code`
             details = 'Running analysis in sandbox'
           } else {
-            title = `🔧 ${tool.replace('_', ' ')}`
+            title = `${tool.replace('_', ' ')}`
             details = `Query: "${query}"`
           }
-          dotClass = 'bg-purple-500'
+          dotClass = 'bg-gray-400'
           type = 'tool_call'
         }
       } else if (event.event === 'agent_completion' && data.type === 'LiberalFunctionMessage' && data.name) {
         if (data.name === 'search_tavily') {
           const resultCount = Array.isArray(data.content) ? data.content.length : 0
-          title = `✅ Found ${resultCount} web sources`
+          title = `Found ${resultCount} web sources`
           details = resultCount > 0 ? 'Search completed successfully' : 'No sources found'
-          dotClass = 'bg-green-500'
+          dotClass = 'bg-gray-400'
           type = 'tool_result'
         } else if (data.name === 'arxiv') {
           const papers = data.content && data.content.includes('Title:') ? 
             data.content.split('Title:').length - 1 : 1
-          title = `✅ Found ${papers} arXiv papers`
-          dotClass = 'bg-green-500'
+          title = `Found ${papers} arXiv papers`
+          dotClass = 'bg-gray-400'
           type = 'tool_result'
         } else if (data.name === 'DaytonaCodeSandbox') {
-          title = `✅ Code execution complete`
+          title = `Code execution complete`
           details = 'Generated charts and analysis'
-          dotClass = 'bg-green-500'
+          dotClass = 'bg-gray-400'
           type = 'tool_result'
         }
       } else if (event.event === 'agent_completion') {
         // Handle deep research agent types
         const agentType = getAgentType(event)
         if (agentType === 'react_subgraph_deep_research') {
-          title = `🧠 Deep Research Started`
+          title = `Deep Research Started`
           details = 'Initializing comprehensive research workflow'
-          dotClass = 'bg-blue-500'
+          dotClass = 'bg-gray-400'
           type = 'deep_research_start'
         } else if (agentType === 'deep_research_search_queries_plan') {
-          title = `📋 Research Planning`
+          title = 'Research Planning'
           details = 'Generating search queries and research strategy'
-          dotClass = 'bg-orange-500'
+          dotClass = 'bg-gray-400'
           type = 'deep_research_planning'
         } else if (agentType === 'deep_research_search_queries_plan_fixed') {
-          title = `📋 Research Plan Refined`
+          title = `Research Plan Refined`
           details = 'Optimizing search queries for better results'
-          dotClass = 'bg-orange-500'
+          dotClass = 'bg-gray-400'
           type = 'deep_research_planning'
         } else if (agentType === 'deep_research_search_sections') {
-          title = `📚 Research Sections Defined`
+          title = `▫ Research Sections Defined`
           details = 'Organizing research into structured sections'
-          dotClass = 'bg-purple-500'
+          dotClass = 'bg-gray-400'
           type = 'deep_research_sections'
         } else if (agentType === 'deep_research_search_queries_section') {
-          title = `🔍 Section Search Queries`
+          title = `Section Search Queries`
           details = 'Generating search queries for each section of the plan'
-          dotClass = 'bg-cyan-500'
+          dotClass = 'bg-gray-400'
           type = 'deep_research_section_queries'
         } else if (agentType === 'deep_research_search_queries_section_fixed') {
-          title = `🔍 Section Queries Refined`
+          title = `Section Queries Refined`
           details = 'Retrying section format that was incorrect'
-          dotClass = 'bg-cyan-500'
+          dotClass = 'bg-gray-400'
           type = 'deep_research_section_queries_fixed'
         } else if (agentType === 'deep_research_writer') {
-          title = `✍️ Content Generation`
+          title = `Content Generation`
           details = 'Generating written content for a section'
-          dotClass = 'bg-green-600'
+          dotClass = 'bg-gray-400'
           type = 'deep_research_writer'
         } else if (agentType === 'deep_research_grader') {
-          title = `⭐ Quality Evaluation`
+          title = `Quality Evaluation`
           details = 'Evaluating section quality and completeness'
-          dotClass = 'bg-yellow-500'
+          dotClass = 'bg-gray-400'
           type = 'deep_research_grader'
         }
       }
