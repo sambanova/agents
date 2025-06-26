@@ -618,6 +618,10 @@ async function transcribeAudio(audioBlob) {
 
 function cleanTranscription(transcribedText) {
   let cleanedText = transcribedText.trim();
+  
+  // Remove whisper tags like <|0.50|> from the beginning
+  cleanedText = cleanedText.replace(/^<\|[^|]*\|>\s*/, '');
+  
   const prefixes = [
     'The transcription of the audio is:',
     'The transcription is:',
