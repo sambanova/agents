@@ -151,9 +151,9 @@
                   <div class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
                   
                   <!-- Event Count -->
-                  <div class="flex flex-col items-center w-[40px] sm:w-[45px]">
+                  <div class="flex flex-col items-center w-[40px] sm:w-[50px]">
                     <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).event_count }}</span>
-                    <span class="text-2xs text-gray-600">events</span>
+                    <span class="text-2xs text-gray-600">LLM calls</span>
                   </div>
                 </div>
               </div>

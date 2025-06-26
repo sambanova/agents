@@ -347,18 +347,8 @@
   import { computed, defineProps, ref,watch,nextTick, provide, defineEmits } from 'vue'
   
   import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
-  import AssistantComponent from '@/components/ChatMain/ResponseTypes/AssistantComponent.vue'
-  import UserProxyComponent from '@/components/ChatMain/ResponseTypes/UserProxyComponent.vue'
-  import SalesLeadComponent from '@/components/ChatMain/ResponseTypes/SalesLeadsComponent.vue'
-  import EducationalComponent from '@/components/ChatMain/EducationalComponent.vue'
-  import UnknownTypeComponent from '@/components/ChatMain/ResponseTypes/UnknownTypeComponent.vue'
-  import FinancialAnalysisComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisComponent.vue'
-  import DeepResearchComponent from '@/components/ChatMain/ResponseTypes//DeepResearchComponent.vue'
-  import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue'
-  import AssistantEndComponent from '@/components/ChatMain/ResponseTypes/AssistantEndComponent.vue'
-  import FinancialAnalysisEndComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisEndComponent.vue'
-  import SalesLeadsEndComponent from '@/components/ChatMain/ResponseTypes/SalesLeadsEndComponent.vue'
   import WorkflowDataItem from '@/components/ChatMain/WorkflowDataItem.vue'
+  import { getComponentByAgentType } from '@/utils/componentUtils.js'
 
 // Icons for streaming timeline
 import {
@@ -506,30 +496,7 @@ return parsedData.metadata;
   
   // Choose which sub-component to display based on agent_type
   const selectedComponent = computed(() => {
-    switch (parsedData.value.agent_type) {
-      case 'assistant':
-        return AssistantComponent
-      case 'educational_content':
-        return EducationalComponent
-      case 'user_proxy':
-        return UserProxyComponent
-      case 'sales_leads':
-        return SalesLeadComponent
-      case 'financial_analysis':
-        return FinancialAnalysisComponent
-      case 'deep_research':
-        return DeepResearchComponent
-      case 'react_end':
-        return AssistantEndComponent
-      case 'error':
-        return ErrorComponent
-      case 'financial_analysis_end':
-        return FinancialAnalysisEndComponent
-      case 'sales_leads_end':
-        return SalesLeadsEndComponent
-      default:
-        return UnknownTypeComponent
-    }
+    return getComponentByAgentType(parsedData.value.agent_type)
   })
   
   // Define isOpen; if not passed as prop, define it as a ref
@@ -650,6 +617,7 @@ const streamingResponseContent = computed(() => {
         // Don't show in streaming content as they have their own specialized components
         if (agentType === 'financial_analysis_end' || 
             agentType === 'sales_leads_end' || 
+            agentType === 'deep_research_end' || 
             agentType === 'react_end') {
           return ''
         }
@@ -705,15 +673,10 @@ const finalResponseComponent = computed(() => {
       
       const agentType = getAgentType(event)
       
-      switch (agentType) {
-        case 'financial_analysis_end':
-          return FinancialAnalysisEndComponent
-        case 'sales_leads_end':
-          return SalesLeadsEndComponent
-        case 'react_end':
-          return AssistantEndComponent
-        default:
-          continue
+      const component = getComponentByAgentType(agentType)
+      // Only return specific end components, skip others
+      if (['financial_analysis_end', 'sales_leads_end', 'react_end', 'deep_research_end'].includes(agentType)) {
+        return component
       }
     }
   } catch (error) {

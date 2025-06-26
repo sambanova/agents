@@ -149,8 +149,11 @@ function renderMarkdown(text) {
 
 // ---- GET final_report (larger text for main body) ----
 const finalReport = computed(() => {
-  const raw = props.parsed?.data?.final_report || '';
-  if (!raw) return '';
+  const raw = props.parsed?.content || '';
+  
+  if (!raw) {
+    return '';
+  }
 
   // Remove the "## Citations" section from the main body
   const headingRegex = /(^|\n)##\s*Citations\s*(\n|$)/i;
@@ -165,7 +168,7 @@ const finalReport = computed(() => {
 const citationsBlockFound = ref(false);
 
 const citations = computed(() => {
-  const text = props.parsed?.data?.final_report || '';
+  const text = props.parsed?.content || '';
   if (!text) return [];
 
   // Find "## Citations"
