@@ -634,7 +634,8 @@ const streamingResponseContent = computed(() => {
   props.streamingEvents.forEach(event => {
     if (event.event === 'llm_stream_chunk' && 
         event.data.content && 
-        !event.data.content.includes('<tool>') &&
+        !event.data.content.includes('<tool>') && 
+        !event.data.content.includes('<subgraph>') &&
         event.data.content.trim()) {
       
       const content = event.data.content.trim()

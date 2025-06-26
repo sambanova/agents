@@ -749,7 +749,6 @@ async function loadPreviousChat(convId) {
     
     if (resp.data && resp.data.messages) {
       await filterChat(resp.data);
-      console.log('Filtered messages loaded:', messagesData.value.length);
 
     } else {
       console.warn('No messages found in chat history response');
@@ -1734,7 +1733,7 @@ async function connectWebSocket() {
 
         // Handle streaming events
         if (receivedData.event === 'agent_completion') {
-          console.log('Agent message stream:', receivedData);
+
           
           // Update cumulative token usage if present
           if (receivedData.cumulative_usage_metadata) {
@@ -1751,6 +1750,8 @@ async function connectWebSocket() {
           // Check if this is a final response event
           const isFinalResponse = receivedData.additional_kwargs?.agent_type === 'react_end' || 
                                  receivedData.additional_kwargs?.agent_type === 'financial_analysis_end';
+
+
           
           // Create message object and attach token usage data directly to it
           const messageData = {
@@ -1802,6 +1803,8 @@ async function connectWebSocket() {
             isLoading.value = false;
           }
         } else if (receivedData.event === 'llm_stream_chunk') {
+
+          
           const chunkId = receivedData.id;
           
           if (chunkId) {
@@ -1815,6 +1818,7 @@ async function connectWebSocket() {
               const existingContent = messagesData.value[existingIndex].data?.content || '';
               const newContent = receivedData.content || '';
               messagesData.value[existingIndex].data.content = existingContent + newContent;
+
             } else {
               // Create new message for new ID
               messagesData.value.push({
@@ -1824,6 +1828,7 @@ async function connectWebSocket() {
                 conversation_id: currentId.value,
                 timestamp: new Date().toISOString()
               });
+
             }
           } else {
             // No ID, just add as new message
@@ -1834,6 +1839,7 @@ async function connectWebSocket() {
               conversation_id: currentId.value,
               timestamp: new Date().toISOString()
             });
+
           }
         } else if (receivedData.event === 'stream_complete') {
           console.log('Stream complete:', receivedData);
@@ -1963,9 +1969,7 @@ async function removeDocument(docId) {
 
 function formatMessageData(msgItem) {
   try {
-    if (msgItem.agent_type === 'financial_analysis_end' || msgItem.additional_kwargs?.agent_type === 'financial_analysis_end') {
-      console.log('🔧 Formatting financial analysis final result:', msgItem);
-    }
+
     switch (msgItem.event) {
       case 'agent_completion':
         // Check if this is a user message in new format
@@ -2117,6 +2121,8 @@ const filteredMessages = computed(() => {
       // Decide whether this message should always render its own bubble
       const agentType = msg.agent_type || msg.additional_kwargs?.agent_type || msg.data?.additional_kwargs?.agent_type || msg.data?.agent_type
       
+
+      
       // Always separate genuine user inputs
       if (agentType === 'human' || msg.type === 'HumanMessage') {
         const uniqueKey = `${msg.type || msg.agent_type}_${msgId}_${index}`;
@@ -2128,9 +2134,11 @@ const filteredMessages = computed(() => {
       // But exclude only financial_analysis_end from grouping since it doesn't stream first
       const shouldExcludeFromGrouping = agentType === 'financial_analysis_end';
       
+
+
       if (streamingEvents.includes(msg.event) &&
           msgId &&
-          !userMessages.has(msgId) &&
+          !(agentType === 'human' || msg.type === 'HumanMessage') &&
           !shouldExcludeFromGrouping) {
 
         const groupKey = `streaming_${msgId}`;
@@ -2189,6 +2197,7 @@ const filteredMessages = computed(() => {
       // Fallback: render as individual bubble - but only if it has content
       if (msg.data?.content || msg.content) {
         const uniqueKey = `${msg.type || msg.event}_${msgId}_${index}`;
+
         grouped.set(uniqueKey, msg);
       }
       
@@ -2201,7 +2210,7 @@ const filteredMessages = computed(() => {
       return aTime - bTime;
     });
 
-    console.log('🔍 result:', result)
+
 
     return result;
   } catch (error) {
