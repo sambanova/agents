@@ -176,8 +176,6 @@
             :messageId="currentMsgId"
           />
           
-          <LoadingText v-if="isLoading" />
-          
           <!-- End Chat Bubble -->
         </transition-group>
       </div>
@@ -986,7 +984,7 @@ async function filterChat(msgData) {
         };
       }
       // Handle streaming events that might be in stored data - CRITICAL FOR PERSISTENCE
-      else if (['llm_stream_chunk', 'stream_complete'].includes(message.event)) {
+      else if (['llm_stream_chunk', 'stream_complete', 'stream_start'].includes(message.event)) {
         return {
           event: message.event,
           data: message.data || message,
@@ -1804,7 +1802,6 @@ async function connectWebSocket() {
             isLoading.value = false;
           }
         } else if (receivedData.event === 'llm_stream_chunk') {
-          console.log('LLM stream chunk:', receivedData);
           const chunkId = receivedData.id;
           
           if (chunkId) {
@@ -2203,9 +2200,9 @@ const filteredMessages = computed(() => {
       const bTime = new Date(b.timestamp || 0).getTime();
       return aTime - bTime;
     });
-    
 
-    
+    console.log('🔍 result:', result)
+
     return result;
   } catch (error) {
     console.error('Error in filteredMessages computed:', error);

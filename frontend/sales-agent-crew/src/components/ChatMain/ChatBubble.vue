@@ -18,7 +18,6 @@
         <div class="flex items-start justify-between p-3 bg-gray-50 rounded-t-lg border-b status-bar">
           <div class="flex items-start space-x-3 flex-1">
             <div class="flex items-center space-x-2">
-              <div :class="currentStatusDot" class="w-2 h-2 rounded-full mt-1 flex-shrink-0"></div>
               <div v-if="showSearchingAnimation" class="mt-0.5">
                 <svg 
                   class="w-3 h-3 text-gray-500 animate-spin" 
@@ -151,13 +150,6 @@
               class="text-gray-800"
               v-html="renderMarkdown(streamingResponseContent)"
             ></div>
-            <div 
-              v-else-if="isCurrentlyStreaming && !streamingResponseContent"
-              class="flex items-center space-x-2 text-gray-500"
-            >
-              <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-              <span class="text-sm italic">Generating response...</span>
-            </div>
           </div>
 
           <!-- Inline Sources (minimalist) - MOVED TO AFTER RESPONSE -->
