@@ -324,7 +324,7 @@ async def human_feedback(
 ]:
     sections = state["sections"]
     sec_str = (
-        "Please <b>provide feedback</b> on the following plan or <b>type 'true' to approve it.</b>\n"
+        "Please <b>provide feedback</b> on the following plan or <b>type 'approve'.</b>\n"
         + "\n".join(
             f"<b>Section {i+1}:</b> {s.name} - {s.description}"
             for i, s in enumerate(sections)
