@@ -243,12 +243,12 @@ class RedisStorage:
         try:
 
             if not await self.verify_file_belongs_to_user(user_id, file_id):
-                return None
+                return None, None
 
             file_metadata = await self.get_file_metadata(user_id, file_id)
 
             if not file_metadata:
-                return None
+                return None, None
 
             # Get file data
             file_data_key = self._get_file_data_key(user_id, file_id)
@@ -266,7 +266,7 @@ class RedisStorage:
                 error=str(e),
                 exc_info=True,
             )
-            return None
+            return None, None
 
     async def get_file_metadata(self, user_id: str, file_id: str) -> Optional[dict]:
         """Get file metadata from Redis storage."""
