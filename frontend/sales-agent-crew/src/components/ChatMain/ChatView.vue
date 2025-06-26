@@ -2236,14 +2236,12 @@ const filteredMessages = computed(() => {
       
     });
     
-        // Convert to array and sort by timestamp
+    // Convert to array and sort by timestamp
     const result = Array.from(grouped.values()).sort((a, b) => {
       const aTime = new Date(a.timestamp || 0).getTime();
       const bTime = new Date(b.timestamp || 0).getTime();
       return aTime - bTime;
     });
-
-    console.log("debug result", result)
 
     return result;
   } catch (error) {

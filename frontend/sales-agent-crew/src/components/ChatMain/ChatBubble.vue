@@ -1271,89 +1271,72 @@ const showBubble = computed(() => {
 
 // Streaming status and audit log properties that were accidentally removed
 const currentStreamingStatus = computed(() => {
+  // Handle cases with no streaming events
   if (!props.streamingEvents || props.streamingEvents.length === 0) {
-    // For loaded conversations, show completion status if we have workflow data
-    if (props.workflowData && props.workflowData.length > 0) {
-      return '✅ Response complete';
-    }
-    return '⏳ Starting...';
+    return props.workflowData?.length > 0 ? '✅ Response complete' : '⏳ Starting...';
   }
   
-  const events = props.streamingEvents
-  let currentTool = null
-  let toolQuery = null
+  const events = props.streamingEvents;
+  let currentTool = null;
+  let toolQuery = null;
+  let latestCompletion = null;
+  let hasStreamingContent = false;
   
-  // Process events chronologically to find the LATEST completion status
-  let latestCompletionStatus = null
-  
-  for (let i = 0; i < events.length; i++) {
-    const event = events[i]
-    const data = event.data
+  // Single pass through events to gather all necessary information
+  events.forEach(event => {
+    const data = event.data;
     
-    // Track current tool calls
-    if (event.event === 'llm_stream_chunk' && data.content && data.content.includes('<tool>')) {
-      const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/)
-      const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/)
+    // Track tool calls
+    if (event.event === 'llm_stream_chunk' && data.content?.includes('<tool>')) {
+      const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/);
+      const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/);
       
       if (toolMatch) {
-        currentTool = toolMatch[1]
-        toolQuery = inputMatch ? inputMatch[1].trim() : null
+        currentTool = toolMatch[1];
+        toolQuery = inputMatch?.[1]?.trim();
       }
     }
     
-    // Update latest completion status when we find tool results
+    // Track tool completions
     if (event.event === 'agent_completion' && data.type === 'LiberalFunctionMessage' && data.name) {
-      if (data.name === 'search_tavily' && Array.isArray(data.content)) {
-        const resultCount = data.content.length
-        latestCompletionStatus = `✅ Found ${resultCount} web sources`
-      } else if (data.name === 'arxiv') {
-        const papers = data.content && data.content.includes('Title:') ? 
-          data.content.split('Title:').length - 1 : 1
-        latestCompletionStatus = `✅ Found ${papers} arXiv papers`
-      } else if (data.name === 'DaytonaCodeSandbox') {
-        latestCompletionStatus = `✅ Code execution complete`
+      const { name, content } = data;
+      if (name === 'search_tavily' && Array.isArray(content)) {
+        latestCompletion = `✅ Found ${content.length} web sources`;
+      } else if (name === 'arxiv') {
+        const papers = content?.includes('Title:') ? content.split('Title:').length - 1 : 1;
+        latestCompletion = `✅ Found ${papers} arXiv papers`;
+      } else if (name === 'DaytonaCodeSandbox') {
+        latestCompletion = `✅ Code execution complete`;
       }
     }
-  }
-  
-  // Return latest completion status if we have one
-  if (latestCompletionStatus) {
-    return latestCompletionStatus
-  }
-  
-  // Check if we're streaming response
-  for (let i = events.length - 1; i >= 0; i--) {
-    const event = events[i]
-    const data = event.data
     
+    // Check for streaming response content
     if (event.event === 'llm_stream_chunk' && 
-        data.content && 
-        data.content.trim() && 
+        data.content?.trim() && 
         !data.content.includes('<tool>')) {
-      return '📝 Streaming response...'
+      hasStreamingContent = true;
     }
-  }
+  });
   
-  // Return current tool status if we have one and no completion
+  // Return status based on priority
+  if (latestCompletion) return latestCompletion;
+  if (hasStreamingContent) return '📝 Streaming response...';
+  
+  // Show current tool status
   if (currentTool) {
-    if (currentTool === 'search_tavily') {
-      return `🔍 Searching web: "${toolQuery || 'query'}"`
-    } else if (currentTool === 'arxiv') {
-      return `📚 Searching arXiv: "${toolQuery || 'query'}"`
-    } else if (currentTool === 'DaytonaCodeSandbox') {
-      return `⚡ Executing code in sandbox`
-    } else {
-      return `🔧 Using ${currentTool.replace('_', ' ')}: "${toolQuery || 'executing'}"`
-    }
+    const toolMap = {
+      'search_tavily': `🔍 Searching web: "${toolQuery || 'query'}"`,
+      'arxiv': `📚 Searching arXiv: "${toolQuery || 'query'}"`,
+      'DaytonaCodeSandbox': `⚡ Executing code in sandbox`
+    };
+    return toolMap[currentTool] || `🔧 Using ${currentTool.replace('_', ' ')}: "${toolQuery || 'executing'}"`;
   }
   
-  // Check if we're done
-  const lastEvent = events[events.length - 1]
-  if (lastEvent?.event === 'stream_complete') {
-    return '✅ Response complete'
-  }
+  // Final fallbacks
+  const lastEvent = events[events.length - 1];
+  if (lastEvent?.event === 'stream_complete') return '✅ Response complete';
   
-  return '💭 Processing...'
+  return '💭 Processing...';
 })
 
 const isStreamingResponse = computed(() => {
