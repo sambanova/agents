@@ -207,18 +207,7 @@
 import { computed, defineProps, ref, watch, nextTick } from 'vue'
 
 import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
-import AssistantComponent from '@/components/ChatMain/ResponseTypes/AssistantComponent.vue'
-import AssistantEndComponent from '@/components/ChatMain/ResponseTypes/AssistantEndComponent.vue'
-
-import UserProxyComponent from '@/components/ChatMain/ResponseTypes/UserProxyComponent.vue'
-import SalesLeadComponent from '@/components/ChatMain/ResponseTypes/SalesLeadsComponent.vue'
-import EducationalComponent from '@/components/ChatMain/EducationalComponent.vue'
-import UnknownTypeComponent from '@/components/ChatMain/ResponseTypes/UnknownTypeComponent.vue'
-import FinancialAnalysisComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisComponent.vue'
-import FinancialAnalysisEndComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisEndComponent.vue'
-
-import DeepResearchComponent from '@/components/ChatMain/ResponseTypes/DeepResearchComponent.vue'
-import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue'
+import { getComponentByAgentType } from '@/utils/componentUtils.js'
 import AnalysisTimeline from '@/components/ChatMain/AnalysisTimeline.vue'
 import StatusBox from '@/components/ChatMain/StatusBox.vue';
 import html2canvas from 'html2canvas'
@@ -375,30 +364,7 @@ const parsedData = computed(() => {
 })
 
 const selectedComponent = computed(() => {
-  switch (props?.data?.agent_type) {
-      case 'react_end':
-      return AssistantEndComponent
-     case undefined:
-      return AssistantEndComponent
-    case 'assistant':
-      return AssistantEndComponent
-    case 'educational_content':
-      return EducationalComponent
-    case 'user_proxy':
-      return UserProxyComponent
-    case 'sales_leads':
-      return SalesLeadComponent
-         case 'financial_analysis_end':
-      return FinancialAnalysisEndComponent
-    case 'financial_analysis':
-      return FinancialAnalysisComponent
-    case 'deep_research':
-      return DeepResearchComponent
-    case 'error':
-      return ErrorComponent
-    default:
-      return UnknownTypeComponent
-  }
+  return getComponentByAgentType(props?.data?.agent_type)
 })
 
 const isOpen = ref(false)
