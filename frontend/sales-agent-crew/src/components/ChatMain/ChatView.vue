@@ -82,6 +82,7 @@
               :streamingEvents="msgItem.type === 'streaming_group' ? msgItem.events : null"
               :provider="provider"
               :sidebarOpen="showDaytonaSidebar"
+              :isInDeepResearch="isInDeepResearch"
               @open-daytona-sidebar="handleOpenDaytonaSidebar"
               @open-artifact-canvas="handleOpenArtifactCanvas"
             />
@@ -694,6 +695,9 @@ watch(
       // Clear run metrics for new conversation
       runMetrics.value.clear();
       
+      // Reset deep research state for new conversation
+      isInDeepResearch.value = false;
+      
       // Reset sidebar state when switching conversations
       showDaytonaSidebar.value = false;
       currentDaytonaEvents.value = [];
@@ -785,6 +789,9 @@ const cumulativeTokenUsage = ref({
 
 // Track metrics per run_id
 const runMetrics = ref(new Map());
+
+// Track deep research state
+const isInDeepResearch = ref(false);
 
 async function filterChat(msgData) {
   // First pass: identify conversation turns for run grouping
@@ -882,8 +889,9 @@ async function filterChat(msgData) {
         const isUserMessage = message.additional_kwargs?.agent_type === 'human' || message.type === 'HumanMessage';
         const isFinalResponse = isFinalAgentType(message.additional_kwargs?.agent_type);
         const isRegularAIMessage = message.type === 'AIMessage' && !isToolCall && !isToolResult && !isToolResponse;
+        const isReactSubgraph = message.additional_kwargs?.agent_type === 'react_subgraph';
         
-        if (!isUserMessage && !isFinalResponse && !isRegularAIMessage) {
+        if (!isUserMessage && !isFinalResponse && !isRegularAIMessage && !isReactSubgraph) {
           return null; // Filter out intermediate agent responses that aren't tool-related
         }
         
@@ -1149,6 +1157,19 @@ async function filterChat(msgData) {
       total_tokens: latestCumulativeUsage.total_tokens || 0
     };
   }
+
+  // Restore deep research state by checking the last agent_completion message
+  msgData.messages
+    .filter((message) => message.event === 'agent_completion')
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+    .forEach((completion) => {
+      const agentType = completion.additional_kwargs?.agent_type;
+      if (agentType === 'deep_research_interrupt') {
+        isInDeepResearch.value = true;
+      } else if (agentType === 'deep_research_end') {
+        isInDeepResearch.value = false;
+      }
+    });
 
   AutoScrollToBottom();
 
@@ -1597,7 +1618,7 @@ const addMessage = async () => {
       const message = messagesData.value[i];
       if (message.event === 'agent_completion') {
         // Check if this agent_completion has deep_research_interrupt agent_type
-        if (message.data && message.data.agent_type === 'deep_research_interrupt') {
+        if (message.data && message.data.additional_kwargs.agent_type === 'deep_research_interrupt') {
           // If user typed something, set resume to true
           shouldResume = searchQuery.value.trim().length > 0;
         }
@@ -1734,7 +1755,14 @@ async function connectWebSocket() {
 
         // Handle streaming events
         if (receivedData.event === 'agent_completion') {
-
+          
+          // Update deep research state based on agent type
+          const agentType = receivedData.additional_kwargs?.agent_type;
+          if (agentType === 'react_subgraph_deep_research') {
+            isInDeepResearch.value = true;
+          } else if (agentType === 'deep_research_end') {
+            isInDeepResearch.value = false;
+          }
           
           // Update cumulative token usage if present
           if (receivedData.cumulative_usage_metadata) {
@@ -1754,7 +1782,7 @@ async function connectWebSocket() {
           // Create message object and attach token usage data directly to it
           const messageData = {
             event: 'agent_completion', 
-            data: receivedData,
+            data: receivedData || {},
             message_id: currentMsgId.value,
             conversation_id: currentId.value,
             timestamp: receivedData.timestamp || new Date().toISOString(),
@@ -1794,7 +1822,13 @@ async function connectWebSocket() {
             messageData.cumulative_usage_metadata = receivedData.cumulative_usage_metadata;
           }
           
-          messagesData.value.push(messageData);
+          try {
+            messagesData.value.push(messageData);
+          } catch (error) {
+            console.error('Error pushing message data:', error);
+            isLoading.value = false;
+            return;
+          }
           
           // Set loading to false when we receive a final response
           if (isFinalResponse) {
@@ -1813,41 +1847,55 @@ async function connectWebSocket() {
             
             if (existingIndex !== -1) {
               // Accumulate content for existing message
-              const existingContent = messagesData.value[existingIndex].data?.content || '';
-              const newContent = receivedData.content || '';
-              messagesData.value[existingIndex].data.content = existingContent + newContent;
-
+              try {
+                const existingContent = messagesData.value[existingIndex].data?.content || '';
+                const newContent = receivedData.content || '';
+                messagesData.value[existingIndex].data.content = existingContent + newContent;
+              } catch (error) {
+                console.error('Error updating stream chunk:', error);
+              }
             } else {
               // Create new message for new ID
+              try {
+                messagesData.value.push({
+                  event: 'llm_stream_chunk',
+                  data: receivedData || {},
+                  message_id: currentMsgId.value,
+                  conversation_id: currentId.value,
+                  timestamp: new Date().toISOString()
+                });
+              } catch (error) {
+                console.error('Error adding new stream chunk:', error);
+              }
+            }
+          } else {
+            // No ID, just add as new message
+            try {
               messagesData.value.push({
                 event: 'llm_stream_chunk',
-                data: receivedData,
+                data: receivedData || {},
                 message_id: currentMsgId.value,
                 conversation_id: currentId.value,
                 timestamp: new Date().toISOString()
               });
-
+            } catch (error) {
+              console.error('Error adding stream chunk without ID:', error);
             }
-          } else {
-            // No ID, just add as new message
-            messagesData.value.push({
-              event: 'llm_stream_chunk',
-              data: receivedData,
-              message_id: currentMsgId.value,
-              conversation_id: currentId.value,
-              timestamp: new Date().toISOString()
-            });
 
           }
         } else if (receivedData.event === 'stream_complete') {
           console.log('Stream complete:', receivedData);
-          messagesData.value.push({
-            event: 'stream_complete',
-            data: receivedData,
-            message_id: currentMsgId.value,
-            conversation_id: currentId.value,
-            timestamp: new Date().toISOString()
-          });
+          try {
+            messagesData.value.push({
+              event: 'stream_complete',
+              data: receivedData || {},
+              message_id: currentMsgId.value,
+              conversation_id: currentId.value,
+              timestamp: new Date().toISOString()
+            });
+          } catch (error) {
+            console.error('Error adding stream complete message:', error);
+          }
           isLoading.value = false;
         } else if (receivedData.event === 'planner_chunk') {
           addOrUpdatePlannerText({
@@ -1864,13 +1912,17 @@ async function connectWebSocket() {
             addOrUpdateModel(dataParsed.metadata);
             
             // Add think event to messages for persistence
-            messagesData.value.push({
-              event: 'think',
-              data: receivedData.data,
-              message_id: receivedData.message_id || currentMsgId.value,
-              conversation_id: receivedData.conversation_id || currentId.value,
-              timestamp: receivedData.timestamp || new Date().toISOString()
-            });
+            try {
+              messagesData.value.push({
+                event: 'think',
+                data: receivedData.data || {},
+                message_id: receivedData.message_id || currentMsgId.value,
+                conversation_id: receivedData.conversation_id || currentId.value,
+                timestamp: receivedData.timestamp || new Date().toISOString()
+              });
+            } catch (error) {
+              console.error('Error adding think message:', error);
+            }
 
             AutoScrollToBottom();
           } catch (e) {
@@ -1882,13 +1934,17 @@ async function connectWebSocket() {
           addOrUpdateModel(dataParsed.metadata);
           
           // Add planner event to messages for persistence
-          messagesData.value.push({
-            event: 'planner',
-            data: receivedData.data,
-            message_id: receivedData.message_id || currentMsgId.value,
-            conversation_id: receivedData.conversation_id || currentId.value,
-            timestamp: receivedData.timestamp || new Date().toISOString()
-          });
+          try {
+            messagesData.value.push({
+              event: 'planner',
+              data: receivedData.data || {},
+              message_id: receivedData.message_id || currentMsgId.value,
+              conversation_id: receivedData.conversation_id || currentId.value,
+              timestamp: receivedData.timestamp || new Date().toISOString()
+            });
+          } catch (error) {
+            console.error('Error adding planner message:', error);
+          }
 
           AutoScrollToBottom();
         }
@@ -2093,13 +2149,12 @@ const filteredMessages = computed(() => {
 
   try {
     const grouped = new Map();
-    const streamingEvents = ['agent_completion', 'llm_stream_chunk', 'stream_complete', 'think', 'planner'];
+    const streamingEvents = ['agent_completion', 'llm_stream_chunk', 'stream_complete'];
     
     // First pass: identify distinct conversation turns and streaming groups
     const messageIdCounts = {};
     const userMessages = new Set(); // Track user messages
     const aiMessages = new Set(); // Track AI messages
-    const toolRelatedMessages = new Map(); // Store tool-related messages separately
     
     messagesData.value.forEach(msg => {
       if (!msg) return;
@@ -2117,15 +2172,6 @@ const filteredMessages = computed(() => {
       if (streamingEvents.includes(msg.event) && msg.message_id) {
         // Count ALL streaming events for grouping - we want everything in one bubble
         messageIdCounts[msg.message_id] = (messageIdCounts[msg.message_id] || 0) + 1;
-        
-        // Separate tool-related messages for comprehensive audit log and Daytona processing
-        if (msg.isToolRelated || msg.isDaytonaRelated) {
-          const toolKey = `tool_${msg.message_id}`;
-          if (!toolRelatedMessages.has(toolKey)) {
-            toolRelatedMessages.set(toolKey, []);
-          }
-          toolRelatedMessages.get(toolKey).push(msg);
-        }
       }
     });
     
@@ -2169,11 +2215,7 @@ const filteredMessages = computed(() => {
         if (group && group.events) {
           group.events.push(msg);
 
-          // Merge in any tool-related events we captured for this message id
-          const toolKey = `tool_${msgId}`;
-          if (toolRelatedMessages.has(toolKey)) {
-            group.events.push(...toolRelatedMessages.get(toolKey));
-          }
+
 
           // Sort inside the group chronologically
           group.events.sort((a, b) => {
@@ -2181,28 +2223,6 @@ const filteredMessages = computed(() => {
             const bTime = new Date(b.timestamp || 0).getTime();
             return aTime - bTime;
           });
-        }
-        return;
-      } else if (msg.isToolRelated) {
-        // For tool-related messages from persisted histories, create/append to a synthetic streaming group
-        const groupKey = `streaming_${msgId}`;
-        if (!grouped.has(groupKey)) {
-          grouped.set(groupKey, {
-            type: 'streaming_group',
-            message_id: msgId,
-            events: [msg],
-            timestamp: msg.timestamp || new Date().toISOString()
-          });
-        } else {
-          const group = grouped.get(groupKey);
-          if (group && group.events) {
-            group.events.push(msg);
-            group.events.sort((a, b) => {
-              const aTime = new Date(a.timestamp || 0).getTime();
-              const bTime = new Date(b.timestamp || 0).getTime();
-              return aTime - bTime;
-            });
-          }
         }
         return;
       }

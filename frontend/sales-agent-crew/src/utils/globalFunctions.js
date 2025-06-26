@@ -23,7 +23,9 @@ export function formattedDuration(duration) {
     const finalAgentTypes = [
       'react_end',
       'financial_analysis_end', 
-      'sales_leads_end'
+      'sales_leads_end',
+      'deep_research_interrupt',
+      'deep_research_end'
     ];
     return finalAgentTypes.includes(agentType);
   }
