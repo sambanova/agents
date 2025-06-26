@@ -1302,7 +1302,7 @@ const currentStreamingStatus = computed(() => {
     // Track deep research events
     if (event.event === 'agent_completion') {
       const agentType = data.additional_kwargs?.agent_type || data.agent_type;
-      const deepResearchMap = {
+      const agentTypeMap = {
         'deep_research_search_queries_plan': '◦ Planning search queries',
         'deep_research_search_queries_plan_fixed': '↻ Plan format corrected',
         'deep_research_search_sections': '▫ Creating research sections',
@@ -1312,11 +1312,14 @@ const currentStreamingStatus = computed(() => {
         'deep_research_writer': '◆ Writing content',
         'deep_research_grader': '◈ Evaluating quality',
         'deep_research_end': '✓ Research complete',
-        'react_subgraph_deep_research': '◐ Deep research started'
+        'react_subgraph_deep_research': '◐ Deep research started',
+        'react_subgraph_financial_analysis': '◐ Financial analysis started',
+        'react_end': '✓ Response complete',
+        'financial_analysis_end': '✓ Financial analysis complete'
       };
       
-      if (deepResearchMap[agentType]) {
-        latestCompletion = deepResearchMap[agentType];
+      if (agentTypeMap[agentType]) {
+        latestCompletion = agentTypeMap[agentType];
       }
     }
     

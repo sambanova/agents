@@ -7,12 +7,11 @@
     >
       <!-- Sticky Top Component -->
       <div
-        v-if="cumulativeTokenUsage.total_tokens > 0"
         class="sticky top-0 z-10 bg-white p-4 shadow"
       >
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-4 min-h-[2rem]">
           <!-- Token Usage Display -->
-          <div class="flex flex-wrap items-center gap-1 sm:gap-2 text-sm text-gray-600">
+          <div v-if="cumulativeTokenUsage.total_tokens > 0" class="flex flex-wrap items-center gap-1 sm:gap-2 text-sm text-gray-600">
             <span class="font-medium whitespace-nowrap">Chat Usage Tokens:</span>
             <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs whitespace-nowrap">
               {{ cumulativeTokenUsage.input_tokens.toLocaleString() }} input
