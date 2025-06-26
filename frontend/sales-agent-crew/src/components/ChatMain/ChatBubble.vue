@@ -126,8 +126,24 @@
         </div>
 
         <!-- Model usage cards -->
-        <div v-if="workflowData && workflowData.length" class="px-3 pt-3 pb-1 bg-gray-50 border-b">
-          <WorkflowDataItem :workflowData="workflowData" />
+        <div v-if="workflowData && workflowData.length || deepResearchPdfFileId" class="px-3 pt-3 pb-1 bg-gray-50 border-b">
+          <div class="flex items-start justify-between">
+            <div v-if="workflowData && workflowData.length" class="flex-1">
+              <WorkflowDataItem :workflowData="workflowData" />
+            </div>
+            <!-- PDF Download Button for Deep Research -->
+            <div v-if="deepResearchPdfFileId" class="ml-3">
+              <button 
+                @click="downloadPdf(deepResearchPdfFileId, deepResearchPdfFilename)"
+                class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs text-gray-700 hover:text-gray-900 transition-colors border border-gray-200 hover:border-gray-300"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                PDF Report
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Actual Streaming Response Content -->
@@ -198,6 +214,8 @@
             <component :is="finalResponseComponent" :parsed="finalResponseData" />
           </div>
           
+
+
           <!-- Daytona Status Indicator and Controls -->
           <div v-if="isDaytonaActive" class="mt-4">
             <div class="inline-flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg text-sm text-blue-800">
@@ -1604,6 +1622,115 @@ const auditLogEvents = computed(() => {
     })
     .filter(event => event.title) // Only include events with titles
 })
+
+// Check if there's an auto-generated PDF file for deep research
+const deepResearchPdfFileId = computed(() => {
+  // Check streaming events first
+  if (props.streamingEvents) {
+    const event = props.streamingEvents.find(e => 
+      e.event === 'agent_completion' && 
+      e.additional_kwargs?.agent_type === 'deep_research_end' &&
+      e.additional_kwargs?.deep_research_pdf_file_id
+    );
+    if (event) {
+      return event.additional_kwargs.deep_research_pdf_file_id;
+    }
+    
+    // Also check if the data is nested differently
+    const eventWithData = props.streamingEvents.find(e => 
+      e.event === 'agent_completion' && 
+      e.data?.additional_kwargs?.agent_type === 'deep_research_end' &&
+      e.data?.additional_kwargs?.deep_research_pdf_file_id
+    );
+    if (eventWithData) {
+      return eventWithData.data.additional_kwargs.deep_research_pdf_file_id;
+    }
+  }
+  
+  // Check parsed data for non-streaming messages
+  if (parsedData.value?.additional_kwargs?.deep_research_pdf_file_id) {
+    return parsedData.value.additional_kwargs.deep_research_pdf_file_id;
+  }
+  
+  return null;
+})
+
+const deepResearchPdfFilename = computed(() => {
+  // Check streaming events first
+  if (props.streamingEvents) {
+    const event = props.streamingEvents.find(e => 
+      e.event === 'agent_completion' && 
+      e.additional_kwargs?.agent_type === 'deep_research_end' &&
+      e.additional_kwargs?.deep_research_pdf_filename
+    );
+    if (event) {
+      return event.additional_kwargs.deep_research_pdf_filename;
+    }
+    
+    // Also check if the data is nested differently
+    const eventWithData = props.streamingEvents.find(e => 
+      e.event === 'agent_completion' && 
+      e.data?.additional_kwargs?.agent_type === 'deep_research_end' &&
+      e.data?.additional_kwargs?.deep_research_pdf_filename
+    );
+    if (eventWithData) {
+      return eventWithData.data.additional_kwargs.deep_research_pdf_filename;
+    }
+  }
+  
+  // Check parsed data for non-streaming messages
+  if (parsedData.value?.additional_kwargs?.deep_research_pdf_filename) {
+    return parsedData.value.additional_kwargs.deep_research_pdf_filename;
+  }
+  
+  return null;
+})
+
+// Function to download PDF with authentication
+async function downloadPdf(fileId, filename) {
+  try {
+    // Get the auth token from Clerk
+    const token = await window.Clerk.session.getToken();
+    
+    if (!token) {
+      console.error('No authentication token found');
+      return;
+    }
+
+    // Make authenticated request to download the PDF
+    const response = await fetch(`/api/files/${fileId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    // Get the PDF blob
+    const blob = await response.blob();
+    
+    // Create download link
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename || 'deep_research_report.pdf';
+    
+    // Trigger download
+    document.body.appendChild(link);
+    link.click();
+    
+    // Cleanup
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+  } catch (error) {
+    console.error('Error downloading PDF:', error);
+    // You could add a toast notification here if available
+  }
+}
 
 function closeArtifactCanvas() {
   // Implementation of closeArtifactCanvas function

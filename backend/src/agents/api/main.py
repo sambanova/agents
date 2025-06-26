@@ -3,9 +3,12 @@ import os
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime
+from io import BytesIO
 from typing import Optional
 
 import jwt
+import markdown
 import mlflow
 import structlog
 from agents.api.data_types import APIKeys
@@ -35,6 +38,7 @@ from fastapi_clerk_auth import (
     HTTPAuthorizationCredentials,
 )
 from langgraph.checkpoint.redis import AsyncRedisSaver
+from weasyprint import CSS, HTML
 
 logger = structlog.get_logger(__name__)
 
