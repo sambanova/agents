@@ -2492,8 +2492,10 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata) {
     }
   }
   
-  // Always increment event count (even for events without token data)
-  runData.event_count++;
+  // Only increment event count if event has both response_metadata and model_name, since we are counting llm calls
+  if (responseMetadata && responseMetadata.model_name) {
+    runData.event_count++;
+  }
 }
 
 // Function to get run summary for display
