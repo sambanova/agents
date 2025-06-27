@@ -231,21 +231,21 @@
               </button>
 
               <!-- Collapsible content -->
-              <div v-if="isExpanded" class="bg-gray-50 border border-gray-200 rounded-lg p-2 space-y-2">
+              <div v-if="isExpanded" class="bg-gray-50 border border-gray-200 rounded-lg p-1 space-y-1">
                 <!-- Uploaded Documents Section (for RAG) -->
                 <div v-if="uploadedFiles.length > 0">
-                  <div class="flex items-center justify-between mb-1">
+                  <div class="flex items-center justify-between mb-0.5">
                     <h4 class="text-sm font-medium text-gray-700">Uploaded Documents</h4>
                     <span class="text-xs text-gray-500">{{ selectedDocuments.length }} selected of {{ uploadedFiles.length }} files</span>
                   </div>
                   <HorizontalScroll>
-                    <div class="flex space-x-2">
+                    <div class="flex space-x-1">
                       <div
                         v-for="doc in uploadedFiles"
                         :key="doc.file_id"
-                        class="w-28 flex-shrink-0 p-1.5 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 relative group"
+                        class="w-28 flex-shrink-0 p-1 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 relative group"
                       >
-                        <div class="flex flex-col items-center space-y-1">
+                        <div class="flex flex-col items-center space-y-0.5">
                           <!-- Checkbox positioned at top -->
                           <input
                             type="checkbox"
@@ -282,20 +282,20 @@
                 </div>
 
                 <!-- Generated Files Section -->
-                <div v-if="generatedFiles.length > 0" class="border-t border-gray-300 pt-2">
-                  <div class="flex items-center justify-between mb-1">
+                <div v-if="generatedFiles.length > 0" class="border-t border-gray-300 pt-1">
+                  <div class="flex items-center justify-between mb-0.5">
                     <h4 class="text-sm font-medium text-gray-700">Generated Files</h4>
                     <span class="text-xs text-gray-500">{{ generatedFiles.length }} files • From sandbox</span>
                   </div>
                   <HorizontalScroll>
-                    <div class="flex space-x-2">
+                    <div class="flex space-x-1">
                       <div
                         v-for="doc in generatedFiles"
                         :key="doc.file_id"
-                        class="w-28 flex-shrink-0 p-1.5 bg-blue-50 rounded-lg border border-blue-200 hover:bg-blue-100 relative group cursor-pointer transition-all duration-200"
+                        class="w-28 flex-shrink-0 p-1 bg-blue-50 rounded-lg border border-blue-200 hover:bg-blue-100 relative group cursor-pointer transition-all duration-200"
                         @click="viewGeneratedFile(doc)"
                       >
-                        <div class="flex flex-col items-center space-y-1">
+                        <div class="flex flex-col items-center space-y-0.5">
                           <!-- File Type Icon -->
                           <div class="w-6 h-6 flex items-center justify-center rounded file-icon-container" :class="getFileIconBackground(doc.format, doc.filename)">
                             <component :is="getFileIcon(doc.format, doc.filename)" class="w-3 h-3" :class="getFileIconColor(doc.format, doc.filename)" />
