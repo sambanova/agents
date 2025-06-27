@@ -16,10 +16,10 @@
             <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs whitespace-nowrap">
               {{ cumulativeTokenUsage.input_tokens.toLocaleString() }} input
             </span>
-            <span class="bg-gray-200 text-gray-800 px-2 py-1 rounded text-xs whitespace-nowrap">
+            <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs whitespace-nowrap">
               {{ cumulativeTokenUsage.output_tokens.toLocaleString() }} output
             </span>
-            <span class="bg-gray-300 text-gray-900 px-2 py-1 rounded text-xs whitespace-nowrap">
+            <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs whitespace-nowrap">
               {{ cumulativeTokenUsage.total_tokens.toLocaleString() }} total
             </span>
           </div>
@@ -720,6 +720,7 @@ function AutoScrollToBottom(smoothScrollOff = false) {
 const emit = defineEmits([
   'searchStart',
   'metadataChanged',
+  'messagesChanged',
   'searchComplete',
   'searchError',
   'openSettings',
