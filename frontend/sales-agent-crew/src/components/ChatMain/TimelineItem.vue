@@ -38,29 +38,13 @@
         >
           {{ isExpanded ? '..hide' : 'more...' }}
         </button>
-        <div v-if="isExpanded" class="bg-primary-brandGray p-2" name="slide">
-          <table class="w-full text-left">
-            <tbody>
-              <tr>
-                <td class="px-1 py-0 font-semibold">Name:</td>
-                <td class="px-1 py-0">{{ data.metadata.llm_name }}</td>
-              </tr>
-              <tr>
-                <td class="px-1 py-0 font-semibold">Task:</td>
-                <td class="px-1 py-0">{{ data.metadata.task }}</td>
-              </tr>
-              <tr>
-                <td class="px-1 py-0 font-semibold">Duration:</td>
-                <td class="px-1 py-0">
-                  {{ formattedDuration(data.metadata.duration) }} s
-                </td>
-              </tr>
-              <tr>
-                <td class="px-1 py-0 font-semibold">Provider:</td>
-                <td class="px-1 py-0">{{ data.metadata.llm_provider }}</td>
-              </tr>
-            </tbody>
-          </table>
+        <div v-if="isExpanded" class="mt-2 bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 text-left" name="slide">
+          <div class="truncate text-left">
+            <span class="font-semibold text-gray-800">Model:</span> {{ data.metadata.llm_name }}
+          </div>
+          <div class="truncate text-left">
+            <span class="font-semibold text-gray-800">Duration:</span> {{ formattedDuration(data.metadata.duration) }}s
+          </div>
         </div>
       </div>
     </div>

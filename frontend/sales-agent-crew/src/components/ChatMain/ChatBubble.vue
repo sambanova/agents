@@ -1516,7 +1516,7 @@ const auditLogEvents = computed(() => {
           dotClass = 'bg-gray-400'
           type = 'deep_research_planning'
         } else if (agentType === 'deep_research_search_sections') {
-          title = `▫ Research Sections Defined`
+          title = `Research Sections Defined`
           details = 'Organizing research into structured sections'
           dotClass = 'bg-gray-400'
           type = 'deep_research_sections'

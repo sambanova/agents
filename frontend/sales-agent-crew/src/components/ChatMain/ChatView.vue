@@ -64,11 +64,7 @@
           <!-- Chat Bubble -->
           <li v-for="msgItem in filteredMessages" :key="msgItem.conversation_id || msgItem.message_id || msgItem.timestamp || Math.random()">
             <ChatBubble
-              :workflowData="
-                workflowData.filter(
-                  (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
-                )
-              "
+              :workflowData="getModelData(msgItem.message_id || msgItem.messageId)"
               :plannerText="
                 plannerTextData.filter(
                   (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
@@ -159,11 +155,9 @@
             </div>
           </li>
           
-          <ChatLoaderBubble
-            :workflowData="
-              workflowData.filter((item) => item.message_id === currentMsgId)
-            "
-            v-if="isLoading && !hasActiveStreamingGroup && workflowData.length > 0"
+                      <ChatLoaderBubble
+            :workflowData="getModelData(currentMsgId)"
+            v-if="isLoading && !hasActiveStreamingGroup && getModelData(currentMsgId).length > 0"
             :isLoading="isLoading"
             :statusText="'Planning...'"
             :plannerText="
@@ -930,7 +924,7 @@ async function filterChat(msgData) {
   // Second pass: track ALL metrics for ALL messages BEFORE filtering
   sortedMessages.forEach(message => {
     // Count events that contribute to the conversation run
-    const shouldTrackEvent = ['agent_completion', 'think', 'planner', 'llm_stream_chunk', 'stream_complete'].includes(message.event);
+    const shouldTrackEvent = ['agent_completion', 'llm_stream_chunk', 'stream_complete'].includes(message.event);
     
     if (shouldTrackEvent) {
       const runId = messageToRunMap.get(message.message_id) || message.message_id;
@@ -1132,7 +1126,7 @@ async function filterChat(msgData) {
     try {
       const parsedData = JSON.parse(planner.data);
       if (parsedData.metadata) {
-        addOrUpdateModel(parsedData.metadata, planner.message_id);
+
       }
     } catch (error) {
       console.error('Failed to parse planner data:', error);
@@ -1147,7 +1141,7 @@ async function filterChat(msgData) {
     try {
       const parsedData = JSON.parse(work.data);
       if (parsedData.metadata) {
-        addOrUpdateModel(parsedData.metadata, work.message_id);
+
       }
     } catch (error) {
       console.error('Failed to parse think data:', error);
@@ -1172,7 +1166,7 @@ async function filterChat(msgData) {
         workflow_name: "Agent Workflow",
         agent_name: "Research Agent", 
         task: "tool_execution",
-        llm_name: completion.response_metadata?.model_name || "Unknown",
+        llm_name: completion.response_metadata?.model_name || "none",
         llm_provider: "agent",
         duration: 0
       };
@@ -1197,7 +1191,7 @@ async function filterChat(msgData) {
         metadata.task = "tool_call";
       }
 
-      addOrUpdateModel(metadata, completion.message_id);
+
     } catch (error) {
       console.error('Failed to process agent completion data:', error);
     }
@@ -1837,28 +1831,7 @@ const addMessage = async () => {
   }
 };
 
-function addOrUpdateModel(newData, message_id) {
-  // Determine which message_id to use.
-  const idToUse = message_id ? message_id : currentMsgId.value;
 
-  // Find an existing model with matching llm_name and message_id.
-  const existingModel = workflowData.value.find(
-    (item) => item.llm_name === newData.llm_name && item.message_id === idToUse
-  );
-
-  if (existingModel) {
-    // Update existing model and increment count.
-    Object.assign(existingModel, newData);
-    existingModel.count = (existingModel.count || 1) + 1;
-  } else {
-    // Add new model entry with initial count of 1.
-    workflowData.value.push({
-      ...newData,
-      count: 1,
-      message_id: idToUse,
-    });
-  }
-}
 
 async function connectWebSocket() {
   try {
@@ -2070,7 +2043,6 @@ async function connectWebSocket() {
           statusText.value = dataParsed.agent_name;
           emit('agentThoughtsDataChanged', agentThoughtsData.value);
           try {
-            addOrUpdateModel(dataParsed.metadata);
             
             // Add think event to messages for persistence
             try {
@@ -2092,7 +2064,6 @@ async function connectWebSocket() {
           }
         } else if (receivedData.event === 'planner') {
           let dataParsed = JSON.parse(receivedData.data);
-          addOrUpdateModel(dataParsed.metadata);
           
           // Add planner event to messages for persistence
           try {
@@ -2628,7 +2599,8 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata) {
       latencies: [],
       ttfts: [],
       throughputs: [],
-      event_count: 0
+      event_count: 0,
+      models: new Map() // Track model names and their counts
     });
   }
   
@@ -2657,6 +2629,11 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata) {
   // Only increment event count if event has both response_metadata and model_name, since we are counting llm calls
   if (responseMetadata && responseMetadata.model_name) {
     runData.event_count++;
+    
+    // Track model usage
+    const modelName = responseMetadata.model_name;
+    const currentCount = runData.models.get(modelName) || 0;
+    runData.models.set(modelName, currentCount + 1);
   }
 }
 
@@ -2718,6 +2695,28 @@ function getRunSummary(msgItem) {
   
 
   return summary;
+}
+
+// Get model data from runMetrics for display
+function getModelData(message_id) {
+  const runId = message_id || currentMsgId.value;
+  
+  if (!runId || !runMetrics.value.has(runId)) {
+    return [];
+  }
+  
+  const runData = runMetrics.value.get(runId);
+  const models = [];
+  
+  for (const [modelName, count] of runData.models.entries()) {
+    models.push({
+      llm_name: modelName,
+      count: count,
+      message_id: runId
+    });
+  }
+  
+  return models;
 }
 
 // File utility functions
