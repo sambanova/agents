@@ -233,7 +233,7 @@
               <!-- Collapsible content -->
               <div v-if="isExpanded" class="bg-gray-50 border border-gray-200 rounded-lg p-1 space-y-1">
                 <!-- Uploaded Documents Section (for RAG) -->
-                <div v-if="uploadedFiles.length > 0">
+                <div>
                   <div class="flex items-center justify-between mb-0.5">
                     <h4 class="text-sm font-medium text-gray-700">Uploaded Documents</h4>
                     <div class="flex items-center space-x-2">
@@ -247,7 +247,7 @@
                       </button>
                     </div>
                   </div>
-                  <HorizontalScroll>
+                  <HorizontalScroll v-if="uploadedFiles.length > 0">
                     <div class="flex space-x-1">
                       <div
                         v-for="doc in uploadedFiles"
@@ -291,12 +291,12 @@
                 </div>
 
                 <!-- Generated Files Section -->
-                <div v-if="generatedFiles.length > 0" class="border-t border-gray-300 pt-1">
+                <div class="border-t border-gray-300 pt-1">
                   <div class="flex items-center justify-between mb-0.5">
                     <h4 class="text-sm font-medium text-gray-700">Generated Files</h4>
                     <span class="text-xs text-gray-500">{{ generatedFiles.length }} files • From sandbox</span>
                   </div>
-                  <HorizontalScroll>
+                  <HorizontalScroll v-if="generatedFiles.length > 0">
                     <div class="flex space-x-1">
                       <div
                         v-for="doc in generatedFiles"
