@@ -11,6 +11,7 @@ import markdown
 import redis
 import structlog
 from agents.api.data_types import APIKeys
+from agents.api.utils import deep_research_to_agent_thinking, generate_deep_research_pdf
 from agents.api.websocket_interface import WebSocketInterface
 from agents.components.compound.financial_analysis_subgraph import (
     create_financial_analysis_graph,
@@ -22,7 +23,6 @@ from agents.tools.langgraph_tools import RETRIEVAL_DESCRIPTION
 from fastapi import WebSocket, WebSocketDisconnect
 from langchain_core.messages import AIMessage, HumanMessage
 from starlette.websockets import WebSocketState
-from weasyprint import HTML
 
 logger = structlog.get_logger(__name__)
 
@@ -510,187 +510,6 @@ class WebSocketConnectionManager(WebSocketInterface):
 
             return False
 
-    async def _generate_deep_research_pdf(self, content: str) -> Optional[str]:
-        """
-        Generate a PDF from deep research markdown content and return the file ID.
-
-        Args:
-            content: The markdown content to convert to PDF
-
-        Returns:
-            Optional[str]: The file ID if successful, None if failed
-        """
-        try:
-            logger.info("Generating PDF from deep research content")
-
-            # Convert markdown to HTML
-            html_content = markdown.markdown(
-                content, extensions=["tables", "fenced_code"]
-            )
-
-            # Create professional HTML document
-            full_html = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <style>
-                    @page {{
-                        size: A4;
-                        margin: 1in 0.75in;
-                        @bottom-center {{
-                            content: "Page " counter(page) " of " counter(pages);
-                            font-size: 9pt;
-                            color: #666;
-                        }}
-                    }}
-                    
-                    body {{
-                        font-family: Georgia, 'Times New Roman', serif;
-                        font-size: 11pt;
-                        line-height: 1.5;
-                        color: #212529;
-                        margin: 0;
-                        padding: 0;
-                    }}
-                    
-                    .report-header {{
-                        text-align: center;
-                        margin-bottom: 2em;
-                        padding-bottom: 0.5em;
-                        border-bottom: 2px solid #343a40;
-                        page-break-after: avoid;
-                    }}
-                    
-                    .report-header h1 {{
-                        font-size: 24pt;
-                        margin-bottom: 0.5em;
-                        font-weight: 700;
-                    }}
-                    
-                    .report-header .date {{
-                        font-size: 10pt;
-                        color: #666;
-                    }}
-                    
-                    h1, h2, h3, h4, h5, h6 {{
-                        font-family: 'Helvetica Neue', Arial, sans-serif;
-                        font-weight: 700;
-                        color: #000;
-                        margin-top: 1.5em;
-                        margin-bottom: 0.5em;
-                        line-height: 1.2;
-                        page-break-after: avoid;
-                    }}
-                    
-                    h1 {{ font-size: 20pt; }}
-                    h2 {{ font-size: 16pt; }}
-                    h3 {{ font-size: 14pt; }}
-                    
-                    p {{
-                        margin-bottom: 1em;
-                        text-align: justify;
-                        orphans: 3;
-                        widows: 3;
-                    }}
-                    
-                    a {{
-                        color: #ee7624;
-                        text-decoration: none;
-                    }}
-                    
-                    a:hover {{
-                        text-decoration: underline;
-                    }}
-                    
-                    strong {{
-                        font-weight: 700;
-                    }}
-                    
-                    ul, ol {{
-                        padding-left: 2em;
-                        margin-bottom: 1em;
-                    }}
-                    
-                    li {{
-                        margin-bottom: 0.5em;
-                        page-break-inside: avoid;
-                    }}
-                    
-                    blockquote {{
-                        border-left: 4px solid #dee2e6;
-                        padding: 0.5em 1em;
-                        margin: 1.5em 0;
-                        color: #6c757d;
-                        page-break-inside: avoid;
-                    }}
-                    
-                    pre, code {{
-                        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
-                        font-size: 9.5pt;
-                    }}
-                    
-                    pre {{
-                        background-color: #f8f9fa;
-                        border: 1px solid #e9ecef;
-                        border-radius: 4px;
-                        padding: 1em;
-                        overflow-x: auto;
-                        page-break-inside: avoid;
-                    }}
-                    
-                    table {{
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin: 1.5em 0;
-                        page-break-inside: avoid;
-                    }}
-                    
-                    th, td {{
-                        border: 1px solid #dee2e6;
-                        padding: 0.75em;
-                        text-align: left;
-                    }}
-                    
-                    th {{
-                        background-color: #f8f9fa;
-                        font-weight: 700;
-                    }}
-                </style>
-            </head>
-            <body>
-                <div class="report-header">
-                    <h1>Deep Research Report</h1>
-                    <p class="date">Generated on {datetime.now().strftime('%B %d, %Y')}</p>
-                </div>
-                <div class="report-content">
-                    {html_content}
-                </div>
-            </body>
-            </html>
-            """
-
-            # Generate PDF using WeasyPrint
-            pdf_buffer = BytesIO()
-            HTML(string=full_html).write_pdf(pdf_buffer)
-            pdf_data = pdf_buffer.getvalue()
-            pdf_buffer.close()
-
-            # Generate unique file ID and filename
-            file_id = str(uuid.uuid4())
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"deep_research_report_{timestamp}.pdf"
-
-            logger.info("PDF generated successfully", file_size=len(pdf_data))
-
-            return file_id, filename, pdf_data
-
-        except Exception as e:
-            logger.error(
-                "Failed to generate PDF from deep research content", error=str(e)
-            )
-            return None
-
     async def send_message(
         self, user_id: str, conversation_id: str, data: dict
     ) -> bool:
@@ -736,7 +555,7 @@ class WebSocketConnectionManager(WebSocketInterface):
 
                         # Try to parse as JSON to get the structured data
                         if final_report_content:
-                            pdf_result = await self._generate_deep_research_pdf(
+                            pdf_result = await generate_deep_research_pdf(
                                 final_report_content
                             )
                             if pdf_result:
@@ -774,6 +593,16 @@ class WebSocketConnectionManager(WebSocketInterface):
                             error=str(e),
                         )
                         # Continue without PDF - don't fail the message sending
+
+                content = deep_research_to_agent_thinking(data)
+                if content:
+                    # Map to old format persist it and send it
+                    await self.message_storage.save_message(
+                        user_id,
+                        conversation_id,
+                        content,
+                    )
+                    await self._safe_send(websocket, content)
 
                 await self.message_storage.save_message(user_id, conversation_id, data)
 
