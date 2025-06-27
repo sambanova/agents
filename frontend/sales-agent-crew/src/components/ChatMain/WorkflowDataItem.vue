@@ -1,43 +1,45 @@
 <template>
-  
-    <div 
-      v-for="(item, index) in workflowData" 
-      :key="item.message_id +index|| index" 
-      class="group flex flex-col bg-primary-brandDarkGray border border-primary-brandGray shadow-sm rounded-xl hover:shadow-md focus:outline-none focus:shadow-md transition mb-2"
-    >
-      <div class="px-4 py-2 md:px-5 min-w-[260px]">
-        <div class="flex items-start relative justify-between">
-          <!-- Left: Text Content -->
-          <div class="grow">
-            <h3 class="text-sm text-primary-bodyText flex items-center">
-              <span class="inline-block w-[75%] truncate capitalize">
-                {{ getTextAfterLastSlash(item.llm_name) }} 
-              </span>
-              <span class="ml-1 w-[15%]">
-                ({{ item.count }})
-              </span>
-            </h3>
-            <p class="text-sm text-gray-500 flex justify-between">
-              <span class="capitalize">{{ item.task }}</span>
-              <span v-if="item.duration">{{ formattedDuration(item.duration) }}</span>
-            </p>
-          </div>
-          <!-- Right: Icon  -->
-          <div class="absolute top-[5px] right-[5px]">
-            <template v-if="item.llm_name.toLowerCase().includes('meta')">
-              <img class="w-4 h-4" src="/Images/icons/meta.png" alt="">
-            </template>
-            <template v-else-if="item.llm_name.toLowerCase().includes('deepseek')">
-              <img class="w-4 h-4" src="/Images/icons/deepseek.png" alt="">
-            </template>
-          </div>
-        </div>
+  <div
+    v-for="(item, index) in workflowData"
+    :key="item.message_id + index || index"
+    class="group flex flex-col bg-gray-50 border border-gray-200 rounded-lg p-3 mb-2"
+  >
+    <div class="flex items-start justify-between">
+      <!-- Left: Text Content -->
+      <div class="grow">
+        <h3 class="text-xs font-semibold text-gray-800 flex items-center">
+          <span class="truncate capitalize">
+            {{ getTextAfterLastSlash(item.llm_name) }}
+          </span>
+          <span class="ml-1.5 text-gray-500 font-normal"> ({{ item.count }}) </span>
+        </h3>
+        <p class="text-xs text-gray-500 flex justify-between mt-1">
+          <span class="capitalize">{{ item.task }}</span>
+          <span v-if="item.duration">{{
+            formattedDuration(item.duration)
+          }}</span>
+        </p>
       </div>
-      <div v-if="isLoading" class="mt-1 w-full h-1 bg-gray-300 overflow-hidden relative">
-        <div class="absolute top-0 left-0 h-full bg-primary-brandPrimaryColor animate-loader"></div>
+      <!-- Right: Icon -->
+      <div class="flex-shrink-0">
+        <template v-if="item.llm_name.toLowerCase().includes('meta')">
+          <img class="w-4 h-4" src="/Images/icons/meta.png" alt="Meta" />
+        </template>
+        <template v-else-if="item.llm_name.toLowerCase().includes('deepseek')">
+          <img class="w-4 h-4" src="/Images/icons/deepseek.png" alt="Deepseek" />
+        </template>
       </div>
     </div>
-  
+    <div
+      v-if="isLoading"
+      class="mt-2 w-full h-1 bg-gray-200 rounded-full overflow-hidden"
+    >
+      <div
+        class="h-full bg-blue-500 animate-pulse"
+        style="width: 100%"
+      ></div>
+    </div>
+  </div>
 </template>
 
 <script setup>

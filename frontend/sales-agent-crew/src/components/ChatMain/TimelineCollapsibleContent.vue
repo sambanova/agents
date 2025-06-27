@@ -1,16 +1,14 @@
 <template>
-  <div class="mx-2 mb-2">
+  <div class="text-xs">
     <div
       @click="isOpen = !isOpen"
-      class="flex justify-between items-center cursor-pointer"
+      class="flex justify-between items-center cursor-pointer p-2 rounded-md hover:bg-gray-50"
     >
       <div
         :title="getHeadingValue()"
         class="flex items-center align-items-center flex-1"
       >
-        <CorrectIcon class="mr-1 flex-shrink-0" />
-
-        <span class="line-clamp-1 text-primary-brandTextSecondary text-sm">
+        <span class="line-clamp-1 text-gray-500 text-xs">
           {{ getHeadingValue() }}:
         </span>
       </div>
@@ -19,7 +17,7 @@
         <svg
           v-if="!isOpen"
           xmlns="http://www.w3.org/2000/svg"
-          class="h-4 w-4 text-[#667085]"
+          class="h-4 w-4 text-gray-400"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -34,7 +32,7 @@
         <svg
           v-else
           xmlns="http://www.w3.org/2000/svg"
-          class="h-4 w-4 text-[#667085] transform rotate-180"
+          class="h-4 w-4 text-gray-400 transform rotate-180"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -49,25 +47,22 @@
       </div>
     </div>
 
-    <div class="m-1 p-1 border rounded-md bg-primary-brandGray" v-show="isOpen">
+    <div class="pl-6" v-show="isOpen">
       <!-- If value is an object (and not an array), render all keys -->
-      <div v-if="isObject(value) && !Array.isArray(value)" class="w-full">
-        <div v-for="(val, key) in filterObject(value)" :key="key" class="mb-1">
-          <div v-if="val !== '' || val !== null"></div>
-          <!-- Key Row: Dark Background -->
-          <div class="px-2 py-1 text-xs text-gray-900 bg-gray-200">
-            {{ formatKey(key) }}
-          </div>
-          <!-- Value Row: Light Background -->
-          <div class="px-2 py-1 text-xs text-gray-900 bg-gray-50">
-            <RecursiveDisplay :value="val" :inline="true" />
+      <div v-if="isObject(value) && !Array.isArray(value)" class="w-full space-y-1 py-1">
+        <div v-for="(val, key) in filterObject(value)" :key="key">
+          <div v-if="val !== '' || val !== null">
+            <span class="font-medium text-gray-900">{{ formatKey(key) }}: </span>
+            <span class="text-gray-700">
+              <RecursiveDisplay :value="val" :inline="true" />
+            </span>
           </div>
         </div>
       </div>
 
       <!-- If value is an array, render as a bullet list -->
-      <div v-else-if="Array.isArray(value)">
-        <ul class="list-disc ml-6 space-y-1">
+      <div v-else-if="Array.isArray(value)" class="py-1">
+        <ul class="list-disc ml-6 space-y-1 text-gray-700">
           <li v-for="(item, index) in value" :key="index">
             <RecursiveDisplay :value="item" />
           </li>
@@ -75,32 +70,28 @@
       </div>
 
       <!-- If heading is numeric and value has a description, display it -->
-      <div v-else-if="isNumeric(heading) && value?.description">
+      <div v-else-if="isNumeric(heading) && value?.description" class="py-1 text-gray-700">
         {{ value.description }}
       </div>
 
       <!-- If value is a JSON string, convert it and display it as an object -->
-      <div v-else-if="isJsonString(value)" class="w-full">
+      <div v-else-if="isJsonString(value)" class="w-full space-y-1 py-1">
         <div
           v-for="(val, key) in convertStringToJson(value)"
           :key="key"
           class="mb-1"
         >
-          <!-- Key Row: Dark Background -->
-          <div class="px-2 py-1 text-xs text-gray-900 bg-gray-200">
-            {{ formatKey(key) }}
-          </div>
-          <!-- Value Row: Light Background -->
-          <div class="px-2 py-1 text-xs text-gray-900 bg-gray-50">
+          <span class="font-medium text-gray-900">{{ formatKey(key) }}: </span>
+          <span class="text-gray-700">
             <RecursiveDisplay :value="val" :inline="true" />
-          </div>
+          </span>
         </div>
       </div>
 
       <!-- Otherwise, render the value as plain text -->
-      <div v-else>
+      <div v-else class="py-1">
         <div
-          class="markdown-content text-[#667085] text-[12px]"
+          class="prose prose-sm max-w-none"
           v-html="formattedText(value)"
         ></div>
       </div>
@@ -110,7 +101,6 @@
 
 <script setup>
 import { ref } from 'vue';
-import CorrectIcon from '@/components/icons/CorrectIcon.vue';
 import RecursiveDisplay from './RecursiveDisplay.vue';
 import { isNumeric } from '@/utils/globalFunctions';
 import { formattedText } from '@/utils/formatText';
