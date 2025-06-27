@@ -46,18 +46,10 @@
                 <td class="px-1 py-0">{{ data.metadata.llm_name }}</td>
               </tr>
               <tr>
-                <td class="px-1 py-0 font-semibold">Task:</td>
-                <td class="px-1 py-0">{{ data.metadata.task }}</td>
-              </tr>
-              <tr>
                 <td class="px-1 py-0 font-semibold">Duration:</td>
                 <td class="px-1 py-0">
                   {{ formattedDuration(data.metadata.duration) }} s
                 </td>
-              </tr>
-              <tr>
-                <td class="px-1 py-0 font-semibold">Provider:</td>
-                <td class="px-1 py-0">{{ data.metadata.llm_provider }}</td>
               </tr>
             </tbody>
           </table>
