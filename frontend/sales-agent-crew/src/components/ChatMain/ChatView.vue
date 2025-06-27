@@ -64,11 +64,7 @@
           <!-- Chat Bubble -->
           <li v-for="msgItem in filteredMessages" :key="msgItem.conversation_id || msgItem.message_id || msgItem.timestamp || Math.random()">
             <ChatBubble
-              :workflowData="
-                workflowData.filter(
-                  (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
-                )
-              "
+              :workflowData="getModelData(msgItem.message_id || msgItem.messageId)"
               :plannerText="
                 plannerTextData.filter(
                   (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
@@ -159,11 +155,9 @@
             </div>
           </li>
           
-          <ChatLoaderBubble
-            :workflowData="
-              workflowData.filter((item) => item.message_id === currentMsgId)
-            "
-            v-if="isLoading && !hasActiveStreamingGroup && workflowData.length > 0"
+                      <ChatLoaderBubble
+            :workflowData="getModelData(currentMsgId)"
+            v-if="isLoading && !hasActiveStreamingGroup && getModelData(currentMsgId).length > 0"
             :isLoading="isLoading"
             :statusText="'Planning...'"
             :plannerText="
@@ -1132,7 +1126,7 @@ async function filterChat(msgData) {
     try {
       const parsedData = JSON.parse(planner.data);
       if (parsedData.metadata) {
-        addOrUpdateModel(parsedData.metadata, planner.message_id);
+
       }
     } catch (error) {
       console.error('Failed to parse planner data:', error);
@@ -1147,7 +1141,7 @@ async function filterChat(msgData) {
     try {
       const parsedData = JSON.parse(work.data);
       if (parsedData.metadata) {
-        addOrUpdateModel(parsedData.metadata, work.message_id);
+
       }
     } catch (error) {
       console.error('Failed to parse think data:', error);
@@ -1197,7 +1191,7 @@ async function filterChat(msgData) {
         metadata.task = "tool_call";
       }
 
-      addOrUpdateModel(metadata, completion.message_id);
+
     } catch (error) {
       console.error('Failed to process agent completion data:', error);
     }
@@ -1837,36 +1831,7 @@ const addMessage = async () => {
   }
 };
 
-function addOrUpdateModel(newData, message_id) {
 
-  console.log('addOrUpdateModel', newData);
-
-  // Skip if no valid model name
-  if (!newData.llm_name || newData.llm_name === "none" || newData.llm_name === "Unknown") {
-    return;
-  }
-
-  // Determine which message_id to use.
-  const idToUse = message_id ? message_id : currentMsgId.value;
-
-  // Find an existing model with matching llm_name and message_id.
-  const existingModel = workflowData.value.find(
-    (item) => item.llm_name === newData.llm_name && item.message_id === idToUse
-  );
-
-  if (existingModel) {
-    // Update existing model and increment count.
-    Object.assign(existingModel, newData);
-    existingModel.count = (existingModel.count || 1) + 1;
-  } else {
-    // Add new model entry with initial count of 1.
-    workflowData.value.push({
-      ...newData,
-      count: 1,
-      message_id: idToUse,
-    });
-  }
-}
 
 async function connectWebSocket() {
   try {
@@ -2078,7 +2043,6 @@ async function connectWebSocket() {
           statusText.value = dataParsed.agent_name;
           emit('agentThoughtsDataChanged', agentThoughtsData.value);
           try {
-            addOrUpdateModel(dataParsed.metadata);
             
             // Add think event to messages for persistence
             try {
@@ -2100,7 +2064,6 @@ async function connectWebSocket() {
           }
         } else if (receivedData.event === 'planner') {
           let dataParsed = JSON.parse(receivedData.data);
-          addOrUpdateModel(dataParsed.metadata);
           
           // Add planner event to messages for persistence
           try {
@@ -2669,10 +2632,8 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata) {
     
     // Track model usage
     const modelName = responseMetadata.model_name;
-    if (modelName && modelName !== "none" && modelName !== "Unknown") {
-      const currentCount = runData.models.get(modelName) || 0;
-      runData.models.set(modelName, currentCount + 1);
-    }
+    const currentCount = runData.models.get(modelName) || 0;
+    runData.models.set(modelName, currentCount + 1);
   }
 }
 
@@ -2734,6 +2695,28 @@ function getRunSummary(msgItem) {
   
 
   return summary;
+}
+
+// Get model data from runMetrics for display
+function getModelData(message_id) {
+  const runId = message_id || currentMsgId.value;
+  
+  if (!runId || !runMetrics.value.has(runId)) {
+    return [];
+  }
+  
+  const runData = runMetrics.value.get(runId);
+  const models = [];
+  
+  for (const [modelName, count] of runData.models.entries()) {
+    models.push({
+      llm_name: modelName,
+      count: count,
+      message_id: runId
+    });
+  }
+  
+  return models;
 }
 
 // File utility functions
