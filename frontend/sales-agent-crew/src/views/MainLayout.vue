@@ -37,11 +37,12 @@
               <!-- ChatView for conversation -->
               <ChatView
                 :conversationId="selectedConversationId"
-                @metadataChanged="metadataChanged"
                 :userId="clerkUserId"
                 class="flex-1"
                 @agentThoughtsDataChanged="agentThoughtsDataChanged"
                 @daytona-sidebar-state-changed="handleDaytonaSidebarStateChange"
+                @stream-started="streamCompleted = false"
+                @stream-completed="streamCompleted = true"
               />
             </div>
 
@@ -138,7 +139,7 @@
         :userId="clerkUserId"
         :runId="currentRunId"
         :agentData="agentData"
-        :metadata="metadata"
+        :stream-completed="streamCompleted"
         ref="chatAgentSidebarRef"
       />
     </div>
@@ -230,15 +231,11 @@ const clerkUserId = computed(() => user.value?.id || 'anonymous_user');
 
 const agentData = ref([]);
 const chatSideBarRef = ref(null);
-
-const metadata = ref(null);
-
-const metadataChanged = (metaData) => {
-  metadata.value = metaData;
-};
+const streamCompleted = ref(false);
 
 const handleNewChat = () => {
   agentData.value = [];
+  streamCompleted.value = false;
 };
 
 const agentThoughtsDataChanged = (agentThoughtsData) => {
@@ -287,6 +284,7 @@ function onModeToggled(val) {
  */
 function handleSelectConversation(conv) {
   selectedConversationId.value = conv.conversation_id;
+  streamCompleted.value = false;
 }
 
 /**

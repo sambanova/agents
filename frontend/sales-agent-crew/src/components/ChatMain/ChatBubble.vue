@@ -407,11 +407,6 @@ import { isFinalAgentType } from '@/utils/globalFunctions.js'
       type: String,
       required: true
     },
-    metadata: {
-      type: Object,
-      required: false,
-      default: () => ({})
-    },
     provider: {
       type: String,
       required: true
@@ -458,29 +453,6 @@ import { isFinalAgentType } from '@/utils/globalFunctions.js'
   
   // Define emits for communicating with parent ChatView
   const emit = defineEmits(['open-daytona-sidebar', 'open-artifact-canvas'])
-  
-  const presentMetadata = computed(() => {
-
-
-if (!parsedData.metadata) return null;
-
-return parsedData.metadata;
-});
-
-  const presentMetadataOld = computed(() => {
-
-
-  if (!props.metadata) return null;
-
-  return props.metadata;
-});
-
-
-
-
-
-
-
   
   // Parse the JSON string safely
   const parsedData = computed(() => {

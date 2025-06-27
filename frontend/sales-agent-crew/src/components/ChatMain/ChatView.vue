@@ -64,7 +64,6 @@
           <!-- Chat Bubble -->
           <li v-for="msgItem in filteredMessages" :key="msgItem.conversation_id || msgItem.message_id || msgItem.timestamp || Math.random()">
             <ChatBubble
-              :metadata="completionMetaData || {}"
               :workflowData="
                 workflowData.filter(
                   (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
@@ -719,7 +718,6 @@ function AutoScrollToBottom(smoothScrollOff = false) {
 
 const emit = defineEmits([
   'searchStart',
-  'metadataChanged',
   'messagesChanged',
   'searchComplete',
   'searchError',
@@ -727,6 +725,8 @@ const emit = defineEmits([
   'agentThoughtsDataChanged',
   'daytona-sidebar-state-changed',
   'open-artifact-canvas',
+  'stream-started',
+  'stream-completed',
 ]);
 const props = defineProps({
   conversationId: {
@@ -843,6 +843,18 @@ async function loadPreviousChat(convId) {
     if (resp.data && resp.data.messages) {
       await filterChat(resp.data);
 
+      const lastMessage = messagesData.value[messagesData.value.length - 1];
+      console.log('[ChatView] Inspecting last message on load:', lastMessage);
+      if (
+        lastMessage &&
+        (isFinalAgentType(lastMessage.additional_kwargs?.agent_type) ||
+         lastMessage.event === 'stream_complete')
+      ) {
+        console.log(
+          '[ChatView] Loaded last message is final, emitting stream-completed.'
+        );
+        emit('stream-completed');
+      }
     } else {
       console.warn('No messages found in chat history response');
       messagesData.value = [];
@@ -880,6 +892,14 @@ const runMetrics = ref(new Map());
 
 // Track deep research state
 const isInDeepResearch = ref(false);
+
+watch(
+  () => agentThoughtsData.value,
+  (newThoughts) => {
+    emit('agentThoughtsDataChanged', newThoughts);
+  },
+  { deep: true }
+);
 
 async function filterChat(msgData) {
   // First pass: identify conversation turns for run grouping
@@ -1712,6 +1732,8 @@ function waitForSocketOpen(timeout = 5000) {
 
 const currentMsgId = ref('');
 const addMessage = async () => {
+  emit('stream-started');
+  
   isLoading.value = true;
   errorMessage.value = '';
 
@@ -1737,17 +1759,16 @@ const addMessage = async () => {
     chatName.value = searchQuery.value;
   }
 
-  completionMetaData.value = null;
   // plannerText.value = null
   statusText.value = 'Loading...';
   AutoScrollToBottom();
   agentThoughtsData.value = [];
   // workflowData.value = []
   emit('agentThoughtsDataChanged', agentThoughtsData.value);
-  emit('metadataChanged', completionMetaData.value);
   if (!searchQuery.value.trim()) return;
 
   currentMsgId.value = uuidv4();
+  
   
   // Check if the last agent_completion message is a deep_research_interrupt and user typed something
   let shouldResume = false;
@@ -2024,6 +2045,7 @@ async function connectWebSocket() {
           }
         } else if (receivedData.event === 'stream_complete') {
           console.log('Stream complete:', receivedData);
+          emit('stream-completed');
           try {
             messagesData.value.push({
               event: 'stream_complete',

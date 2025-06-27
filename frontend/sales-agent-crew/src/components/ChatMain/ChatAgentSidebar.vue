@@ -85,12 +85,11 @@
         />
       </ol>
 
-      <template v-if="metadata && !collapsed">
-        <!-- Render only available metadata fields -->
-        <MetaData :presentMetadata="presentMetadata" />
-
+      <template v-if="streamCompleted && !collapsed">
+        
+        <!-- Performance banners -->
         <Fastest />
-        <MaximizeBox :token_savings="presentMetadata?.token_savings" />
+        <MaximizeBox :token_savings="0" />
       </template>
     </div>
   </div>
@@ -99,7 +98,6 @@
 <script setup>
 import { ref, watch, nextTick, computed } from 'vue';
 import TimelineItem from '@/components/ChatMain/TimelineItem.vue';
-import MetaData from '@/components/ChatMain/MetaData.vue';
 import Fastest from '@/components/ChatMain/Fastest.vue';
 import MaximizeBox from '@/components/ChatMain/MaximizeBox.vue';
 
@@ -241,37 +239,23 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
-  metadata: {
-    type: Object, // or Array, depending on your data
-    default: () => ({}), // or [] if you expect an array
+  streamCompleted: {
+    type: Boolean,
+    default: false,
   },
 });
 const agentThoughtsData = ref([]);
-const metadata = ref(null);
 
 watch(
-  () => props.metadata,
-  (newMetadata, oldMetadata) => {
-    console.log(
-      'Child sawold Metadata array change from',
-      oldMetadata,
-      'to',
-      newMetadata
-    );
-
-    metadata.value = newMetadata || null;
-  },
-  { deep: true } // If you want to detect nested mutations
+  () => props.streamCompleted,
+  (newValue) => {
+    // Stream completion state changed
+  }
 );
+
 watch(
   () => props.agentData,
   (newAgentData, oldAgentData) => {
-    console.log(
-      'Child saw array change from',
-      oldAgentData,
-      'to',
-      newAgentData
-    );
 
     agentThoughtsData.value = newAgentData || [];
     nextTick(() => {
@@ -321,10 +305,6 @@ function autoScrollToBottom() {
  */
 watch(messages, () => {
   autoScrollToBottom();
-});
-
-const presentMetadata = computed(() => {
-  return props.metadata;
 });
 
 const formattedDuration = (duration) => {
