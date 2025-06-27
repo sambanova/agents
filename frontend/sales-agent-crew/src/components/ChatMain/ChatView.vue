@@ -930,7 +930,7 @@ async function filterChat(msgData) {
   // Second pass: track ALL metrics for ALL messages BEFORE filtering
   sortedMessages.forEach(message => {
     // Count events that contribute to the conversation run
-    const shouldTrackEvent = ['agent_completion', 'think', 'planner', 'llm_stream_chunk', 'stream_complete'].includes(message.event);
+    const shouldTrackEvent = ['agent_completion', 'llm_stream_chunk', 'stream_complete'].includes(message.event);
     
     if (shouldTrackEvent) {
       const runId = messageToRunMap.get(message.message_id) || message.message_id;
@@ -1172,7 +1172,7 @@ async function filterChat(msgData) {
         workflow_name: "Agent Workflow",
         agent_name: "Research Agent", 
         task: "tool_execution",
-        llm_name: completion.response_metadata?.model_name || "Unknown",
+        llm_name: completion.response_metadata?.model_name || "none",
         llm_provider: "agent",
         duration: 0
       };
@@ -1838,6 +1838,14 @@ const addMessage = async () => {
 };
 
 function addOrUpdateModel(newData, message_id) {
+
+  console.log('addOrUpdateModel', newData);
+
+  // Skip if no valid model name
+  if (!newData.llm_name || newData.llm_name === "none" || newData.llm_name === "Unknown") {
+    return;
+  }
+
   // Determine which message_id to use.
   const idToUse = message_id ? message_id : currentMsgId.value;
 
@@ -2628,7 +2636,8 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata) {
       latencies: [],
       ttfts: [],
       throughputs: [],
-      event_count: 0
+      event_count: 0,
+      models: new Map() // Track model names and their counts
     });
   }
   
@@ -2657,6 +2666,13 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata) {
   // Only increment event count if event has both response_metadata and model_name, since we are counting llm calls
   if (responseMetadata && responseMetadata.model_name) {
     runData.event_count++;
+    
+    // Track model usage
+    const modelName = responseMetadata.model_name;
+    if (modelName && modelName !== "none" && modelName !== "Unknown") {
+      const currentCount = runData.models.get(modelName) || 0;
+      runData.models.set(modelName, currentCount + 1);
+    }
   }
 }
 
