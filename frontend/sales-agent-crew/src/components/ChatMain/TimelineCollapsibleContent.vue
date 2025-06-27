@@ -49,7 +49,7 @@
 
     <div class="pl-6" v-show="isOpen">
       <!-- If value is an object (and not an array), render all keys -->
-      <div v-if="isObject(value) && !Array.isArray(value)" class="w-full space-y-1 py-1">
+      <div v-if="isObject(value) && !Array.isArray(value)" class="w-full space-y-1 py-1 text-xs">
         <div v-for="(val, key) in filterObject(value)" :key="key">
           <div v-if="val !== '' || val !== null">
             <span class="font-medium text-gray-900">{{ formatKey(key) }}: </span>
@@ -61,7 +61,7 @@
       </div>
 
       <!-- If value is an array, render as a bullet list -->
-      <div v-else-if="Array.isArray(value)" class="py-1">
+      <div v-else-if="Array.isArray(value)" class="py-1 text-xs">
         <ul class="list-disc ml-6 space-y-1 text-gray-700">
           <li v-for="(item, index) in value" :key="index">
             <RecursiveDisplay :value="item" />
@@ -70,12 +70,12 @@
       </div>
 
       <!-- If heading is numeric and value has a description, display it -->
-      <div v-else-if="isNumeric(heading) && value?.description" class="py-1 text-gray-700">
+      <div v-else-if="isNumeric(heading) && value?.description" class="py-1 text-gray-700 text-xs">
         {{ value.description }}
       </div>
 
       <!-- If value is a JSON string, convert it and display it as an object -->
-      <div v-else-if="isJsonString(value)" class="w-full space-y-1 py-1">
+      <div v-else-if="isJsonString(value)" class="w-full space-y-1 py-1 text-xs">
         <div
           v-for="(val, key) in convertStringToJson(value)"
           :key="key"
@@ -88,11 +88,10 @@
         </div>
       </div>
 
-      <!-- Otherwise, render the value as plain text -->
-      <div v-else class="py-1">
+      <!-- Otherwise, render the value as markdown -->
+      <div v-else class="py-1 text-xs text-gray-700 leading-relaxed">
         <div
-          class="prose prose-sm max-w-none"
-          v-html="formattedText(value)"
+          v-html="renderMarkdown(value)"
         ></div>
       </div>
     </div>
@@ -103,7 +102,7 @@
 import { ref } from 'vue';
 import RecursiveDisplay from './RecursiveDisplay.vue';
 import { isNumeric } from '@/utils/globalFunctions';
-import { formattedText } from '@/utils/formatText';
+import { renderMarkdown } from '@/utils/markdownRenderer';
 
 const isOpen = ref(false);
 
