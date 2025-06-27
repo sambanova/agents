@@ -231,32 +231,36 @@
               </button>
 
               <!-- Collapsible content -->
-              <div v-if="isExpanded" class="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
+              <div v-if="isExpanded" class="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-3">
                 <!-- Uploaded Documents Section (for RAG) -->
                 <div v-if="uploadedFiles.length > 0">
-                  <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center justify-between mb-2">
                     <h4 class="text-sm font-medium text-gray-700">Uploaded Documents</h4>
                     <span class="text-xs text-gray-500">{{ selectedDocuments.length }} selected of {{ uploadedFiles.length }} files</span>
                   </div>
                   <HorizontalScroll>
-                    <div class="flex space-x-3">
+                    <div class="flex space-x-2">
                       <div
                         v-for="doc in uploadedFiles"
                         :key="doc.file_id"
-                        class="w-44 flex-shrink-0 p-2 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 relative group"
+                        class="w-36 flex-shrink-0 p-2 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 relative group"
                       >
                         <div class="flex items-center space-x-2">
                           <input
                             type="checkbox"
                             :checked="selectedDocuments.includes(doc.file_id)"
                             @change="toggleDocumentSelection(doc.file_id)"
-                            class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                            class="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                           />
+                          <!-- File Type Icon -->
+                          <div class="w-6 h-6 flex items-center justify-center rounded file-icon-container" :class="getFileIconBackground(doc.format, doc.filename)">
+                            <component :is="getFileIcon(doc.format, doc.filename)" class="w-3 h-3" :class="getFileIconColor(doc.format, doc.filename)" />
+                          </div>
                           <div class="flex-1 overflow-hidden">
-                            <p class="text-sm font-medium text-gray-900 truncate">
+                            <p class="text-xs font-medium text-gray-900 truncate" :title="doc.filename">
                               {{ doc.filename }}
                             </p>
-                            <p class="text-xs text-gray-500 truncate">
+                            <p class="text-2xs text-gray-500 truncate">
                               {{ formatFileSize(doc.file_size) }}
                               <span v-if="doc.num_chunks"> • {{ doc.num_chunks }} chunks</span>
                             </p>
@@ -264,10 +268,10 @@
                         </div>
                         <button
                           @click="removeDocument(doc.file_id)"
-                          class="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 transition-opacity opacity-0 group-hover:opacity-100"
+                          class="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 transition-opacity opacity-0 group-hover:opacity-100"
                           title="Remove document"
                         >
-                          <XMarkIcon class="w-3 h-3" />
+                          <XMarkIcon class="w-2 h-2" />
                         </button>
                       </div>
                     </div>
@@ -275,23 +279,23 @@
                 </div>
 
                 <!-- Generated Files Section -->
-                <div v-if="generatedFiles.length > 0" class="border-t border-gray-300 pt-4">
-                  <div class="flex items-center justify-between mb-3">
+                <div v-if="generatedFiles.length > 0" class="border-t border-gray-300 pt-3">
+                  <div class="flex items-center justify-between mb-2">
                     <h4 class="text-sm font-medium text-gray-700">Generated Files</h4>
                     <span class="text-xs text-gray-500">{{ generatedFiles.length }} files • From sandbox</span>
                   </div>
                   <HorizontalScroll>
-                    <div class="flex space-x-3">
+                    <div class="flex space-x-2">
                       <div
                         v-for="doc in generatedFiles"
                         :key="doc.file_id"
-                        class="w-32 flex-shrink-0 p-2 bg-blue-50 rounded-lg border border-blue-200 hover:bg-blue-100 relative group cursor-pointer transition-all duration-200"
+                        class="w-28 flex-shrink-0 p-2 bg-blue-50 rounded-lg border border-blue-200 hover:bg-blue-100 relative group cursor-pointer transition-all duration-200"
                         @click="viewGeneratedFile(doc)"
                       >
-                        <div class="flex flex-col items-center space-y-2">
+                        <div class="flex flex-col items-center space-y-1">
                           <!-- File Type Icon -->
-                          <div class="w-8 h-8 flex items-center justify-center rounded-lg" :class="getFileIconBackground(doc.format, doc.filename)">
-                            <component :is="getFileIcon(doc.format, doc.filename)" class="w-5 h-5" :class="getFileIconColor(doc.format, doc.filename)" />
+                          <div class="w-6 h-6 flex items-center justify-center rounded file-icon-container" :class="getFileIconBackground(doc.format, doc.filename)">
+                            <component :is="getFileIcon(doc.format, doc.filename)" class="w-3 h-3" :class="getFileIconColor(doc.format, doc.filename)" />
                           </div>
                           
                           <!-- File Info -->
@@ -309,10 +313,10 @@
                         <div class="absolute top-1 right-1 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             @click.stop="downloadFile(doc)"
-                            class="bg-blue-500 text-white rounded-full p-1 hover:bg-blue-600"
+                            class="bg-blue-500 text-white rounded-full p-0.5 hover:bg-blue-600"
                             title="Download file"
                           >
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                           </button>
@@ -770,6 +774,10 @@ watch(
       showArtifactCanvas.value = false;
       selectedArtifact.value = null;
       daytonaSidebarClosed.value = false; // Reset manual close flag for new conversation
+      
+      // Note: We intentionally don't clear selectedDocuments here
+      // The document selection should persist across conversation switches
+      // Only clear it if the user manually deselects or removes documents
 
       // Load new conversation data
       if (newId) {
@@ -1761,7 +1769,7 @@ const addMessage = async () => {
       socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
       searchQuery.value = '';
-      selectedDocuments.value = [];
+      // Don't clear selectedDocuments here - let them persist for next message
 
       console.log('Message sent after connecting:', messagePayload);
     } catch (error) {
@@ -1775,7 +1783,7 @@ const addMessage = async () => {
       socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
       searchQuery.value = '';
-      selectedDocuments.value = [];
+      // Don't clear selectedDocuments here - let them persist for next message
     } catch (e) {
       console.error('ChatView error', e);
       isLoading.value = false;
@@ -2884,5 +2892,14 @@ function getFileExtensionFromFormat(format) {
 .text-2xs {
   font-size: 0.625rem; /* 10px */
   line-height: 0.75rem; /* 12px */
+}
+
+/* Ensure consistent file icon sizes */
+.file-icon-container {
+  transition: all 0.2s ease;
+}
+
+.file-icon-container:hover {
+  transform: scale(1.05);
 }
 </style>
