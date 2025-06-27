@@ -646,7 +646,6 @@ const streamingResponseContent = computed(() => {
       const content = event.data.content.trim()
 
       if (props.isInDeepResearch) {
-        console.log('Deep research flow detected, hiding main content')
         return ''
       }
 
