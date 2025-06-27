@@ -231,12 +231,12 @@
               </button>
 
               <!-- Collapsible content -->
-              <div v-if="isExpanded" class="space-y-4 max-h-64 overflow-y-auto">
+              <div v-if="isExpanded" class="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
                 <!-- Uploaded Documents Section (for RAG) -->
                 <div v-if="uploadedFiles.length > 0">
-                  <div class="flex items-center justify-between mb-2">
-                    <h4 class="text-xs font-medium text-gray-600">Uploaded Documents</h4>
-                    <span class="text-xs text-gray-500">{{ uploadedFiles.length }} files • Include in search</span>
+                  <div class="flex items-center justify-between mb-3">
+                    <h4 class="text-sm font-medium text-gray-700">Uploaded Documents</h4>
+                    <span class="text-xs text-gray-500">{{ selectedDocuments.length }} selected of {{ uploadedFiles.length }} files</span>
                   </div>
                   <HorizontalScroll>
                     <div class="flex space-x-3">
@@ -275,9 +275,9 @@
                 </div>
 
                 <!-- Generated Files Section -->
-                <div v-if="generatedFiles.length > 0">
-                  <div class="flex items-center justify-between mb-2">
-                    <h4 class="text-xs font-medium text-gray-600">Generated Files</h4>
+                <div v-if="generatedFiles.length > 0" class="border-t border-gray-300 pt-4">
+                  <div class="flex items-center justify-between mb-3">
+                    <h4 class="text-sm font-medium text-gray-700">Generated Files</h4>
                     <span class="text-xs text-gray-500">{{ generatedFiles.length }} files • From sandbox</span>
                   </div>
                   <HorizontalScroll>
@@ -290,8 +290,8 @@
                       >
                         <div class="flex flex-col items-center space-y-2">
                           <!-- File Type Icon -->
-                          <div class="w-8 h-8 flex items-center justify-center rounded-lg" :class="getFileIconBackground(doc.format)">
-                            <component :is="getFileIcon(doc.format)" class="w-5 h-5" :class="getFileIconColor(doc.format)" />
+                          <div class="w-8 h-8 flex items-center justify-center rounded-lg" :class="getFileIconBackground(doc.format, doc.filename)">
+                            <component :is="getFileIcon(doc.format, doc.filename)" class="w-5 h-5" :class="getFileIconColor(doc.format, doc.filename)" />
                           </div>
                           
                           <!-- File Info -->
@@ -708,6 +708,7 @@ const emit = defineEmits([
   'openSettings',
   'agentThoughtsDataChanged',
   'daytona-sidebar-state-changed',
+  'open-artifact-canvas',
 ]);
 const props = defineProps({
   conversationId: {
@@ -1573,7 +1574,11 @@ function cleanTranscription(transcribedText) {
 async function handleFileUpload(event) {
   isUploading.value = true;
   const file = event.target.files[0];
-  if (!file) return;
+  if (!file) {
+    isUploading.value = false;
+    return;
+  }
+  
   try {
     const formData = new FormData();
     formData.append('file', file);
@@ -1586,19 +1591,42 @@ async function handleFileUpload(event) {
         },
       }
     );
+    
     // Store the uploaded document and update selection.
     const document = response.data.document || response.data.file;
     uploadedDocuments.value.unshift(document);
     selectedDocuments.value.push(document.file_id);
+    
+    // Show success message
+    uploadStatus.value = {
+      type: 'success',
+      message: `Successfully uploaded ${file.name}`,
+    };
+    
+    // Clear the file input
     if (fileInput.value) {
       fileInput.value.value = '';
     }
+    
+    // Reload the documents list to ensure we have the latest data
+    await loadUserDocuments();
+    
+    // Clear success message after 3 seconds
+    setTimeout(() => {
+      uploadStatus.value = null;
+    }, 3000);
+    
   } catch (error) {
     console.error('[ChatView] Upload error:', error);
     uploadStatus.value = {
       type: 'error',
       message: error.response?.data?.error || 'Failed to upload document',
     };
+    
+    // Clear error message after 5 seconds
+    setTimeout(() => {
+      uploadStatus.value = null;
+    }, 5000);
   } finally {
     isUploading.value = false;
   }
@@ -2645,60 +2673,66 @@ function formatFileSize(bytes) {
   return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
 }
 
-function getFileIcon(format) {
-  if (!format) return DocumentIcon;
+function getFileIcon(format, filename = '') {
+  if (!format && !filename) return DocumentIcon;
   
-  const type = format.toLowerCase();
+  const type = (format || '').toLowerCase();
+  const name = (filename || '').toLowerCase();
   
-  if (type.includes('pdf')) {
+  if (type.includes('pdf') || name.includes('.pdf')) {
     return DocumentTextIcon;
-  } else if (type.includes('image') || type.includes('jpeg') || type.includes('png') || type.includes('gif') || type.includes('webp')) {
+  } else if (type.includes('image') || type.includes('jpeg') || type.includes('png') || type.includes('gif') || type.includes('webp') ||
+             name.includes('.jpg') || name.includes('.jpeg') || name.includes('.png') || name.includes('.gif') || name.includes('.webp')) {
     return PhotoIcon;
-  } else if (type.includes('csv') || type.includes('excel') || type.includes('sheet')) {
+  } else if (type.includes('csv') || type.includes('excel') || type.includes('sheet') || name.includes('.csv') || name.includes('.xlsx') || name.includes('.xls')) {
     return TableCellsIcon;
-  } else if (type.includes('json')) {
+  } else if (type.includes('json') || name.includes('.json')) {
     return CodeBracketIcon;
-  } else if (type.includes('text') || type.includes('txt')) {
+  } else if (type.includes('text') || type.includes('txt') || name.includes('.txt') || name.includes('.md') || type.includes('markdown')) {
     return DocumentTextIcon;
   } else {
     return DocumentIcon;
   }
 }
 
-function getFileIconBackground(format) {
-  if (!format) return 'bg-gray-100';
+function getFileIconBackground(format, filename = '') {
+  if (!format && !filename) return 'bg-gray-100';
   
-  const type = format.toLowerCase();
+  const type = (format || '').toLowerCase();
+  const name = (filename || '').toLowerCase();
   
-  if (type.includes('pdf')) {
+  if (type.includes('pdf') || name.includes('.pdf')) {
     return 'bg-red-100';
-  } else if (type.includes('image') || type.includes('jpeg') || type.includes('png') || type.includes('gif') || type.includes('webp')) {
+  } else if (type.includes('image') || type.includes('jpeg') || type.includes('png') || type.includes('gif') || type.includes('webp') ||
+             name.includes('.jpg') || name.includes('.jpeg') || name.includes('.png') || name.includes('.gif') || name.includes('.webp')) {
     return 'bg-green-100';
-  } else if (type.includes('csv') || type.includes('excel') || type.includes('sheet')) {
+  } else if (type.includes('csv') || type.includes('excel') || type.includes('sheet') || name.includes('.csv') || name.includes('.xlsx') || name.includes('.xls')) {
     return 'bg-emerald-100';
-  } else if (type.includes('json')) {
+  } else if (type.includes('json') || name.includes('.json')) {
     return 'bg-blue-100';
-  } else if (type.includes('text') || type.includes('txt')) {
+  } else if (type.includes('text') || type.includes('txt') || name.includes('.txt') || name.includes('.md') || type.includes('markdown')) {
     return 'bg-yellow-100';
   } else {
     return 'bg-gray-100';
   }
 }
 
-function getFileIconColor(format) {
-  if (!format) return 'text-gray-600';
+function getFileIconColor(format, filename = '') {
+  if (!format && !filename) return 'text-gray-600';
   
-  const type = format.toLowerCase();
+  const type = (format || '').toLowerCase();
+  const name = (filename || '').toLowerCase();
   
-  if (type.includes('pdf')) {
+  if (type.includes('pdf') || name.includes('.pdf')) {
     return 'text-red-600';
-  } else if (type.includes('image') || type.includes('jpeg') || type.includes('png') || type.includes('gif') || type.includes('webp')) {
+  } else if (type.includes('image') || type.includes('jpeg') || type.includes('png') || type.includes('gif') || type.includes('webp') ||
+             name.includes('.jpg') || name.includes('.jpeg') || name.includes('.png') || name.includes('.gif') || name.includes('.webp')) {
     return 'text-green-600';
-  } else if (type.includes('csv') || type.includes('excel') || type.includes('sheet')) {
+  } else if (type.includes('csv') || type.includes('excel') || type.includes('sheet') || name.includes('.csv') || name.includes('.xlsx') || name.includes('.xls')) {
     return 'text-emerald-600';
-  } else if (type.includes('json')) {
+  } else if (type.includes('json') || name.includes('.json')) {
     return 'text-blue-600';
-  } else if (type.includes('text') || type.includes('txt')) {
+  } else if (type.includes('text') || type.includes('txt') || name.includes('.txt') || name.includes('.md') || type.includes('markdown')) {
     return 'text-yellow-600';
   } else {
     return 'text-gray-600';
@@ -2706,15 +2740,34 @@ function getFileIconColor(format) {
 }
 
 async function viewGeneratedFile(doc) {
-  // For now, just download the file when clicked
-  // In the future, this could open a preview modal
-  await downloadFile(doc);
+  // Check if we can preview the file inline (like DaytonaSidebar does)
+  const previewableTypes = ['image', 'pdf', 'csv', 'markdown', 'html'];
+  const fileType = getGeneratedFileType(doc.format, doc.filename);
+  
+  if (previewableTypes.includes(fileType)) {
+    // Create a preview artifact and emit to open in sidebar/modal
+    const artifact = {
+      id: doc.file_id,
+      title: doc.filename,
+      type: fileType,
+      url: `${import.meta.env.VITE_API_URL}/files/${doc.file_id}`,
+      loading: true,
+      downloadUrl: `${import.meta.env.VITE_API_URL}/files/${doc.file_id}`,
+      preview: null
+    };
+    
+    // Emit to parent to handle preview (could open Daytona sidebar or artifact canvas)
+    emit('open-artifact-canvas', artifact);
+  } else {
+    // For non-previewable files, download directly
+    await downloadFile(doc);
+  }
 }
 
 async function downloadFile(doc) {
   try {
     const response = await axios.get(
-      `${import.meta.env.VITE_API_URL}/files/${doc.file_id}/download`,
+      `${import.meta.env.VITE_API_URL}/files/${doc.file_id}`,
       {
         headers: {
           Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
@@ -2723,22 +2776,93 @@ async function downloadFile(doc) {
       }
     );
     
-    // Create download link
-    const url = window.URL.createObjectURL(new Blob([response.data]));
+    if (!response.data) {
+      throw new Error('No file data received');
+    }
+    
+    // Create download link using the same approach as DaytonaSidebar
+    const blob = new Blob([response.data]);
+    const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', doc.filename);
+    
+    // Use original filename with proper extension
+    const extension = getFileExtensionFromFormat(doc.format);
+    const filename = doc.filename.includes('.') ? doc.filename : `${doc.filename}.${extension}`;
+    link.download = filename;
+    
     document.body.appendChild(link);
     link.click();
-    link.remove();
+    document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
+    
+    uploadStatus.value = {
+      type: 'success',
+      message: `Downloaded ${doc.filename}`
+    };
+    
+    // Clear status after 3 seconds
+    setTimeout(() => {
+      uploadStatus.value = null;
+    }, 3000);
+    
   } catch (error) {
     console.error('Error downloading file:', error);
     uploadStatus.value = {
       type: 'error',
-      message: 'Failed to download file'
+      message: `Failed to download ${doc.filename}: ${error.response?.data?.error || error.message}`
     };
+    
+    // Clear error after 5 seconds
+    setTimeout(() => {
+      uploadStatus.value = null;
+    }, 5000);
   }
+}
+
+function getGeneratedFileType(format, filename) {
+  if (!format && !filename) return 'unknown';
+  
+  const type = (format || '').toLowerCase();
+  const name = (filename || '').toLowerCase();
+  
+  if (type.includes('pdf') || name.includes('.pdf')) {
+    return 'pdf';
+  } else if (type.includes('image') || type.includes('jpeg') || type.includes('png') || type.includes('gif') || type.includes('webp') ||
+             name.includes('.jpg') || name.includes('.jpeg') || name.includes('.png') || name.includes('.gif') || name.includes('.webp')) {
+    return 'image';
+  } else if (type.includes('csv') || name.includes('.csv')) {
+    return 'csv';
+  } else if (type.includes('markdown') || name.includes('.md')) {
+    return 'markdown';
+  } else if (type.includes('html') || name.includes('.html') || name.includes('.htm')) {
+    return 'html';
+  } else if (type.includes('powerpoint') || type.includes('presentation') || 
+             name.includes('.ppt') || name.includes('.pptx')) {
+    return 'powerpoint';
+  } else {
+    return 'unknown';
+  }
+}
+
+function getFileExtensionFromFormat(format) {
+  if (!format) return 'txt';
+  
+  const type = format.toLowerCase();
+  const extensions = {
+    'application/pdf': 'pdf',
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'text/csv': 'csv',
+    'text/markdown': 'md',
+    'text/html': 'html',
+    'application/vnd.ms-powerpoint': 'ppt',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx'
+  };
+  
+  return extensions[type] || 'txt';
 }
 
 
