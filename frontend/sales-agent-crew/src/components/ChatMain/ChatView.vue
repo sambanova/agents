@@ -236,7 +236,16 @@
                 <div v-if="uploadedFiles.length > 0">
                   <div class="flex items-center justify-between mb-0.5">
                     <h4 class="text-sm font-medium text-gray-700">Uploaded Documents</h4>
-                    <span class="text-xs text-gray-500">{{ selectedDocuments.length }} selected of {{ uploadedFiles.length }} files</span>
+                    <div class="flex items-center space-x-2">
+                      <span class="text-xs text-gray-500">{{ selectedDocuments.length }} selected of {{ uploadedFiles.length }} files</span>
+                      <button
+                        v-if="uploadedFiles.length > 1"
+                        @click="toggleSelectAllUploaded"
+                        class="text-xs text-blue-600 hover:underline focus:outline-none"
+                      >
+                        {{ allUploadedSelected ? 'Deselect all' : 'Select all' }}
+                      </button>
+                    </div>
                   </div>
                   <HorizontalScroll>
                     <div class="flex space-x-1">
@@ -376,6 +385,7 @@
                         @change="handleFileUpload"
                         class="hidden"
                         accept=".pdf,.doc,.docx,.csv,.xlsx,.xls,.jpeg,.jpg,.png,.gif,.webp"
+                        multiple
                       />
                       <svg
                         v-if="!isUploading"
@@ -1336,6 +1346,27 @@ const generatedFiles = computed(() => {
   return uploadedDocuments.value.filter(doc => doc.source === 'daytona');
 });
 
+// Select All functionality for uploaded files
+const allUploadedSelected = computed(() => {
+  return (
+    uploadedFiles.value.length > 0 &&
+    uploadedFiles.value.every(doc => selectedDocuments.value.includes(doc.file_id))
+  );
+});
+
+function toggleSelectAllUploaded() {
+  if (allUploadedSelected.value) {
+    // Deselect all uploaded files
+    selectedDocuments.value = selectedDocuments.value.filter(
+      id => !uploadedFiles.value.some(doc => doc.file_id === id)
+    );
+  } else {
+    // Select all uploaded files
+    const ids = uploadedFiles.value.map(doc => doc.file_id);
+    selectedDocuments.value = Array.from(new Set([...selectedDocuments.value, ...ids]));
+  }
+}
+
 // Clerk
 const { userId } = useAuth();
 
@@ -1583,63 +1614,53 @@ function cleanTranscription(transcribedText) {
 }
 
 async function handleFileUpload(event) {
+  const files = Array.from(event.target.files || []);
+  if (files.length === 0) return;
+
   isUploading.value = true;
-  const file = event.target.files[0];
-  if (!file) {
-    isUploading.value = false;
-    return;
-  }
-  
   try {
-    const formData = new FormData();
-    formData.append('file', file);
-    const response = await axios.post(
-      `${import.meta.env.VITE_API_URL}/upload`,
-      formData,
-      {
-        headers: {
-          Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
-        },
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await axios.post(
+        `${import.meta.env.VITE_API_URL}/upload`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+          },
+        }
+      );
+
+      const document = response.data.document || response.data.file;
+      uploadedDocuments.value.unshift(document);
+      if (!selectedDocuments.value.includes(document.file_id)) {
+        selectedDocuments.value.push(document.file_id);
       }
-    );
-    
-    // Store the uploaded document and update selection.
-    const document = response.data.document || response.data.file;
-    uploadedDocuments.value.unshift(document);
-    selectedDocuments.value.push(document.file_id);
-    
-    // Show success message
+    }
+
     uploadStatus.value = {
       type: 'success',
-      message: `Successfully uploaded ${file.name}`,
+      message: `Uploaded ${files.length} file${files.length > 1 ? 's' : ''}`,
     };
-    
-    // Clear the file input
-    if (fileInput.value) {
-      fileInput.value.value = '';
-    }
-    
-    // Reload the documents list to ensure we have the latest data
+
     await loadUserDocuments();
-    
-    // Clear success message after 3 seconds
+
     setTimeout(() => {
       uploadStatus.value = null;
     }, 3000);
-    
   } catch (error) {
     console.error('[ChatView] Upload error:', error);
     uploadStatus.value = {
       type: 'error',
-      message: error.response?.data?.error || 'Failed to upload document',
+      message: error.response?.data?.error || 'Failed to upload document(s)',
     };
-    
-    // Clear error message after 5 seconds
     setTimeout(() => {
       uploadStatus.value = null;
     }, 5000);
   } finally {
     isUploading.value = false;
+    if (fileInput.value) fileInput.value.value = '';
   }
 }
 
