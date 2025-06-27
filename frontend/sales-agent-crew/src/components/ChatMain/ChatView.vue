@@ -212,7 +212,7 @@
                 class="flex items-center justify-between focus:outline-none mb-2"
               >
                 <h3 class="text-sm font-medium text-gray-700">
-                  Uploaded Documents ({{ uploadedDocuments.length }})
+                  User Artefacts ({{ uploadedDocuments.length }})
                 </h3>
                 <svg
                   :class="{ 'transform rotate-180': isExpanded }"
@@ -231,46 +231,96 @@
               </button>
 
               <!-- Collapsible content -->
-              <div v-if="isExpanded">
-                <HorizontalScroll>
-                  <div class="flex space-x-4">
-                    <div
-                      v-for="doc in uploadedDocuments"
-                      :key="doc.file_id"
-                      class="w-48 flex-shrink-0 p-2 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 relative group"
-                    >
-                      <div class="flex items-center space-x-3">
-                        <input
-                          type="checkbox"
-                          :checked="selectedDocuments.includes(doc.file_id)"
-                          @change="toggleDocumentSelection(doc.file_id)"
-                          class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                        />
-                        <div class="w-48 overflow-hidden">
-                          <p class="text-sm font-medium text-gray-900 truncate">
-                            {{ doc.filename }}
-                          </p>
-                          <p class="text-xs text-gray-500 truncate">
-                            Uploaded
-                            {{
-                              new Date(
-                                doc.created_at * 1000
-                              ).toLocaleString()
-                            }}
-                            • {{ doc.num_chunks }} chunks
-                          </p>
+              <div v-if="isExpanded" class="space-y-4 max-h-64 overflow-y-auto">
+                <!-- Uploaded Documents Section (for RAG) -->
+                <div v-if="uploadedFiles.length > 0">
+                  <div class="flex items-center justify-between mb-2">
+                    <h4 class="text-xs font-medium text-gray-600">Uploaded Documents</h4>
+                    <span class="text-xs text-gray-500">{{ uploadedFiles.length }} files • Include in search</span>
+                  </div>
+                  <HorizontalScroll>
+                    <div class="flex space-x-3">
+                      <div
+                        v-for="doc in uploadedFiles"
+                        :key="doc.file_id"
+                        class="w-44 flex-shrink-0 p-2 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 relative group"
+                      >
+                        <div class="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            :checked="selectedDocuments.includes(doc.file_id)"
+                            @change="toggleDocumentSelection(doc.file_id)"
+                            class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                          />
+                          <div class="flex-1 overflow-hidden">
+                            <p class="text-sm font-medium text-gray-900 truncate">
+                              {{ doc.filename }}
+                            </p>
+                            <p class="text-xs text-gray-500 truncate">
+                              {{ formatFileSize(doc.file_size) }}
+                              <span v-if="doc.num_chunks"> • {{ doc.num_chunks }} chunks</span>
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          @click="removeDocument(doc.file_id)"
+                          class="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 transition-opacity opacity-0 group-hover:opacity-100"
+                          title="Remove document"
+                        >
+                          <XMarkIcon class="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  </HorizontalScroll>
+                </div>
+
+                <!-- Generated Files Section -->
+                <div v-if="generatedFiles.length > 0">
+                  <div class="flex items-center justify-between mb-2">
+                    <h4 class="text-xs font-medium text-gray-600">Generated Files</h4>
+                    <span class="text-xs text-gray-500">{{ generatedFiles.length }} files • From sandbox</span>
+                  </div>
+                  <HorizontalScroll>
+                    <div class="flex space-x-3">
+                      <div
+                        v-for="doc in generatedFiles"
+                        :key="doc.file_id"
+                        class="w-32 flex-shrink-0 p-2 bg-blue-50 rounded-lg border border-blue-200 hover:bg-blue-100 relative group cursor-pointer transition-all duration-200"
+                        @click="viewGeneratedFile(doc)"
+                      >
+                        <div class="flex flex-col items-center space-y-2">
+                          <!-- File Type Icon -->
+                          <div class="w-8 h-8 flex items-center justify-center rounded-lg" :class="getFileIconBackground(doc.format)">
+                            <component :is="getFileIcon(doc.format)" class="w-5 h-5" :class="getFileIconColor(doc.format)" />
+                          </div>
+                          
+                          <!-- File Info -->
+                          <div class="text-center w-full">
+                            <p class="text-xs font-medium text-gray-900 truncate" :title="doc.filename">
+                              {{ doc.filename }}
+                            </p>
+                            <p class="text-2xs text-gray-500">
+                              {{ formatFileSize(doc.file_size) }}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="absolute top-1 right-1 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            @click.stop="downloadFile(doc)"
+                            class="bg-blue-500 text-white rounded-full p-1 hover:bg-blue-600"
+                            title="Download file"
+                          >
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
-                      <button
-                        @click="removeDocument(doc.file_id)"
-                        class="absolute top-1 right-1 bg-orange-300 text-white rounded-full p-1 transition-opacity opacity-0 group-hover:opacity-100"
-                        title="Remove document"
-                      >
-                        <XMarkIcon class="w-5 h-5" />
-                      </button>
                     </div>
-                  </div>
-                </HorizontalScroll>
+                  </HorizontalScroll>
+                </div>
               </div>
             </div>
 
@@ -529,7 +579,14 @@ import { useAuth } from '@clerk/vue';
 import { decryptKey } from '../../utils/encryption';
 import Tooltip from '@/components/Common/UIComponents/CustomTooltip.vue';
 
-import { XMarkIcon } from '@heroicons/vue/24/outline';
+import { 
+  XMarkIcon, 
+  DocumentIcon,
+  DocumentTextIcon,
+  PhotoIcon,
+  TableCellsIcon,
+  CodeBracketIcon
+} from '@heroicons/vue/24/outline';
 import HorizontalScroll from '@/components/Common/UIComponents/HorizontalScroll.vue';
 import emitterMitt from '@/utils/eventBus.js';
 import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue';
@@ -539,6 +596,15 @@ import { isFinalAgentType, shouldExcludeFromGrouping } from '@/utils/globalFunct
 
 // Inject the shared selectedOption from MainLayout.vue.
 const selectedOption = inject('selectedOption');
+
+// Make Heroicons available for dynamic component resolution
+const iconComponents = {
+  DocumentIcon,
+  DocumentTextIcon,
+  PhotoIcon,
+  TableCellsIcon,
+  CodeBracketIcon
+};
 async function handleButtonClick(data) {
   chatName.value = '';
   
@@ -1248,6 +1314,15 @@ const isUploading = ref(false);
 const uploadedDocuments = ref([]);
 const selectedDocuments = ref([]);
 const manualSocketClose = ref(false);
+
+// Computed properties to split documents by source
+const uploadedFiles = computed(() => {
+  return uploadedDocuments.value.filter(doc => doc.source === 'upload');
+});
+
+const generatedFiles = computed(() => {
+  return uploadedDocuments.value.filter(doc => doc.source === 'daytona');
+});
 
 // Clerk
 const { userId } = useAuth();
@@ -2560,6 +2635,110 @@ function getRunSummary(msgItem) {
   
 
   return summary;
+}
+
+// File utility functions
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return '0 B';
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
+}
+
+function getFileIcon(format) {
+  if (!format) return DocumentIcon;
+  
+  const type = format.toLowerCase();
+  
+  if (type.includes('pdf')) {
+    return DocumentTextIcon;
+  } else if (type.includes('image') || type.includes('jpeg') || type.includes('png') || type.includes('gif') || type.includes('webp')) {
+    return PhotoIcon;
+  } else if (type.includes('csv') || type.includes('excel') || type.includes('sheet')) {
+    return TableCellsIcon;
+  } else if (type.includes('json')) {
+    return CodeBracketIcon;
+  } else if (type.includes('text') || type.includes('txt')) {
+    return DocumentTextIcon;
+  } else {
+    return DocumentIcon;
+  }
+}
+
+function getFileIconBackground(format) {
+  if (!format) return 'bg-gray-100';
+  
+  const type = format.toLowerCase();
+  
+  if (type.includes('pdf')) {
+    return 'bg-red-100';
+  } else if (type.includes('image') || type.includes('jpeg') || type.includes('png') || type.includes('gif') || type.includes('webp')) {
+    return 'bg-green-100';
+  } else if (type.includes('csv') || type.includes('excel') || type.includes('sheet')) {
+    return 'bg-emerald-100';
+  } else if (type.includes('json')) {
+    return 'bg-blue-100';
+  } else if (type.includes('text') || type.includes('txt')) {
+    return 'bg-yellow-100';
+  } else {
+    return 'bg-gray-100';
+  }
+}
+
+function getFileIconColor(format) {
+  if (!format) return 'text-gray-600';
+  
+  const type = format.toLowerCase();
+  
+  if (type.includes('pdf')) {
+    return 'text-red-600';
+  } else if (type.includes('image') || type.includes('jpeg') || type.includes('png') || type.includes('gif') || type.includes('webp')) {
+    return 'text-green-600';
+  } else if (type.includes('csv') || type.includes('excel') || type.includes('sheet')) {
+    return 'text-emerald-600';
+  } else if (type.includes('json')) {
+    return 'text-blue-600';
+  } else if (type.includes('text') || type.includes('txt')) {
+    return 'text-yellow-600';
+  } else {
+    return 'text-gray-600';
+  }
+}
+
+async function viewGeneratedFile(doc) {
+  // For now, just download the file when clicked
+  // In the future, this could open a preview modal
+  await downloadFile(doc);
+}
+
+async function downloadFile(doc) {
+  try {
+    const response = await axios.get(
+      `${import.meta.env.VITE_API_URL}/files/${doc.file_id}/download`,
+      {
+        headers: {
+          Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+        },
+        responseType: 'blob'
+      }
+    );
+    
+    // Create download link
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', doc.filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Error downloading file:', error);
+    uploadStatus.value = {
+      type: 'error',
+      message: 'Failed to download file'
+    };
+  }
 }
 
 
