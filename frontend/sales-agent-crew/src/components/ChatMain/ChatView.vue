@@ -231,10 +231,10 @@
               </button>
 
               <!-- Collapsible content -->
-              <div v-if="isExpanded" class="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-3">
+              <div v-if="isExpanded" class="bg-gray-50 border border-gray-200 rounded-lg p-2 space-y-2">
                 <!-- Uploaded Documents Section (for RAG) -->
                 <div v-if="uploadedFiles.length > 0">
-                  <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center justify-between mb-1">
                     <h4 class="text-sm font-medium text-gray-700">Uploaded Documents</h4>
                     <span class="text-xs text-gray-500">{{ selectedDocuments.length }} selected of {{ uploadedFiles.length }} files</span>
                   </div>
@@ -243,9 +243,10 @@
                       <div
                         v-for="doc in uploadedFiles"
                         :key="doc.file_id"
-                        class="w-36 flex-shrink-0 p-2 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 relative group"
+                        class="w-28 flex-shrink-0 p-1.5 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 relative group"
                       >
-                        <div class="flex items-center space-x-2">
+                        <div class="flex flex-col items-center space-y-1">
+                          <!-- Checkbox positioned at top -->
                           <input
                             type="checkbox"
                             :checked="selectedDocuments.includes(doc.file_id)"
@@ -256,11 +257,13 @@
                           <div class="w-6 h-6 flex items-center justify-center rounded file-icon-container" :class="getFileIconBackground(doc.format, doc.filename)">
                             <component :is="getFileIcon(doc.format, doc.filename)" class="w-3 h-3" :class="getFileIconColor(doc.format, doc.filename)" />
                           </div>
-                          <div class="flex-1 overflow-hidden">
+                          
+                          <!-- File Info -->
+                          <div class="text-center w-full">
                             <p class="text-xs font-medium text-gray-900 truncate" :title="doc.filename">
                               {{ doc.filename }}
                             </p>
-                            <p class="text-2xs text-gray-500 truncate">
+                            <p class="text-2xs text-gray-500">
                               {{ formatFileSize(doc.file_size) }}
                               <span v-if="doc.num_chunks"> • {{ doc.num_chunks }} chunks</span>
                             </p>
@@ -268,7 +271,7 @@
                         </div>
                         <button
                           @click="removeDocument(doc.file_id)"
-                          class="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 transition-opacity opacity-0 group-hover:opacity-100"
+                          class="absolute top-0.5 right-0.5 bg-red-500 text-white rounded-full p-0.5 transition-opacity opacity-0 group-hover:opacity-100"
                           title="Remove document"
                         >
                           <XMarkIcon class="w-2 h-2" />
@@ -279,8 +282,8 @@
                 </div>
 
                 <!-- Generated Files Section -->
-                <div v-if="generatedFiles.length > 0" class="border-t border-gray-300 pt-3">
-                  <div class="flex items-center justify-between mb-2">
+                <div v-if="generatedFiles.length > 0" class="border-t border-gray-300 pt-2">
+                  <div class="flex items-center justify-between mb-1">
                     <h4 class="text-sm font-medium text-gray-700">Generated Files</h4>
                     <span class="text-xs text-gray-500">{{ generatedFiles.length }} files • From sandbox</span>
                   </div>
@@ -289,7 +292,7 @@
                       <div
                         v-for="doc in generatedFiles"
                         :key="doc.file_id"
-                        class="w-28 flex-shrink-0 p-2 bg-blue-50 rounded-lg border border-blue-200 hover:bg-blue-100 relative group cursor-pointer transition-all duration-200"
+                        class="w-28 flex-shrink-0 p-1.5 bg-blue-50 rounded-lg border border-blue-200 hover:bg-blue-100 relative group cursor-pointer transition-all duration-200"
                         @click="viewGeneratedFile(doc)"
                       >
                         <div class="flex flex-col items-center space-y-1">
@@ -310,7 +313,7 @@
                         </div>
                         
                         <!-- Action Buttons -->
-                        <div class="absolute top-1 right-1 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div class="absolute top-0.5 right-0.5 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             @click.stop="downloadFile(doc)"
                             class="bg-blue-500 text-white rounded-full p-0.5 hover:bg-blue-600"
