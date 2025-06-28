@@ -545,6 +545,8 @@ const lastCodeUpdate = ref('')
 const lastCodeUpdateTs = ref(0)
 // Track length of processed events to detect new conversations and prevent artifacts flicker
 const lastEventsLength = ref(0)
+// Track index of the last processed Daytona tool-call chunk to detect new executions
+const lastProcessedToolIndex = ref(-1)
 
 // Template refs
 const codeContainer = ref(null)
@@ -662,6 +664,14 @@ function processStreamingEvents(events) {
             
             // Look for tool calls with code input - this is where the actual code is
             if (content.includes('<tool>DaytonaCodeSandbox</tool>')) {
+              // Detect start of a NEW Daytona execution and reset code buffer for fresh streaming
+              if (index > lastProcessedToolIndex.value) {
+                lastProcessedToolIndex.value = index
+                // Clear previous code so incoming chunks stream line-by-line again
+                codeContent.value = ''
+                lastCodeUpdate.value = ''
+                lastCodeUpdateTs.value = 0
+              }
               // Extract the code from tool_input
               const toolInputMatch = content.match(/<tool_input>([\s\S]*?)(?:<\/tool_input>|$)/);
               if (toolInputMatch && toolInputMatch[1]) {
@@ -1271,6 +1281,7 @@ function handleArtifactError(artifact) {
 
 function cleanupCodeUpdates() {
   // Nothing to clean since we switched to timestamp-based throttle
+  lastProcessedToolIndex.value = -1
 }
 
 async function fetchArtifactContent(artifact) {
