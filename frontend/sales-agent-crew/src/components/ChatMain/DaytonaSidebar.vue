@@ -539,9 +539,12 @@ const codeExpanded = ref(true)
 const artifactsExpanded = ref(true)
 const logExpanded = ref(false)
 
-// Anti-flickering state
+// Anti-flickering / streaming state
 const lastCodeUpdate = ref('')
-const codeUpdateDebounce = ref(null)
+// Simple throttle timestamp for code streaming
+const lastCodeUpdateTs = ref(0)
+// Track length of processed events to detect new conversations and prevent artifacts flicker
+const lastEventsLength = ref(0)
 
 // Template refs
 const codeContainer = ref(null)
@@ -602,37 +605,37 @@ function safeUpdateCodeContent(newCode, context = '') {
   if (newCode === lastCodeUpdate.value) {
     return false; // No update needed
   }
-  
-  // Clear any pending debounced update
-  if (codeUpdateDebounce.value) {
-    clearTimeout(codeUpdateDebounce.value);
-    codeUpdateDebounce.value = null;
-  }
-  
-  // For rapid streaming updates, debounce to reduce flickering
+
   if (context === 'streaming') {
-    codeUpdateDebounce.value = setTimeout(() => {
-      codeContent.value = newCode;
-      lastCodeUpdate.value = newCode;
-      codeUpdateDebounce.value = null;
-    }, 100); // 100ms debounce for streaming
-  } else {
-    // Immediate update for non-streaming contexts (loaded conversations, etc.)
-    codeContent.value = newCode;
-    lastCodeUpdate.value = newCode;
+    const now = Date.now()
+    // Throttle to ~60 ms per update (about 16 FPS)
+    if (now - lastCodeUpdateTs.value < 60) {
+      return false
+    }
+    lastCodeUpdateTs.value = now
   }
-  
-  return true; // Update was scheduled/applied
+
+  // Apply update immediately
+  codeContent.value = newCode
+  lastCodeUpdate.value = newCode
+  return true
 }
 
 function processStreamingEvents(events) {
   try {
     if (!events || !Array.isArray(events)) return
 
+    // Detect a brand-new conversation (events length has shrunk)
+    if (events.length < lastEventsLength.value) {
+      artifacts.value = []
+      executionLog.value = []
+      cleanupCodeUpdates()
+      lastCodeUpdate.value = ''
+      lastEventsLength.value = 0 // full reset
+    }
+    
     // Reset state when processing new events
-    artifacts.value = []
-    executionLog.value = []
-    isProcessing.value = false
+    isProcessing.value = true
     
     // Reset anti-flickering state for fresh conversation
     cleanupCodeUpdates()
@@ -866,6 +869,9 @@ function processStreamingEvents(events) {
       // Update status to show loaded state
       updateStatus('✅ Historical analysis loaded', `Code and ${artifactCount} files from conversation`)
     }
+
+    // Update processed length so we can detect resets next time
+    lastEventsLength.value = events.length
   } catch (error) {
     console.error('Error processing streaming events in DaytonaSidebar:', error);
     updateStatus('❌ Error', 'Failed to process conversation history.')
@@ -1264,11 +1270,7 @@ function handleArtifactError(artifact) {
 }
 
 function cleanupCodeUpdates() {
-  // Clear any pending debounced updates to prevent memory leaks
-  if (codeUpdateDebounce.value) {
-    clearTimeout(codeUpdateDebounce.value);
-    codeUpdateDebounce.value = null;
-  }
+  // Nothing to clean since we switched to timestamp-based throttle
 }
 
 async function fetchArtifactContent(artifact) {
