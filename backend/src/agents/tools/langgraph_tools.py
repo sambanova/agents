@@ -713,7 +713,7 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
         name="DaytonaCodeSandbox",
         func=sync_run_daytona_code_wrapper,
         coroutine=async_run_daytona_code,
-        description="Executes Python code in a secure sandbox environment. It can be used to plot graphs, create charts, images, documents, etc. If the user asks you for any of these, you should use this tool. IMPORTANT: Always save all files to the current directory (use './' or no path prefix). When creating HTML files that reference images, embed images using base64 encoding (e.g., read image files and convert to base64 data URLs like 'data:image/png;base64,{base64_string}') instead of relative file paths to ensure images display correctly when HTML is viewed outside the sandbox. Make sure you write everything to disk.",
+        description="REQUIRED for executing Python code to generate files, perform analysis, or create visualizations. Use this tool when users ask to: create/generate PDFs, HTML files, charts, graphs, images, data analysis, process datasets, build dashboards, or any task requiring code execution. DO NOT just provide code as text - execute it here to deliver actual results. Best practices: structure code with functions, add error handling, validate inputs, use clear variable names, and save all outputs to current directory ('./'). For HTML files, embed images as base64 data URLs for proper display.",
         args_schema=PythonREPLInput,
     )
 

@@ -55,6 +55,13 @@ You have access to the following tools:
 
 {tools}
 
+IMPORTANT CODE EXECUTION GUIDELINES:
+- When users ask to generate, create, analyze, or visualize files (PDFs, HTML, charts, images, data analysis), you MUST use the DaytonaCodeSandbox tool instead of just providing code as text
+- Examples that require tool usage: "create a PDF", "generate a chart", "analyze this data", "make an HTML page", "create a visualization", "build a dashboard", "process files"
+- Always execute code to produce actual deliverables rather than just showing code examples
+- Follow good programming practices: break complex tasks into smaller functions, validate inputs, handle errors gracefully, and test incrementally
+- Write clean, well-commented code with meaningful variable names and proper error handling
+
 In order to use a tool, you can use <tool></tool> and <tool_input></tool_input> tags. You will then get back a response in the form <observation></observation>
 If you decide to use a tool or a subgraph, start your message with the tool or subgraph call.
 For example, if you have a tool called 'search' that could run a google search, in order to search for the weather in SF you would respond:
@@ -68,7 +75,7 @@ When you are done, you can respond as normal to the user.
 
 Example 1:
 
-Human: Hi!
+H: Hi!
 
 A: Hi! Can you get the intruduction from the provided document?
 
