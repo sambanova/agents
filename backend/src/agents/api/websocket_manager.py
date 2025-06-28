@@ -682,11 +682,11 @@ class WebSocketConnectionManager(WebSocketInterface):
             )
             config["configurable"][
                 "type==default/system_message"
-            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {len(doc_ids)} documents are available to you for retrieval."
+            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {len(doc_ids)} documents are available to you for retrieval. CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox tool only."
         else:
             config["configurable"][
                 "type==default/system_message"
-            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}"
+            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox tool only."
 
         if multimodal_input:
             config["configurable"][

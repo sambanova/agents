@@ -713,7 +713,7 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
         name="DaytonaCodeSandbox",
         func=sync_run_daytona_code_wrapper,
         coroutine=async_run_daytona_code,
-        description="REQUIRED for executing Python code to generate files, perform analysis, or create visualizations. Use this tool when users ask to: create/generate PDFs, HTML files, charts, graphs, images, data analysis, process datasets, build dashboards, or any task requiring code execution. DO NOT just provide code as text - execute it here to deliver actual results. Best practices: structure code with functions, add error handling, validate inputs, use clear variable names, and save all outputs to current directory ('./'). For HTML files, embed images as base64 data URLs for proper display.",
+        description="MANDATORY tool for ALL file creation tasks. After gathering information, write ALL code directly inside this tool - NEVER in response text. For: PDF, HTML, PowerPoint, charts, dashboards, reports, visualizations, data analysis. FORBIDDEN: Showing code outside this tool. REQUIRED: Search (if needed) → immediate sandbox usage. Zero explanations between. Always save outputs to current directory ('./'). Use functions, error handling, clear variable names. For HTML: embed images as base64 data URLs.",
         args_schema=PythonREPLInput,
     )
 
