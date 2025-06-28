@@ -1,13 +1,14 @@
 import os
-from typing import List
+from typing import List, Literal, Optional
 
 import structlog
 from langchain.agents import AgentExecutor, create_openai_functions_agent
+from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
 from langchain.output_parsers.openai_functions import JsonOutputFunctionsParser
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.tools import tool
 from langchain_core.language_models.base import LanguageModelLike
-from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
 
 logger = structlog.get_logger(__name__)
 
@@ -111,6 +112,19 @@ def create_agent(
     return AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, verbose=False)
 
 
+class SupervisorDecision(BaseModel):
+    """
+    Decision about which agent should act next and what task they should perform.
+    """
+
+    next: str = Field(
+        description="The name of the agent that should act next, or 'FINISH' if the task is complete. Must be one of the provided options."
+    )
+    task: str = Field(
+        description="A concise description of the task the selected agent should perform."
+    )
+
+
 def create_supervisor(
     llm: LanguageModelLike, system_prompt: str, members: list[str]
 ) -> AgentExecutor:
@@ -120,29 +134,9 @@ def create_supervisor(
     # Define options for routing, including FINISH and team members
     options = ["FINISH"] + members
 
-    # Define the function for routing and task assignment
-    function_def = {
-        "name": "route",
-        "description": "Select the next role and assign a task.",
-        "parameters": {
-            "title": "routeSchema",
-            "type": "object",
-            "properties": {
-                "next": {
-                    "title": "Next",
-                    "anyOf": [
-                        {"enum": options},
-                    ],
-                },
-                "task": {
-                    "title": "Task",
-                    "type": "string",
-                    "description": "The task to be performed by the selected agent",
-                },
-            },
-            "required": ["next", "task"],
-        },
-    }
+    supervisor_parser = PydanticOutputParser(pydantic_object=SupervisorDecision)
+
+    format_instructions = supervisor_parser.get_format_instructions()
 
     # Create the prompt template
     prompt = ChatPromptTemplate.from_messages(
@@ -153,19 +147,32 @@ def create_supervisor(
                 "system",
                 "Given the conversation above, who should act next? "
                 "Or should we FINISH? Select one of: {options}. "
-                "Additionally, specify the task that the selected role should perform.",
+                "Additionally, specify the task that the selected role should perform. "
+                "Your response MUST be a JSON object conforming to the following schema:\n"
+                "```json\n"  # Emphasize JSON block for LLM
+                "{format_instructions}\n"
+                "```\n"
+                "Do NOT include any other text or explanation, only the JSON object.",
             ),
         ]
-    ).partial(options=str(options), team_members=", ".join(members))
+    ).partial(
+        options=str(options),  # Pass options as a string for the prompt
+        team_members=", ".join(
+            members
+        ),  # If system_prompt uses team_members, keep this
+        format_instructions=format_instructions,  # Inject the Pydantic schema instructions
+    )
 
     # Log successful creation of supervisor
     logger.info("Supervisor created successfully")
 
-    # Return the chained operations
     return (
         prompt
-        | llm.bind_functions(functions=[function_def], function_call="route")
-        | JsonOutputFunctionsParser()
+        | llm
+        | OutputFixingParser.from_llm(
+            llm=llm,
+            parser=supervisor_parser,
+        )
     )
 
 

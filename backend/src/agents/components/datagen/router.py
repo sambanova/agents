@@ -1,7 +1,9 @@
 import json
 import logging
+import re
 from typing import Dict, List, Literal, Optional, Union
 
+from agents.components.datagen.create_agent import SupervisorDecision
 from agents.components.datagen.state import State
 from langchain_core.messages import AIMessage
 
@@ -111,14 +113,9 @@ def process_router(state: State) -> ProcessNodeType:
     decision_str: str = ""
 
     try:
-        if isinstance(process_decision, AIMessage):
-            logger.debug("Process decision is an AIMessage")
-            try:
-                decision_dict = json.loads(process_decision.content.replace("'", '"'))
-                decision_str = str(decision_dict.get("next", ""))
-            except json.JSONDecodeError as e:
-                logger.warning(f"JSON parse error: {e}. Using content directly.")
-                decision_str = process_decision.content
+        if isinstance(process_decision, SupervisorDecision):
+            logger.debug("Process decision is an SupervisorDecision")
+            decision_str = str(process_decision.next)
         elif isinstance(process_decision, dict):
             decision_str = str(process_decision.get("next", ""))
         else:

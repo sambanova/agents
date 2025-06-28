@@ -8,7 +8,7 @@ from langchain_core.messages import HumanMessage
 def setup_language_models():
     """Set up the language models needed for the workflow"""
     # Get API keys from environment variables
-    sambanova_api_key = ""
+    sambanova_api_key = os.getenv("FIREWORKS_KEY")
 
     # Initialize language models
     llm = get_fireworks_llm(

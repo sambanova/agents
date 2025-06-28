@@ -1,3 +1,4 @@
+from agents.components.datagen.create_agent import SupervisorDecision
 from langchain_core.messages import BaseMessage
 from typing import Sequence, TypedDict
 from pydantic import BaseModel, Field
@@ -14,7 +15,7 @@ class State(TypedDict):
     process: str = ""
     
     # next process
-    process_decision: str = ""
+    process_decision: SupervisorDecision = None
     
     # The current state of data visualization planning and execution
     visualization_state: str = ""
