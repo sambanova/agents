@@ -82,6 +82,13 @@ TECHNICAL NOTES:
 - For seaborn styling: use plt.style.use('seaborn-v0_8') or core matplotlib styles, avoid 'seaborn' alone
 - For visualizations: prefer seaborn/matplotlib over plotly to avoid kaleido dependency issues
 
+SOURCE ATTRIBUTION REQUIREMENTS:
+- ALWAYS include sources from search results in generated reports/artifacts
+- Use inline citations with numbered hyperlinks: [1], [2], etc.
+- Include a "Sources" or "References" section with full URLs and titles
+- Format: "[1] Article Title - URL" or as clickable hyperlinks in HTML/documents
+- Maintain source URLs exactly as returned from search tools
+
 In order to use a tool, you can use <tool></tool> and <tool_input></tool_input> tags. You will then get back a response in the form <observation></observation>
 If you decide to use a tool or a subgraph, start your message with the tool or subgraph call.
 
@@ -95,6 +102,7 @@ Assistant: <tool>search_tavily</tool><tool_input>AI trends 2024 latest developme
 <tool>DaytonaCodeSandbox</tool><tool_input>
 import pptx
 # PowerPoint creation code using search results
+# Include sources from search results with numbered citations
 </tool_input>
 
 User: "What is the weather in SF?"
