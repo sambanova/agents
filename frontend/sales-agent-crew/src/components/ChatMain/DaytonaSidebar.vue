@@ -509,7 +509,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, nextTick, onMounted } from 'vue'
+import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   isOpen: {
@@ -539,6 +539,10 @@ const codeExpanded = ref(true)
 const artifactsExpanded = ref(true)
 const logExpanded = ref(false)
 
+// Anti-flickering state
+const lastCodeUpdate = ref('')
+const codeUpdateDebounce = ref(null)
+
 // Template refs
 const codeContainer = ref(null)
 
@@ -567,12 +571,15 @@ watch(() => props.streamingEvents, (newEvents) => {
 }, { deep: true, immediate: true })
 
 // Watch for code content changes and auto-scroll
-watch(codeContent, () => {
-  nextTick(() => {
-    if (codeContainer.value && codeExpanded.value) {
-      codeContainer.value.scrollTop = codeContainer.value.scrollHeight
-    }
-  })
+watch(codeContent, (newCode, oldCode) => {
+  // Only auto-scroll if the content has meaningfully changed and is expanded
+  if (newCode && newCode !== oldCode && codeExpanded.value) {
+    nextTick(() => {
+      if (codeContainer.value) {
+        codeContainer.value.scrollTop = codeContainer.value.scrollHeight
+      }
+    })
+  }
 })
 
 // Watch for artifacts changes and auto-load CSV data
@@ -590,6 +597,34 @@ watch(artifacts, (newArtifacts) => {
 }, { deep: true })
 
 // Methods
+function safeUpdateCodeContent(newCode, context = '') {
+  // Prevent unnecessary updates if code hasn't changed
+  if (newCode === lastCodeUpdate.value) {
+    return false; // No update needed
+  }
+  
+  // Clear any pending debounced update
+  if (codeUpdateDebounce.value) {
+    clearTimeout(codeUpdateDebounce.value);
+    codeUpdateDebounce.value = null;
+  }
+  
+  // For rapid streaming updates, debounce to reduce flickering
+  if (context === 'streaming') {
+    codeUpdateDebounce.value = setTimeout(() => {
+      codeContent.value = newCode;
+      lastCodeUpdate.value = newCode;
+      codeUpdateDebounce.value = null;
+    }, 100); // 100ms debounce for streaming
+  } else {
+    // Immediate update for non-streaming contexts (loaded conversations, etc.)
+    codeContent.value = newCode;
+    lastCodeUpdate.value = newCode;
+  }
+  
+  return true; // Update was scheduled/applied
+}
+
 function processStreamingEvents(events) {
   try {
     if (!events || !Array.isArray(events)) return
@@ -598,6 +633,10 @@ function processStreamingEvents(events) {
     artifacts.value = []
     executionLog.value = []
     isProcessing.value = false
+    
+    // Reset anti-flickering state for fresh conversation
+    cleanupCodeUpdates()
+    lastCodeUpdate.value = ''
     
     let codeDetected = false
     let toolCallDetected = false
@@ -628,10 +667,11 @@ function processStreamingEvents(events) {
                 if (extractedCode.includes('import') || extractedCode.includes('def ') || 
                     extractedCode.includes('plt.') || extractedCode.includes('matplotlib') ||
                     extractedCode.includes('numpy') || extractedCode.includes('pandas')) {
-                  codeContent.value = extractedCode
-                  codeDetected = true
-                  updateStatus('📝 Code generated', 'Python analysis script ready')
-                  addToLog('Code generation detected', 'info', timestamp)
+                  if (safeUpdateCodeContent(extractedCode, 'streaming')) {
+                    codeDetected = true
+                    updateStatus('📝 Code generated', 'Python analysis script ready')
+                    addToLog('Code generation detected', 'info', timestamp)
+                  }
                 }
               }
               
@@ -644,8 +684,9 @@ function processStreamingEvents(events) {
             // Also check for code blocks in regular content
             const codeMatch = content.match(/```python\n([\s\S]*?)```/)
             if (codeMatch && codeMatch[1] && !codeDetected) {
-              codeContent.value = codeMatch[1].trim()
-              codeDetected = true
+              if (safeUpdateCodeContent(codeMatch[1].trim(), 'streaming')) {
+                codeDetected = true
+              }
             }
           }
           break
@@ -666,11 +707,12 @@ function processStreamingEvents(events) {
                 if (extractedCode.includes('import') || extractedCode.includes('def ') || 
                     extractedCode.includes('plt.') || extractedCode.includes('matplotlib') ||
                     extractedCode.includes('numpy') || extractedCode.includes('pandas')) {
-                  codeContent.value = extractedCode
-                  codeDetected = true
-                  updateStatus('📝 Code loaded from history', 'Python analysis script')
-                  addToLog('Code loaded from conversation history', 'info', timestamp)
-                  console.log('Extracted code from tool call:', extractedCode.substring(0, 100) + '...');
+                  if (safeUpdateCodeContent(extractedCode, 'loaded')) {
+                    codeDetected = true
+                    updateStatus('📝 Code loaded from history', 'Python analysis script')
+                    addToLog('Code loaded from conversation history', 'info', timestamp)
+                    console.log('Extracted code from tool call:', extractedCode.substring(0, 100) + '...');
+                  }
                 }
               }
             }
@@ -1111,6 +1153,7 @@ function toggleCollapse() {
 }
 
 function handleClose() {
+  cleanupCodeUpdates()
   emit('close')
 }
 
@@ -1220,6 +1263,14 @@ function handleArtifactError(artifact) {
   addToLog(`Failed to load file: ${artifact.title}`, 'error', new Date().toISOString())
 }
 
+function cleanupCodeUpdates() {
+  // Clear any pending debounced updates to prevent memory leaks
+  if (codeUpdateDebounce.value) {
+    clearTimeout(codeUpdateDebounce.value);
+    codeUpdateDebounce.value = null;
+  }
+}
+
 async function fetchArtifactContent(artifact) {
   // Do nothing for data URLs or if content is already a blob
   if (artifact.url.startsWith('data:') || artifact.url.startsWith('blob:')) {
@@ -1279,6 +1330,11 @@ onMounted(() => {
     console.log('DaytonaSidebar: Processing existing streaming events on mount:', props.streamingEvents.length);
     processStreamingEvents(props.streamingEvents);
   }
+})
+
+onUnmounted(() => {
+  // Clean up any pending debounced updates
+  cleanupCodeUpdates()
 })
 
 // Watch for sidebar open/close state changes and emit to parent
