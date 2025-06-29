@@ -4,9 +4,19 @@ import subprocess
 from typing import Annotated
 
 import structlog
+
+# Import persistent Daytona tools
+from agents.components.datagen.tools.persistent_daytona import (
+    daytona_execute_code,
+    daytona_list_files,
+    daytona_read_file,
+    daytona_write_file,
+    get_or_create_daytona_manager,
+)
 from langchain_core.tools import tool
 
 logger = structlog.get_logger(__name__)
+
 
 def get_platform_specific_command(command: str) -> tuple:
     """

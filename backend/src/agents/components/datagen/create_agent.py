@@ -2,7 +2,10 @@ import os
 from typing import List, Literal, Optional
 
 import structlog
-from langchain.agents import AgentExecutor, create_openai_functions_agent
+
+# Import the manual agent
+from agents.components.datagen.manual_agent import ManualAgent
+from langchain.agents import AgentExecutor
 from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
 from langchain.output_parsers.openai_functions import JsonOutputFunctionsParser
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -40,22 +43,22 @@ def create_agent(
     system_message: str,
     team_members: list[str],
     working_directory: str = "./data_storage/",
-) -> AgentExecutor:
+) -> ManualAgent:
     """
-    Create an agent with the given language model, tools, system message, and team members.
+    Create a manual agent with the given language model, tools, system message, and team members.
 
     Parameters:
-        llm (ChatOpenAI): The language model to use for the agent.
+        llm (LanguageModelLike): The language model to use for the agent.
         tools (list[tool]): A list of tools the agent can use.
         system_message (str): A message defining the agent's role and tasks.
         team_members (list[str]): A list of team member roles for collaboration.
         working_directory (str): The directory where the agent's data will be stored.
 
     Returns:
-        AgentExecutor: An executor that manages the agent's task execution.
+        ManualAgent: A manual agent that handles tool execution without function calling.
     """
 
-    logger.info("Creating agent")
+    logger.info("Creating manual agent")
 
     # Ensure the ListDirectoryContents tool is available
     if list_directory_contents not in tools:
@@ -99,17 +102,13 @@ def create_agent(
             ("ai", "report_section: {report_section}"),
             ("ai", "quality_review: {quality_review}"),
             ("ai", "needs_revision: {needs_revision}"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
         ]
     )
 
-    # Create the agent using the defined prompt and tools
-    agent = create_openai_functions_agent(llm=llm, tools=tools, prompt=prompt)
+    logger.info("Manual agent created successfully")
 
-    logger.info("Agent created successfully")
-
-    # Return an executor to manage the agent's task execution
-    return AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, verbose=False)
+    # Return a manual agent that handles tool execution
+    return ManualAgent(llm=llm, tools=tools, prompt=prompt)
 
 
 class SupervisorDecision(BaseModel):
@@ -184,34 +183,45 @@ def create_note_agent(
     llm: LanguageModelLike,
     tools: list,
     system_prompt: str,
-) -> AgentExecutor:
+) -> ManualAgent:
     """
-    Create a Note Agent that updates the entire state.
+    Create a Note Agent using manual approach that outputs structured JSON.
     """
-    logger.info("Creating note agent")
+    logger.info("Creating manual note agent")
+
+    # Get the JSON output format instructions
     parser = PydanticOutputParser(pydantic_object=NoteState)
     output_format = parser.get_format_instructions()
-    escaped_output_format = output_format.replace("{", "{{").replace("}", "}}")
+
+    # Enhanced system prompt for JSON output with tool capabilities
+    enhanced_system_prompt = f"""{system_prompt}
+
+You are a meticulous research process note-taker with access to tools for reading documents and gathering information.
+
+IMPORTANT: You must format your response as a JSON object with the following structure:
+{output_format}
+
+TOOL USAGE:
+You can use tools when you need to read documents or gather information. Use XML tags for tool calls:
+<tool>tool_name</tool><tool_input>your input here</tool_input>
+
+After using tools, you'll receive results in <observation></observation> tags. Then provide your final JSON response.
+
+RESPONSE FORMAT:
+Always end your response with a valid JSON object that matches the required structure above. Do not include any text after the JSON object.
+"""
+
+    # Simple prompt structure for manual agent
     prompt = ChatPromptTemplate.from_messages(
         [
-            (
-                "system",
-                system_prompt
-                + "\n\nPlease format your response as a JSON object with the following structure:\n"
-                + escaped_output_format,
-            ),
+            ("system", enhanced_system_prompt),
             MessagesPlaceholder(variable_name="messages"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
+            # Note: No state variables needed since note agent processes the full conversation
         ]
     )
-    logger.debug(f"Note agent prompt: {prompt}")
-    agent = create_openai_functions_agent(llm=llm, tools=tools, prompt=prompt)
-    logger.info("Note agent created successfully")
-    return AgentExecutor.from_agent_and_tools(
-        agent=agent,
-        tools=tools,
-        verbose=False,
-    )
+
+    logger.info("Manual note agent created successfully")
+    return ManualAgent(llm=llm, tools=tools, prompt=prompt)
 
 
 logger.info("Agent creation module initialized")

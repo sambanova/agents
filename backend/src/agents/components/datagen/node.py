@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import structlog
+from agents.components.datagen.manual_agent import ManualAgent
 from agents.components.datagen.state import State
 from langchain.agents import AgentExecutor
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
@@ -14,16 +15,12 @@ from openai import InternalServerError
 logger = structlog.get_logger(__name__)
 
 
-def agent_node(state: State, agent: AgentExecutor, name: str) -> State:
+def agent_node(state: State, agent: ManualAgent, name: str) -> State:
     """
     Process an agent's action and update the state accordingly.
     """
     logger.info(f"Processing agent: {name}")
     try:
-
-        if name == "process_agent":
-            print("dsf")
-
         result = agent.invoke(state)
         logger.debug(f"Agent {name} result: {result}")
 

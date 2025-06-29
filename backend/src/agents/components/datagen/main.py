@@ -78,6 +78,66 @@ def main(user_input: str, working_directory: str = "./data", thread_id: str = "1
         raise
 
 
+async def main_with_persistent_daytona(
+    user_input: str,
+    user_id: str = "default_user",
+    working_directory: str = "./data",
+    thread_id: str = "1",
+    redis_storage=None,
+):
+    """
+    Main method to run the datagen workflow with persistent Daytona client
+
+    Args:
+        user_input (str): The user's input/query
+        user_id (str): User ID for the Daytona session
+        working_directory (str): Directory for file operations
+        thread_id (str): Thread ID for conversation tracking
+        redis_storage: Redis storage instance (optional)
+    """
+    try:
+        # Set up language models
+        print("Setting up language models...")
+        language_models = setup_language_models()
+
+        # Create workflow manager
+        print("Creating workflow manager...")
+        workflow_manager = WorkflowManager(language_models, working_directory)
+
+        # Initial state
+        initial_state = {
+            "messages": [HumanMessage(content=user_input)],
+            "hypothesis": "",
+            "process_decision": "",
+            "process": "",
+            "visualization_state": "",
+            "searcher_state": "",
+            "code_state": "",
+            "report_section": "",
+            "quality_review": "",
+            "needs_revision": False,
+            "sender": "",
+        }
+
+        # Configuration
+        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 3000}
+
+        print(f"Starting workflow with persistent Daytona for user: {user_id}")
+        print(f"Input: {user_input}")
+        print("-" * 50)
+
+        # Run workflow with persistent Daytona
+        async for event in workflow_manager.run_with_persistent_daytona(
+            initial_state, config, user_id, redis_storage
+        ):
+            print(f"Event: {event}")
+            print("-" * 30)
+
+    except Exception as e:
+        print(f"Error running workflow: {e}")
+        raise
+
+
 if __name__ == "__main__":
     # Example usage
     user_input = "Analyze the relationship between customer satisfaction and purchase behavior using machine learning techniques"

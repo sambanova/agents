@@ -8,7 +8,6 @@ from langchain_community.utilities import WikipediaAPIWrapper
 
 def create_hypothesis_agent(llm, members, working_directory):
     """Create the hypothesis agent"""
-    wikipedia = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
 
     base_tools = [
         collect_data,

@@ -1,22 +1,41 @@
 from agents.components.datagen.create_agent import create_agent
-from agents.components.datagen.tools.basetool import execute_code, execute_command
-from agents.components.datagen.tools.FileEdit import read_document
+from agents.components.datagen.tools.persistent_daytona import (
+    daytona_execute_code,
+    daytona_list_files,
+    daytona_read_file,
+    daytona_write_file,
+)
 
 
 def create_code_agent(power_llm, members, working_directory):
-    """Create the code agent"""
-    tools = [read_document, execute_code, execute_command]
+    """Create the code agent with persistent Daytona support"""
+
+    tools = [
+        daytona_execute_code,
+        daytona_list_files,
+        daytona_read_file,
+        daytona_write_file,
+    ]
+
     system_prompt = """
-    You are an expert Python programmer specializing in data processing and analysis. Your main responsibilities include:
+    You are an expert Python programmer specializing in data processing and analysis with access to a persistent Daytona sandbox. Your main responsibilities include:
 
     1. Writing clean, efficient Python code for data manipulation, cleaning, and transformation.
     2. Implementing statistical methods and machine learning algorithms as needed.
     3. Debugging and optimizing existing code for performance improvements.
     4. Adhering to PEP 8 standards and ensuring code readability with meaningful variable and function names.
 
+    **Available Tools:**
+    - daytona_execute_code: Execute Python code in the persistent sandbox
+    - daytona_list_files: List files in the sandbox directory
+    - daytona_read_file: Read content from files in the sandbox
+    - daytona_write_file: Write content to files in the sandbox
+
     Constraints:
     - Focus solely on data processing tasks; do not generate visualizations or write non-Python code.
     - Provide only valid, executable Python code, including necessary comments for complex logic.
     - Avoid unnecessary complexity; prioritize readability and efficiency.
+    - Take advantage of the persistent environment by building on previous work.
     """
+
     return create_agent(power_llm, tools, system_prompt, members, working_directory)

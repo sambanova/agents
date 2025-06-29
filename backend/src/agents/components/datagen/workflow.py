@@ -26,6 +26,11 @@ from agents.components.datagen.router import (
     process_router,
 )
 from agents.components.datagen.state import State
+from agents.components.datagen.tools.persistent_daytona import (
+    PersistentDaytonaManager,
+    cleanup_persistent_daytona,
+    persistent_daytona_context,
+)
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
@@ -56,6 +61,9 @@ class WorkflowManager:
         ]
         self.agents = self.create_agents()
         self.setup_workflow()
+
+        # Persistent Daytona manager
+        self.daytona_manager = None
 
     def create_agents(self):
         """Create all system agents"""
@@ -219,4 +227,52 @@ class WorkflowManager:
         """Return the compiled workflow graph"""
         return self.graph
 
+    async def initialize_persistent_daytona(self, user_id: str, redis_storage=None):
+        """Initialize the persistent Daytona client for the workflow."""
+        try:
+            self.daytona_manager = await PersistentDaytonaManager.initialize(
+                user_id=user_id, redis_storage=redis_storage
+            )
+            logger.info("Persistent Daytona client initialized for workflow")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to initialize persistent Daytona: {e}")
+            return False
 
+    async def cleanup_persistent_daytona(self):
+        """Clean up the persistent Daytona client."""
+        if self.daytona_manager:
+            try:
+                await self.daytona_manager.cleanup()
+                self.daytona_manager = None
+                logger.info("Persistent Daytona client cleaned up")
+            except Exception as e:
+                logger.error(f"Error cleaning up persistent Daytona: {e}")
+
+    async def run_with_persistent_daytona(
+        self, initial_state, config, user_id: str, redis_storage=None
+    ):
+        """
+        Run the workflow with persistent Daytona client.
+
+        Args:
+            initial_state: Initial state for the workflow
+            config: Configuration for the workflow
+            user_id: User ID for the Daytona session
+            redis_storage: Redis storage instance (optional)
+
+        Returns:
+            Generator of events from the workflow
+        """
+        # Initialize persistent Daytona
+        await self.initialize_persistent_daytona(user_id, redis_storage)
+
+        try:
+            # Run the workflow
+            async for event in self.graph.astream(
+                initial_state, config, stream_mode="values"
+            ):
+                yield event
+        finally:
+            # Always cleanup Daytona when done
+            await self.cleanup_persistent_daytona()
