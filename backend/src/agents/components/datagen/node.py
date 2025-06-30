@@ -15,13 +15,13 @@ from openai import InternalServerError
 logger = structlog.get_logger(__name__)
 
 
-def agent_node(state: State, agent: ManualAgent, name: str) -> State:
+async def agent_node(state: State, agent: ManualAgent, name: str) -> State:
     """
     Process an agent's action and update the state accordingly.
     """
     logger.info(f"Processing agent: {name}")
     try:
-        result = agent.invoke(state)
+        result = await agent.ainvoke(state)
         logger.debug(f"Agent {name} result: {result}")
 
         output = (
@@ -121,7 +121,7 @@ def create_message(message: dict[str], name: str) -> BaseMessage:
     )
 
 
-def note_agent_node(state: State, agent: AgentExecutor, name: str) -> State:
+async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
     """
     Process the note agent's action and update the entire state.
     """
@@ -137,7 +137,7 @@ def note_agent_node(state: State, agent: AgentExecutor, name: str) -> State:
             state = {**state, "messages": current_messages[2:-2]}
             logger.debug("Trimmed messages for processing")
 
-        result = agent.invoke(state)
+        result = await agent.ainvoke(state)
         logger.debug(f"Note agent {name} result: {result}")
         output = (
             result["output"]
@@ -287,7 +287,7 @@ def human_review_node(state: State) -> State:
         return None
 
 
-def refiner_node(state: State, agent: AgentExecutor, name: str) -> State:
+async def refiner_node(state: State, agent: ManualAgent, name: str) -> State:
     """
     Read MD file contents and PNG file names from the specified storage path,
     add them as report materials to a new message,
@@ -321,7 +321,7 @@ def refiner_node(state: State, agent: AgentExecutor, name: str) -> State:
 
         try:
             # Attempt to invoke agent with full content
-            result = agent.invoke(refiner_state)
+            result = await agent.invoke(refiner_state)
         except Exception as token_error:
             # If token limit is exceeded, retry with only MD file names
             logger.warning("Token limit exceeded. Retrying with MD file names only.")
@@ -334,7 +334,7 @@ def refiner_node(state: State, agent: AgentExecutor, name: str) -> State:
             )
 
             refiner_state["messages"] = [BaseMessage(content=simplified_report_content)]
-            result = agent.invoke(refiner_state)
+            result = await agent.invoke(refiner_state)
 
         # Update original state
         state["messages"].append(AIMessage(content=result))

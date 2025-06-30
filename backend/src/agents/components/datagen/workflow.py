@@ -1,5 +1,4 @@
-from typing import Any, Dict
-
+import structlog
 from agents.components.datagen.agent.code_agent import create_code_agent
 from agents.components.datagen.agent.hypothesis_agent import create_hypothesis_agent
 from agents.components.datagen.agent.note_agent import create_note_agent
@@ -26,13 +25,11 @@ from agents.components.datagen.router import (
     process_router,
 )
 from agents.components.datagen.state import State
-from agents.components.datagen.tools.persistent_daytona import (
-    PersistentDaytonaManager,
-    cleanup_persistent_daytona,
-    persistent_daytona_context,
-)
+from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
+
+logger = structlog.get_logger(__name__)
 
 
 class WorkflowManager:
@@ -114,61 +111,58 @@ class WorkflowManager:
         """Set up the workflow graph"""
         self.workflow = StateGraph(State)
 
-        # Add nodes
-        self.workflow.add_node(
-            "Hypothesis",
-            lambda state: agent_node(
+        # Create async wrapper functions for agent nodes
+        async def hypothesis_node(state):
+            return await agent_node(
                 state, self.agents["hypothesis_agent"], "hypothesis_agent"
-            ),
-        )
-        self.workflow.add_node(
-            "Process",
-            lambda state: agent_node(
+            )
+
+        async def process_node(state):
+            return await agent_node(
                 state, self.agents["process_agent"], "process_agent"
-            ),
-        )
-        self.workflow.add_node(
-            "Visualization",
-            lambda state: agent_node(
+            )
+
+        async def visualization_node(state):
+            return await agent_node(
                 state, self.agents["visualization_agent"], "visualization_agent"
-            ),
-        )
-        self.workflow.add_node(
-            "Search",
-            lambda state: agent_node(
+            )
+
+        async def search_node(state):
+            return await agent_node(
                 state, self.agents["searcher_agent"], "searcher_agent"
-            ),
-        )
-        self.workflow.add_node(
-            "Coder",
-            lambda state: agent_node(state, self.agents["code_agent"], "code_agent"),
-        )
-        self.workflow.add_node(
-            "Report",
-            lambda state: agent_node(
-                state, self.agents["report_agent"], "report_agent"
-            ),
-        )
-        self.workflow.add_node(
-            "QualityReview",
-            lambda state: agent_node(
+            )
+
+        async def coder_node(state):
+            return await agent_node(state, self.agents["code_agent"], "code_agent")
+
+        async def report_node(state):
+            return await agent_node(state, self.agents["report_agent"], "report_agent")
+
+        async def quality_review_node(state):
+            return await agent_node(
                 state, self.agents["quality_review_agent"], "quality_review_agent"
-            ),
-        )
-        self.workflow.add_node(
-            "NoteTaker",
-            lambda state: note_agent_node(
-                state, self.agents["note_agent"], "note_agent"
-            ),
-        )
+            )
+
+        async def note_taker_node(state):
+            return await note_agent_node(state, self.agents["note_agent"], "note_agent")
+
+        async def refiner_node_async(state):
+            return await refiner_node(
+                state, self.agents["refiner_agent"], "refiner_agent"
+            )
+
+        # Add nodes
+        self.workflow.add_node("Hypothesis", hypothesis_node)
+        self.workflow.add_node("Process", process_node)
+        self.workflow.add_node("Visualization", visualization_node)
+        self.workflow.add_node("Search", search_node)
+        self.workflow.add_node("Coder", coder_node)
+        self.workflow.add_node("Report", report_node)
+        self.workflow.add_node("QualityReview", quality_review_node)
+        self.workflow.add_node("NoteTaker", note_taker_node)
         self.workflow.add_node("HumanChoice", human_choice_node)
         self.workflow.add_node("HumanReview", human_review_node)
-        self.workflow.add_node(
-            "Refiner",
-            lambda state: refiner_node(
-                state, self.agents["refiner_agent"], "refiner_agent"
-            ),
-        )
+        self.workflow.add_node("Refiner", refiner_node_async)
 
         # Add edges
         self.workflow.add_edge(START, "Hypothesis")
@@ -262,7 +256,7 @@ class WorkflowManager:
             config: Configuration for the workflow
             user_id: User ID for the Daytona session
             redis_storage: Redis storage instance (optional)
-            data_sources: Data sources to upload to sandbox root folder (optional)
+            data_sources: List of file paths to upload to sandbox root folder (optional)
 
         Returns:
             Generator of events from the workflow

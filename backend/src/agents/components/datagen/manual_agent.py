@@ -32,6 +32,13 @@ class ToolExecutor:
         else:
             return f"Tool {action.tool} not found"
 
+    async def ainvoke(self, action: ToolInvocation):
+        tool = self.tools_by_name.get(action.tool)
+        if tool:
+            return await tool.ainvoke(action.tool_input)
+        else:
+            return f"Tool {action.tool} not found"
+
 
 class ManualAgent:
     """
@@ -56,6 +63,29 @@ class ManualAgent:
             if self._has_tool_call(response):
                 # Execute tools and get results
                 tool_result = self._execute_tool_call(response)
+
+                # Get final response with tool results
+                final_response = self._get_final_response(state, response, tool_result)
+                return {"output": final_response}
+            else:
+                return {"output": response}
+
+        except Exception as e:
+            logger.error(f"Error in manual agent: {e}", exc_info=True)
+            return {"output": f"Error: {str(e)}"}
+
+    async def ainvoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Async version to process the state and return a result with 'output' field.
+        """
+        try:
+            # Get initial response from LLM
+            response = self._get_llm_response(state)
+
+            # Check if the response contains tool calls
+            if self._has_tool_call(response):
+                # Execute tools and get results (async)
+                tool_result = await self._execute_tool_call_async(response)
 
                 # Get final response with tool results
                 final_response = self._get_final_response(state, response, tool_result)
@@ -249,6 +279,87 @@ If you don't need to use a tool, respond normally without any XML tags.
                 error_msg = f"Error executing tool '{tool_name}': {str(e)}"
                 logger.error(
                     "Tool execution failed",
+                    tool_name=tool_name,
+                    error=str(e),
+                    exc_info=True,
+                )
+                return error_msg
+
+        except Exception as e:
+            # Catch-all error handler for unexpected parsing issues
+            error_msg = f"Unexpected error parsing tool call: {str(e)}"
+            logger.error(
+                "Unexpected error parsing tool call", error=str(e), exc_info=True
+            )
+            return error_msg
+
+    async def _execute_tool_call_async(self, response: str) -> str:
+        """Execute tool call from LLM response using XML parsing (async version)."""
+        try:
+            # Parse tool call with improved error handling (based on xml_agent)
+            if "</tool>" not in response:
+                error_msg = "Error: Malformed tool call - missing </tool> tag"
+                logger.warning("Malformed tool call", error=error_msg, content=response)
+                return error_msg
+
+            # Split on </tool> to separate tool name and input
+            tool_parts = response.split("</tool>", 1)
+            if len(tool_parts) < 2:
+                error_msg = "Error: Could not parse tool call - invalid format"
+                logger.warning(
+                    "Could not parse tool call", error=error_msg, content=response
+                )
+                return error_msg
+
+            tool_part, tool_input_part = tool_parts
+
+            # Extract tool name
+            if "<tool>" not in tool_part:
+                error_msg = "Error: Missing <tool> tag in tool call"
+                logger.warning("Missing tool tag", error=error_msg, content=response)
+                return error_msg
+
+            tool_name = tool_part.split("<tool>")[1].strip()
+
+            # Extract tool input
+            if "<tool_input>" not in tool_input_part:
+                tool_input = ""
+            else:
+                tool_input_content = tool_input_part.split("<tool_input>")[1]
+                if "</tool_input>" in tool_input_content:
+                    tool_input = tool_input_content.split("</tool_input>")[0]
+                else:
+                    # Handle case where </tool_input> is missing (malformed/truncated)
+                    tool_input = tool_input_content.strip()
+
+            # Validate tool name
+            if not tool_name:
+                error_msg = "Error: Empty tool name provided"
+                logger.warning("Empty tool name", error=error_msg, content=response)
+                return error_msg
+
+            # Create and execute tool invocation (async)
+            action = ToolInvocation(tool=tool_name, tool_input=tool_input)
+            logger.info(
+                "Executing tool async", tool_name=tool_name, tool_input=tool_input
+            )
+
+            try:
+                result = await self.tool_executor.ainvoke(action)
+                logger.info(
+                    "Async tool execution completed", tool_name=tool_name, success=True
+                )
+
+                # Handle cases where response might be too large
+                if isinstance(result, str) and len(result) > 50000:
+                    result = result[:50000] + "\n\n[Response truncated due to length]"
+
+                return str(result) if result else "No response from tool"
+
+            except Exception as e:
+                error_msg = f"Error executing tool '{tool_name}': {str(e)}"
+                logger.error(
+                    "Async tool execution failed",
                     tool_name=tool_name,
                     error=str(e),
                     exc_info=True,

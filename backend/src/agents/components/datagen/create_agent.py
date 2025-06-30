@@ -5,6 +5,7 @@ import structlog
 
 # Import the manual agent
 from agents.components.datagen.manual_agent import ManualAgent
+from agents.components.datagen.state import NoteState, SupervisorDecision
 from langchain.agents import AgentExecutor
 from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
 from langchain.output_parsers.openai_functions import JsonOutputFunctionsParser
@@ -69,7 +70,7 @@ def create_agent(
     team_members_str = ", ".join(team_members)
 
     # List the initial contents of the working directory
-    initial_directory_contents = list_directory_contents(working_directory)
+    initial_directory_contents = daytona_list_directory_contents(working_directory)
 
     # Create the system prompt for the agent
     system_prompt = (
@@ -109,19 +110,6 @@ def create_agent(
 
     # Return a manual agent that handles tool execution
     return ManualAgent(llm=llm, tools=tools, prompt=prompt)
-
-
-class SupervisorDecision(BaseModel):
-    """
-    Decision about which agent should act next and what task they should perform.
-    """
-
-    next: str = Field(
-        description="The name of the agent that should act next, or 'FINISH' if the task is complete. Must be one of the provided options."
-    )
-    task: str = Field(
-        description="A concise description of the task the selected agent should perform."
-    )
 
 
 def create_supervisor(
@@ -173,10 +161,6 @@ def create_supervisor(
             parser=supervisor_parser,
         )
     )
-
-
-from agents.components.datagen.state import NoteState
-from langchain.output_parsers import PydanticOutputParser
 
 
 def create_note_agent(

@@ -7,7 +7,7 @@ import structlog
 
 # Import persistent Daytona tools
 from agents.components.datagen.tools.persistent_daytona import (
-    create_data_sources_config,
+    daytona_collect_data,
     daytona_execute_code,
     daytona_list_files,
     daytona_read_file,

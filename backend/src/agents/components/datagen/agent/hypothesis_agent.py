@@ -1,5 +1,5 @@
 from agents.components.datagen.create_agent import create_agent
-from agents.components.datagen.tools.FileEdit import collect_data
+from agents.components.datagen.tools.persistent_daytona import daytona_collect_data
 from agents.tools.langgraph_tools import TOOL_REGISTRY
 from langchain.agents import load_tools
 from langchain_community.tools import WikipediaQueryRun
@@ -10,7 +10,7 @@ def create_hypothesis_agent(llm, members, working_directory):
     """Create the hypothesis agent"""
 
     base_tools = [
-        collect_data,
+        daytona_collect_data,
         TOOL_REGISTRY["wikipedia"]["factory"](),
         TOOL_REGISTRY["search_tavily"]["factory"](),
         TOOL_REGISTRY["arxiv"]["factory"](),

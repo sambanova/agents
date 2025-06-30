@@ -1,13 +1,10 @@
+import asyncio
 import os
 
 import structlog
-from agents.components.datagen.node import setup_language_models
 from agents.components.datagen.state import State
-from agents.components.datagen.tools.persistent_daytona import (
-    create_data_sources_config,
-)
 from agents.components.datagen.workflow import WorkflowManager
-from agents.utils.llms import get_fireworks_llm, get_langmodels, get_sambanova_llm
+from agents.utils.llms import get_fireworks_llm, get_sambanova_llm
 from langchain_core.messages import HumanMessage
 
 logger = structlog.get_logger(__name__)
@@ -103,11 +100,7 @@ async def main_with_persistent_daytona(
         working_directory: Directory for storing workflow data
         thread_id: Thread identifier for the conversation
         redis_storage: Redis storage instance (optional)
-        data_sources: Data sources to upload to sandbox root folder (optional)
-                     Can contain:
-                     - 'files': List of file paths to upload
-                     - 'directories': List of directory paths to upload
-                     - 'content': Dict of filename -> content strings to create
+        data_sources: List of file paths to upload to sandbox root folder (optional)
 
     Example usage:
         # Basic usage
@@ -115,11 +108,7 @@ async def main_with_persistent_daytona(
             print(event)
 
         # With data upload
-        data_sources = create_data_sources_config(
-            files=['/path/to/sales_data.csv'],
-            directories=['/path/to/datasets'],
-            content={'analysis_config.json': '{"type": "sales", "period": "Q1"}'}
-        )
+        data_sources = ['/path/to/sales_data.csv', '/path/to/customer_data.csv']
         async for event in main_with_persistent_daytona(
             "Analyze the sales data",
             data_sources=data_sources
@@ -134,13 +123,29 @@ async def main_with_persistent_daytona(
     manager = WorkflowManager(language_models, working_directory)
 
     # Create initial state
-    initial_state = State(messages=[("user", user_input)])
+    initial_state = {
+        "messages": [HumanMessage(content=user_input)],
+        "hypothesis": "",
+        "process": "",
+        "process_decision": None,
+        "visualization_state": "",
+        "searcher_state": "",
+        "code_state": "",
+        "report_section": "",
+        "quality_review": "",
+        "needs_revision": False,
+        "sender": "",
+    }
 
     # Configuration for the thread
     config = {"configurable": {"thread_id": thread_id}}
 
     try:
         # Run workflow with persistent Daytona
+
+        data_sources = [
+            "/Users/tamasj/Downloads/customer_satisfaction_purchase_behavior.csv.csv"
+        ]
         async for event in manager.run_with_persistent_daytona(
             initial_state, config, user_id, redis_storage, data_sources
         ):
@@ -153,12 +158,27 @@ async def main_with_persistent_daytona(
 
 
 if __name__ == "__main__":
-    # Example usage
-    user_input = "Analyze the relationship between customer satisfaction and purchase behavior using machine learning techniques"
-    working_directory = "./data"
 
-    # Create working directory if it doesn't exist
-    os.makedirs(working_directory, exist_ok=True)
+    async def run_workflow():
+        """Run the workflow and process events"""
+        # Example usage
+        user_input = "Analyze the relationship between customer satisfaction and purchase behavior using machine learning techniques"
+        working_directory = "./data"
 
-    # Run the workflow
-    main(user_input, working_directory)
+        # Create working directory if it doesn't exist
+        os.makedirs(working_directory, exist_ok=True)
+
+        print(f"Starting datagen workflow with input: {user_input}")
+        print("-" * 50)
+
+        # Run the workflow and process events
+        async for event in main_with_persistent_daytona(
+            user_input, working_directory=working_directory
+        ):
+            print(f"Event: {event}")
+            print("-" * 30)
+
+        print("Workflow completed!")
+
+    # Run the async workflow
+    asyncio.run(run_workflow())

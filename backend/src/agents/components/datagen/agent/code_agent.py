@@ -1,5 +1,6 @@
 from agents.components.datagen.create_agent import create_agent
 from agents.components.datagen.tools.persistent_daytona import (
+    daytona_collect_data,
     daytona_execute_code,
     daytona_list_files,
     daytona_read_file,
@@ -15,6 +16,7 @@ def create_code_agent(power_llm, members, working_directory):
         daytona_list_files,
         daytona_read_file,
         daytona_write_file,
+        daytona_collect_data,
     ]
 
     system_prompt = """
@@ -30,12 +32,14 @@ def create_code_agent(power_llm, members, working_directory):
     - daytona_list_files: List files in the sandbox directory
     - daytona_read_file: Read content from files in the sandbox
     - daytona_write_file: Write content to files in the sandbox
+    - daytona_collect_data: Analyze CSV data with encoding detection and detailed structure analysis
 
     Constraints:
     - Focus solely on data processing tasks; do not generate visualizations or write non-Python code.
     - Provide only valid, executable Python code, including necessary comments for complex logic.
     - Avoid unnecessary complexity; prioritize readability and efficiency.
     - Take advantage of the persistent environment by building on previous work.
+    - Use daytona_collect_data to analyze CSV files before processing them.
     """
 
     return create_agent(power_llm, tools, system_prompt, members, working_directory)
