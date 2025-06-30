@@ -33,16 +33,14 @@ logger = structlog.get_logger(__name__)
 
 
 class WorkflowManager:
-    def __init__(self, language_models, working_directory):
+    def __init__(self, language_models):
         """
-        Initialize the workflow manager with language models and working directory.
+        Initialize the workflow manager with language models.
 
         Args:
             language_models (dict): Dictionary containing language model instances
-            working_directory (str): Path to the working directory
         """
         self.language_models = language_models
-        self.working_directory = working_directory
         self.workflow = None
         self.memory = None
         self.graph = None
@@ -73,37 +71,26 @@ class WorkflowManager:
         agents = {}
 
         # Create each agent using their respective creation functions
-        agents["hypothesis_agent"] = create_hypothesis_agent(
-            llm, self.members, self.working_directory
-        )
+        agents["hypothesis_agent"] = create_hypothesis_agent(llm, self.members)
 
         agents["process_agent"] = create_process_agent(power_llm)
 
         agents["visualization_agent"] = create_visualization_agent(
-            llm, self.members, self.working_directory
+            llm,
+            self.members,
         )
 
-        agents["code_agent"] = create_code_agent(
-            power_llm, self.members, self.working_directory
-        )
+        agents["code_agent"] = create_code_agent(power_llm, self.members)
 
-        agents["searcher_agent"] = create_search_agent(
-            llm, self.members, self.working_directory
-        )
+        agents["searcher_agent"] = create_search_agent(llm, self.members)
 
-        agents["report_agent"] = create_report_agent(
-            power_llm, self.members, self.working_directory
-        )
+        agents["report_agent"] = create_report_agent(power_llm, self.members)
 
-        agents["quality_review_agent"] = create_quality_review_agent(
-            llm, self.members, self.working_directory
-        )
+        agents["quality_review_agent"] = create_quality_review_agent(llm, self.members)
 
         agents["note_agent"] = create_note_agent(json_llm)
 
-        agents["refiner_agent"] = create_refiner_agent(
-            power_llm, self.members, self.working_directory
-        )
+        agents["refiner_agent"] = create_refiner_agent(power_llm, self.members)
 
         return agents
 

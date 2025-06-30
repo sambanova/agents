@@ -86,7 +86,6 @@ def main(user_input: str, working_directory: str = "./data", thread_id: str = "1
 async def main_with_persistent_daytona(
     user_input: str,
     user_id: str = "default_user",
-    working_directory: str = "./data",
     thread_id: str = "1",
     redis_storage=None,
     data_sources=None,
@@ -120,7 +119,7 @@ async def main_with_persistent_daytona(
     language_models = setup_language_models()
 
     # Create workflow manager
-    manager = WorkflowManager(language_models, working_directory)
+    manager = WorkflowManager(language_models)
 
     # Create initial state
     initial_state = {
@@ -144,7 +143,7 @@ async def main_with_persistent_daytona(
         # Run workflow with persistent Daytona
 
         data_sources = [
-            "/Users/tamasj/Downloads/customer_satisfaction_purchase_behavior.csv.csv"
+            "/Users/tamasj/Downloads/customer_satisfaction_purchase_behavior.csv"
         ]
         async for event in manager.run_with_persistent_daytona(
             initial_state, config, user_id, redis_storage, data_sources
@@ -163,18 +162,12 @@ if __name__ == "__main__":
         """Run the workflow and process events"""
         # Example usage
         user_input = "Analyze the relationship between customer satisfaction and purchase behavior using machine learning techniques"
-        working_directory = "./data"
-
-        # Create working directory if it doesn't exist
-        os.makedirs(working_directory, exist_ok=True)
 
         print(f"Starting datagen workflow with input: {user_input}")
         print("-" * 50)
 
         # Run the workflow and process events
-        async for event in main_with_persistent_daytona(
-            user_input, working_directory=working_directory
-        ):
+        async for event in main_with_persistent_daytona(user_input):
             print(f"Event: {event}")
             print("-" * 30)
 

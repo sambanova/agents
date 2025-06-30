@@ -6,12 +6,14 @@ import structlog
 # Import the manual agent
 from agents.components.datagen.manual_agent import ManualAgent
 from agents.components.datagen.state import NoteState, SupervisorDecision
+from agents.components.datagen.tools.persistent_daytona import daytona_list_files
 from langchain.agents import AgentExecutor
 from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
 from langchain.output_parsers.openai_functions import JsonOutputFunctionsParser
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.tools import tool
 from langchain_core.language_models.base import LanguageModelLike
+from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 logger = structlog.get_logger(__name__)
@@ -38,39 +40,64 @@ def list_directory_contents(directory: str = "./data_storage/") -> str:
         return f"Error listing directory contents: {str(e)}"
 
 
+def _format_tools(tools: List[BaseTool]) -> str:
+    """Format tools for inclusion in the prompt."""
+    tool_descriptions = []
+    for tool in tools:
+        # Get tool description and parameters
+        description = tool.description or f"Tool: {tool.name}"
+
+        # Format parameters if available
+        if hasattr(tool, "args_schema") and tool.args_schema:
+            schema = tool.args_schema.schema()
+            properties = schema.get("properties", {})
+            required = schema.get("required", [])
+
+            params = []
+            for param_name, param_info in properties.items():
+                param_type = param_info.get("type", "string")
+                param_desc = param_info.get("description", "")
+                is_required = param_name in required
+                params.append(
+                    f"  - {param_name} ({param_type}{'*' if is_required else ''}): {param_desc}"
+                )
+
+            param_str = "\\n".join(params) if params else "  No parameters"
+        else:
+            param_str = "  No parameters"
+
+        tool_descriptions.append(
+            f"{tool.name}: {description}\\nParameters:\\n{param_str}"
+        )
+
+    return "\\n\\n".join(tool_descriptions)
+
+
 def create_agent(
     llm: LanguageModelLike,
-    tools: list[tool],
+    tools: list,
     system_message: str,
     team_members: list[str],
-    working_directory: str = "./data_storage/",
 ) -> ManualAgent:
     """
     Create a manual agent with the given language model, tools, system message, and team members.
-
-    Parameters:
-        llm (LanguageModelLike): The language model to use for the agent.
-        tools (list[tool]): A list of tools the agent can use.
-        system_message (str): A message defining the agent's role and tasks.
-        team_members (list[str]): A list of team member roles for collaboration.
-        working_directory (str): The directory where the agent's data will be stored.
-
-    Returns:
-        ManualAgent: A manual agent that handles tool execution without function calling.
     """
 
     logger.info("Creating manual agent")
 
-    # Ensure the ListDirectoryContents tool is available
-    if list_directory_contents not in tools:
-        tools.append(list_directory_contents)
+    # Ensure the daytona_list_files tool is available
+    if daytona_list_files not in tools:
+        tools.append(daytona_list_files)
 
     # Prepare the tool names and team members for the system prompt
     tool_names = ", ".join([tool.name for tool in tools])
     team_members_str = ", ".join(team_members)
 
-    # List the initial contents of the working directory
-    initial_directory_contents = daytona_list_directory_contents(working_directory)
+    # Format detailed tool descriptions
+    tool_descriptions = _format_tools(tools)
+
+    # TODO: replace with daytona_list_files tool
+    initial_directory_contents = ["customer_satisfaction_purchase_behavior.csv.csv"]
 
     # Create the system prompt for the agent
     system_prompt = (
@@ -79,14 +106,21 @@ def create_agent(
         "Use the provided tools to make progress on your task. "
         "If you can't fully complete a task, explain what you've done and what's needed next. "
         "Always aim for accurate and clear outputs. "
-        f"You have access to the following tools: {tool_names}. "
-        f"Your specific role: {system_message}\n"
+        f"Your specific role: {system_message}\\n"
         "Work autonomously according to your specialty, using the tools available to you. "
         "Do not ask for clarification. "
         "Your other team members (and other teams) will collaborate with you based on their specialties. "
-        f"You are chosen for a reason! You are one of the following team members: {team_members_str}.\n"
-        f"The initial contents of your working directory are:\n{initial_directory_contents}\n"
-        "Use the ListDirectoryContents tool to check for updates in the directory contents when needed."
+        f"You are chosen for a reason! You are one of the following team members: {team_members_str}.\\n"
+        f"The initial contents of your working directory are:\\n{initial_directory_contents}\\n"
+        "Use the daytona_list_files tool to check for updates in the directory contents when needed.\\n\\n"
+        "You have access to the following tools:\\n"
+        f"{tool_descriptions}\\n\\n"
+        "In order to use a tool, you can use <tool></tool> and <tool_input></tool_input> tags. You will then get back a response in the form <observation></observation> "
+        "For example, if you have a tool called 'search' that could search the web, in order to search for something you would respond: "
+        "<tool>search</tool><tool_input>your search query here</tool_input> "
+        "And you would get back: "
+        "<observation>Search results here...</observation>\\n"
+        "If you don't need to use a tool, respond normally without any XML tags."
     )
 
     # Define the prompt structure with placeholders for dynamic content

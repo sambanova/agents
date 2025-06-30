@@ -6,7 +6,7 @@ from agents.components.datagen.tools.FileEdit import (
 )
 
 
-def create_report_agent(power_llm, members, working_directory):
+def create_report_agent(power_llm, members):
     """Create the report agent"""
     tools = [create_document, read_document, edit_document]
 
@@ -24,4 +24,4 @@ def create_report_agent(power_llm, members, working_directory):
     - Maintain an objective, academic tone throughout the report.
     - Cite all sources using APA style and ensure that all findings are supported by evidence.
     """
-    return create_agent(power_llm, tools, system_prompt, members, working_directory)
+    return create_agent(power_llm, tools, system_prompt, members)

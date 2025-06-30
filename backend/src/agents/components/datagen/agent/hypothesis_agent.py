@@ -1,16 +1,16 @@
 from agents.components.datagen.create_agent import create_agent
-from agents.components.datagen.tools.persistent_daytona import daytona_collect_data
+from agents.components.datagen.tools.persistent_daytona import daytona_describe_data
 from agents.tools.langgraph_tools import TOOL_REGISTRY
 from langchain.agents import load_tools
 from langchain_community.tools import WikipediaQueryRun
 from langchain_community.utilities import WikipediaAPIWrapper
 
 
-def create_hypothesis_agent(llm, members, working_directory):
+def create_hypothesis_agent(llm, members):
     """Create the hypothesis agent"""
 
     base_tools = [
-        daytona_collect_data,
+        daytona_describe_data,
         TOOL_REGISTRY["wikipedia"]["factory"](),
         TOOL_REGISTRY["search_tavily"]["factory"](),
         TOOL_REGISTRY["arxiv"]["factory"](),
@@ -29,4 +29,4 @@ def create_hypothesis_agent(llm, members, working_directory):
     Just answer a research hypothesis.
     """
 
-    return create_agent(llm, base_tools, system_prompt, members, working_directory)
+    return create_agent(llm, base_tools, system_prompt, members)

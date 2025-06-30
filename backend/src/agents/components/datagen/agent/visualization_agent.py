@@ -3,7 +3,7 @@ from agents.components.datagen.tools.basetool import execute_code, execute_comma
 from agents.components.datagen.tools.FileEdit import read_document
 
 
-def create_visualization_agent(llm, members, working_directory):
+def create_visualization_agent(llm, members):
     """Create the visualization agent"""
     tools = [read_document, execute_code, execute_command]
 
@@ -26,4 +26,4 @@ def create_visualization_agent(llm, members, working_directory):
     - Ensure all visual elements are suitable for the target audience, with attention to color schemes and design principles.
     - Avoid over-complicating visualizations; aim for clarity and simplicity.
     """
-    return create_agent(llm, tools, system_prompt, members, working_directory)
+    return create_agent(llm, tools, system_prompt, members)

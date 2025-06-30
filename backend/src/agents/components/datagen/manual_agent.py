@@ -153,31 +153,13 @@ And you would get back:
 If you don't need to use a tool, respond normally without any XML tags.
 """
 
-        # Create messages for the conversation
-        messages = [("system", enhanced_system_message)]
-
-        # Add state messages if available
-        if "messages" in state and state["messages"]:
-            for msg in state["messages"]:
-                if hasattr(msg, "content"):
-                    role = (
-                        "human"
-                        if msg.__class__.__name__ == "HumanMessage"
-                        else "assistant"
-                    )
-                    messages.append((role, msg.content))
-
-        # Add state variables as context
-        context_vars = []
-        for key, value in state.items():
-            if key not in ["messages"] and value and str(value).strip():
-                context_vars.append(f"{key}: {value}")
-
-        if context_vars:
-            messages.append(("system", "Current context:\n" + "\n".join(context_vars)))
-
-        # Create prompt and get response
-        prompt = ChatPromptTemplate.from_messages(messages)
+        # Use template placeholder for messages instead of building dynamically
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", enhanced_system_message),
+                MessagesPlaceholder(variable_name="messages"),
+            ]
+        )
 
         # Bind stop sequences to prevent over-generation
         llm_with_stop = self.llm.bind(stop=["</tool_input>", "<observation>"])
@@ -197,7 +179,12 @@ If you don't need to use a tool, respond normally without any XML tags.
             "needs_revision": state.get("needs_revision", False),
         }
 
-        response = chain.invoke(template_vars)
+        try:
+            response = chain.invoke(template_vars)
+        except Exception as e:
+            logger.error(f"Error in manual agent: {e}", exc_info=True)
+            return {"output": f"Error: {str(e)}"}
+
         content = response.content if hasattr(response, "content") else str(response)
 
         # Post-process response to catch potential formatting issues

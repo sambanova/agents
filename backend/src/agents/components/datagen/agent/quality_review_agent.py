@@ -6,7 +6,7 @@ from agents.components.datagen.tools.FileEdit import (
 )
 
 
-def create_quality_review_agent(llm, members, working_directory):
+def create_quality_review_agent(llm, members):
     """Create the quality review agent"""
     tools = [create_document, read_document, edit_document]
     system_prompt = """
@@ -19,4 +19,4 @@ def create_quality_review_agent(llm, members, working_directory):
 
     After your review, if revisions are needed, respond with 'REVISION' as a prefix, set needs_revision=True, and provide specific feedback on parts that need improvement. If no revisions are necessary, respond with 'CONTINUE' as a prefix and set needs_revision=False.
     """
-    return create_agent(llm, tools, system_prompt, members, working_directory)
+    return create_agent(llm, tools, system_prompt, members)

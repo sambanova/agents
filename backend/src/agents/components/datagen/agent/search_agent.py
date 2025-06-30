@@ -10,7 +10,7 @@ from langchain_community.tools import WikipediaQueryRun
 from langchain_community.utilities import WikipediaAPIWrapper
 
 
-def create_search_agent(llm, members, working_directory):
+def create_search_agent(llm, members):
     """Create the search agent"""
     tools = [
         create_document,
@@ -33,4 +33,4 @@ def create_search_agent(llm, members, working_directory):
     - Present information in an organized format, with clear attributions to sources.
     - Evaluate the credibility of sources and prioritize high-quality, reliable information.
     """
-    return create_agent(llm, tools, system_prompt, members, working_directory)
+    return create_agent(llm, tools, system_prompt, members)

@@ -10,7 +10,7 @@ from langchain_community.tools import WikipediaQueryRun
 from langchain_community.utilities import WikipediaAPIWrapper
 
 
-def create_refiner_agent(power_llm, members, working_directory):
+def create_refiner_agent(power_llm, members):
     """Create the refiner agent"""
     tools = [
         create_document,
@@ -40,4 +40,4 @@ def create_refiner_agent(power_llm, members, working_directory):
 
     After refining the report, submit it for final human review, ensuring it is ready for publication or presentation.
     """
-    return create_agent(power_llm, tools, system_prompt, members, working_directory)
+    return create_agent(power_llm, tools, system_prompt, members)

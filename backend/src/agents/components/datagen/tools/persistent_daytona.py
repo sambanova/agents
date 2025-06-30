@@ -132,19 +132,9 @@ class PersistentDaytonaManager:
 
         try:
             logger.info("Executing code in persistent sandbox", code_preview=code[:100])
-
-            # Clean up the code (remove markdown formatting, etc.)
-            clean_code = self._clean_code(code)
-
-            if not clean_code or len(clean_code.strip()) < 3:
-                return "Error: No valid code found after processing input. Please provide valid Python code."
-
-            # Simulate code execution - replace with actual async Daytona SDK calls
-            # For now, return a placeholder response
-            result = f"Code executed successfully in sandbox {self._sandbox}\nCode:\n{clean_code}\n\nOutput: Simulated execution result"
-
+            result = await self._sandbox.process.code_run(code)
             logger.info("Code executed successfully")
-            return result
+            return result.result
 
         except Exception as e:
             logger.error(
@@ -173,8 +163,8 @@ class PersistentDaytonaManager:
             raise RuntimeError("Daytona sandbox not initialized.")
 
         try:
-            # Simulate file reading - replace with actual async Daytona SDK calls
-            return f"Content of {filename} from sandbox {self._sandbox}"
+            content = await self._sandbox.fs.download_file(filename)
+            return content
         except Exception as e:
             logger.error("Error reading file", filename=filename, error=str(e))
             return f"Error reading file '{filename}': {str(e)}"
@@ -241,7 +231,6 @@ async def get_or_create_daytona_manager(
     """Get or create the global Daytona manager."""
     global _daytona_manager
 
-    # TODO: Remove this once we have a proper data sources configuration
     data_sources = ["~/Downloads/customer_satisfaction_purchase_behavior.csv.csv"]
     if _daytona_manager is None:
         _daytona_manager = await PersistentDaytonaManager.initialize(
@@ -292,11 +281,11 @@ async def daytona_write_file(
 
 
 @tool
-async def daytona_collect_data(
-    data_path: Annotated[str, "Path to the CSV file in the sandbox"] = "data.csv",
+async def daytona_describe_data(
+    filename: Annotated[str, "Name of the file to describe"],
 ) -> str:
     """
-    Collect data from a CSV file in the persistent Daytona sandbox.
+    Describe the data in a CSV file in the persistent Daytona sandbox.
 
     This function attempts to read a CSV file using different encodings and
     returns information about the data structure and first few rows.
@@ -305,11 +294,6 @@ async def daytona_collect_data(
 
     # First check if file exists
     try:
-        file_content = await manager.read_file(data_path)
-
-        if "Error reading file" in file_content:
-            files_list = await manager.list_files(".")
-            return f"File not found: {data_path}. Available files: {files_list}"
 
         # Generate pandas analysis code to run in sandbox
         analysis_code = f'''
@@ -335,8 +319,8 @@ def analyze_csv_data(file_path: str) -> str:
                 "memory_usage": data.memory_usage(deep=True).sum()
             }}
             
-            # Get sample data (first 5 rows)
-            sample_data = data.head().to_dict('records')
+            # Get sample data (first 5 rows) as string table
+            sample_data_str = data.head().to_string(max_cols=10, max_colwidth=50)
             
             # Generate summary
             summary = f"""
@@ -353,9 +337,7 @@ Missing Values:
 {{chr(10).join([f"  - {{col}}: {{count}} missing" for col, count in info["null_counts"].items() if count > 0])}}
 
 Sample Data (first 5 rows):
-{{chr(10).join([str(row) for row in sample_data[:5]])}}
-
-Data loaded successfully and is ready for analysis!
+{{sample_data_str}}
 """
             return summary
             
@@ -365,7 +347,7 @@ Data loaded successfully and is ready for analysis!
     return f"Error: Unable to read CSV file '{{file_path}}' with any supported encoding (utf-8, latin1, iso-8859-1, cp1252)"
 
 # Analyze the data
-result = analyze_csv_data("{data_path}")
+result = analyze_csv_data("{filename}")
 print(result)
 '''
 
