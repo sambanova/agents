@@ -223,12 +223,15 @@ def create_note_agent(
     tool_descriptions = _format_tools(tools)
 
     # Enhanced system prompt for JSON output with tool capabilities
+    # Escape curly braces in output_format to prevent f-string conflicts
+    escaped_output_format = output_format.replace("{", "{{").replace("}", "}}")
+
     enhanced_system_prompt = f"""{system_prompt}
 
 You are a meticulous research process note-taker with access to tools for reading documents and gathering information.
 
 IMPORTANT: You must format your response as a JSON object with the following structure:
-{output_format}
+{escaped_output_format}
 
 TOOL USAGE INSTRUCTIONS:
 You have access to the following tools:
