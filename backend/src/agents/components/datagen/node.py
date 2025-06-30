@@ -15,55 +15,44 @@ from openai import InternalServerError
 logger = structlog.get_logger(__name__)
 
 
-async def agent_node(state: State, agent: ManualAgent, name: str) -> State:
+async def agent_node(
+    state: State, agent: ManualAgent, name: str, state_key: str
+) -> dict:
     """
-    Process an agent's action and update the state accordingly.
+    Invokes the agent and updates the state with the result.
+
+    Args:
+        state: The current state of the graph.
+        agent: The agent to invoke.
+        name: The name of the agent.
+        state_key: The key in the state to update with the agent's output.
+
+    Returns:
+        A dictionary containing the updated state.
     """
-    logger.info(f"Processing agent: {name}")
+    logger.info(f"Processing agent: {name} to update state key: '{state_key}'")
     try:
         result = await agent.ainvoke(state)
-        logger.debug(f"Agent {name} result: {result}")
+        # The agent returns a dictionary with an 'output' key
+        output_message = result.get("output")
 
-        output = (
-            result["output"]
-            if isinstance(result, dict) and "output" in result
-            else str(result)
-        )
+        if output_message is None:
+            raise ValueError("Agent output is missing the 'output' key.")
 
-        ai_message = AIMessage(content=output, name=name)
-        state["messages"].append(ai_message)
-        state["sender"] = name
+        # Return a dictionary to be merged into the state
+        return {
+            "messages": state["messages"] + [output_message],
+            state_key: output_message,
+            "sender": name,
+        }
 
-        if name == "hypothesis_agent" and not state["hypothesis"]:
-            state["hypothesis"] = ai_message
-            logger.info("Hypothesis updated")
-        elif name == "process_agent":
-            state["process_decision"] = result
-            logger.info("Process decision updated")
-        elif name == "visualization_agent":
-            state["visualization_state"] = ai_message
-            logger.info("Visualization state updated")
-        elif name == "searcher_agent":
-            state["searcher_state"] = ai_message
-            logger.info("Searcher state updated")
-        elif name == "report_agent":
-            state["report_section"] = ai_message
-            logger.info("Report section updated")
-        elif name == "quality_review_agent":
-            state["quality_review"] = ai_message
-            state["needs_revision"] = "revision needed" in output.lower()
-            logger.info(
-                f"Quality review updated. Needs revision: {state['needs_revision']}"
-            )
-
-        logger.info(f"Agent {name} processing completed")
-        return state
     except Exception as e:
         logger.error(
             f"Error occurred while processing agent {name}: {str(e)}", exc_info=True
         )
-        error_message = AIMessage(content=f"Error: {str(e)}", name=name)
-        return {"messages": [error_message]}
+        # Return an error message to be added to the state
+        error_message = AIMessage(content=f"Error in {name}: {str(e)}", name=name)
+        return {"messages": state["messages"] + [error_message]}
 
 
 def human_choice_node(state: State) -> State:

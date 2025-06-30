@@ -26,6 +26,7 @@ from agents.components.datagen.router import (
 )
 from agents.components.datagen.state import State
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
+from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
@@ -101,34 +102,72 @@ class WorkflowManager:
         # Create async wrapper functions for agent nodes
         async def hypothesis_node(state):
             return await agent_node(
-                state, self.agents["hypothesis_agent"], "hypothesis_agent"
+                state, self.agents["hypothesis_agent"], "hypothesis_agent", "hypothesis"
             )
 
         async def process_node(state):
             return await agent_node(
-                state, self.agents["process_agent"], "process_agent"
+                state, self.agents["process_agent"], "process_agent", "process_decision"
             )
 
         async def visualization_node(state):
             return await agent_node(
-                state, self.agents["visualization_agent"], "visualization_agent"
+                state,
+                self.agents["visualization_agent"],
+                "visualization_agent",
+                "visualization_state",
             )
 
         async def search_node(state):
             return await agent_node(
-                state, self.agents["searcher_agent"], "searcher_agent"
+                state, self.agents["searcher_agent"], "searcher_agent", "searcher_state"
             )
 
         async def coder_node(state):
-            return await agent_node(state, self.agents["code_agent"], "code_agent")
+            return await agent_node(
+                state, self.agents["code_agent"], "code_agent", "code_state"
+            )
 
         async def report_node(state):
-            return await agent_node(state, self.agents["report_agent"], "report_agent")
+            return await agent_node(
+                state, self.agents["report_agent"], "report_agent", "report_section"
+            )
 
         async def quality_review_node(state):
-            return await agent_node(
-                state, self.agents["quality_review_agent"], "quality_review_agent"
-            )
+            name = "quality_review_agent"
+            agent = self.agents[name]
+            logger.info(f"Processing special agent: {name}")
+            try:
+                result = await agent.ainvoke(state)
+                output_message = result.get("output")
+
+                if output_message is None:
+                    raise ValueError("Agent output is missing the 'output' key.")
+
+                # Special logic for quality review: check for "revision needed"
+                content = (
+                    output_message.content
+                    if hasattr(output_message, "content")
+                    else str(output_message)
+                )
+                needs_revision = "revision needed" in content.lower()
+                logger.info(f"Quality review updated. Needs revision: {needs_revision}")
+
+                return {
+                    "messages": state["messages"] + [output_message],
+                    "quality_review": output_message,
+                    "needs_revision": needs_revision,
+                    "sender": name,
+                }
+            except Exception as e:
+                logger.error(
+                    f"Error occurred while processing agent {name}: {str(e)}",
+                    exc_info=True,
+                )
+                error_message = AIMessage(
+                    content=f"Error in {name}: {str(e)}", name=name
+                )
+                return {"messages": state["messages"] + [error_message]}
 
         async def note_taker_node(state):
             return await note_agent_node(state, self.agents["note_agent"], "note_agent")

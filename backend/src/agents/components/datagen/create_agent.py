@@ -42,35 +42,16 @@ def list_directory_contents(directory: str = "./data_storage/") -> str:
 
 def _format_tools(tools: List[BaseTool]) -> str:
     """Format tools for inclusion in the prompt."""
-    tool_descriptions = []
+    tool_strings = []
     for tool in tools:
-        # Get tool description and parameters
-        description = tool.description or f"Tool: {tool.name}"
-
-        # Format parameters if available
-        if hasattr(tool, "args_schema") and tool.args_schema:
-            schema = tool.args_schema.schema()
-            properties = schema.get("properties", {})
-            required = schema.get("required", [])
-
-            params = []
-            for param_name, param_info in properties.items():
-                param_type = param_info.get("type", "string")
-                param_desc = param_info.get("description", "")
-                is_required = param_name in required
-                params.append(
-                    f"  - {param_name} ({param_type}{'*' if is_required else ''}): {param_desc}"
-                )
-
-            param_str = "\\n".join(params) if params else "  No parameters"
-        else:
-            param_str = "  No parameters"
-
-        tool_descriptions.append(
-            f"{tool.name}: {description}\\nParameters:\\n{param_str}"
+        args_schema = "\n".join(
+            f"  - {name} ({info.get('type')}{'*' if name in tool.args else ''}): {info.get('description')}"
+            for name, info in tool.args.items()
         )
-
-    return "\\n\\n".join(tool_descriptions)
+        tool_strings.append(
+            f"{tool.name}: {tool.description}\nParameters:\n{args_schema}"
+        )
+    return "\n\n".join(tool_strings)
 
 
 def create_agent(
@@ -82,67 +63,67 @@ def create_agent(
     """
     Create a manual agent with the given language model, tools, system message, and team members.
     """
-
     logger.info("Creating manual agent")
 
     # Ensure the daytona_list_files tool is available
     if daytona_list_files not in tools:
         tools.append(daytona_list_files)
 
-    # Prepare the tool names and team members for the system prompt
-    tool_names = ", ".join([tool.name for tool in tools])
     team_members_str = ", ".join(team_members)
-
-    # Format detailed tool descriptions
     tool_descriptions = _format_tools(tools)
-
-    # TODO: replace with daytona_list_files tool
     initial_directory_contents = ["customer_satisfaction_purchase_behavior.csv.csv"]
 
-    # Create the system prompt for the agent
-    system_prompt = (
-        "You are a specialized AI assistant in a data analysis team. "
-        "Your role is to complete specific tasks in the research process. "
-        "Use the provided tools to make progress on your task. "
-        "If you can't fully complete a task, explain what you've done and what's needed next. "
-        "Always aim for accurate and clear outputs. "
-        f"Your specific role: {system_message}\\n"
-        "Work autonomously according to your specialty, using the tools available to you. "
-        "Do not ask for clarification. "
-        "Your other team members (and other teams) will collaborate with you based on their specialties. "
-        f"You are chosen for a reason! You are one of the following team members: {team_members_str}.\\n"
-        f"The initial contents of your working directory are:\\n{initial_directory_contents}\\n"
-        "Use the daytona_list_files tool to check for updates in the directory contents when needed.\\n\\n"
-        "You have access to the following tools:\\n"
-        f"{tool_descriptions}\\n\\n"
-        "In order to use a tool, you can use <tool></tool> and <tool_input></tool_input> tags. You will then get back a response in the form <observation></observation> "
-        "For example, if you have a tool called 'search' that could search the web, in order to search for something you would respond: "
-        "<tool>search</tool><tool_input>your search query here</tool_input> "
-        "And you would get back: "
-        "<observation>Search results here...</observation>\\n"
-        "If you don't need to use a tool, respond normally without any XML tags."
-    )
+    # This is a static prompt that is fully constructed once.
+    final_system_prompt = f"""You are a specialized AI assistant in a data analysis team.
+Your role is to complete specific tasks in the research process.
+Your specific role is: {system_message}
 
-    # Define the prompt structure with placeholders for dynamic content
+Work autonomously according to your specialty, using the tools available to you. Do not ask for clarification.
+Your other team members (and other teams) will collaborate with you based on their specialties. You are one of the following team members: {team_members_str}.
+
+The initial contents of your working directory are:
+{initial_directory_contents}
+Use the daytona_list_files tool to check for updates in the directory contents when needed.
+
+TOOL USAGE INSTRUCTIONS:
+You have access to the following tools:
+{tool_descriptions}
+
+To use a tool, you MUST respond with a single XML block in the following format:
+<tool>tool_name</tool><tool_input>your input here</tool_input>
+
+You will then get back the results in an <observation> tag.
+If you do not need to use a tool, respond normally without any XML tags.
+"""
+
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", system_prompt),
+            ("system", final_system_prompt),
             MessagesPlaceholder(variable_name="messages"),
-            ("ai", "hypothesis: {hypothesis}"),
-            ("ai", "process: {process}"),
-            ("ai", "process_decision: {process_decision}"),
-            ("ai", "visualization_state: {visualization_state}"),
-            ("ai", "searcher_state: {searcher_state}"),
-            ("ai", "code_state: {code_state}"),
-            ("ai", "report_section: {report_section}"),
-            ("ai", "quality_review: {quality_review}"),
-            ("ai", "needs_revision: {needs_revision}"),
+            # The agent's state is now passed in a single, structured human message
+            # for clarity and to avoid confusing the LLM.
+            (
+                "human",
+                """
+CURRENT STATE:
+---
+Hypothesis: {hypothesis}
+Process: {process}
+Process Decision: {process_decision}
+Visualization State: {visualization_state}
+Searcher State: {searcher_state}
+Code State: {code_state}
+Report Section: {report_section}
+Quality Review: {quality_review}
+Needs Revision: {needs_revision}
+---
+Based on your role and the current state, please proceed with your task.
+""",
+            ),
         ]
     )
 
     logger.info("Manual agent created successfully")
-
-    # Return a manual agent that handles tool execution
     return ManualAgent(llm=llm, tools=tools, prompt=prompt)
 
 
