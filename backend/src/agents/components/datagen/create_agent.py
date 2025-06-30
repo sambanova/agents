@@ -94,7 +94,24 @@ You have access to the following tools:
 
 To use a tool, you MUST respond with a single XML block in the following format:
 <tool>tool_name</tool>
-<tool_input>your input here</tool_input>
+<tool_input>
+<parameter_name1>value1</parameter_name1>
+<parameter_name2>value2</parameter_name2>
+</tool_input>
+
+For example, to use daytona_create_document:
+<tool>daytona_create_document</tool>
+<tool_input>
+<points>["Point 1", "Point 2", "Point 3"]</points>
+<filename>my_document.md</filename>
+</tool_input>
+
+Or for daytona_edit_document:
+<tool>daytona_edit_document</tool>
+<tool_input>
+<filename>document.md</filename>
+<inserts>dict([(1, "New first line"), (3, "New third line")])</inserts>
+</tool_input>
 
 You will then get back the results in an <observation> tag.
 If you do not need to use a tool, respond normally without any XML tags.
@@ -219,7 +236,17 @@ You have access to the following tools:
 
 To use a tool, you MUST respond with a single XML block in the following format:
 <tool>tool_name</tool>
-<tool_input>your input here</tool_input>
+<tool_input>
+<parameter_name1>value1</parameter_name1>
+<parameter_name2>value2</parameter_name2>
+</tool_input>
+
+For example, to use daytona_create_document:
+<tool>daytona_create_document</tool>
+<tool_input>
+<points>["Point 1", "Point 2", "Point 3"]</points>
+<filename>my_document.md</filename>
+</tool_input>
 
 You will then get back the results in an <observation> tag.
 If you do not need to use a tool, respond normally without any XML tags.

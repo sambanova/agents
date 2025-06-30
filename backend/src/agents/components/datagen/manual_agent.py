@@ -32,16 +32,26 @@ class ToolExecutor:
     def invoke(self, action: ToolInvocation):
         tool = self.tools_by_name.get(action.tool)
         if tool:
-            # StructuredTool expects a single input argument
-            return tool.invoke(action.tool_input)
+            # Handle both structured parameters (dict) and simple string input
+            if isinstance(action.tool_input, dict):
+                # For structured parameters, pass as keyword arguments
+                return tool.invoke(action.tool_input)
+            else:
+                # For simple string input, pass directly
+                return tool.invoke(action.tool_input)
         else:
             return f"Tool {action.tool} not found"
 
     async def ainvoke(self, action: ToolInvocation):
         tool = self.tools_by_name.get(action.tool)
         if tool:
-            # StructuredTool expects a single input argument
-            return await tool.ainvoke(action.tool_input)
+            # Handle both structured parameters (dict) and simple string input
+            if isinstance(action.tool_input, dict):
+                # For structured parameters, pass as keyword arguments
+                return await tool.ainvoke(action.tool_input)
+            else:
+                # For simple string input, pass directly
+                return await tool.ainvoke(action.tool_input)
         else:
             return f"Tool {action.tool} not found"
 
@@ -60,6 +70,81 @@ class ManualAgent(Runnable):
         self.tool_executor = ToolExecutor(tools)
         self.name = name
         logger.info(f"ManualAgent initialized with {len(tools)} tools.")
+
+    def _parse_tool_parameters(self, tool_input_content: str) -> Dict[str, Any]:
+        """
+        Parse structured XML parameters from tool_input content.
+
+        Converts XML parameter tags like:
+        <param1>value1</param1>
+        <param2>["item1", "item2"]</param2>
+        <param3>dict([(1, "value")])</param3>
+
+        Into a dictionary of parameter names and properly typed values.
+        """
+        params = {}
+
+        # Find all parameter tags using regex
+        param_pattern = r"<(\w+)>(.*?)</\1>"
+        matches = re.findall(param_pattern, tool_input_content, re.DOTALL)
+
+        for param_name, param_value in matches:
+            param_value = param_value.strip()
+
+            # Try to parse the parameter value as appropriate Python data type
+            try:
+                # Handle list format: ["item1", "item2", "item3"]
+                if param_value.startswith("[") and param_value.endswith("]"):
+                    parsed_value = json.loads(param_value)
+                    params[param_name] = parsed_value
+
+                # Handle dict format: dict([(1, "value1"), (2, "value2")])
+                elif param_value.startswith("dict("):
+                    # Use eval for dict() format - this is safe for known patterns
+                    parsed_value = eval(param_value)
+                    params[param_name] = parsed_value
+
+                # Handle JSON object format: {"key": "value"}
+                elif param_value.startswith("{") and param_value.endswith("}"):
+                    parsed_value = json.loads(param_value)
+                    params[param_name] = parsed_value
+
+                # Handle numeric values
+                elif param_value.isdigit():
+                    params[param_name] = int(param_value)
+
+                elif param_value.replace(".", "", 1).isdigit():
+                    params[param_name] = float(param_value)
+
+                # Handle boolean values
+                elif param_value.lower() in ["true", "false"]:
+                    params[param_name] = param_value.lower() == "true"
+
+                # Handle None value
+                elif param_value.lower() == "none":
+                    params[param_name] = None
+
+                # Default to string value
+                else:
+                    params[param_name] = param_value
+
+            except (json.JSONDecodeError, SyntaxError, ValueError) as e:
+                # If parsing fails, treat as string
+                logger.warning(
+                    f"Failed to parse parameter '{param_name}' with value '{param_value}': {e}. Using as string."
+                )
+                params[param_name] = param_value
+
+        # If no structured parameters found, check for fallback to old format
+        if not params and tool_input_content:
+            # Fallback: if content doesn't contain parameter tags, treat as single string input
+            logger.info(
+                "No structured parameters found, using raw content as string input"
+            )
+            return tool_input_content
+
+        logger.info(f"Parsed tool parameters: {params}")
+        return params
 
     async def _get_llm_response(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -127,10 +212,13 @@ class ManualAgent(Runnable):
 
                 if tool_match and tool_input_match:
                     tool_name = tool_match.group(1).strip()
-                    tool_input = tool_input_match.group(1).strip()
+                    tool_input_content = tool_input_match.group(1).strip()
 
-                    # Execute the tool with the raw input
-                    action = ToolInvocation(tool=tool_name, tool_input=tool_input)
+                    # Parse structured XML parameters
+                    parsed_params = self._parse_tool_parameters(tool_input_content)
+
+                    # Execute the tool with parsed parameters
+                    action = ToolInvocation(tool=tool_name, tool_input=parsed_params)
                     tool_result = await self.tool_executor.ainvoke(action)
 
                     # Create final response with tool result
