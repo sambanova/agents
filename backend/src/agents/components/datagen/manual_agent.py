@@ -79,19 +79,13 @@ class ManualAgent(Runnable):
             # Skip 'sender' as it's not needed by the prompt template
             if key == "sender":
                 continue
-
             # Extract content from AIMessage objects
             if hasattr(value, "content"):
-                content = value.content
-                # Debug: Check if this content contains the problematic string
-                if "\\n        1" in str(content) or "{" in str(content):
-                    logger.error(f"PROBLEMATIC CONTENT in {key}: {repr(content)}")
-                # Escape curly braces to prevent template variable errors
-                template_vars[key] = content.replace("{", "{{").replace("}", "}}")
-            # For other types, convert to string and escape curly braces
+                template_vars[key] = value.content
+            # For other types, convert to string
             else:
                 str_value = str(value)
-                template_vars[key] = str_value.replace("{", "{{").replace("}", "}}")
+                template_vars[key] = str_value
 
         # Ensure all expected keys are present, even if empty
         expected_keys = [
@@ -141,10 +135,12 @@ class ManualAgent(Runnable):
 
                     # Create final response with tool result
                     final_content = f"{response.content}\n<observation>{tool_result}</observation>\n"
-                    return {"output": AIMessage(content=final_content)}
+                    return {
+                        "output": AIMessage(content=final_content, sender=self.name)
+                    }
 
             # No tool calls, return regular response
-            return {"output": AIMessage(content=response.content)}
+            return {"output": AIMessage(content=response.content, sender=self.name)}
         except Exception as e:
             logger.error(f"Error invoking LLM chain: {e}")
             # Re-raise to be handled by the calling invoke/ainvoke method

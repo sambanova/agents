@@ -74,17 +74,20 @@ def QualityReview_router(state: State) -> NodeType:
     logger.info("Entering QualityReview_router")
     messages = state.get("messages", [])
     last_message = messages[-1] if messages else None
+    message_before_revision = messages[-2] if len(messages) > 1 else None
 
     # Check if revision is needed
     if (last_message and "REVISION" in str(last_message.content)) or state.get(
         "needs_revision", False
     ):
-        previous_node = state.get("last_sender", "")
+        previous_node = (
+            message_before_revision.sender if message_before_revision else ""
+        )
         revision_routes = {
-            "Visualization": "Visualization",
-            "Search": "Search",
-            "Coder": "Coder",
-            "Report": "Report",
+            "visualization_agent": "Visualization",
+            "search_agent": "Search",
+            "code_agent": "Coder",
+            "report_agent": "Report",
         }
         result = revision_routes.get(previous_node, "NoteTaker")
         logger.info(f"Revision needed. Routing to: {result}")

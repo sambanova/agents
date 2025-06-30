@@ -1,12 +1,12 @@
 from agents.components.datagen.create_agent import (
     create_note_agent as base_create_note_agent,
 )
-from agents.components.datagen.tools.FileEdit import read_document
+from agents.components.datagen.tools.persistent_daytona import daytona_read_document
 
 
 def create_note_agent(json_llm):
     """Create the note agent"""
-    tools = [read_document]
+    tools = [daytona_read_document]
     system_prompt = """
     You are a meticulous research process note-taker. Your main responsibility is to observe, summarize, and document the actions and findings of the research team. Your tasks include:
 

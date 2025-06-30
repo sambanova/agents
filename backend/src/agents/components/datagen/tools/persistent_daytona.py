@@ -321,6 +321,172 @@ async def daytona_write_file(
 
 
 @tool
+async def daytona_create_document(
+    points: Annotated[List[str], "List of points to be included in the document"],
+    filename: Annotated[str, "Name of the file to save the document"],
+) -> str:
+    """
+    Create and save a text document in Markdown format in the persistent Daytona sandbox.
+
+    This function takes a list of points and writes them as numbered items in a Markdown file.
+    """
+    manager = await get_or_create_daytona_manager("default_user")
+
+    try:
+        # Create the markdown content with numbered points
+        content = ""
+        for i, point in enumerate(points, 1):
+            content += f"{i}. {point}\n"
+
+        # Write the document to the sandbox
+        result = await manager.write_file(filename, content)
+        logger.info(
+            "Document created successfully in sandbox",
+            filename=filename,
+            points_count=len(points),
+        )
+        return f"Document '{filename}' created successfully in sandbox with {len(points)} points"
+
+    except Exception as e:
+        logger.error(
+            "Error creating document in sandbox", filename=filename, error=str(e)
+        )
+        return f"Error creating document '{filename}': {str(e)}"
+
+
+@tool
+async def daytona_read_document(
+    filename: Annotated[str, "Name of the file to read"],
+    start: Annotated[Optional[int], "Starting line number to read from"] = None,
+    end: Annotated[Optional[int], "Ending line number to read to"] = None,
+) -> str:
+    """
+    Read the document from the persistent Daytona sandbox.
+
+    This function reads the specified file from the sandbox and returns its content.
+    Optionally, it can return a specific range of lines.
+
+    Args:
+        filename: Name of the file to read
+        start: Starting line number to read from (0-based indexing)
+        end: Ending line number to read to (exclusive)
+
+    Returns:
+        str: The content of the document or an error message.
+    """
+    manager = await get_or_create_daytona_manager("default_user")
+
+    try:
+        # Read the file content from sandbox
+        content = await manager.read_file(filename)
+
+        # Check if file read was successful (not an error message)
+        if content.startswith("Error reading file"):
+            return content
+
+        # Split content into lines for range reading
+        lines = content.splitlines()
+
+        # Handle line range selection
+        if start is None:
+            start = 0
+
+        # Get the specified range of lines
+        selected_lines = lines[start:end]
+        result_content = "\n".join(selected_lines)
+
+        logger.info(
+            "Document read successfully from sandbox",
+            filename=filename,
+            total_lines=len(lines),
+            lines_returned=len(selected_lines),
+            start=start,
+            end=end,
+        )
+
+        return result_content
+
+    except Exception as e:
+        logger.error(
+            "Error reading document from sandbox", filename=filename, error=str(e)
+        )
+        return f"Error reading document '{filename}': {str(e)}"
+
+
+@tool
+async def daytona_edit_document(
+    filename: Annotated[str, "Name of the file to edit"],
+    inserts: Annotated[Dict[int, str], "Dictionary of line numbers and text to insert"],
+) -> str:
+    """
+    Edit the document in the persistent Daytona sandbox by inserting text at specific line numbers.
+
+    This function reads the existing file, inserts new text at specified line numbers,
+    and saves the modified document back to the sandbox.
+
+    Args:
+        filename (str): Name of the file to edit.
+        inserts (Dict[int, str]): Dictionary where keys are line numbers (1-based) and values are text to insert.
+
+    Returns:
+        str: A message indicating the result of the operation.
+
+    Example:
+        inserts = dict([(1, "This is the first line to insert."), (3, "This is the third line to insert.")])
+        result = await daytona_edit_document(filename="document.md", inserts=inserts)
+    """
+    manager = await get_or_create_daytona_manager("default_user")
+
+    try:
+        # Read the existing file content from sandbox
+        content = await manager.read_file(filename)
+
+        # Check if file read was successful (not an error message)
+        if content.startswith("Error reading file"):
+            return f"Error: Could not read existing document. {content}"
+
+        # Split content into lines (preserve line endings)
+        lines = content.splitlines(keepends=True)
+
+        # Convert to list without line endings for easier processing
+        lines_no_endings = [line.rstrip("\n\r") for line in lines]
+
+        # Sort inserts by line number to process from top to bottom
+        sorted_inserts = sorted(inserts.items())
+
+        # Process inserts in reverse order to maintain line numbering
+        for line_number, text in reversed(sorted_inserts):
+            if 1 <= line_number <= len(lines_no_endings) + 1:
+                # Insert at the specified line (convert from 1-based to 0-based indexing)
+                lines_no_endings.insert(line_number - 1, text)
+            else:
+                logger.error(f"Line number out of range: {line_number}")
+                return f"Error: Line number {line_number} is out of range. Document has {len(lines_no_endings)} lines."
+
+        # Reconstruct the content with newlines
+        modified_content = "\n".join(lines_no_endings)
+
+        # Write the modified content back to the sandbox
+        result = await manager.write_file(filename, modified_content)
+
+        logger.info(
+            "Document edited successfully in sandbox",
+            filename=filename,
+            original_lines=len(lines),
+            final_lines=len(lines_no_endings),
+            inserts_count=len(inserts),
+        )
+
+        return f"Document '{filename}' edited successfully in sandbox. Added {len(inserts)} insertions."
+
+    except Exception as e:
+        logger.error(
+            "Error editing document in sandbox", filename=filename, error=str(e)
+        )
+        return f"Error editing document '{filename}': {str(e)}"
+
+
+@tool
 async def daytona_describe_data(
     filename: Annotated[str, "Name of the file to describe"],
 ) -> str:
