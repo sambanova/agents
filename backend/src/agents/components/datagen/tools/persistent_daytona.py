@@ -5,6 +5,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 import structlog
+from agents.utils.code_validator import patch_plot_code_str, strip_markdown_code_blocks
 
 # Import Daytona SDK components - using sync versions
 from daytona_sdk import AsyncDaytona as DaytonaClient
@@ -132,9 +133,49 @@ class PersistentDaytonaManager:
 
         try:
             logger.info("Executing code in persistent sandbox", code_preview=code[:100])
-            result = await self._sandbox.process.code_run(code)
+
+            # Strip markdown formatting before processing
+            clean_code = strip_markdown_code_blocks(code)
+
+            # Validate the cleaned code
+            if not clean_code or len(clean_code.strip()) < 3:
+                return "Error: No valid code found after processing input. Please provide valid Python code."
+
+            # Enhanced logging for debugging
+            logger.info(
+                "Processing code for execution",
+                original_length=len(code),
+                cleaned_length=len(clean_code),
+                first_100_chars=clean_code[:100],
+            )
+
+            patched_code, expected_filenames = patch_plot_code_str(clean_code)
+
+            # Execute the code with timeout and error handling
+            try:
+                response = await self._sandbox.process.code_run(patched_code)
+            except Exception as exec_error:
+                logger.error(
+                    "Code execution failed in sandbox",
+                    error=str(exec_error),
+                    exc_info=True,
+                )
+                return f"Error during code execution: {str(exec_error)}"
+
+            # Ensure result is a string, even if None or other types
+            result_str = str(response.result) if response.result is not None else ""
+
+            if response.exit_code != 0:
+                error_detail = result_str
+                logger.error(
+                    "Daytona code execution failed",
+                    exit_code=response.exit_code,
+                    error_detail=error_detail,
+                    original_code_preview=code[:200],
+                )
+                return f"Error (Exit Code {response.exit_code}): {error_detail}"
             logger.info("Code executed successfully")
-            return result.result
+            return result_str
 
         except Exception as e:
             logger.error(
@@ -231,7 +272,6 @@ async def get_or_create_daytona_manager(
     """Get or create the global Daytona manager."""
     global _daytona_manager
 
-    data_sources = ["~/Downloads/customer_satisfaction_purchase_behavior.csv.csv"]
     if _daytona_manager is None:
         _daytona_manager = await PersistentDaytonaManager.initialize(
             user_id, redis_storage, data_sources=data_sources

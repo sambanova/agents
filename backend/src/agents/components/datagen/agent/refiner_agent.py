@@ -40,4 +40,4 @@ def create_refiner_agent(power_llm, members):
 
     After refining the report, submit it for final human review, ensuring it is ready for publication or presentation.
     """
-    return create_agent(power_llm, tools, system_prompt, members)
+    return create_agent(power_llm, tools, system_prompt, members, "refiner_agent")

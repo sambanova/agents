@@ -33,4 +33,4 @@ def create_search_agent(llm, members):
     - Present information in an organized format, with clear attributions to sources.
     - Evaluate the credibility of sources and prioritize high-quality, reliable information.
     """
-    return create_agent(llm, tools, system_prompt, members)
+    return create_agent(llm, tools, system_prompt, members, "search_agent")

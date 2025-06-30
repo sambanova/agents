@@ -30,7 +30,7 @@ class State(TypedDict):
     process: str = ""
 
     # next process
-    process_decision: SupervisorDecision = None
+    process_decision: str = ""
 
     # The current state of data visualization planning and execution
     visualization_state: str = ""

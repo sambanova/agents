@@ -32,6 +32,7 @@ class ToolExecutor:
     def invoke(self, action: ToolInvocation):
         tool = self.tools_by_name.get(action.tool)
         if tool:
+            # StructuredTool expects a single input argument
             return tool.invoke(action.tool_input)
         else:
             return f"Tool {action.tool} not found"
@@ -39,6 +40,7 @@ class ToolExecutor:
     async def ainvoke(self, action: ToolInvocation):
         tool = self.tools_by_name.get(action.tool)
         if tool:
+            # StructuredTool expects a single input argument
             return await tool.ainvoke(action.tool_input)
         else:
             return f"Tool {action.tool} not found"
@@ -49,14 +51,17 @@ class ManualAgent(Runnable):
     A manual agent that parses and executes tool calls using XML tags (like xml_agent).
     """
 
-    def __init__(self, llm, tools: List[BaseTool], prompt: ChatPromptTemplate):
+    def __init__(
+        self, llm, tools: List[BaseTool], prompt: ChatPromptTemplate, name: str
+    ):
         self.llm = llm
         self.tools = {tool.name: tool for tool in tools}
         self.prompt = prompt
         self.tool_executor = ToolExecutor(tools)
+        self.name = name
         logger.info(f"ManualAgent initialized with {len(tools)} tools.")
 
-    def _get_llm_response(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    async def _get_llm_response(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
         Get response from LLM, parse it for tool calls, and return the final output
         dictionary.
@@ -71,16 +76,22 @@ class ManualAgent(Runnable):
             if key == "messages":
                 template_vars[key] = value
                 continue
+            # Skip 'sender' as it's not needed by the prompt template
+            if key == "sender":
+                continue
 
-            # Extract content from AIMessage or SupervisorDecision objects
+            # Extract content from AIMessage objects
             if hasattr(value, "content"):
-                template_vars[key] = value.content
-            # Handle SupervisorDecision specifically if it has a 'decision' attribute
-            elif hasattr(value, "decision"):
-                template_vars[key] = value.decision
-            # For other types, convert to string
+                content = value.content
+                # Debug: Check if this content contains the problematic string
+                if "\\n        1" in str(content) or "{" in str(content):
+                    logger.error(f"PROBLEMATIC CONTENT in {key}: {repr(content)}")
+                # Escape curly braces to prevent template variable errors
+                template_vars[key] = content.replace("{", "{{").replace("}", "}}")
+            # For other types, convert to string and escape curly braces
             else:
-                template_vars[key] = str(value)
+                str_value = str(value)
+                template_vars[key] = str_value.replace("{", "{{").replace("}", "}}")
 
         # Ensure all expected keys are present, even if empty
         expected_keys = [
@@ -98,15 +109,44 @@ class ManualAgent(Runnable):
             if key not in template_vars:
                 template_vars[key] = ""
 
+        # Debug logging to identify problematic template variables
+        for key, value in template_vars.items():
+            if isinstance(value, str) and ("{" in value or "}" in value):
+                logger.warning(
+                    f"Template variable '{key}' contains curly braces: {repr(value)}"
+                )
+
         try:
-            response = chain.invoke(template_vars)
-            # The _parse_llm_output method will return either a ToolCall or an AIMessage.
-            # This is then wrapped in the dictionary structure expected by the graph.
-            output = self._parse_llm_output(response.content)
-            return {"output": output}
+            response = await chain.ainvoke(template_vars)
+
+            # Check if response contains tool calls and execute them
+            if "<tool>" in response.content:
+                # Parse tool call from XML
+                tool_match = re.search(
+                    r"<tool>(.*?)</tool>", response.content, re.DOTALL
+                )
+
+                # Handle both closed and unclosed tool_input tags
+                tool_input_match = re.search(
+                    r"<tool_input>(.*?)(?:</tool_input>|$)", response.content, re.DOTALL
+                )
+
+                if tool_match and tool_input_match:
+                    tool_name = tool_match.group(1).strip()
+                    tool_input = tool_input_match.group(1).strip()
+
+                    # Execute the tool with the raw input
+                    action = ToolInvocation(tool=tool_name, tool_input=tool_input)
+                    tool_result = await self.tool_executor.ainvoke(action)
+
+                    # Create final response with tool result
+                    final_content = f"{response.content}\n<observation>{tool_result}</observation>\n"
+                    return {"output": AIMessage(content=final_content)}
+
+            # No tool calls, return regular response
+            return {"output": AIMessage(content=response.content)}
         except Exception as e:
             logger.error(f"Error invoking LLM chain: {e}")
-            logger.error(f"Template variables: {template_vars}")
             # Re-raise to be handled by the calling invoke/ainvoke method
             raise
 
@@ -115,29 +155,7 @@ class ManualAgent(Runnable):
         Asynchronously invokes the agent with the given state.
         The logic is now fully encapsulated in _get_llm_response.
         """
-        return await asyncio.to_thread(self._get_llm_response, state)
-
-    def _parse_llm_output(self, response: str) -> Union[ToolCall, AIMessage]:
-        """Parse the LLM output to find a tool call."""
-        # Post-process response to catch potential formatting issues from the LLM
-        if "<tool>" in response and "</tool>" not in response:
-            response += "</tool>"
-        elif "<tool_input>" in response and "</tool_input>" not in response:
-            response += "</tool_input>"
-
-        tool_match = re.search(r"<tool>(.*?)</tool>", response, re.DOTALL)
-        tool_input_match = re.search(
-            r"<tool_input>(.*?)</tool_input>", response, re.DOTALL
-        )
-
-        if tool_match and tool_input_match:
-            tool_name = tool_match.group(1).strip()
-            tool_input = tool_input_match.group(1).strip()
-            # Generate a random ID for the tool call
-            tool_call_id = f"call_{''.join(random.choices(string.ascii_letters + string.digits, k=24))}"
-            return ToolCall(name=tool_name, args={"query": tool_input}, id=tool_call_id)
-
-        return AIMessage(content=response)
+        return await self._get_llm_response(state)
 
     def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
         raise NotImplementedError(

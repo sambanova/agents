@@ -19,4 +19,4 @@ def create_quality_review_agent(llm, members):
 
     After your review, if revisions are needed, respond with 'REVISION' as a prefix, set needs_revision=True, and provide specific feedback on parts that need improvement. If no revisions are necessary, respond with 'CONTINUE' as a prefix and set needs_revision=False.
     """
-    return create_agent(llm, tools, system_prompt, members)
+    return create_agent(llm, tools, system_prompt, members, "quality_review_agent")

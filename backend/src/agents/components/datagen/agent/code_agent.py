@@ -14,8 +14,6 @@ def create_code_agent(power_llm, members):
     tools = [
         daytona_execute_code,
         daytona_list_files,
-        daytona_read_file,
-        daytona_write_file,
         daytona_describe_data,
     ]
 
@@ -30,8 +28,6 @@ def create_code_agent(power_llm, members):
     **Available Tools:**
     - daytona_execute_code: Execute Python code in the persistent sandbox
     - daytona_list_files: List files in the sandbox directory
-    - daytona_read_file: Read content from files in the sandbox
-    - daytona_write_file: Write content to files in the sandbox
     - daytona_describe_data: Analyze CSV data with encoding detection and detailed structure analysis
 
     Constraints:
@@ -42,4 +38,4 @@ def create_code_agent(power_llm, members):
     - Use daytona_describe_data to analyze CSV files before processing them.
     """
 
-    return create_agent(power_llm, tools, system_prompt, members)
+    return create_agent(power_llm, tools, system_prompt, members, "code_agent")

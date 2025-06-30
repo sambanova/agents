@@ -26,4 +26,4 @@ def create_visualization_agent(llm, members):
     - Ensure all visual elements are suitable for the target audience, with attention to color schemes and design principles.
     - Avoid over-complicating visualizations; aim for clarity and simplicity.
     """
-    return create_agent(llm, tools, system_prompt, members)
+    return create_agent(llm, tools, system_prompt, members, "visualization_agent")

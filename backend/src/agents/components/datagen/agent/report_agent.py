@@ -24,4 +24,4 @@ def create_report_agent(power_llm, members):
     - Maintain an objective, academic tone throughout the report.
     - Cite all sources using APA style and ensure that all findings are supported by evidence.
     """
-    return create_agent(power_llm, tools, system_prompt, members)
+    return create_agent(power_llm, tools, system_prompt, members, "report_agent")

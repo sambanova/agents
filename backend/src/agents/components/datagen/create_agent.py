@@ -13,6 +13,8 @@ from langchain.output_parsers.openai_functions import JsonOutputFunctionsParser
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.tools import tool
 from langchain_core.language_models.base import LanguageModelLike
+from langchain_core.messages import AIMessage
+from langchain_core.runnables import RunnableLambda
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
@@ -59,6 +61,7 @@ def create_agent(
     tools: list,
     system_message: str,
     team_members: list[str],
+    name: str,
 ) -> ManualAgent:
     """
     Create a manual agent with the given language model, tools, system message, and team members.
@@ -71,7 +74,7 @@ def create_agent(
 
     team_members_str = ", ".join(team_members)
     tool_descriptions = _format_tools(tools)
-    initial_directory_contents = ["customer_satisfaction_purchase_behavior.csv.csv"]
+    directory_contents_str = "customer_satisfaction_purchase_behavior.csv"
 
     # This is a static prompt that is fully constructed once.
     final_system_prompt = f"""You are a specialized AI assistant in a data analysis team.
@@ -82,7 +85,7 @@ Work autonomously according to your specialty, using the tools available to you.
 Your other team members (and other teams) will collaborate with you based on their specialties. You are one of the following team members: {team_members_str}.
 
 The initial contents of your working directory are:
-{initial_directory_contents}
+{directory_contents_str}
 Use the daytona_list_files tool to check for updates in the directory contents when needed.
 
 TOOL USAGE INSTRUCTIONS:
@@ -90,7 +93,8 @@ You have access to the following tools:
 {tool_descriptions}
 
 To use a tool, you MUST respond with a single XML block in the following format:
-<tool>tool_name</tool><tool_input>your input here</tool_input>
+<tool>tool_name</tool>
+<tool_input>your input here</tool_input>
 
 You will then get back the results in an <observation> tag.
 If you do not need to use a tool, respond normally without any XML tags.
@@ -124,7 +128,7 @@ Based on your role and the current state, please proceed with your task.
     )
 
     logger.info("Manual agent created successfully")
-    return ManualAgent(llm=llm, tools=tools, prompt=prompt)
+    return ManualAgent(llm=llm, tools=tools, prompt=prompt, name=name)
 
 
 def create_supervisor(
@@ -168,6 +172,11 @@ def create_supervisor(
     # Log successful creation of supervisor
     logger.info("Supervisor created successfully")
 
+    def wrap_supervisor_output(decision):
+        # Convert SupervisorDecision to a simple AIMessage with structured content
+        decision_content = f"Decision: {decision.next}, Task: {decision.task}"
+        return {"output": AIMessage(content=decision_content)}
+
     return (
         prompt
         | llm
@@ -175,6 +184,7 @@ def create_supervisor(
             llm=llm,
             parser=supervisor_parser,
         )
+        | wrap_supervisor_output
     )
 
 
@@ -192,6 +202,9 @@ def create_note_agent(
     parser = PydanticOutputParser(pydantic_object=NoteState)
     output_format = parser.get_format_instructions()
 
+    # Format tools for the note agent
+    tool_descriptions = _format_tools(tools)
+
     # Enhanced system prompt for JSON output with tool capabilities
     enhanced_system_prompt = f"""{system_prompt}
 
@@ -200,11 +213,16 @@ You are a meticulous research process note-taker with access to tools for readin
 IMPORTANT: You must format your response as a JSON object with the following structure:
 {output_format}
 
-TOOL USAGE:
-You can use tools when you need to read documents or gather information. Use XML tags for tool calls:
-<tool>tool_name</tool><tool_input>your input here</tool_input>
+TOOL USAGE INSTRUCTIONS:
+You have access to the following tools:
+{tool_descriptions}
 
-After using tools, you'll receive results in <observation></observation> tags. Then provide your final JSON response.
+To use a tool, you MUST respond with a single XML block in the following format:
+<tool>tool_name</tool>
+<tool_input>your input here</tool_input>
+
+You will then get back the results in an <observation> tag.
+If you do not need to use a tool, respond normally without any XML tags.
 
 RESPONSE FORMAT:
 Always end your response with a valid JSON object that matches the required structure above. Do not include any text after the JSON object.
@@ -220,7 +238,4 @@ Always end your response with a valid JSON object that matches the required stru
     )
 
     logger.info("Manual note agent created successfully")
-    return ManualAgent(llm=llm, tools=tools, prompt=prompt)
-
-
-logger.info("Agent creation module initialized")
+    return ManualAgent(llm=llm, tools=tools, prompt=prompt, name="note_agent")

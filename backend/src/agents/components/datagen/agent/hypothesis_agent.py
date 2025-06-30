@@ -29,4 +29,4 @@ def create_hypothesis_agent(llm, members):
     Just answer a research hypothesis.
     """
 
-    return create_agent(llm, base_tools, system_prompt, members)
+    return create_agent(llm, base_tools, system_prompt, members, "hypothesis_agent")
