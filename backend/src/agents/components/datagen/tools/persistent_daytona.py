@@ -4,13 +4,14 @@ import os
 import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import structlog
 
 # Import Daytona SDK components
-from daytona_sdk import DaytonaClient, DaytonaSDKConfig
-from daytona_sdk.models import CreateSandboxFromSnapshotParams
+from daytona_sdk import AsyncDaytona as DaytonaClient
+from daytona_sdk import CreateSandboxFromSnapshotParams
+from daytona_sdk import DaytonaConfig as DaytonaSDKConfig
 from langchain.tools import tool
 from pydantic import BaseModel, Field
 from typing_extensions import Annotated
@@ -40,8 +41,21 @@ class PersistentDaytonaManager:
         user_id: str,
         redis_storage: Optional[Any] = None,
         snapshot: str = "data-analysis:0.0.8",
+        data_sources: Optional[Dict[str, Any]] = None,
     ) -> "PersistentDaytonaManager":
-        """Initialize the persistent Daytona client and sandbox."""
+        """
+        Initialize the persistent Daytona client and sandbox.
+
+        Args:
+            user_id: User identifier for the session
+            redis_storage: Redis storage instance for file management
+            snapshot: Daytona snapshot to use for the sandbox
+            data_sources: Dictionary containing data to upload to sandbox root folder.
+                         Can contain:
+                         - 'files': List of file paths to upload
+                         - 'directories': List of directory paths to upload
+                         - 'content': Dict of filename -> content strings to create
+        """
         instance = cls()
 
         if instance._client is None:
@@ -67,7 +81,109 @@ class PersistentDaytonaManager:
                 user_id=user_id,
             )
 
+            # Upload data to sandbox root folder if provided
+            if data_sources:
+                await instance._upload_data_sources(data_sources)
+
         return instance
+
+    async def _upload_data_sources(self, data_sources: Dict[str, Any]) -> None:
+        """Upload data sources to the sandbox root folder."""
+        logger.info(
+            "Uploading data sources to sandbox",
+            data_sources_keys=list(data_sources.keys()),
+        )
+
+        try:
+            # Upload individual files
+            if "files" in data_sources:
+                for file_path in data_sources["files"]:
+                    await self._upload_file_to_sandbox(file_path)
+
+            # Upload directories
+            if "directories" in data_sources:
+                for dir_path in data_sources["directories"]:
+                    await self._upload_directory_to_sandbox(dir_path)
+
+            # Create files from content
+            if "content" in data_sources:
+                for filename, content in data_sources["content"].items():
+                    await self.write_file(filename, content)
+                    logger.info("Created file from content", filename=filename)
+
+            logger.info("Data sources uploaded successfully")
+
+        except Exception as e:
+            logger.error("Error uploading data sources", error=str(e), exc_info=True)
+            raise
+
+    async def _upload_file_to_sandbox(self, file_path: str) -> None:
+        """Upload a single file to the sandbox root folder."""
+        if not os.path.exists(file_path):
+            logger.warning("File not found, skipping", file_path=file_path)
+            return
+
+        try:
+            filename = os.path.basename(file_path)
+
+            with open(file_path, "rb") as f:
+                content = f.read()
+
+            # Try to decode as text, fallback to binary upload
+            try:
+                text_content = content.decode("utf-8")
+                await self.write_file(filename, text_content)
+                logger.info(
+                    "Uploaded text file", filename=filename, source_path=file_path
+                )
+            except UnicodeDecodeError:
+                # For binary files, upload directly
+                await self._sandbox.fs.upload_file(filename, content)
+                logger.info(
+                    "Uploaded binary file", filename=filename, source_path=file_path
+                )
+
+        except Exception as e:
+            logger.error("Error uploading file", file_path=file_path, error=str(e))
+            raise
+
+    async def _upload_directory_to_sandbox(self, dir_path: str) -> None:
+        """Upload all files from a directory to the sandbox root folder."""
+        if not os.path.exists(dir_path) or not os.path.isdir(dir_path):
+            logger.warning("Directory not found, skipping", dir_path=dir_path)
+            return
+
+        try:
+            for root, dirs, files in os.walk(dir_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    # Create relative path for sandbox
+                    rel_path = os.path.relpath(file_path, dir_path)
+
+                    with open(file_path, "rb") as f:
+                        content = f.read()
+
+                    # Try to decode as text, fallback to binary upload
+                    try:
+                        text_content = content.decode("utf-8")
+                        await self.write_file(rel_path, text_content)
+                        logger.info(
+                            "Uploaded text file from directory",
+                            filename=rel_path,
+                            source_path=file_path,
+                        )
+                    except UnicodeDecodeError:
+                        # For binary files, upload directly
+                        await self._sandbox.fs.upload_file(rel_path, content)
+                        logger.info(
+                            "Uploaded binary file from directory",
+                            filename=rel_path,
+                            source_path=file_path,
+                        )
+
+        except Exception as e:
+            logger.error("Error uploading directory", dir_path=dir_path, error=str(e))
+            raise
 
     async def execute_code(self, code: str) -> str:
         """Execute code in the persistent sandbox."""
@@ -263,13 +379,15 @@ _daytona_manager: Optional[PersistentDaytonaManager] = None
 
 
 async def get_or_create_daytona_manager(
-    user_id: str, redis_storage: Optional[Any] = None
+    user_id: str,
+    redis_storage: Optional[Any] = None,
+    data_sources: Optional[Dict[str, Any]] = None,
 ) -> PersistentDaytonaManager:
     """Get or create the global Daytona manager."""
     global _daytona_manager
     if _daytona_manager is None:
         _daytona_manager = await PersistentDaytonaManager.initialize(
-            user_id, redis_storage
+            user_id, redis_storage, data_sources=data_sources
         )
     return _daytona_manager
 
@@ -396,14 +514,55 @@ async def cleanup_persistent_daytona():
 
 # Context manager for automatic cleanup
 @asynccontextmanager
-async def persistent_daytona_context(user_id: str, redis_storage: Optional[Any] = None):
-    """Context manager for persistent Daytona usage with automatic cleanup."""
-    manager = None
+async def persistent_daytona_context(
+    user_id: str,
+    redis_storage: Optional[Any] = None,
+    data_sources: Optional[Dict[str, Any]] = None,
+):
+    """Context manager for persistent Daytona lifecycle management."""
+    manager = await PersistentDaytonaManager.initialize(
+        user_id, redis_storage, data_sources=data_sources
+    )
     try:
-        manager = await get_or_create_daytona_manager(user_id, redis_storage)
         yield manager
     finally:
-        if manager:
-            await manager.cleanup()
-            global _daytona_manager
-            _daytona_manager = None
+        await manager.cleanup()
+
+
+# Helper function to create data sources configuration
+def create_data_sources_config(
+    files: Optional[List[str]] = None,
+    directories: Optional[List[str]] = None,
+    content: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    """
+    Helper function to create data_sources configuration for PersistentDaytonaManager.
+
+    Args:
+        files: List of file paths to upload to sandbox root
+        directories: List of directory paths to upload to sandbox root
+        content: Dictionary of filename -> content to create in sandbox
+
+    Returns:
+        Dictionary formatted for use with PersistentDaytonaManager.initialize()
+
+    Example:
+        # Upload specific files and create a config file
+        data_sources = create_data_sources_config(
+            files=['/path/to/data.csv', '/path/to/script.py'],
+            directories=['/path/to/datasets'],
+            content={'config.json': '{"setting": "value"}'}
+        )
+    """
+    config = {}
+
+    if files:
+        config["files"] = files
+
+    if directories:
+        config["directories"] = directories
+
+    if content:
+        config["content"] = content
+
+    return config if config else None

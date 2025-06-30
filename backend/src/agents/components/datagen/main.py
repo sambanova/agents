@@ -1,8 +1,16 @@
 import os
 
+import structlog
+from agents.components.datagen.node import setup_language_models
+from agents.components.datagen.state import State
+from agents.components.datagen.tools.persistent_daytona import (
+    create_data_sources_config,
+)
 from agents.components.datagen.workflow import WorkflowManager
-from agents.utils.llms import get_fireworks_llm, get_sambanova_llm
+from agents.utils.llms import get_fireworks_llm, get_langmodels, get_sambanova_llm
 from langchain_core.messages import HumanMessage
+
+logger = structlog.get_logger(__name__)
 
 
 def setup_language_models():
@@ -84,58 +92,64 @@ async def main_with_persistent_daytona(
     working_directory: str = "./data",
     thread_id: str = "1",
     redis_storage=None,
+    data_sources=None,
 ):
     """
     Main method to run the datagen workflow with persistent Daytona client
 
     Args:
-        user_input (str): The user's input/query
-        user_id (str): User ID for the Daytona session
-        working_directory (str): Directory for file operations
-        thread_id (str): Thread ID for conversation tracking
+        user_input: User's query or request
+        user_id: User identifier for the session
+        working_directory: Directory for storing workflow data
+        thread_id: Thread identifier for the conversation
         redis_storage: Redis storage instance (optional)
-    """
-    try:
-        # Set up language models
-        print("Setting up language models...")
-        language_models = setup_language_models()
+        data_sources: Data sources to upload to sandbox root folder (optional)
+                     Can contain:
+                     - 'files': List of file paths to upload
+                     - 'directories': List of directory paths to upload
+                     - 'content': Dict of filename -> content strings to create
 
-        # Create workflow manager
-        print("Creating workflow manager...")
-        workflow_manager = WorkflowManager(language_models, working_directory)
+    Example usage:
+        # Basic usage
+        async for event in main_with_persistent_daytona("Analyze the data"):
+            print(event)
 
-        # Initial state
-        initial_state = {
-            "messages": [HumanMessage(content=user_input)],
-            "hypothesis": "",
-            "process_decision": "",
-            "process": "",
-            "visualization_state": "",
-            "searcher_state": "",
-            "code_state": "",
-            "report_section": "",
-            "quality_review": "",
-            "needs_revision": False,
-            "sender": "",
-        }
-
-        # Configuration
-        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 3000}
-
-        print(f"Starting workflow with persistent Daytona for user: {user_id}")
-        print(f"Input: {user_input}")
-        print("-" * 50)
-
-        # Run workflow with persistent Daytona
-        async for event in workflow_manager.run_with_persistent_daytona(
-            initial_state, config, user_id, redis_storage
+        # With data upload
+        data_sources = create_data_sources_config(
+            files=['/path/to/sales_data.csv'],
+            directories=['/path/to/datasets'],
+            content={'analysis_config.json': '{"type": "sales", "period": "Q1"}'}
+        )
+        async for event in main_with_persistent_daytona(
+            "Analyze the sales data",
+            data_sources=data_sources
         ):
-            print(f"Event: {event}")
-            print("-" * 30)
+            print(event)
+    """
+
+    # Initialize language models
+    language_models = setup_language_models()
+
+    # Create workflow manager
+    manager = WorkflowManager(language_models, working_directory)
+
+    # Create initial state
+    initial_state = State(messages=[("user", user_input)])
+
+    # Configuration for the thread
+    config = {"configurable": {"thread_id": thread_id}}
+
+    try:
+        # Run workflow with persistent Daytona
+        async for event in manager.run_with_persistent_daytona(
+            initial_state, config, user_id, redis_storage, data_sources
+        ):
+            yield event
 
     except Exception as e:
-        print(f"Error running workflow: {e}")
-        raise
+        logger.error("Error in datagen workflow", error=str(e), exc_info=True)
+        error_state = State(messages=[("assistant", f"Error occurred: {str(e)}")])
+        yield error_state
 
 
 if __name__ == "__main__":

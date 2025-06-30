@@ -227,11 +227,13 @@ class WorkflowManager:
         """Return the compiled workflow graph"""
         return self.graph
 
-    async def initialize_persistent_daytona(self, user_id: str, redis_storage=None):
+    async def initialize_persistent_daytona(
+        self, user_id: str, redis_storage=None, data_sources=None
+    ):
         """Initialize the persistent Daytona client for the workflow."""
         try:
             self.daytona_manager = await PersistentDaytonaManager.initialize(
-                user_id=user_id, redis_storage=redis_storage
+                user_id=user_id, redis_storage=redis_storage, data_sources=data_sources
             )
             logger.info("Persistent Daytona client initialized for workflow")
             return True
@@ -250,7 +252,7 @@ class WorkflowManager:
                 logger.error(f"Error cleaning up persistent Daytona: {e}")
 
     async def run_with_persistent_daytona(
-        self, initial_state, config, user_id: str, redis_storage=None
+        self, initial_state, config, user_id: str, redis_storage=None, data_sources=None
     ):
         """
         Run the workflow with persistent Daytona client.
@@ -260,12 +262,13 @@ class WorkflowManager:
             config: Configuration for the workflow
             user_id: User ID for the Daytona session
             redis_storage: Redis storage instance (optional)
+            data_sources: Data sources to upload to sandbox root folder (optional)
 
         Returns:
             Generator of events from the workflow
         """
         # Initialize persistent Daytona
-        await self.initialize_persistent_daytona(user_id, redis_storage)
+        await self.initialize_persistent_daytona(user_id, redis_storage, data_sources)
 
         try:
             # Run the workflow
