@@ -50,7 +50,8 @@
         <div v-if="messagesData.length == 0" class="w-full text-center">
           <h1 v-if="!initialLoading" class="text-3xl font-bold sm:text-3xl">
             <span class="bg-clip-text text-primary-brandTextSecondary">
-              What can I help you with?
+              Hey {{ userFirstName || 'there' }},<br />
+              What can I help you with today?
             </span>
           </h1>
         </div>
@@ -585,7 +586,7 @@ import ChatBubble from '@/components/ChatMain/ChatBubble.vue';
 import ChatLoaderBubble from '@/components/ChatMain/ChatLoaderBubble.vue';
 const router = useRouter();
 const route = useRoute();
-import { useAuth } from '@clerk/vue';
+import { useAuth, useUser } from '@clerk/vue';
 import { decryptKey } from '../../utils/encryption';
 import Tooltip from '@/components/Common/UIComponents/CustomTooltip.vue';
 
@@ -603,6 +604,15 @@ import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.v
 import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue';
 import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue';
 import { isFinalAgentType, shouldExcludeFromGrouping } from '@/utils/globalFunctions.js';
+
+// Access Clerk user for personalization
+const { user } = useUser();
+const userFirstName = computed(() => {
+  if (user && user.value) {
+    return user.value.firstName || user.value.first_name || '';
+  }
+  return '';
+});
 
 // Inject the shared selectedOption from MainLayout.vue.
 const selectedOption = inject('selectedOption');
