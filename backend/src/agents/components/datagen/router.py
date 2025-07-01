@@ -1,5 +1,5 @@
 import json
-import logging
+import structlog
 import re
 from typing import Dict, List, Literal, Optional, Union
 
@@ -7,7 +7,7 @@ from agents.components.datagen.state import State, SupervisorDecision
 from langchain_core.messages import AIMessage
 
 # Set up logger
-logger = logging.getLogger(__name__)
+logger = structlog.getLogger(__name__)
 
 # Define types for node routing
 NodeType = Literal[

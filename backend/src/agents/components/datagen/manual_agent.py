@@ -146,10 +146,9 @@ class ManualAgent(Runnable):
         logger.info(f"Parsed tool parameters: {params}")
         return params
 
-    async def _get_llm_response(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    async def _get_llm_response(self, state: Dict[str, Any]) -> AIMessage:
         """
-        Get response from LLM, parse it for tool calls, and return the final output
-        dictionary.
+        Get response from LLM, parse it for tool calls, and return the final AIMessage.
         """
         llm_with_stop = self.llm.bind(stop=["</tool_input>", "<observation>"])
         chain = self.prompt | llm_with_stop
@@ -188,13 +187,6 @@ class ManualAgent(Runnable):
             if key not in template_vars:
                 template_vars[key] = ""
 
-        # Debug logging to identify problematic template variables
-        for key, value in template_vars.items():
-            if isinstance(value, str) and ("{" in value or "}" in value):
-                logger.warning(
-                    f"Template variable '{key}' contains curly braces: {repr(value)}"
-                )
-
         try:
             response = await chain.ainvoke(template_vars)
 
@@ -218,30 +210,31 @@ class ManualAgent(Runnable):
                     parsed_params = self._parse_tool_parameters(tool_input_content)
 
                     # Execute the tool with parsed parameters
+                    logger.info(
+                        f"Executing tool {tool_name} with parameters {parsed_params} in {self.name}"
+                    )
                     action = ToolInvocation(tool=tool_name, tool_input=parsed_params)
                     tool_result = await self.tool_executor.ainvoke(action)
 
                     # Create final response with tool result
                     final_content = f"{response.content}\n<observation>{tool_result}</observation>\n"
-                    return {
-                        "output": AIMessage(content=final_content, sender=self.name)
-                    }
+                    return AIMessage(content=final_content, sender=self.name)
 
             # No tool calls, return regular response
-            return {"output": AIMessage(content=response.content, sender=self.name)}
+            return AIMessage(content=response.content, sender=self.name)
         except Exception as e:
             logger.error(f"Error invoking LLM chain: {e}")
             # Re-raise to be handled by the calling invoke/ainvoke method
             raise
 
-    async def ainvoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    async def ainvoke(self, state: Dict[str, Any]) -> AIMessage:
         """
         Asynchronously invokes the agent with the given state.
         The logic is now fully encapsulated in _get_llm_response.
         """
         return await self._get_llm_response(state)
 
-    def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    def invoke(self, state: Dict[str, Any]) -> AIMessage:
         raise NotImplementedError(
             "This agent is designed for asynchronous invocation. Use ainvoke instead."
         )

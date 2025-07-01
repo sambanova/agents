@@ -192,7 +192,7 @@ def create_supervisor(
     def wrap_supervisor_output(decision):
         # Convert SupervisorDecision to a simple AIMessage with structured content
         decision_content = f"Decision: {decision.next}, Task: {decision.task}"
-        return {"output": AIMessage(content=decision_content)}
+        return AIMessage(content=decision_content)
 
     return (
         prompt

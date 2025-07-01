@@ -3,8 +3,7 @@ from agents.components.datagen.tools.persistent_daytona import (
     daytona_describe_data,
     daytona_execute_code,
     daytona_list_files,
-    daytona_read_file,
-    daytona_write_file,
+    daytona_pip_install,
 )
 
 
@@ -13,6 +12,7 @@ def create_code_agent(power_llm, members):
 
     tools = [
         daytona_execute_code,
+        daytona_pip_install,
         daytona_list_files,
         daytona_describe_data,
     ]

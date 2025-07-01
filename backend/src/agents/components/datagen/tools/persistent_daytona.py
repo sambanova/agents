@@ -40,7 +40,7 @@ class PersistentDaytonaManager:
         cls,
         user_id: str,
         redis_storage: Optional[Any] = None,
-        snapshot: str = "data-analysis:0.0.8",
+        snapshot: str = "data-analysis:0.0.9",
         data_sources: Optional[List[str]] = None,
     ) -> "PersistentDaytonaManager":
         """
@@ -184,6 +184,42 @@ class PersistentDaytonaManager:
                 exc_info=True,
             )
             return f"Error during code execution: {str(e)}"
+
+    async def execute(self, command: str, timeout: int = 60) -> str:
+        """Execute a shell command in the persistent sandbox."""
+        if not self._sandbox:
+            raise RuntimeError(
+                "Daytona sandbox not initialized. Call initialize() first."
+            )
+
+        try:
+            logger.info("Executing command in persistent sandbox", command=command)
+
+            response = await self._sandbox.process.exec(command, timeout=timeout)
+
+            # Ensure result is a string, even if None or other types
+            result_str = str(response.result) if response.result is not None else ""
+
+            if response.exit_code != 0:
+                error_detail = result_str
+                logger.error(
+                    "Daytona command execution failed",
+                    exit_code=response.exit_code,
+                    error_detail=error_detail,
+                    command=command,
+                )
+                return f"Error (Exit Code {response.exit_code}): {error_detail}"
+
+            logger.info("Command executed successfully")
+            return result_str
+
+        except Exception as e:
+            logger.error(
+                "Error executing command in persistent sandbox",
+                error=str(e),
+                exc_info=True,
+            )
+            return f"Error during command execution: {str(e)}"
 
     async def list_files(self, directory: str = ".") -> str:
         """List files in the sandbox directory."""
@@ -563,6 +599,71 @@ print(result)
 
     except Exception as e:
         return f"Error analyzing CSV data: {str(e)}"
+
+
+@tool
+async def daytona_pip_install(
+    packages: Annotated[
+        str,
+        "Package name(s) to install. Can be a single package or multiple packages separated by spaces",
+    ],
+) -> str:
+    """
+    Install Python packages using pip in the persistent Daytona sandbox. Only install packages after you have run some code and observed that some packages are missing.
+
+    This function executes pip install commands in the sandbox to install the specified packages.
+    You can install single or multiple packages at once.
+
+    Args:
+        packages: Package name(s) to install. Examples: "pandas", "numpy matplotlib", "requests==2.28.0"
+
+    Returns:
+        str: Success message or error details from the installation process.
+
+    Examples:
+        - Install single package: packages="pandas"
+        - Install multiple packages: packages="numpy matplotlib seaborn"
+        - Install with version: packages="requests==2.28.0"
+    """
+    manager = await get_or_create_daytona_manager("default_user")
+
+    try:
+        # Split packages by space and clean them
+        package_list = [pkg.strip() for pkg in packages.split() if pkg.strip()]
+
+        if not package_list:
+            return "Error: No packages specified for installation"
+
+        # Create pip install command
+        pip_command = f"pip install {' '.join(package_list)}"
+
+        logger.info(
+            "Installing packages in sandbox", packages=package_list, command=pip_command
+        )
+
+        # Execute pip install using the manager's execute method
+        result = await manager.execute(pip_command, timeout=300)
+
+        # Add success prefix if command succeeded
+        if not result.startswith("Error"):
+            result = f"Successfully installed: {' '.join(package_list)}\n{result}"
+
+        logger.info(
+            "Package installation completed",
+            packages=package_list,
+            success="Successfully installed" in result,
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(
+            "Error installing packages in sandbox",
+            packages=packages,
+            error=str(e),
+            exc_info=True,
+        )
+        return f"Error installing packages '{packages}': {str(e)}"
 
 
 # Cleanup function to be called at workflow end

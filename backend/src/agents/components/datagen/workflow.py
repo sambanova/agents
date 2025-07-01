@@ -138,11 +138,10 @@ class WorkflowManager:
             agent = self.agents[name]
             logger.info(f"Processing special agent: {name}")
             try:
-                result = await agent.ainvoke(state)
-                output_message = result.get("output")
+                output_message = await agent.ainvoke(state)
 
                 if output_message is None:
-                    raise ValueError("Agent output is missing the 'output' key.")
+                    raise ValueError("Agent output is None.")
 
                 # Special logic for quality review: check for "revision needed"
                 content = (

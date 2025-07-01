@@ -13,18 +13,12 @@ logger = structlog.get_logger(__name__)
 def setup_language_models():
     """Set up the language models needed for the workflow"""
     # Get API keys from environment variables
-    sambanova_api_key = os.getenv("FIREWORKS_KEY")
+    sambanova_api_key = os.getenv("SAMBANOVA_KEY")
 
     # Initialize language models
-    llm = get_fireworks_llm(
-        sambanova_api_key, "accounts/fireworks/models/llama-v3p1-70b-instruct"
-    )
-    power_llm = get_fireworks_llm(
-        sambanova_api_key, "accounts/fireworks/models/llama-v3p1-70b-instruct"
-    )
-    json_llm = get_fireworks_llm(
-        sambanova_api_key, "accounts/fireworks/models/llama-v3p1-70b-instruct"
-    )
+    llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-V3-0324")
+    power_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-V3-0324")
+    json_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-V3-0324")
 
     return {"llm": llm, "power_llm": power_llm, "json_llm": json_llm}
 
@@ -51,8 +45,8 @@ def main(user_input: str, working_directory: str = "./data", thread_id: str = "1
         graph = workflow_manager.get_graph()
 
         # Run the workflow
-        print(f"Starting workflow with input: {user_input}")
-        print("-" * 50)
+        logger.info(f"Starting workflow with input: {user_input}")
+        logger.info("-" * 50)
 
         events = graph.stream(
             {
@@ -72,11 +66,6 @@ def main(user_input: str, working_directory: str = "./data", thread_id: str = "1
             stream_mode="values",
             debug=False,
         )
-
-        # Process and display events
-        for event in events:
-            print(f"Event: {event}")
-            print("-" * 30)
 
     except Exception as e:
         print(f"Error running workflow: {e}")
@@ -168,7 +157,7 @@ if __name__ == "__main__":
 
         # Run the workflow and process events
         async for event in main_with_persistent_daytona(user_input):
-            print(f"Event: {event}")
+            print(f"Event: {event['messages'][-1].content}")
             print("-" * 30)
 
         print("Workflow completed!")

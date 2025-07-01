@@ -6,7 +6,7 @@ from typing import Any
 
 import structlog
 from agents.components.datagen.manual_agent import ManualAgent
-from agents.components.datagen.state import State
+from agents.components.datagen.state import NoteState, State
 from langchain.agents import AgentExecutor
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from openai import InternalServerError
@@ -32,12 +32,10 @@ async def agent_node(
     """
     logger.info(f"Processing agent: {name} to update state key: '{state_key}'")
     try:
-        result = await agent.ainvoke(state)
-        # The agent returns a dictionary with an 'output' key
-        output_message = result.get("output")
+        output_message = await agent.ainvoke(state)
 
         if output_message is None:
-            raise ValueError("Agent output is missing the 'output' key.")
+            raise ValueError("Agent output is None.")
 
         # Return a dictionary to be merged into the state
         return {
@@ -127,14 +125,25 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
             logger.debug("Trimmed messages for processing")
 
         result = await agent.ainvoke(state)
-        logger.debug(f"Note agent {name} result: {result}")
-        output = (
-            result["output"]
-            if isinstance(result, dict) and "output" in result
-            else str(result)
-        )
 
-        cleaned_output = re.sub(r"[\x00-\x1F\x7F-\x9F]", "", output)
+        from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
+
+        node_state_parser = PydanticOutputParser(pydantic_object=NoteState)
+        fixing_parser = OutputFixingParser.from_llm(
+            llm=agent.llm,
+            parser=node_state_parser,
+        )
+        parsed_result = await fixing_parser.aparse(result)
+
+        logger.debug(f"Note agent {name} result: {result}")
+
+        # Extract content from AIMessage
+        if hasattr(result, "content"):
+            output_content = result.content
+        else:
+            output_content = str(result)
+
+        cleaned_output = re.sub(r"[\x00-\x1F\x7F-\x9F]", "", output_content)
         parsed_output = json.loads(cleaned_output)
         logger.debug(f"Parsed output: {parsed_output}")
 
@@ -185,7 +194,7 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
         logger.error(f"JSON decode error: {e}", exc_info=True)
         return _create_error_state(
             state,
-            AIMessage(content=f"Error parsing output: {output}", name=name),
+            AIMessage(content=f"Error parsing output: {result}", name=name),
             name,
             "JSON decode error",
         )
@@ -310,7 +319,7 @@ async def refiner_node(state: State, agent: ManualAgent, name: str) -> State:
 
         try:
             # Attempt to invoke agent with full content
-            result = await agent.invoke(refiner_state)
+            result = await agent.ainvoke(refiner_state)
         except Exception as token_error:
             # If token limit is exceeded, retry with only MD file names
             logger.warning("Token limit exceeded. Retrying with MD file names only.")
@@ -323,10 +332,10 @@ async def refiner_node(state: State, agent: ManualAgent, name: str) -> State:
             )
 
             refiner_state["messages"] = [BaseMessage(content=simplified_report_content)]
-            result = await agent.invoke(refiner_state)
+            result = await agent.ainvoke(refiner_state)
 
-        # Update original state
-        state["messages"].append(AIMessage(content=result))
+        # Update original state - result is now an AIMessage
+        state["messages"].append(result)
         state["sender"] = name
 
         logger.info("Refiner node processing completed")
