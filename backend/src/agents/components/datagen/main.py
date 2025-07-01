@@ -62,7 +62,7 @@ def main(user_input: str, working_directory: str = "./data", thread_id: str = "1
                 "needs_revision": False,
                 "sender": "",
             },
-            {"configurable": {"thread_id": thread_id}, "recursion_limit": 3000},
+            {"configurable": {"thread_id": thread_id}, "recursion_limit": 100},
             stream_mode="values",
             debug=False,
         )
@@ -126,7 +126,7 @@ async def main_with_persistent_daytona(
     }
 
     # Configuration for the thread
-    config = {"configurable": {"thread_id": thread_id}}
+    config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 100}
 
     try:
         # Run workflow with persistent Daytona

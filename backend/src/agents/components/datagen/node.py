@@ -7,8 +7,13 @@ from typing import Any
 import structlog
 from agents.components.datagen.manual_agent import ManualAgent
 from agents.components.datagen.state import NoteState, State
+from agents.components.datagen.tools.persistent_daytona import (
+    PersistentDaytonaManager,
+    get_or_create_daytona_manager,
+)
 from langchain.agents import AgentExecutor
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
+from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMessage
 from openai import InternalServerError
 
 # Set up logger
@@ -125,88 +130,70 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
             logger.debug("Trimmed messages for processing")
 
         result = await agent.ainvoke(state)
-
-        from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
-
         node_state_parser = PydanticOutputParser(pydantic_object=NoteState)
         fixing_parser = OutputFixingParser.from_llm(
             llm=agent.llm,
             parser=node_state_parser,
         )
-        parsed_result = await fixing_parser.aparse(result)
-
-        logger.debug(f"Note agent {name} result: {result}")
-
-        # Extract content from AIMessage
-        if hasattr(result, "content"):
-            output_content = result.content
-        else:
-            output_content = str(result)
-
-        cleaned_output = re.sub(r"[\x00-\x1F\x7F-\x9F]", "", output_content)
-        parsed_output = json.loads(cleaned_output)
-        logger.debug(f"Parsed output: {parsed_output}")
-
-        new_messages = [
-            create_message(msg, name) for msg in parsed_output.get("messages", [])
-        ]
-
-        messages = new_messages if new_messages else current_messages
+        parsed_output: NoteState = await fixing_parser.aparse(result.content)
+        messages = (
+            parsed_output.messages if parsed_output.messages else current_messages
+        )
 
         combined_messages = head_messages + messages + tail_messages
 
         updated_state: State = {
             "messages": combined_messages,
-            "hypothesis": str(
-                parsed_output.get("hypothesis", state.get("hypothesis", ""))
+            "hypothesis": (
+                str(parsed_output.hypothesis)
+                if parsed_output.hypothesis
+                else state.get("hypothesis", "")
             ),
-            "process": str(parsed_output.get("process", state.get("process", ""))),
-            "process_decision": str(
-                parsed_output.get("process_decision", state.get("process_decision", ""))
+            "process": (
+                str(parsed_output.process)
+                if parsed_output.process
+                else state.get("process", "")
             ),
-            "visualization_state": str(
-                parsed_output.get(
-                    "visualization_state", state.get("visualization_state", "")
-                )
+            "process_decision": (
+                str(parsed_output.process_decision)
+                if parsed_output.process_decision
+                else state.get("process_decision", "")
             ),
-            "searcher_state": str(
-                parsed_output.get("searcher_state", state.get("searcher_state", ""))
+            "visualization_state": (
+                str(parsed_output.visualization_state)
+                if parsed_output.visualization_state
+                else state.get("visualization_state", "")
             ),
-            "code_state": str(
-                parsed_output.get("code_state", state.get("code_state", ""))
+            "searcher_state": (
+                str(parsed_output.searcher_state)
+                if parsed_output.searcher_state
+                else state.get("searcher_state", "")
             ),
-            "report_section": str(
-                parsed_output.get("report_section", state.get("report_section", ""))
+            "code_state": (
+                str(parsed_output.code_state)
+                if parsed_output.code_state
+                else state.get("code_state", "")
             ),
-            "quality_review": str(
-                parsed_output.get("quality_review", state.get("quality_review", ""))
+            "report_section": (
+                str(parsed_output.report_section)
+                if parsed_output.report_section
+                else state.get("report_section", "")
+            ),
+            "quality_review": (
+                str(parsed_output.quality_review)
+                if parsed_output.quality_review
+                else state.get("quality_review", "")
             ),
             "needs_revision": bool(
-                parsed_output.get("needs_revision", state.get("needs_revision", False))
+                bool(parsed_output.needs_revision)
+                if parsed_output.needs_revision
+                else state.get("needs_revision", False)
             ),
             "sender": "note_agent",
         }
 
         logger.info("Updated state successfully")
         return updated_state
-
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON decode error: {e}", exc_info=True)
-        return _create_error_state(
-            state,
-            AIMessage(content=f"Error parsing output: {result}", name=name),
-            name,
-            "JSON decode error",
-        )
-
-    except InternalServerError as e:
-        logger.error(f"OpenAI Internal Server Error: {e}", exc_info=True)
-        return _create_error_state(
-            state,
-            AIMessage(content=f"OpenAI Error: {str(e)}", name=name),
-            name,
-            "OpenAI error",
-        )
 
     except Exception as e:
         logger.error(f"Unexpected error in note_agent_node: {e}", exc_info=True)
@@ -293,21 +280,24 @@ async def refiner_node(state: State, agent: ManualAgent, name: str) -> State:
     If token limit is exceeded, use only MD file names instead of full content.
     """
     try:
+
+        manager: PersistentDaytonaManager = await get_or_create_daytona_manager(
+            "default_user"
+        )
         # Get storage path
-        storage_path = Path(os.getenv("STORAGE_PATH", "./data_storage/"))
+        storage_path = await manager.list_files()
 
         # Collect materials
         materials = []
-        md_files = list(storage_path.glob("*.md"))
-        png_files = list(storage_path.glob("*.png"))
+        md_files = [s for s in storage_path if s.endswith("md")]
+        png_files = [s for s in storage_path if s.endswith("png")]
 
         # Process MD files
         for md_file in md_files:
-            with open(md_file, "r", encoding="utf-8") as f:
-                materials.append(f"MD file '{md_file.name}':\n{f.read()}")
+            materials.append(f"MD file '{md_file}':\n{await manager.read_file(md_file)}")
 
         # Process PNG files
-        materials.extend(f"PNG file: '{png_file.name}'" for png_file in png_files)
+        materials.extend(f"PNG file: '{png_file}'" for png_file in png_files)
 
         # Combine materials
         combined_materials = "\n\n".join(materials)
@@ -315,7 +305,7 @@ async def refiner_node(state: State, agent: ManualAgent, name: str) -> State:
 
         # Create refiner state
         refiner_state = state.copy()
-        refiner_state["messages"] = [BaseMessage(content=report_content)]
+        refiner_state["messages"] = [AIMessage(content=report_content)]
 
         try:
             # Attempt to invoke agent with full content
@@ -323,15 +313,15 @@ async def refiner_node(state: State, agent: ManualAgent, name: str) -> State:
         except Exception as token_error:
             # If token limit is exceeded, retry with only MD file names
             logger.warning("Token limit exceeded. Retrying with MD file names only.")
-            md_file_names = [f"MD file: '{md_file.name}'" for md_file in md_files]
-            png_file_names = [f"PNG file: '{png_file.name}'" for png_file in png_files]
+            md_file_names = [f"MD file: '{md_file}'" for md_file in md_files]
+            png_file_names = [f"PNG file: '{png_file}'" for png_file in png_files]
 
             simplified_materials = "\n".join(md_file_names + png_file_names)
             simplified_report_content = (
                 f"Report materials (file names only):\n{simplified_materials}"
             )
 
-            refiner_state["messages"] = [BaseMessage(content=simplified_report_content)]
+            refiner_state["messages"] = [AIMessage(content=simplified_report_content)]
             result = await agent.ainvoke(refiner_state)
 
         # Update original state - result is now an AIMessage

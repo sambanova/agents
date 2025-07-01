@@ -221,18 +221,23 @@ class PersistentDaytonaManager:
             )
             return f"Error during command execution: {str(e)}"
 
-    async def list_files(self, directory: str = ".") -> str:
+    async def list_files(self, directory: str = ".") -> List[str]:
         """List files in the sandbox directory."""
         if not self._sandbox:
             raise RuntimeError("Daytona sandbox not initialized.")
 
         try:
-            # Simulate file listing - replace with actual async Daytona SDK calls
-            simulated_files = ["data.csv", "analysis.py", "results.txt"]
-            return f"Files in {directory}:\n" + "\n".join(simulated_files)
+            # Use actual Daytona SDK call to list files
+            files = await self._sandbox.fs.list_files(directory)
+            file_names = [f.name for f in files]
+
+            if not file_names:
+                return f"No files found in directory '{directory}'"
+
+            return file_names
         except Exception as e:
-            logger.error("Error listing files", error=str(e))
-            return f"Error listing files: {str(e)}"
+            logger.error("Error listing files", directory=directory, error=str(e))
+            return f"Error listing files in '{directory}': {str(e)}"
 
     async def read_file(self, filename: str) -> str:
         """Read a file from the sandbox."""
@@ -241,6 +246,9 @@ class PersistentDaytonaManager:
 
         try:
             content = await self._sandbox.fs.download_file(filename)
+            # Decode binary content to string if needed
+            if isinstance(content, bytes):
+                content = content.decode("utf-8")
             return content
         except Exception as e:
             logger.error("Error reading file", filename=filename, error=str(e))
@@ -252,9 +260,14 @@ class PersistentDaytonaManager:
             raise RuntimeError("Daytona sandbox not initialized.")
 
         try:
-            # Simulate file writing - replace with actual async Daytona SDK calls
+            # Convert string content to bytes for upload
+            content_bytes = content.encode("utf-8")
+
+            # Use actual Daytona SDK call to upload/write file
+            await self._sandbox.fs.upload_file(content_bytes, filename)
+
             logger.info("File written successfully", filename=filename)
-            return f"File '{filename}' written successfully to sandbox {self._sandbox}"
+            return f"File '{filename}' written successfully to sandbox"
         except Exception as e:
             logger.error("Error writing file", filename=filename, error=str(e))
             return f"Error writing file '{filename}': {str(e)}"
@@ -277,13 +290,23 @@ class PersistentDaytonaManager:
     async def cleanup(self):
         """Clean up the persistent Daytona client and sandbox."""
         try:
-            # Simulate cleanup - replace with actual async Daytona SDK calls
-            logger.info("Cleaning up persistent Daytona", sandbox_id=self._sandbox)
+            if self._client:
+                logger.info(
+                    "Closing persistent Daytona client", sandbox_id=self._sandbox
+                )
+                # Close the Daytona client which will also clean up the sandbox
+                await self._client.close()
+                logger.info("Persistent Daytona client closed successfully")
+
+            # Reset the instance variables
             self._client = None
             self._sandbox = None
             logger.info("Persistent Daytona cleaned up successfully")
         except Exception as e:
             logger.error("Error during cleanup", error=str(e))
+            # Still reset variables even if cleanup failed
+            self._client = None
+            self._sandbox = None
 
     @classmethod
     def reset(cls):
@@ -334,7 +357,7 @@ async def daytona_list_files(
 ) -> str:
     """List files in the persistent Daytona sandbox directory."""
     manager = await get_or_create_daytona_manager("default_user")
-    return await manager.list_files(directory)
+    return "Files in the sandbox:\n" + "\n".join(await manager.list_files(directory))
 
 
 @tool

@@ -1,12 +1,16 @@
 from agents.components.datagen.create_agent import create_agent
 from agents.components.datagen.tools.basetool import execute_code, execute_command
 from agents.components.datagen.tools.FileEdit import read_document
-from agents.components.datagen.tools.persistent_daytona import daytona_execute_code, daytona_read_document
+from agents.components.datagen.tools.persistent_daytona import (
+    daytona_execute_code,
+    daytona_list_files,
+    daytona_read_document,
+)
 
 
 def create_visualization_agent(llm, members):
     """Create the visualization agent"""
-    tools = [daytona_read_document, daytona_execute_code]
+    tools = [daytona_read_document, daytona_execute_code, daytona_list_files]
 
     system_prompt = """
     You are a data visualization expert tasked with creating insightful visual representations of data. Your primary responsibilities include:

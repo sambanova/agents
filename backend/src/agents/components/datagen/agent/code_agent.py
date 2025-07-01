@@ -24,6 +24,7 @@ def create_code_agent(power_llm, members):
     2. Implementing statistical methods and machine learning algorithms as needed.
     3. Debugging and optimizing existing code for performance improvements.
     4. Adhering to PEP 8 standards and ensuring code readability with meaningful variable and function names.
+    5. Any output data must be saved to the sandbox directory. Also print the file name in the output.
 
     **Available Tools:**
     - daytona_execute_code: Execute Python code in the persistent sandbox

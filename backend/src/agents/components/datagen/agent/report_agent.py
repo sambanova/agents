@@ -7,13 +7,19 @@ from agents.components.datagen.tools.FileEdit import (
 from agents.components.datagen.tools.persistent_daytona import (
     daytona_create_document,
     daytona_edit_document,
+    daytona_list_files,
     daytona_read_document,
 )
 
 
 def create_report_agent(power_llm, members):
     """Create the report agent"""
-    tools = [daytona_create_document, daytona_read_document, daytona_edit_document]
+    tools = [
+        daytona_create_document,
+        daytona_read_document,
+        daytona_edit_document,
+        daytona_list_files,
+    ]
 
     system_prompt = """
     You are an experienced scientific writer tasked with drafting comprehensive research reports. Your primary duties include:

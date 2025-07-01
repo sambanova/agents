@@ -688,7 +688,7 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
             return result_str
 
         except Exception as e:
-            logger.error("Daytona code execution failed", error=str(e), exc_info=True)
+            logger.info("Daytona code execution failed", error=str(e), exc_info=True)
             return f"Error during Daytona code execution: {str(e)}"
 
     def sync_run_daytona_code_wrapper(code_to_run: str) -> str:

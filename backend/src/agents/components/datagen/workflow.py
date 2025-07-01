@@ -21,6 +21,7 @@ from agents.components.datagen.node import (
 )
 from agents.components.datagen.router import (
     QualityReview_router,
+    human_choice_router,
     hypothesis_router,
     process_router,
 )
@@ -191,11 +192,18 @@ class WorkflowManager:
 
         # Add edges
         self.workflow.add_edge(START, "Hypothesis")
-        self.workflow.add_edge("Hypothesis", "HumanChoice")
 
+        # Add conditional edge from Hypothesis for ReAct loop
+        self.workflow.add_conditional_edges(
+            "Hypothesis",
+            hypothesis_router,
+            {"Hypothesis": "Hypothesis", "Process": "HumanChoice"},
+        )
+
+        # Add conditional edge from HumanChoice based on user decision
         self.workflow.add_conditional_edges(
             "HumanChoice",
-            hypothesis_router,
+            human_choice_router,
             {"Hypothesis": "Hypothesis", "Process": "Process"},
         )
 

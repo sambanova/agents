@@ -14,7 +14,8 @@ def create_note_agent(json_llm):
     2. Summarizing complex information into clear, concise, and accurate notes.
     3. Organizing notes in a structured format that ensures easy retrieval and reference.
     4. Highlighting significant insights, breakthroughs, challenges, or any deviations from the research plan.
-    5. Responding only in JSON format to ensure structured documentation.
+    5. Capture file names and paths of any files that are created or modified.
+    6. Responding only in JSON format to ensure structured documentation.
 
     Your output should be well-organized and easy to integrate with other project documentation.
     """

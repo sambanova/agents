@@ -68,10 +68,6 @@ def create_agent(
     """
     logger.info("Creating manual agent")
 
-    # Ensure the daytona_list_files tool is available
-    if daytona_list_files not in tools:
-        tools.append(daytona_list_files)
-
     team_members_str = ", ".join(team_members)
     tool_descriptions = _format_tools(tools)
     directory_contents_str = "customer_satisfaction_purchase_behavior.csv"
@@ -146,6 +142,26 @@ Based on your role and the current state, please proceed with your task.
 
     logger.info("Manual agent created successfully")
     return ManualAgent(llm=llm, tools=tools, prompt=prompt, name=name)
+
+
+def create_simple_agent(
+    llm: LanguageModelLike,
+    system_message: str,
+) -> ManualAgent:
+    """
+    Create a manual agent with the given language model, tools, system message, and team members.
+    """
+    logger.info("Creating refiner agent")
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", system_message),
+            MessagesPlaceholder(variable_name="messages"),
+        ]
+    )
+
+    logger.info("Manual agent created successfully")
+    return prompt | llm
 
 
 def create_supervisor(

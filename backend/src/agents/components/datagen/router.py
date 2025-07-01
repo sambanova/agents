@@ -1,8 +1,8 @@
 import json
-import structlog
 import re
 from typing import Dict, List, Literal, Optional, Union
 
+import structlog
 from agents.components.datagen.state import State, SupervisorDecision
 from langchain_core.messages import AIMessage
 
@@ -25,15 +25,46 @@ ProcessNodeType = Literal[
 ]
 
 
-def hypothesis_router(state: State) -> NodeType:
+def human_choice_router(state: State) -> NodeType:
     """
-    Route based on the presence of a hypothesis in the state.
+    Route based on human choice: regenerate hypothesis or continue to process.
 
     Args:
         state (State): The current state of the system.
 
     Returns:
-        NodeType: 'Hypothesis' if no hypothesis exists, otherwise 'Process'.
+        NodeType: 'Hypothesis' if user chose to regenerate, 'Process' if continuing.
+    """
+    logger.info("Entering human_choice_router")
+
+    # Check if user chose to regenerate hypothesis (choice 1)
+    if "modification_areas" in state:
+        logger.info("User chose to regenerate hypothesis. Routing to: Hypothesis")
+        return "Hypothesis"
+
+    # Check if user chose to continue (choice 2)
+    process_content = state.get("process", "")
+    if "continue the research process" in str(process_content).lower():
+        logger.info("User chose to continue research. Routing to: Process")
+        return "Process"
+
+    # Default to Process if unclear
+    logger.info("Unclear choice, defaulting to: Process")
+    return "Process"
+
+
+def hypothesis_router(state: State) -> NodeType:
+    """
+    Route based on the presence of a hypothesis in the state and tool usage.
+
+    If hypothesis agent used tools (ReAct pattern), route back to Hypothesis for next iteration.
+    Otherwise, continue to Process.
+
+    Args:
+        state (State): The current state of the system.
+
+    Returns:
+        NodeType: 'Hypothesis' if no hypothesis exists or tools were used, otherwise 'Process'.
     """
     logger.info("Entering hypothesis_router")
     hypothesis: Union[AIMessage, str, None] = state.get("hypothesis")
@@ -56,8 +87,30 @@ def hypothesis_router(state: State) -> NodeType:
         logger.error(f"Error processing hypothesis: {e}")
         hypothesis_content = ""
 
-    result = "Hypothesis" if not hypothesis_content.strip() else "Process"
-    logger.info(f"hypothesis_router decision: {result}")
+    # If no hypothesis content, route back to Hypothesis
+    if not hypothesis_content.strip():
+        result = "Hypothesis"
+        logger.info(f"No hypothesis content found. Routing to: {result}")
+        return result
+
+    # Check if the hypothesis agent used tools (ReAct pattern)
+    # Look for tool usage indicators: <tool>, <observation>, or other tool-related patterns
+    used_tools = (
+        "<tool>" in hypothesis_content
+        or "<observation>" in hypothesis_content
+        or "</tool_input>" in hypothesis_content
+    )
+
+    if used_tools:
+        result = "Hypothesis"
+        logger.info(
+            f"Hypothesis agent used tools. Continuing ReAct loop. Routing to: {result}"
+        )
+    else:
+        # If it's not clearly final and no tools were used, continue one more iteration
+        result = "Process"
+        logger.info(f"Final hypothesis detected. Routing to: {result}")
+
     return result
 
 

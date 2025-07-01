@@ -1,3 +1,4 @@
+import ast
 import asyncio
 import json
 import random
@@ -79,6 +80,7 @@ class ManualAgent(Runnable):
         <param1>value1</param1>
         <param2>["item1", "item2"]</param2>
         <param3>dict([(1, "value")])</param3>
+        <param4>{1: "value", 2: "another"}</param4>
 
         Into a dictionary of parameter names and properly typed values.
         """
@@ -104,10 +106,26 @@ class ManualAgent(Runnable):
                     parsed_value = eval(param_value)
                     params[param_name] = parsed_value
 
-                # Handle JSON object format: {"key": "value"}
+                # Handle Python dict syntax with unquoted keys: {1: "value", 2: "value"}
                 elif param_value.startswith("{") and param_value.endswith("}"):
-                    parsed_value = json.loads(param_value)
-                    params[param_name] = parsed_value
+                    try:
+                        # First try JSON parsing for quoted keys
+                        parsed_value = json.loads(param_value)
+                        params[param_name] = parsed_value
+                    except json.JSONDecodeError:
+                        # If JSON fails, try Python literal evaluation for unquoted keys
+                        try:
+                            parsed_value = ast.literal_eval(param_value)
+                            params[param_name] = parsed_value
+                            logger.info(
+                                f"Parsed parameter '{param_name}' using ast.literal_eval: {type(parsed_value)}"
+                            )
+                        except (ValueError, SyntaxError) as e:
+                            # If both fail, treat as string
+                            logger.warning(
+                                f"Failed to parse dict-like parameter '{param_name}': {e}. Using as string."
+                            )
+                            params[param_name] = param_value
 
                 # Handle numeric values
                 elif param_value.isdigit():
@@ -143,7 +161,6 @@ class ManualAgent(Runnable):
             )
             return tool_input_content
 
-        logger.info(f"Parsed tool parameters: {params}")
         return params
 
     async def _get_llm_response(self, state: Dict[str, Any]) -> AIMessage:
@@ -211,7 +228,7 @@ class ManualAgent(Runnable):
 
                     # Execute the tool with parsed parameters
                     logger.info(
-                        f"Executing tool {tool_name} with parameters {parsed_params} in {self.name}"
+                        f"Executing tool {tool_name} with parameters {', '.join([f'{k}: {str(v)[0:20]}' for k, v in parsed_params.items()])} in {self.name}"
                     )
                     action = ToolInvocation(tool=tool_name, tool_input=parsed_params)
                     tool_result = await self.tool_executor.ainvoke(action)

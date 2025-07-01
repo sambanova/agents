@@ -1,6 +1,6 @@
 from typing import Sequence, TypedDict
 
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel, Field
 
 
@@ -21,7 +21,7 @@ class State(TypedDict):
     """TypedDict for the entire state structure."""
 
     # The sequence of messages exchanged in the conversation
-    messages: Sequence[BaseMessage]
+    messages: Sequence[AnyMessage]
 
     # The complete content of the research hypothesis
     hypothesis: str = ""
@@ -57,7 +57,7 @@ class State(TypedDict):
 class NoteState(BaseModel):
     """Pydantic model for the entire state structure."""
 
-    messages: Sequence[BaseMessage] = Field(
+    messages: Sequence[AIMessage] = Field(
         default_factory=list, description="List of message dictionaries"
     )
     hypothesis: str = Field(default="", description="Current research hypothesis")
