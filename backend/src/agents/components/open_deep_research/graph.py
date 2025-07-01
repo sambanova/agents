@@ -1,4 +1,5 @@
 import functools
+import json
 import re
 import time
 from typing import Any, List, Literal, Optional, Tuple
@@ -216,10 +217,14 @@ async def generate_report_plan(
         )
     )
 
+    schema = Queries.model_json_schema()
+    report_planner_schema = json.dumps(schema, indent=2)
+
     system_instructions_query = report_planner_query_writer_instructions.format(
         topic=topic,
         report_organization=report_structure,
         number_of_queries=configurable.number_of_queries,
+        report_planner_schema=report_planner_schema,
     )
 
     logger.info("Generating initial search queries for planning")
@@ -264,12 +269,16 @@ async def generate_report_plan(
         "Web search for planning completed", duration_ms=round(duration * 1000, 2)
     )
 
+    schema = Sections.model_json_schema()
+    report_planner_schema = json.dumps(schema, indent=2)
+
     logger.info("Generating final report sections plan")
     system_instructions_sections = report_planner_instructions.format(
         topic=topic,
         report_organization=report_structure,
         context=source_str,
         feedback=feedback,
+        report_planner_schema=report_planner_schema,
     )
 
     search_sections_interceptor = MessageInterceptor()
@@ -384,8 +393,13 @@ async def generate_queries(writer_model, state: SectionState, config: RunnableCo
         )
     )
 
+    schema = Queries.model_json_schema()
+    queries_schema = json.dumps(schema, indent=2)
+
     sys_inst = query_writer_instructions.format(
-        section_topic=sec.description, number_of_queries=configurable.number_of_queries
+        section_topic=sec.description,
+        number_of_queries=configurable.number_of_queries,
+        queries_schema=queries_schema,
     )
 
     queries = await invoke_llm_with_tracking(
@@ -536,10 +550,15 @@ async def write_section(
     sec.content = content.content
     logger.info("Generated content for section", section_name=sec.name)
 
+    schema = Feedback.model_json_schema()
+    section_grader_schema = json.dumps(schema, indent=2)
+
     # now we grade
     logger.info("Grading section", section_name=sec.name)
     grader_inst = section_grader_instructions.format(
-        section_topic=sec.description, section=sec.content
+        section_topic=sec.description,
+        section=sec.content,
+        section_grader_schema=section_grader_schema,
     )
 
     grader_interceptor = MessageInterceptor()
