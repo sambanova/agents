@@ -8,7 +8,7 @@
   <!-- Otherwise render static company logo -->
   <span v-else>
     <img 
-      src="/Images/logo-nsai.svg" 
+      src="/Images/logo-icon.png" 
       alt="Agents Icon" 
       class="h-8 w-8" 
     />
