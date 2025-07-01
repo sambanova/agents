@@ -509,7 +509,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, nextTick, onMounted } from 'vue'
+import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   isOpen: {
@@ -539,6 +539,15 @@ const codeExpanded = ref(true)
 const artifactsExpanded = ref(true)
 const logExpanded = ref(false)
 
+// Anti-flickering / streaming state
+const lastCodeUpdate = ref('')
+// Simple throttle timestamp for code streaming
+const lastCodeUpdateTs = ref(0)
+// Track length of processed events to detect new conversations and prevent artifacts flicker
+const lastEventsLength = ref(0)
+// Track index of the last processed Daytona tool-call chunk to detect new executions
+const lastProcessedToolIndex = ref(-1)
+
 // Template refs
 const codeContainer = ref(null)
 
@@ -567,12 +576,15 @@ watch(() => props.streamingEvents, (newEvents) => {
 }, { deep: true, immediate: true })
 
 // Watch for code content changes and auto-scroll
-watch(codeContent, () => {
-  nextTick(() => {
-    if (codeContainer.value && codeExpanded.value) {
-      codeContainer.value.scrollTop = codeContainer.value.scrollHeight
-    }
-  })
+watch(codeContent, (newCode, oldCode) => {
+  // Only auto-scroll if the content has meaningfully changed and is expanded
+  if (newCode && newCode !== oldCode && codeExpanded.value) {
+    nextTick(() => {
+      if (codeContainer.value) {
+        codeContainer.value.scrollTop = codeContainer.value.scrollHeight
+      }
+    })
+  }
 })
 
 // Watch for artifacts changes and auto-load CSV data
@@ -590,14 +602,46 @@ watch(artifacts, (newArtifacts) => {
 }, { deep: true })
 
 // Methods
+function safeUpdateCodeContent(newCode, context = '') {
+  // Prevent unnecessary updates if code hasn't changed
+  if (newCode === lastCodeUpdate.value) {
+    return false; // No update needed
+  }
+
+  if (context === 'streaming') {
+    const now = Date.now()
+    // Throttle to ~60 ms per update (about 16 FPS)
+    if (now - lastCodeUpdateTs.value < 60) {
+      return false
+    }
+    lastCodeUpdateTs.value = now
+  }
+
+  // Apply update immediately
+  codeContent.value = newCode
+  lastCodeUpdate.value = newCode
+  return true
+}
+
 function processStreamingEvents(events) {
   try {
     if (!events || !Array.isArray(events)) return
 
+    // Detect a brand-new conversation (events length has shrunk)
+    if (events.length < lastEventsLength.value) {
+      artifacts.value = []
+      executionLog.value = []
+      cleanupCodeUpdates()
+      lastCodeUpdate.value = ''
+      lastEventsLength.value = 0 // full reset
+    }
+    
     // Reset state when processing new events
-    artifacts.value = []
-    executionLog.value = []
-    isProcessing.value = false
+    isProcessing.value = true
+    
+    // Reset anti-flickering state for fresh conversation
+    cleanupCodeUpdates()
+    lastCodeUpdate.value = ''
     
     let codeDetected = false
     let toolCallDetected = false
@@ -620,6 +664,14 @@ function processStreamingEvents(events) {
             
             // Look for tool calls with code input - this is where the actual code is
             if (content.includes('<tool>DaytonaCodeSandbox</tool>')) {
+              // Detect start of a NEW Daytona execution and reset code buffer for fresh streaming
+              if (index > lastProcessedToolIndex.value) {
+                lastProcessedToolIndex.value = index
+                // Clear previous code so incoming chunks stream line-by-line again
+                codeContent.value = ''
+                lastCodeUpdate.value = ''
+                lastCodeUpdateTs.value = 0
+              }
               // Extract the code from tool_input
               const toolInputMatch = content.match(/<tool_input>([\s\S]*?)(?:<\/tool_input>|$)/);
               if (toolInputMatch && toolInputMatch[1]) {
@@ -628,10 +680,11 @@ function processStreamingEvents(events) {
                 if (extractedCode.includes('import') || extractedCode.includes('def ') || 
                     extractedCode.includes('plt.') || extractedCode.includes('matplotlib') ||
                     extractedCode.includes('numpy') || extractedCode.includes('pandas')) {
-                  codeContent.value = extractedCode
-                  codeDetected = true
-                  updateStatus('📝 Code generated', 'Python analysis script ready')
-                  addToLog('Code generation detected', 'info', timestamp)
+                  if (safeUpdateCodeContent(extractedCode, 'streaming')) {
+                    codeDetected = true
+                    updateStatus('📝 Code generated', 'Python analysis script ready')
+                    addToLog('Code generation detected', 'info', timestamp)
+                  }
                 }
               }
               
@@ -644,8 +697,9 @@ function processStreamingEvents(events) {
             // Also check for code blocks in regular content
             const codeMatch = content.match(/```python\n([\s\S]*?)```/)
             if (codeMatch && codeMatch[1] && !codeDetected) {
-              codeContent.value = codeMatch[1].trim()
-              codeDetected = true
+              if (safeUpdateCodeContent(codeMatch[1].trim(), 'streaming')) {
+                codeDetected = true
+              }
             }
           }
           break
@@ -666,11 +720,12 @@ function processStreamingEvents(events) {
                 if (extractedCode.includes('import') || extractedCode.includes('def ') || 
                     extractedCode.includes('plt.') || extractedCode.includes('matplotlib') ||
                     extractedCode.includes('numpy') || extractedCode.includes('pandas')) {
-                  codeContent.value = extractedCode
-                  codeDetected = true
-                  updateStatus('📝 Code loaded from history', 'Python analysis script')
-                  addToLog('Code loaded from conversation history', 'info', timestamp)
-                  console.log('Extracted code from tool call:', extractedCode.substring(0, 100) + '...');
+                  if (safeUpdateCodeContent(extractedCode, 'loaded')) {
+                    codeDetected = true
+                    updateStatus('📝 Code loaded from history', 'Python analysis script')
+                    addToLog('Code loaded from conversation history', 'info', timestamp)
+                    console.log('Extracted code from tool call:', extractedCode.substring(0, 100) + '...');
+                  }
                 }
               }
             }
@@ -824,6 +879,9 @@ function processStreamingEvents(events) {
       // Update status to show loaded state
       updateStatus('✅ Historical analysis loaded', `Code and ${artifactCount} files from conversation`)
     }
+
+    // Update processed length so we can detect resets next time
+    lastEventsLength.value = events.length
   } catch (error) {
     console.error('Error processing streaming events in DaytonaSidebar:', error);
     updateStatus('❌ Error', 'Failed to process conversation history.')
@@ -1111,6 +1169,7 @@ function toggleCollapse() {
 }
 
 function handleClose() {
+  cleanupCodeUpdates()
   emit('close')
 }
 
@@ -1220,6 +1279,11 @@ function handleArtifactError(artifact) {
   addToLog(`Failed to load file: ${artifact.title}`, 'error', new Date().toISOString())
 }
 
+function cleanupCodeUpdates() {
+  // Nothing to clean since we switched to timestamp-based throttle
+  lastProcessedToolIndex.value = -1
+}
+
 async function fetchArtifactContent(artifact) {
   // Do nothing for data URLs or if content is already a blob
   if (artifact.url.startsWith('data:') || artifact.url.startsWith('blob:')) {
@@ -1279,6 +1343,11 @@ onMounted(() => {
     console.log('DaytonaSidebar: Processing existing streaming events on mount:', props.streamingEvents.length);
     processStreamingEvents(props.streamingEvents);
   }
+})
+
+onUnmounted(() => {
+  // Clean up any pending debounced updates
+  cleanupCodeUpdates()
 })
 
 // Watch for sidebar open/close state changes and emit to parent

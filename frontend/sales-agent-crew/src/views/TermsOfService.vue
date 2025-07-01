@@ -3,9 +3,9 @@
       <!-- Header -->
       <div class="flex flex-col items-center mb-12">
         <img
-          src="https://sambanova.ai/hubfs/sambanova-logo-black.png"
+          src="/Images/logo-nsai.svg"
           alt="SambaNova Logo"
-          class="h-10 mb-4"
+          class="h-20 mb-4"
         />
         <h1 class="text-4xl font-bold text-primary-brandTextPrimary">SAMBANOVA SYSTEMS, INC.</h1>
         <p class="text-lg  text-primary-brandTextPrimary">SAMBANOVA AGENTS &ndash; TERMS OF SERVICE</p>
@@ -132,22 +132,22 @@
   
           <h2>11. DEFINITIONS</h2>
           <p>
-            <strong>“Affiliate”</strong> means an entity that, directly or indirectly, owns or controls, is owned or is controlled by, or is under common ownership or control with a party.
+            <strong>"Affiliate"</strong> means an entity that, directly or indirectly, owns or controls, is owned or is controlled by, or is under common ownership or control with a party.
           </p>
           <p>
-            <strong>“Confidential Information”</strong> shall mean all information that is identified as confidential at the time of disclosure or should be reasonably known to be confidential or proprietary due to the nature of the information disclosed and the circumstances surrounding the disclosure. All SambaNova technology will be deemed Confidential Information of SambaNova without any marking or further designation.
+            <strong>"Confidential Information"</strong> shall mean all information that is identified as confidential at the time of disclosure or should be reasonably known to be confidential or proprietary due to the nature of the information disclosed and the circumstances surrounding the disclosure. All SambaNova technology will be deemed Confidential Information of SambaNova without any marking or further designation.
           </p>
           <p>
-            <strong>“Customer Content”</strong> means any input, queries, or other information that you or any User transfers to us for processing, storage or hosting by the Service and any computational results that you or your Users derive from the foregoing through their use of the Service.
+            <strong>"Customer Content"</strong> means any input, queries, or other information that you or any User transfers to us for processing, storage or hosting by the Service and any computational results that you or your Users derive from the foregoing through their use of the Service.
           </p>
           <p>
-            <strong>“Documentation”</strong> means our technical documentation, if any, for the Service.
+            <strong>"Documentation"</strong> means our technical documentation, if any, for the Service.
           </p>
           <p>
-            <strong>“Service”</strong> means the [SambaNova Agents] software-as-a-service offering.
+            <strong>"Service"</strong> means the [SambaNova Agents] software-as-a-service offering.
           </p>
           <p>
-            <strong>“User”</strong> means the persons designated and granted access to the Service by or on behalf of Customer.
+            <strong>"User"</strong> means the persons designated and granted access to the Service by or on behalf of Customer.
           </p>
         </div>
       </div>
