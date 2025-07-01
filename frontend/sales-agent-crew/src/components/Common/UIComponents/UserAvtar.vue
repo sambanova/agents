@@ -1,8 +1,17 @@
 <template>
-  <span :class="avatarClass">
+  <!-- If type is 'user', show user initials inside colored circle -->
+  <span v-if="props.type === 'user'" :class="avatarClass">
     <span class="text-sm font-medium text-white leading-none">
       {{ displayedInitials }}
     </span>
+  </span>
+  <!-- Otherwise render static company logo -->
+  <span v-else>
+    <img 
+      src="/Images/logo-nsai.svg" 
+      alt="Agents Icon" 
+      class="h-8 w-8" 
+    />
   </span>
 </template>
 

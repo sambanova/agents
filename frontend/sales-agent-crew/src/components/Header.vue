@@ -5,9 +5,9 @@
       <div class="flex items-center space-x-4">
         <div class="flex-shrink-0">
           <img
-            src="/logo-icon.svg"
-            alt="Samba Sales Agents Logo"
-            class="h-8 block size-[30px]"
+            src="/Images/logo-nsai.svg"
+            alt="SambaNova Sales Agents Logo"
+            class="h-8 block"
           />
         </div>
 
@@ -52,7 +52,7 @@
             afterSignOutUrl="/login"
             :appearance="{
               elements: {
-                avatarBox: 'bg-primary-brandAvatarGray h-10 w-10',
+                avatarBox: 'bg-primary-800 h-10 w-10',
               },
             }"
           />
