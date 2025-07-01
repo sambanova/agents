@@ -108,7 +108,7 @@ def hypothesis_router(state: State) -> NodeType:
         )
     else:
         # If it's not clearly final and no tools were used, continue one more iteration
-        result = "Process"
+        result = "HumanChoice"
         logger.info(f"Final hypothesis detected. Routing to: {result}")
 
     return result

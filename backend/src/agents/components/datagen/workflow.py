@@ -197,15 +197,17 @@ class WorkflowManager:
         self.workflow.add_conditional_edges(
             "Hypothesis",
             hypothesis_router,
-            {"Hypothesis": "Hypothesis", "Process": "HumanChoice"},
+            {"Hypothesis": "Hypothesis", "HumanChoice": "HumanChoice"},
         )
 
-        # Add conditional edge from HumanChoice based on user decision
         self.workflow.add_conditional_edges(
             "HumanChoice",
             human_choice_router,
             {"Hypothesis": "Hypothesis", "Process": "Process"},
         )
+
+        # Add edge from HumanChoice to Process
+        self.workflow.add_edge("HumanChoice", "Process")
 
         self.workflow.add_conditional_edges(
             "Process",
@@ -249,6 +251,26 @@ class WorkflowManager:
         # Compile workflow
         self.memory = MemorySaver()
         self.graph = self.workflow.compile()
+
+        raw = self.graph.get_graph().draw_mermaid_png()
+
+        # 2) if it’s str, strip any data URL prefix and decode; if it’s already bytes, just use it
+        import base64
+
+        if isinstance(raw, str):
+            # strip off "data:image/png;base64," if present
+            if raw.startswith("data:image/png;base64,"):
+                raw = raw.split(",", 1)[1]
+            png_bytes = base64.b64decode(raw)
+        elif isinstance(raw, (bytes, bytearray)):
+            png_bytes = raw
+        else:
+            raise TypeError(f"Unexpected return type from draw_mermaid_png(): {type(raw)}")
+
+        # 3) write straight out to disk in binary mode
+        out_path = "/Users/tamasj/Downloads/graph.png"
+        with open(out_path, "wb") as f:
+            f.write(png_bytes)
 
     def get_graph(self):
         """Return the compiled workflow graph"""
