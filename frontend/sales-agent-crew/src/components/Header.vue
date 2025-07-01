@@ -14,7 +14,7 @@
         <h1
           class="text-xl font-bold text-primary-brandTextPrimary tracking-tight text-center"
         >
-          Agentic
+          
         </h1>
       </div>
 
