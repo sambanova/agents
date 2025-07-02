@@ -99,13 +99,28 @@ def patch_plot_code_str(code_str):
 
         patched_code = ast.unparse(patched_tree)  # Requires Python 3.9+
 
+        # Post-processing: Add error handling for file operations
+        if patcher.has_file_operations:
+            # Wrap the code in try-except to handle file operation errors
+            error_handled_code = f"""
+try:
+{chr(10).join("    " + line for line in patched_code.split(chr(10)) if line.strip())}
+except Exception as e:
+    print(f"Error during file operations: {{e}}")
+    import traceback
+    traceback.print_exc()
+    raise e
+"""
+            patched_code = error_handled_code.strip()
+
         return patched_code, patcher.filenames
 
     except AttributeError:
         raise RuntimeError("ast.unparse requires Python 3.9+")
     except Exception as e:
-        # If patching fails raise an error
-        raise ValueError(f"Error patching code: {str(e)}")
+        # If patching fails, return original code but still try to extract filenames
+        filenames = extract_filenames_from_string(code_str)
+        return code_str, filenames
 
 
 def extract_filenames_from_string(code_str):
