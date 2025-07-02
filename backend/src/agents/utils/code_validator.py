@@ -99,19 +99,6 @@ def patch_plot_code_str(code_str):
 
         patched_code = ast.unparse(patched_tree)  # Requires Python 3.9+
 
-        # Post-processing: Add error handling for file operations
-        if patcher.has_file_operations:
-            # Wrap the code in try-except to handle file operation errors
-            error_handled_code = f"""
-try:
-{chr(10).join("    " + line for line in patched_code.split(chr(10)) if line.strip())}
-except Exception as e:
-    print(f"Error during file operations: {{e}}")
-    import traceback
-    traceback.print_exc()
-"""
-            patched_code = error_handled_code.strip()
-
         return patched_code, patcher.filenames
 
     except AttributeError:

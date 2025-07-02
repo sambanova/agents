@@ -42,7 +42,13 @@ RUN pip install --no-cache-dir \
     lxml==5.4.0 \
     python-pptx==1.0.2 \
     pillow==11.2.1 \
-    xlsxwriter==3.2.5
+    xlsxwriter==3.2.5 \
+    xgboost==3.0.2 \
+    lightgbm==4.6.0 \
+    tensorflow-cpu==2.19.0 \
+    torch==2.7.1 \
+    shap==0.48.0 \
+    Markdown==3.8.2
 
 
 # Keep the container running indefinitely
