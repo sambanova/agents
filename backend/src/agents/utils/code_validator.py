@@ -117,9 +117,8 @@ except Exception as e:
     except AttributeError:
         raise RuntimeError("ast.unparse requires Python 3.9+")
     except Exception as e:
-        # If patching fails, return original code but still try to extract filenames
-        filenames = extract_filenames_from_string(code_str)
-        return code_str, filenames
+        # If patching fails raise an error
+        raise ValueError(f"Error patching code: {str(e)}")
 
 
 def extract_filenames_from_string(code_str):
@@ -156,98 +155,93 @@ def strip_markdown_code_blocks(code_str):
     if not isinstance(code_str, str):
         return str(code_str).strip() if code_str is not None else ""
 
-    # Store original for fallback
-    original_code = code_str
+    # Remove opening code block markers (```python, ```py, ```html, or just ```)
+    code_str = re.sub(
+        r"^```(?:python|py|html|css|javascript|js)?\s*\n?",
+        "",
+        code_str,
+        flags=re.MULTILINE,
+    )
 
-    try:
-        # Remove opening code block markers (```python, ```py, ```html, or just ```)
-        code_str = re.sub(
-            r"^```(?:python|py|html|css|javascript|js)?\s*\n?",
-            "",
-            code_str,
-            flags=re.MULTILINE,
+    # Remove closing code block markers
+    code_str = re.sub(r"\n?```\s*$", "", code_str, flags=re.MULTILINE)
+
+    # Remove <|python_start|> and <|python_end|> tags
+    code_str = re.sub(r"<\|python_start\|>\s*\n?", "", code_str, flags=re.MULTILINE)
+    code_str = re.sub(r"\n?\s*<\|python_end\|>", "", code_str, flags=re.MULTILINE)
+
+    # Handle tool_input tags more robustly - common source of HTML parsing errors
+    code_str = re.sub(r"<tool_input[^>]*>", "", code_str, flags=re.MULTILINE)
+    code_str = re.sub(r"</tool_input[^>]*>", "", code_str, flags=re.MULTILINE)
+
+    # Remove incomplete tool tags that can break execution
+    code_str = re.sub(r"<tool[^>]*>.*?</tool[^>]*>", "", code_str, flags=re.DOTALL)
+    code_str = re.sub(r"</?tool[^>]*>", "", code_str, flags=re.MULTILINE)
+
+    # Handle common XML/HTML artifacts that interfere with Python execution
+    code_str = re.sub(r"<\?xml[^>]*\?>", "", code_str, flags=re.MULTILINE)
+    code_str = re.sub(r"<!DOCTYPE[^>]*>", "", code_str, flags=re.MULTILINE)
+
+    # Remove leading/trailing whitespace and empty lines
+    code_str = code_str.strip()
+
+    # Decode HTML entities (e.g., &lt; &gt;)
+    if "&lt;" in code_str or "&gt;" in code_str or "&amp;" in code_str:
+        code_str = html.unescape(code_str)
+
+    # Remove any stray trailing '<' characters introduced by partial tag removal
+    code_str = re.sub(r"<+$", "", code_str).rstrip()
+
+    # Remove any remaining partial <tool or </tool tokens without closing bracket
+    code_str = re.sub(r"</?tool[^>\n]*", "", code_str, flags=re.MULTILINE)
+    # Collapse excessive blank lines
+    code_str = re.sub(r"\n{3,}", "\n\n", code_str)
+
+    # Validate that we still have executable code
+    if not code_str or len(code_str.strip()) < 5:
+        logger.warning(
+            "Code block stripping resulted in very short or empty code, using fallback"
         )
+        raise ValueError("Code block stripping resulted in very short or empty code")
 
-        # Remove closing code block markers
-        code_str = re.sub(r"\n?```\s*$", "", code_str, flags=re.MULTILINE)
+    # Basic syntax validation for Python code
+    lines = code_str.split("\n")
+    non_empty_lines = [line for line in lines if line.strip()]
 
-        # Remove <|python_start|> and <|python_end|> tags
-        code_str = re.sub(r"<\|python_start\|>\s*\n?", "", code_str, flags=re.MULTILINE)
-        code_str = re.sub(r"\n?\s*<\|python_end\|>", "", code_str, flags=re.MULTILINE)
+    # If we have code but no Python-like content, it might be pure HTML/CSS
+    has_python_keywords = any(
+        keyword in code_str.lower()
+        for keyword in [
+            "import",
+            "def",
+            "class",
+            "if",
+            "for",
+            "while",
+            "print",
+            "return",
+        ]
+    )
 
-        # Handle tool_input tags more robustly - common source of HTML parsing errors
-        code_str = re.sub(r"<tool_input[^>]*>", "", code_str, flags=re.MULTILINE)
-        code_str = re.sub(r"</tool_input[^>]*>", "", code_str, flags=re.MULTILINE)
-
-        # Remove incomplete tool tags that can break execution
-        code_str = re.sub(r"<tool[^>]*>.*?</tool[^>]*>", "", code_str, flags=re.DOTALL)
-        code_str = re.sub(r"</?tool[^>]*>", "", code_str, flags=re.MULTILINE)
-
-        # Handle common XML/HTML artifacts that interfere with Python execution
-        code_str = re.sub(r"<\?xml[^>]*\?>", "", code_str, flags=re.MULTILINE)
-        code_str = re.sub(r"<!DOCTYPE[^>]*>", "", code_str, flags=re.MULTILINE)
-
-        # Remove leading/trailing whitespace and empty lines
-        code_str = code_str.strip()
-
-        # Decode HTML entities (e.g., &lt; &gt;)
-        if "&lt;" in code_str or "&gt;" in code_str or "&amp;" in code_str:
-            code_str = html.unescape(code_str)
-
-        # Remove any stray trailing '<' characters introduced by partial tag removal
-        code_str = re.sub(r"<+$", "", code_str).rstrip()
-
-        # Remove any remaining partial <tool or </tool tokens without closing bracket
-        code_str = re.sub(r"</?tool[^>\n]*", "", code_str, flags=re.MULTILINE)
-        # Collapse excessive blank lines
-        code_str = re.sub(r"\n{3,}", "\n\n", code_str)
-
-        # Validate that we still have executable code
-        if not code_str or len(code_str.strip()) < 5:
-            logger.warning(
-                "Code block stripping resulted in very short or empty code, using fallback"
+    if not has_python_keywords and len(non_empty_lines) > 0:
+        # Check if this looks like HTML/CSS/JS content
+        if any(
+            tag in code_str.lower()
+            for tag in ["<html", "<div", "<body", "<style", "function"]
+        ):
+            logger.info(
+                "Detected non-Python code (HTML/CSS/JS), wrapping in file creation"
             )
-            return original_code.strip()
-
-        # Basic syntax validation for Python code
-        lines = code_str.split("\n")
-        non_empty_lines = [line for line in lines if line.strip()]
-
-        # If we have code but no Python-like content, it might be pure HTML/CSS
-        has_python_keywords = any(
-            keyword in code_str.lower()
-            for keyword in [
-                "import",
-                "def",
-                "class",
-                "if",
-                "for",
-                "while",
-                "print",
-                "return",
-            ]
-        )
-
-        if not has_python_keywords and len(non_empty_lines) > 0:
-            # Check if this looks like HTML/CSS/JS content
-            if any(
-                tag in code_str.lower()
-                for tag in ["<html", "<div", "<body", "<style", "function"]
+            # Wrap in Python code to write the content to a file
+            file_extension = "html"
+            if "<style" in code_str.lower() or "css" in original_code.lower():
+                file_extension = "css"
+            elif (
+                "function" in code_str.lower() or "javascript" in original_code.lower()
             ):
-                logger.info(
-                    "Detected non-Python code (HTML/CSS/JS), wrapping in file creation"
-                )
-                # Wrap in Python code to write the content to a file
-                file_extension = "html"
-                if "<style" in code_str.lower() or "css" in original_code.lower():
-                    file_extension = "css"
-                elif (
-                    "function" in code_str.lower()
-                    or "javascript" in original_code.lower()
-                ):
-                    file_extension = "js"
+                file_extension = "js"
 
-                wrapped_code = f'''
+            wrapped_code = f'''
 # Auto-generated wrapper for {file_extension.upper()} content
 content = """
 {code_str}
@@ -259,13 +253,9 @@ f.write(content)
 
 print(f"{{file_extension.upper()}} content written to {{filename}}")
 '''
-                return wrapped_code.strip()
+            return wrapped_code.strip()
 
-        return code_str
-
-    except Exception as e:
-        logger.error("Error in strip_markdown_code_blocks", error=e, exc_info=True)
-        return original_code.strip()
+    return code_str
 
 
 def validate_and_fix_html_content(content: str, filename: str) -> str:
@@ -366,5 +356,7 @@ def validate_and_fix_html_content(content: str, filename: str) -> str:
         return content
 
     except Exception as e:
-        logger.warning("Could not validate/fix HTML content", filename=filename, error=e)
+        logger.warning(
+            "Could not validate/fix HTML content", filename=filename, error=e
+        )
         return content  # Return original content if validation fails
