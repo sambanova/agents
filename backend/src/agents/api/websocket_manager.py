@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from typing import Dict, Optional
 
+from agents.components.compound.code_execution_subgraph import create_code_execution_graph
 import markdown
 import redis
 import structlog
@@ -711,6 +712,16 @@ class WebSocketConnectionManager(WebSocketInterface):
                     },
                 ),
             },
+            "code_execution": {
+                "graph": create_code_execution_graph(self.redis_client),
+                "state_input_mapper": lambda x: {"task": x},
+                "state_output_mapper": lambda x: AIMessage(
+                    content=x["result"],
+                    additional_kwargs={
+                        "agent_type": "code_execution_end",
+                    },
+                ),
+            }
         }
 
         return config
