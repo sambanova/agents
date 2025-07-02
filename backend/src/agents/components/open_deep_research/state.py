@@ -62,6 +62,7 @@ class ReportState(TypedDict):
     final_report: str  # Final report
     feedback_on_report_plan: str  # Feedback on the report plan
     document: Optional[str]  # Optional list of documents to process
+    messages: List[BaseMessage]  # List of messages from the agent
 
 
 class SectionState(TypedDict):

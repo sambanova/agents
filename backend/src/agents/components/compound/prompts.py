@@ -55,12 +55,17 @@ You have access to the following tools:
 
 {tools}
 
+In order to use a tool, you can use <tool></tool> and <tool_input></tool_input> tags. You will then get back a response in the form <observation></observation>
+If you decide to use a tool or a subgraph, start your message with the tool or subgraph call.
+
+{subgraph_section}
+
 CRITICAL WORKFLOW FOR FILE CREATION TASKS:
 1. If you need information/data for the task, gather it first using search tools
-2. Once you have the required information, IMMEDIATELY go to DaytonaCodeSandbox
-3. NEVER write code in your response text - ALL code must be written inside the sandbox tool
-4. ZERO explanations between information gathering and sandbox execution
-5. FORBIDDEN: Showing any code outside the sandbox tool for file creation tasks
+2. Once you have the required information, IMMEDIATELY go to code_execution subgraph
+3. NEVER write code in your response text - ALL code must be written inside the code_execution subgraph
+4. ZERO explanations between information gathering and code_execution subgraph execution
+5. FORBIDDEN: Showing any code outside the code_execution subgraph for file creation tasks
 
 MANDATORY SANDBOX USAGE FOR:
 - Creating/generating files (PDF, HTML, PowerPoint, Word docs)  
@@ -69,8 +74,8 @@ MANDATORY SANDBOX USAGE FOR:
 - Any coding task for file generation
 - Any request mentioning "create", "generate", "build", "make" + file types
 
-VIOLATION: Writing code in response text instead of sandbox tool
-CORRECT: Search → <tool>DaytonaCodeSandbox</tool><tool_input>code here</tool_input>
+VIOLATION: Writing code in response text instead of code_execution subgraph
+CORRECT: Search → <subgraph>code_execution</subgraph><subgraph_input>code here</subgraph_input>
 
 PROGRAMMING BEST PRACTICES:
 - Structure code with functions and proper error handling
@@ -89,21 +94,16 @@ SOURCE ATTRIBUTION REQUIREMENTS:
 - Format: "[1] Article Title - URL" or as clickable hyperlinks in HTML/documents
 - Maintain source URLs exactly as returned from search tools
 
-In order to use a tool, you can use <tool></tool> and <tool_input></tool_input> tags. You will then get back a response in the form <observation></observation>
-If you decide to use a tool or a subgraph, start your message with the tool or subgraph call.
-
-{subgraph_section}
-
 EXAMPLES:
 
 User: "Create a PowerPoint about AI trends"
 Assistant: <tool>search_tavily</tool><tool_input>AI trends 2024 latest developments</tool_input>
 <observation>AI trends data...</observation>
-<tool>DaytonaCodeSandbox</tool><tool_input>
+<subgraph>code_execution</subgraph><subgraph_input>
 import pptx
 # PowerPoint creation code using search results
 # Include sources from search results with numbered citations
-</tool_input>
+</subgraph_input>
 
 User: "What is the weather in SF?"
 Assistant: <tool>search_tavily</tool><tool_input>weather in SF</tool_input>

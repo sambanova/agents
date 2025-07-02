@@ -1,7 +1,5 @@
 import asyncio
-import codecs
 import html
-import json
 import mimetypes
 import os
 import re
@@ -10,7 +8,6 @@ import uuid
 from typing import Dict, List, TypedDict
 
 import structlog
-from agents.storage.redis_service import SecureRedisService
 from agents.storage.redis_storage import RedisStorage
 from agents.utils.code_validator import (
     patch_plot_code_str,
@@ -22,7 +19,8 @@ from daytona_sdk import AsyncDaytona as DaytonaClient
 from daytona_sdk import CreateSandboxFromSnapshotParams
 from daytona_sdk import DaytonaConfig as DaytonaSDKConfig
 from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableLambda
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
 from unidecode import unidecode
@@ -94,6 +92,18 @@ class CorrectingExecutorState(TypedDict):
     current_retry: int
     max_retries: int
     final_result: str
+    messages: List[BaseMessage]  # List of messages from the agent
+
+
+class MessageInterceptor:
+    def __init__(self):
+        self.captured_messages = []
+
+    def capture_and_pass(self, message):
+        """Capture the message and pass it through"""
+        if isinstance(message, AIMessage):
+            self.captured_messages.append(message)
+        return message
 
 
 def create_code_execution_graph(
@@ -344,6 +354,10 @@ def create_code_execution_graph(
                                 logger.warning(
                                     f"Could not validate HTML content: {html_check_error}"
                                 )
+                        elif mime_type in images_formats:
+                            result_str += (
+                                f"\n\n![{file.name}](redis-chart:{file_id}:{user_id})"
+                            )
                         else:
                             # For non-image files, still use attachment reference
                             result_str += f"\n\n![{file.name}](attachment:{file_id})"
@@ -457,9 +471,46 @@ def create_code_execution_graph(
         """
         Node 2: Analyzes the error and gets a proposed fix from the simulated LLM.
         """
-        proposed_fix = await propose_fix(state["code"], state["error_log"])
-        # If can't propose a fix, return the error log as the final result
-        return {"corrections_proposed": proposed_fix}
+        logger.info("Analyzing error and proposing a fix...")
+
+        try:
+            llm = get_sambanova_llm(api_key=sambanova_api_key, model="DeepSeek-V3-0324")
+
+            messages = [
+                SystemMessage(
+                    content=system_prompt.format(
+                        code_replacement_schema=CodeCorrections.model_json_schema()
+                    )
+                ),
+                HumanMessage(
+                    content=user_prompt.format(
+                        code=state["code"], error=state["error_log"]
+                    )
+                ),
+            ]
+
+            fixing_interceptor = MessageInterceptor()
+
+            inceptor_llm = llm | RunnableLambda(fixing_interceptor.capture_and_pass)
+            structured_llm = inceptor_llm | OutputFixingParser.from_llm(
+                llm=inceptor_llm,
+                parser=PydanticOutputParser(pydantic_object=CodeCorrections),
+            )
+
+            response = await structured_llm.ainvoke(messages)
+
+            captured_messages = []
+            for m in fixing_interceptor.captured_messages:
+                m.additional_kwargs["agent_type"] = "code_fixer_agents"
+                captured_messages.append(m)
+
+            return {
+                "corrections_proposed": response.model_dump()["corrections"],
+                "messages": captured_messages,
+            }
+        except Exception as e:
+            logger.error(f"Error calling LLM for code fix: {e}", exc_info=True)
+            return {"error_logs": f"Error calling LLM for code fix: {e}"}
 
     async def override_code(state: CorrectingExecutorState) -> Dict:
         """
@@ -506,38 +557,6 @@ def create_code_execution_graph(
             updated_code = updated_code.replace(to_remove, to_add, 1)
 
         return {"code": updated_code, "corrections_proposed": []}  # Clear corrections
-
-    async def propose_fix(code: str, error: str) -> List[Dict[str, str]]:
-        """
-        Analyze the error and propose specific text replacements.
-        Returns a list of dictionaries, each with "remove" and "add" keys.
-        """
-        logger.info("Analyzing error and proposing a fix...")
-
-        try:
-            llm = get_sambanova_llm(api_key=sambanova_api_key, model="DeepSeek-V3-0324")
-
-            messages = [
-                SystemMessage(
-                    content=system_prompt.format(
-                        code_replacement_schema=CodeReplacement.model_json_schema()
-                    )
-                ),
-                HumanMessage(content=user_prompt.format(code=code, error=error)),
-            ]
-
-            structured_llm = llm | OutputFixingParser.from_llm(
-                llm=llm,  # Use the intercepted model
-                parser=PydanticOutputParser(pydantic_object=CodeCorrections),
-            )
-
-            response = await structured_llm.ainvoke(messages)
-
-            return response.model_dump()["corrections"]
-
-        except Exception as e:
-            logger.error(f"Error calling LLM for code fix: {e}", exc_info=True)
-            return []
 
     async def should_continue_patch_code(state: CorrectingExecutorState) -> str:
         """

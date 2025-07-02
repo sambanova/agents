@@ -7,13 +7,15 @@ from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from typing import Dict, Optional
 
-from agents.components.compound.code_execution_subgraph import create_code_execution_graph
 import markdown
 import redis
 import structlog
 from agents.api.data_types import APIKeys
 from agents.api.utils import deep_research_to_agent_thinking, generate_deep_research_pdf
 from agents.api.websocket_interface import WebSocketInterface
+from agents.components.compound.code_execution_subgraph import (
+    create_code_execution_graph,
+)
 from agents.components.compound.financial_analysis_subgraph import (
     create_financial_analysis_graph,
 )
@@ -649,13 +651,6 @@ class WebSocketConnectionManager(WebSocketInterface):
                         "config": {},
                     },
                     {
-                        "type": "daytona",
-                        "config": {
-                            "user_id": user_id,
-                            "redis_storage": self.message_storage,
-                        },
-                    },
-                    {
                         "type": "wikipedia",
                         "config": {},
                     },
@@ -713,15 +708,26 @@ class WebSocketConnectionManager(WebSocketInterface):
                 ),
             },
             "code_execution": {
-                "graph": create_code_execution_graph(self.redis_client),
-                "state_input_mapper": lambda x: {"task": x},
+                "graph": create_code_execution_graph(
+                    user_id=user_id,
+                    sambanova_api_key=api_keys.sambanova_key,
+                    redis_storage=self.message_storage,
+                ),
+                "state_input_mapper": lambda x: {
+                    "code": x,
+                    "current_retry": 0,
+                    "max_retries": 5,
+                    "error_log": "",
+                    "final_result": "",
+                    "corrections_proposed": [],
+                },
                 "state_output_mapper": lambda x: AIMessage(
-                    content=x["result"],
+                    content=x["final_result"] if x["final_result"] else x["error_log"],
                     additional_kwargs={
                         "agent_type": "code_execution_end",
                     },
                 ),
-            }
+            },
         }
 
         return config
