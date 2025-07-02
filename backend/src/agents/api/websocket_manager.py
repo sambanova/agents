@@ -677,11 +677,11 @@ class WebSocketConnectionManager(WebSocketInterface):
             )
             config["configurable"][
                 "type==default/system_message"
-            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {len(doc_ids)} documents are available to you for retrieval. CRITICAL: For file creation, NEVER show code in response text - write ALL code inside code_execution subgraph only."
+            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {len(doc_ids)} documents are available to you for retrieval. CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph only."
         else:
             config["configurable"][
                 "type==default/system_message"
-            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. CRITICAL: For file creation, NEVER show code in response text - write ALL code inside code_execution subgraph only."
+            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph only."
 
         if multimodal_input:
             config["configurable"][
@@ -710,7 +710,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                     },
                 ),
             },
-            "code_execution": {
+            "DaytonaCodeSandbox": {
                 "description": "This subgraph is used to execute code in a sandbox environment and return the result.",
                 "next_node": "agent",
                 "graph": create_code_execution_graph(

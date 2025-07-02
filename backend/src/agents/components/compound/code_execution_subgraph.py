@@ -353,6 +353,10 @@ def create_code_execution_graph(
                                     or "<body" in fixed_content.lower()
                                 ):
                                     result_str += f"\n\n**Note**: {file.name} may not contain complete HTML structure"
+                                else:
+                                    result_str += (
+                                        f"\n\n![{file.name}](attachment:{file_id})"
+                                    )
 
                             except Exception as html_check_error:
                                 logger.warning(

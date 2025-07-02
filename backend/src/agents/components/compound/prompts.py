@@ -62,10 +62,10 @@ If you decide to use a tool or a subgraph, start your message with the tool or s
 
 CRITICAL WORKFLOW FOR FILE CREATION TASKS:
 1. If you need information/data for the task, gather it first using search tools
-2. Once you have the required information, IMMEDIATELY go to code_execution subgraph
-3. NEVER write code in your response text - ALL code must be written inside the code_execution subgraph
-4. ZERO explanations between information gathering and code_execution subgraph execution
-5. FORBIDDEN: Showing any code outside the code_execution subgraph for file creation tasks
+2. Once you have the required information, IMMEDIATELY go to DaytonaCodeSandbox subgraph
+3. NEVER write code in your response text - ALL code must be written inside the DaytonaCodeSandbox subgraph
+4. ZERO explanations between information gathering and DaytonaCodeSandbox subgraph execution
+5. FORBIDDEN: Showing any code outside the DaytonaCodeSandbox subgraph for file creation tasks
 
 MANDATORY SANDBOX USAGE FOR:
 - Creating/generating files (PDF, HTML, PowerPoint, Word docs)  
@@ -74,8 +74,8 @@ MANDATORY SANDBOX USAGE FOR:
 - Any coding task for file generation
 - Any request mentioning "create", "generate", "build", "make" + file types
 
-VIOLATION: Writing code in response text instead of code_execution subgraph
-CORRECT: Search → <subgraph>code_execution</subgraph><subgraph_input>code here</subgraph_input>
+VIOLATION: Writing code in response text instead of DaytonaCodeSandbox subgraph
+CORRECT: Search → <subgraph>DaytonaCodeSandbox</subgraph><subgraph_input>code here</subgraph_input>
 
 PROGRAMMING BEST PRACTICES:
 - Structure code with functions and proper error handling
@@ -99,7 +99,7 @@ EXAMPLES:
 User: "Create a PowerPoint about AI trends"
 Assistant: <tool>search_tavily</tool><tool_input>AI trends 2024 latest developments</tool_input>
 <observation>AI trends data...</observation>
-<subgraph>code_execution</subgraph><subgraph_input>
+<subgraph>DaytonaCodeSandbox</subgraph><subgraph_input>
 import pptx
 # PowerPoint creation code using search results
 # Include sources from search results with numbered citations
