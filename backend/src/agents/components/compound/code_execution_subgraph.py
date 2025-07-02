@@ -233,6 +233,9 @@ def create_code_execution_graph(
         }
 
     async def execute_code(state: CorrectingExecutorState) -> Dict:
+
+        result_str = ""
+
         try:
             config = DaytonaSDKConfig(api_key=api_key)
             daytona = DaytonaClient(config)
@@ -259,13 +262,12 @@ def create_code_execution_graph(
                     "current_retry": state["current_retry"] + 1,
                 }
 
-            # Ensure result is a string, even if None or other types
-            result_str = str(response.result) if response.result is not None else ""
-
             if response.exit_code != 0:
                 # Ensure error detail is a string
                 await daytona.close()
-                error_detail = result_str
+                error_detail = (
+                    str(response.result) if response.result is not None else ""
+                )
                 logger.info(
                     "Daytona code execution failed",
                     exit_code=response.exit_code,
@@ -276,6 +278,8 @@ def create_code_execution_graph(
                     "error_log": f"Error (Exit Code {response.exit_code}): {error_detail}",
                     "current_retry": state["current_retry"] + 1,
                 }
+            else:
+                result_str += f"Code executed successfully, result from the sandbox:\n\n {str(response.result) if response.result is not None else ''}"
 
             # Debug: Check what we got from the response
             logger.info(
@@ -438,10 +442,6 @@ def create_code_execution_graph(
 
             # Clean up sandbox after processing everything
             await daytona.close()
-
-            # Final validation and enhancement of result
-            if not result_str.strip():
-                result_str = "Code executed successfully. Check the console output above for any results."
 
             # Add execution summary
             files_created = len(
@@ -619,7 +619,7 @@ def create_code_execution_graph(
     )
 
     workflow.add_edge("analyze_error_and_propose_fix", "override_code")
-    workflow.add_edge("override_code", "patch_code")
+    workflow.add_edge("override_code", "execute_code")
 
     # Compile and return
     return workflow.compile()
