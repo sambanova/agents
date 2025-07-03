@@ -246,7 +246,7 @@ def create_code_execution_graph(
             try:
                 response = await sandbox.process.code_run(state["code"])
             except Exception as exec_error:
-                await daytona.close()
+                await sandbox.delete()
                 logger.error(
                     "Code execution failed in sandbox",
                     error=str(exec_error),
@@ -259,7 +259,7 @@ def create_code_execution_graph(
 
             if response.exit_code != 0:
                 # Ensure error detail is a string
-                await daytona.close()
+                await sandbox.delete()
                 error_detail = (
                     str(response.result) if response.result is not None else ""
                 )
@@ -440,7 +440,7 @@ def create_code_execution_graph(
                 logger.info("No charts found in response artifacts")
 
             # Clean up sandbox after processing everything
-            await daytona.close()
+            await sandbox.delete()
 
             # Add execution summary
             files_created = len(
