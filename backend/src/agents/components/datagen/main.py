@@ -63,6 +63,8 @@ async def main_with_persistent_daytona(
     manager = WorkflowManager(language_models, user_id, redis_storage)
     await manager.initialize()
 
+    mang
+
     # Create initial state
     initial_state = {
         "messages": [HumanMessage(content=user_input)],

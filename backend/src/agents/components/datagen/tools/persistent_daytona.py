@@ -24,22 +24,15 @@ class PersistentDaytonaManager:
     Fully synchronous implementation.
     """
 
-    def __init__(self, user_id: str):
-        self._client: Optional[Any] = None
-        self._sandbox: Optional[Any] = None
-        self._user_id: str = user_id
-        self._redis_storage: Optional[Any] = None
-
-    @classmethod
-    async def initialize(
-        cls,
+    def __init__(
+        self,
         user_id: str,
         redis_storage: Optional[Any] = None,
         snapshot: str = "data-analysis:0.0.9",
         data_sources: Optional[List[str]] = None,
-    ) -> "PersistentDaytonaManager":
+    ):
         """
-        Initialize the persistent Daytona client and sandbox.
+        Initialize the persistent Daytona client. The sandbox will be created on first use.
 
         Args:
             user_id: User identifier for the session
@@ -47,39 +40,48 @@ class PersistentDaytonaManager:
             snapshot: Daytona snapshot to use for the sandbox
             data_sources: List of file paths to upload to sandbox root folder
         """
-        instance = cls(user_id)
+        self._sandbox: Optional[Any] = None
+        self._user_id = user_id
+        self._redis_storage = redis_storage
+        self._snapshot = snapshot
+        self._data_sources = data_sources
 
         api_key = os.getenv("DAYTONA_API_KEY")
         if not api_key:
             raise ValueError("DAYTONA_API_KEY environment variable not set")
 
-        logger.info("Initializing persistent Daytona client", user_id=user_id)
+        logger.info("Initializing persistent Daytona client", user_id=self._user_id)
 
-        # For now, we'll use a simple approach
-        # In practice, this would use actual async Daytona SDK calls
-        instance._redis_storage = redis_storage
-
-        # Placeholder for actual Daytona initialization
-        # This would be replaced with actual async Daytona SDK calls
         config = DaytonaSDKConfig(api_key=api_key)
-        instance._client = DaytonaClient(config)
+        self._client: DaytonaClient = DaytonaClient(config)
 
-        params = CreateSandboxFromSnapshotParams(
-            snapshot=snapshot,
-        )
-        instance._sandbox = await instance._client.create(params=params)
+    async def _get_sandbox(self):
+        """Get the sandbox instance, creating it if it doesn't exist."""
+        if self._sandbox is None:
+            if not self._client:
+                raise RuntimeError("Daytona client not initialized.")
 
-        logger.info(
-            "Persistent Daytona sandbox created",
-            sandbox_id=instance._sandbox,
-            user_id=user_id,
-        )
+            logger.info(
+                "Creating persistent Daytona sandbox on first use",
+                user_id=self._user_id,
+            )
 
-        # Upload files to sandbox root folder if provided
-        if data_sources:
-            await instance._upload_files(data_sources)
+            params = CreateSandboxFromSnapshotParams(
+                snapshot=self._snapshot,
+            )
+            self._sandbox = await self._client.create(params=params)
 
-        return instance
+            logger.info(
+                "Persistent Daytona sandbox created",
+                sandbox_id=self._sandbox,
+                user_id=self._user_id,
+            )
+
+            # Upload files to sandbox root folder if provided
+            if self._data_sources:
+                await self._upload_files(self._data_sources)
+
+        return self._sandbox
 
     async def _upload_files(self, file_paths: List[str]) -> None:
         """Upload files to the sandbox root folder."""
@@ -119,7 +121,8 @@ class PersistentDaytonaManager:
 
     async def execute_code(self, code: str) -> str:
         """Execute code in the persistent sandbox."""
-        if not self._sandbox:
+        sandbox = await self._get_sandbox()
+        if not sandbox:
             raise RuntimeError(
                 "Daytona sandbox not initialized. Call initialize() first."
             )
@@ -146,7 +149,7 @@ class PersistentDaytonaManager:
 
             # Execute the code with timeout and error handling
             try:
-                response = await self._sandbox.process.code_run(patched_code)
+                response = await sandbox.process.code_run(patched_code)
             except Exception as exec_error:
                 logger.error(
                     "Code execution failed in sandbox",
@@ -180,7 +183,8 @@ class PersistentDaytonaManager:
 
     async def execute(self, command: str, timeout: int = 60) -> str:
         """Execute a shell command in the persistent sandbox."""
-        if not self._sandbox:
+        sandbox = await self._get_sandbox()
+        if not sandbox:
             raise RuntimeError(
                 "Daytona sandbox not initialized. Call initialize() first."
             )
@@ -188,7 +192,7 @@ class PersistentDaytonaManager:
         try:
             logger.info("Executing command in persistent sandbox", command=command)
 
-            response = await self._sandbox.process.exec(command, timeout=timeout)
+            response = await sandbox.process.exec(command, timeout=timeout)
 
             # Ensure result is a string, even if None or other types
             result_str = str(response.result) if response.result is not None else ""
@@ -216,12 +220,13 @@ class PersistentDaytonaManager:
 
     async def list_files(self, directory: str = ".") -> List[str]:
         """List files in the sandbox directory."""
-        if not self._sandbox:
+        sandbox = await self._get_sandbox()
+        if not sandbox:
             raise RuntimeError("Daytona sandbox not initialized.")
 
         try:
             # Use actual Daytona SDK call to list files
-            files = await self._sandbox.fs.list_files(directory)
+            files = await sandbox.fs.list_files(directory)
             file_names = [f.name for f in files]
 
             if not file_names:
@@ -234,11 +239,12 @@ class PersistentDaytonaManager:
 
     async def read_file(self, filename: str) -> str:
         """Read a file from the sandbox."""
-        if not self._sandbox:
+        sandbox = await self._get_sandbox()
+        if not sandbox:
             raise RuntimeError("Daytona sandbox not initialized.")
 
         try:
-            content = await self._sandbox.fs.download_file(filename)
+            content = await sandbox.fs.download_file(filename)
             # Decode binary content to string if needed
             if isinstance(content, bytes):
                 content = content.decode("utf-8")
@@ -249,7 +255,8 @@ class PersistentDaytonaManager:
 
     async def write_file(self, filename: str, content: str) -> str:
         """Write content to a file in the sandbox."""
-        if not self._sandbox:
+        sandbox = await self._get_sandbox()
+        if not sandbox:
             raise RuntimeError("Daytona sandbox not initialized.")
 
         try:
@@ -257,7 +264,7 @@ class PersistentDaytonaManager:
             content_bytes = content.encode("utf-8")
 
             # Use actual Daytona SDK call to upload/write file
-            await self._sandbox.fs.upload_file(content_bytes, filename)
+            await sandbox.fs.upload_file(content_bytes, filename)
 
             logger.info("File written successfully", filename=filename)
             return f"File '{filename}' written successfully to sandbox"
@@ -283,20 +290,19 @@ class PersistentDaytonaManager:
     async def cleanup(self):
         """Clean up the persistent Daytona client and sandbox."""
         try:
-            if self._client:
+            if self._sandbox:
                 logger.info(
-                    "Closing persistent Daytona client", sandbox_id=self._sandbox
+                    "Deleting persistent Daytona sandbox", sandbox_id=self._sandbox
                 )
-                # Close the Daytona client which will also clean up the sandbox
                 await self._sandbox.delete()
-                logger.info("Persistent Daytona client closed successfully")
+                logger.info("Persistent Daytona sandbox deleted successfully")
 
             # Reset the instance variables
             self._client = None
             self._sandbox = None
-            logger.info("Persistent Daytona cleaned up successfully")
+            logger.info("Persistent Daytona manager cleaned up successfully")
         except Exception as e:
-            logger.error("Error during cleanup", error=str(e))
+            logger.error("Error during cleanup", error=str(e), exc_info=True)
             # Still reset variables even if cleanup failed
             self._client = None
             self._sandbox = None

@@ -59,10 +59,12 @@ class WorkflowManager:
         ]
         self.user_id = user_id
         self.agents = {}
-        self.daytona_manager = None  # Initialize to None
+        self.daytona_manager = None  
         self.redis_storage = redis_storage
+        self.setup_workflow()
+        self.agents = self.create_agents()
 
-    async def initialize(self):
+    async def initialize_daytona_manager(self):
         """
         Asynchronously initializes the WorkflowManager, including the Daytona manager and agents.
         """
@@ -75,8 +77,6 @@ class WorkflowManager:
                 "/Users/tamasj/Downloads/customer_satisfaction_purchase_behavior.csv"
             ],
         )
-        self.agents = self.create_agents()
-        self.setup_workflow()
 
     def create_agents(self):
         """Create all system agents"""
@@ -231,6 +231,7 @@ class WorkflowManager:
         self.workflow.add_node("HumanChoice", human_choice_node)
         self.workflow.add_node("HumanReview", human_review_node)
         self.workflow.add_node("Refiner", refiner_node_async)
+        self.workflow.add_node("Cleanup", self.cleanup_node)
 
         # Add edges
         self.workflow.add_edge(START, "Hypothesis")
@@ -281,7 +282,8 @@ class WorkflowManager:
 
         self.workflow.add_edge("NoteTaker", "Process")
         self.workflow.add_edge("Refiner", "HumanReview")
-        self.workflow.add_edge("HumanReview", END)
+        self.workflow.add_edge("HumanReview", "Cleanup")
+        self.workflow.add_edge("Cleanup", END)
 
         # Compile workflow
         self.memory = MemorySaver()
@@ -290,25 +292,14 @@ class WorkflowManager:
     def get_graph(self):
         return self.graph
 
+    async def cleanup_node(self, state: dict) -> dict:
+        """Node to perform cleanup."""
+        logger.info("Executing cleanup node.")
+        await self.cleanup()
+        return {}
+
     async def cleanup(self):
         """Clean up the persistent Daytona manager."""
         if self.daytona_manager:
             await self.daytona_manager.cleanup()
             self.daytona_manager = None
-
-    async def run_workflow(self, initial_state: dict, config: dict):
-        """
-        Run the workflow with the given initial state and configuration.
-        """
-        if not self.graph:
-            raise Exception("Workflow graph not set up. Call initialize() first.")
-
-        try:
-            # Run the graph
-            async for s in self.graph.astream(
-                initial_state, config, stream_mode="values"
-            ):
-                yield s
-        finally:
-            # Ensure cleanup is called
-            await self.cleanup()
