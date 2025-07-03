@@ -1,14 +1,15 @@
-import asyncio
 import html
 import mimetypes
 import os
 import re
 import time
 import uuid
-from typing import Dict, List, TypedDict
+from typing import Dict, List, Optional, TypedDict
 
 import structlog
+from agents.components.open_deep_research.utils import APIKeyRotator
 from agents.storage.redis_storage import RedisStorage
+from agents.tools.langgraph_tools import TOOL_REGISTRY
 from agents.utils.code_validator import (
     patch_plot_code_str,
     strip_markdown_code_blocks,
@@ -35,30 +36,42 @@ class CodeReplacement(BaseModel):
 
 class CodeCorrections(BaseModel):
     corrections: List[CodeReplacement] = Field(
-        description="List of code corrections.",
+        description="List of code corrections. This can be empty if you decide that research is needed.",
+        default_factory=list,
+    )
+    needs_research: bool = Field(
+        description="Set to true if you are not confident about the fix and believe a web search for the error message would provide better context. If you set this to true, you MUST provide an empty list for `corrections`.",
+        default=False,
     )
 
 
-system_prompt = """You are an expert Python developer and debugger. Your task is to analyze Python code that has failed and propose specific text replacements to fix it.
+system_prompt = """You are an expert Python developer and debugger. Your primary goal is to be accurate. When in doubt, you MUST request more information by using the web search tool.
 
 INSTRUCTIONS:
-1.  Carefully analyze the provided code and the error message.
-2.  Identify the exact text snippets that need to be replaced. This is especially important for code inside large multi-line strings like HTML, where line numbers are misleading.
-3.  Return your response as a JSON list of objects. Each object must have two keys: "remove" and "add".
-4.  The "remove" value must be the **exact** string from the original code that you want to replace.
-5.  The "add" value is the new text that will replace it.
-6.  **To ensure the replacement is applied at the correct location, the `remove` value must correspond to a unique block of text in the code. If the code to be changed is short and not unique, you MUST expand the `remove` string to include surrounding lines to make it unique. The `add` string must then contain the same surrounding lines plus your change.** For example, to change `x = 1` to `x = 2` in a file with multiple `x = 1` assignments, you might set `remove` to `y = 0\\nx = 1\\nz = 2` and `add` to `y = 0\\nx = 2\\nz = 2`.
-7.  If you only need to add code, make "remove" an empty string "" and specify where to add it in the "add" value, including surrounding lines for context. This is not for replacement but for insertion.
-8.  If you only need to remove code, make "add" an empty string "". The `remove` string must still be unique.
-9.  It is critical that the "remove" string is EXACTLY as it appears in the code, including all whitespace, newlines, and special characters.
-
+1.  First, analyze the provided code, error message, and any search context.
+2.  Next, categorize the error. Is it:
+    a) A simple syntax error, typo, or undefined variable?
+    b) A complex error involving an external library's API (e.g., `AttributeError`, `TypeError`, `ValueError` from a library call)?
+    c) An error you don't recognize?
+3.  **Based on the category, DECIDE YOUR NEXT ACTION:**
+    *   **If `search_context` is EMPTY:**
+        *   If the error is category (a) (simple syntax/typo), you can propose a fix directly. Set `needs_research` to `false`.
+        *   If the error is category (b) or (c) (library error or unknown), you MUST assume you don't have enough information. Set `needs_research` to `true` and provide an EMPTY list for `corrections`. This is the safest action. **DO NOT GUESS THE FIX FOR LIBRARY ERRORS.**
+    *   **If `search_context` is NOT EMPTY:**
+        *   You MUST use the provided search context to formulate a definitive fix. Provide the code corrections based on your analysis and set `needs_research` to `false`.
+4.  **FORMATTING THE FIX:**
+    *   The "remove" value must be the **exact** string from the original code.
+    *   The "add" value is the new text that will replace it.
+    *   To ensure uniqueness, expand the `remove` and `add` strings with surrounding lines if necessary.
+    *   It is critical that the "remove" string is EXACTLY as it appears in the code, including all whitespace, newlines, and special characters.
+    *   If you receive `CORRECTION FEEDBACK`, your previous attempt failed. Carefully read the feedback and adjust your proposed `corrections` to address the issue. For example, if the feedback says your 'remove' string was not unique, you MUST add more surrounding lines to both the 'remove' and 'add' fields.
 
 You must respond with valid JSON that matches this exact schema:
 {code_replacement_schema}
 """
 
 
-user_prompt = """Please analyze this Python code and the error it produced. Propose specific text replacements to fix the error.
+user_prompt = """Please analyze this Python code, the error it produced, and any provided search context. Follow the instructions to propose a fix or request research.
 
 CODE:
 ```python
@@ -68,6 +81,16 @@ CODE:
 ERROR:
 ```
 {error}
+```
+
+SEARCH CONTEXT:
+```
+{context}
+```
+
+CORRECTION FEEDBACK:
+```
+{feedback}
 ```
 """
 
@@ -84,6 +107,10 @@ class CorrectingExecutorState(TypedDict):
         current_retry: The current attempt number.
         max_retries: The maximum number of correction attempts allowed.
         final_result: The successful output of the code.
+        messages: List[BaseMessage]  # List of messages from the agent
+        search_context: Optional[str]
+        needs_research: bool
+        correction_feedback: Optional[str]
     """
 
     code: str
@@ -92,7 +119,10 @@ class CorrectingExecutorState(TypedDict):
     current_retry: int
     max_retries: int
     final_result: str
-    messages: List[BaseMessage]  # List of messages from the agent
+    messages: List[BaseMessage]
+    search_context: Optional[str]
+    needs_research: bool
+    correction_feedback: Optional[str]
 
 
 class MessageInterceptor:
@@ -130,26 +160,6 @@ def create_code_execution_graph(
         "text/csv",
     ]
     images_formats = ["image/png", "image/jpg", "image/jpeg", "image/gif", "image/svg"]
-
-    async def secure_sandbox_executor(code: str) -> dict:
-        """
-        Simulates a secure environment to execute Python code.
-        In a real application, this would be a sandboxed environment like a Docker container.
-        """
-        try:
-            # A simple check to simulate a common error.
-            if "import non_existent_library" in code:
-                raise ImportError("No module named 'non_existent_library'")
-
-            # Another check for a logic error.
-            if "result = 10 / 0" in code:
-                raise ZeroDivisionError("division by zero")
-
-            # If no errors, simulate a successful execution.
-            return {"result": "Execution successful!", "error": ""}
-        except Exception as e:
-            # Return the error message if execution fails.
-            return {"result": "", "error": f"{type(e).__name__}: {e}"}
 
     def fix_common_string_issues(code: str) -> str:
         """
@@ -430,11 +440,18 @@ def create_code_execution_graph(
 
         return result
 
-    async def analyze_error_and_propose_fix(state: CorrectingExecutorState) -> Dict:
+    async def analyze_error_and_decide(state: CorrectingExecutorState) -> Dict:
         """
-        Node 2: Analyzes the error and gets a proposed fix from the simulated LLM.
+        Analyzes the error and decides whether to propose a fix directly or to
+        conduct research first. If research has already been done, it uses the
+        context to propose a definitive fix.
         """
-        logger.info("Analyzing error and proposing a fix...")
+        context = state.get("search_context")
+        feedback = state.get("correction_feedback")
+        if context:
+            logger.info("Analyzing error with search context...")
+        else:
+            logger.info("Analyzing error and deciding on next step...")
 
         try:
             llm = get_sambanova_llm(api_key=sambanova_api_key, model="DeepSeek-V3-0324")
@@ -447,7 +464,10 @@ def create_code_execution_graph(
                 ),
                 HumanMessage(
                     content=user_prompt.format(
-                        code=state["code"], error=state["error_log"]
+                        code=state["code"],
+                        error=state["error_log"],
+                        context=context or "No search context provided.",
+                        feedback=feedback or "No feedback on previous attempt.",
                     )
                 ),
             ]
@@ -467,22 +487,60 @@ def create_code_execution_graph(
                 m.additional_kwargs["agent_type"] = "code_fixer_agents"
                 captured_messages.append(m)
 
+            # Clear the search context after it's been used
             return {
                 "corrections_proposed": response.model_dump()["corrections"],
+                "needs_research": response.needs_research,
                 "messages": captured_messages,
+                "search_context": None,  # Reset context
+                "correction_feedback": None,  # Reset feedback
             }
         except Exception as e:
             logger.error(f"Error calling LLM for code fix: {e}", exc_info=True)
-            return {"error_logs": f"Error calling LLM for code fix: {e}"}
+            # If the analysis fails, escalate to research as a fallback
+            return {"needs_research": True}
+
+    async def research_for_fix(state: CorrectingExecutorState) -> Dict:
+        """
+        Node: Performs a web search using the error message to find solutions.
+        """
+        logger.info("Performing web search for error context...")
+        error_log = state["error_log"]
+
+        # Extract the most meaningful line from the error log for a better query
+        error_lines = error_log.strip().split("\n")
+        concise_error = error_lines[-1] if error_lines else error_log
+        query = f"python {concise_error}"
+        logger.info(f"Tavily search query: {query}")
+
+        try:
+            # Get the search tool from the registry
+            tavily_search = TOOL_REGISTRY["search_tavily"]["factory"]()
+
+            # Perform the search
+            search_results = await tavily_search.ainvoke(
+                {"query": query, "max_results": 5, "include_raw_content": True}
+            )
+
+            # The tool returns a list of strings, so we format it.
+            formatted_context = "\n\n".join([s["content"] for s in search_results])
+
+            return {"search_context": formatted_context}
+        except Exception as e:
+            logger.error(f"Error during Tavily search: {e}", exc_info=True)
+            # If search fails, return empty context to proceed without it
+            return {"search_context": "Web search failed."}
 
     async def override_code(state: CorrectingExecutorState) -> Dict:
         """
-        Node 3: Applies the proposed fix to the code in the state.
+        Applies the proposed fix to the code in the state.
         """
         corrections = state["corrections_proposed"]
-        if not corrections:
-            logger.info("No corrections proposed. Halting.")
-            return {}
+        if not corrections and not state.get("correction_feedback"):
+            logger.info(
+                "No corrections proposed and no feedback. Assuming successful pass-through."
+            )
+            return {"corrections_proposed": []}  # Ensure corrections are cleared
 
         updated_code = state["code"]
 
@@ -503,14 +561,22 @@ def create_code_execution_graph(
                     "Text to remove is not unique, skipping correction to avoid ambiguity.",
                     to_remove=to_remove[:100],  # Log a preview
                 )
-                continue
+                feedback_msg = f"The 'remove' string you provided was not unique. Please add more surrounding lines of context to make it specific. The non-unique string was: '{to_remove[:100]}...'"
+                return {
+                    "correction_feedback": feedback_msg,
+                    "corrections_proposed": [],  # Clear the failed proposal
+                }
 
             if to_remove and to_remove not in updated_code:
                 logger.warning(
                     "Text to remove not found in code, skipping correction.",
                     to_remove=to_remove[:100],  # Log a preview
                 )
-                continue
+                feedback_msg = f"The 'remove' string you provided was not found in the code. Ensure it is an exact match. The string was: '{to_remove[:100]}...'"
+                return {
+                    "correction_feedback": feedback_msg,
+                    "corrections_proposed": [],  # Clear the failed proposal
+                }
 
             logger.info(
                 "Applying correction",
@@ -528,7 +594,7 @@ def create_code_execution_graph(
         if state["error_log"]:
             if state["current_retry"] < state["max_retries"]:
                 # If there's an error and we have retries left, enter the correction loop.
-                return "analyze_and_fix"
+                return "analyze_and_decide"
             else:
                 # If retries are exhausted, end the process.
                 logger.info("Max Retries Reached")
@@ -544,7 +610,7 @@ def create_code_execution_graph(
         if state["error_log"]:
             if state["current_retry"] < state["max_retries"]:
                 # If there's an error and we have retries left, enter the correction loop.
-                return "analyze_and_fix"
+                return "analyze_and_decide"
             else:
                 # If retries are exhausted, end the process.
                 logger.info("Max Retries Reached")
@@ -553,11 +619,36 @@ def create_code_execution_graph(
             # If there's no error, the process is successful.
             return END
 
+    async def should_research(state: CorrectingExecutorState) -> str:
+        """
+        Determines whether to perform a web search based on the LLM's decision.
+        """
+        if state.get("needs_research"):
+            logger.info(
+                "LLM is not confident and has requested research. Proceeding to web search."
+            )
+            return "research_for_fix"
+        else:
+            logger.info("LLM is confident or has used context. Applying proposed fix.")
+            return "override_code"
+
+    def did_override_succeed(state: CorrectingExecutorState) -> str:
+        """
+        Checks if the override_code step produced feedback, indicating a failure.
+        """
+        if state.get("correction_feedback"):
+            logger.info("Correction failed. Looping back to analysis with feedback.")
+            return "analyze_and_decide"
+        else:
+            logger.info("Correction applied successfully. Proceeding to execution.")
+            return "execute_code"
+
     workflow = StateGraph(CorrectingExecutorState)
 
     workflow.add_node("patch_code", patch_code)
     workflow.add_node("execute_code", execute_code)
-    workflow.add_node("analyze_error_and_propose_fix", analyze_error_and_propose_fix)
+    workflow.add_node("analyze_and_decide", analyze_error_and_decide)
+    workflow.add_node("research_for_fix", research_for_fix)
     workflow.add_node("override_code", override_code)
 
     workflow.set_entry_point("patch_code")
@@ -566,7 +657,7 @@ def create_code_execution_graph(
         "patch_code",
         should_continue_patch_code,
         {
-            "analyze_and_fix": "analyze_error_and_propose_fix",
+            "analyze_and_decide": "analyze_and_decide",
             "execute_code": "execute_code",
             END: END,
         },
@@ -576,13 +667,24 @@ def create_code_execution_graph(
         "execute_code",
         should_continue_execute_code,
         {
-            "analyze_and_fix": "analyze_error_and_propose_fix",
+            "analyze_and_decide": "analyze_and_decide",
             END: END,
         },
     )
 
-    workflow.add_edge("analyze_error_and_propose_fix", "override_code")
-    workflow.add_edge("override_code", "execute_code")
+    workflow.add_conditional_edges(
+        "analyze_and_decide",
+        should_research,
+        {"research_for_fix": "research_for_fix", "override_code": "override_code"},
+    )
+
+    workflow.add_conditional_edges(
+        "override_code",
+        did_override_succeed,
+        {"analyze_and_decide": "analyze_and_decide", "execute_code": "execute_code"},
+    )
+
+    workflow.add_edge("research_for_fix", "analyze_and_decide")  # Loop back
 
     # Compile and return
     return workflow.compile()
