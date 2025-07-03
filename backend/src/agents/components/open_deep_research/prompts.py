@@ -20,7 +20,11 @@ The queries should:
 3. Be specific enough to find high-quality, relevant sources while covering the breadth needed for the report structure. 
 
 Make the queries specific enough to find high-quality, relevant sources while covering the breadth needed for the report structure.
-</Task>"""
+</Task>
+
+You must respond with valid JSON that matches this exact schema:
+{report_planner_schema}
+"""
 
 # Prompt to generate the report plan
 report_planner_instructions = """I want a plan for a report.
@@ -57,6 +61,9 @@ Here is context to use to plan the sections of the report:
 Here is feedback on the report structure from review (if any):
 {feedback}
 </Feedback>
+
+You must respond with valid JSON that matches this exact schema:
+{report_planner_schema}
 """
 
 # Query writer instructions
@@ -81,6 +88,9 @@ Your queries should be:
 - Technical enough to capture detailed implementation information
 - Diverse enough to cover all aspects of the section plan
 - Focused on authoritative sources (documentation, technical blogs, academic papers)
+
+You must respond with valid JSON that matches this exact schema:
+{queries_schema}
 </Task>"""
 
 # Section writer instructions
@@ -159,14 +169,8 @@ Evaluate whether the section adequately covers the topic by checking technical a
 If the section fails any criteria, generate specific follow-up search queries to gather missing information.
 </task>
 
-<format>
-grade: Literal["pass","fail"] = Field(
-description="Evaluation result indicating whether the response meets requirements ('pass') or needs revision ('fail')."
-)
-follow_up_queries: List[SearchQuery] = Field(
-description="List of follow-up search queries.",
-)
-</format>
+You must respond with valid JSON that matches this exact schema:
+{section_grader_schema}
 """
 
 final_section_writer_instructions = """You are an expert technical writer crafting a section that synthesizes information from the rest of the report.

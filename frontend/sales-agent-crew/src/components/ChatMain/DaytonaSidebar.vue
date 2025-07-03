@@ -663,7 +663,7 @@ function processStreamingEvents(events) {
             const content = event.data.content
             
             // Look for tool calls with code input - this is where the actual code is
-            if (content.includes('<tool>DaytonaCodeSandbox</tool>')) {
+            if (content.includes('<subgraph>DaytonaCodeSandbox</subgraph>')) {
               // Detect start of a NEW Daytona execution and reset code buffer for fresh streaming
               if (index > lastProcessedToolIndex.value) {
                 lastProcessedToolIndex.value = index
@@ -673,7 +673,8 @@ function processStreamingEvents(events) {
                 lastCodeUpdateTs.value = 0
               }
               // Extract the code from tool_input
-              const toolInputMatch = content.match(/<tool_input>([\s\S]*?)(?:<\/tool_input>|$)/);
+              const toolInputMatch = content.match(/<tool_input>([\s\S]*?)(?:<\/tool_input>|$)/) || 
+                                    content.match(/<subgraph_input>([\s\S]*?)(?:<\/subgraph_input>|$)/);
               if (toolInputMatch && toolInputMatch[1]) {
                 const extractedCode = toolInputMatch[1].trim()
                 // Only update if this is actual Python code (contains import, def, plt, etc.)
@@ -707,14 +708,17 @@ function processStreamingEvents(events) {
         case 'agent_completion':
           // Handle both streaming and loaded conversation agent_completion events
           const eventData = event.data || event;
+
           
-          if (eventData?.name === 'DaytonaCodeSandbox' || eventData?.agent_type === 'tool_response' || eventData?.agent_type === 'react_tool') {
-            console.log('Processing Daytona agent_completion event:', eventData);
-            
+          if (eventData?.name === 'DaytonaCodeSandbox' || eventData?.agent_type === 'tool_response' || eventData?.agent_type === 'react_tool' || eventData?.agent_type === 'react_subgraph_DaytonaCodeSandbox') {
+
             // Handle tool call (react_tool) - extract code from tool input
-            if (eventData?.agent_type === 'react_tool' && eventData.content && String(eventData.content).includes('DaytonaCodeSandbox')) {
+            if ((eventData?.agent_type === 'react_tool' || eventData?.agent_type === 'react_subgraph_DaytonaCodeSandbox') && eventData.content && String(eventData.content).includes('DaytonaCodeSandbox')) {
+
               const contentStr = String(eventData.content);
-              const toolInputMatch = contentStr.match(/<tool_input>([\s\S]*?)(?:<\/tool_input>|$)/);
+              // Check for both tool_input and subgraph_input patterns
+              const toolInputMatch = contentStr.match(/<tool_input>([\s\S]*?)(?:<\/tool_input>|$)/) || 
+                                    contentStr.match(/<subgraph_input>([\s\S]*?)(?:<\/subgraph_input>|$)/);
               if (toolInputMatch && toolInputMatch[1]) {
                 const extractedCode = toolInputMatch[1].trim()
                 if (extractedCode.includes('import') || extractedCode.includes('def ') || 

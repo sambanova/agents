@@ -1,4 +1,4 @@
-TOOLS_VERSION ?= 0.0.9
+TOOLS_VERSION ?= 0.0.10
 DOCKER_HOST := unix:///Users/$(USER)/.colima/default/docker.sock
 
 .PHONY: push-finance

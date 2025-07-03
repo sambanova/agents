@@ -353,15 +353,51 @@ def _get_press_releases():
 
 @lru_cache(maxsize=1)
 def _get_pubmed():
-    return create_retriever_tool(
-        PubMedRetriever(), "pub_med_search", "Search for a query on PubMed"
+    pubmed_retriever = PubMedRetriever()
+
+    def pubmed_search(query: str) -> str:
+        """Search PubMed for the given query."""
+        docs = pubmed_retriever.get_relevant_documents(query)
+        if not docs:
+            return "No results found on PubMed for this query."
+
+        # Combine the first few results with titles and abstracts
+        results = []
+        for doc in docs[:3]:
+            content = doc.page_content
+            metadata = doc.metadata
+            title = metadata.get("Title", "No title available")
+            results.append(f"**{title}**\n{content}")
+
+        return "\n\n---\n\n".join(results)
+
+    return Tool(
+        name="pub_med_search",
+        func=pubmed_search,
+        description="Search for scientific literature on PubMed. Input should be a search query string.",
+        args_schema=DDGInput,  # Reuse the same schema as DDG since it's just a query string
     )
 
 
 @lru_cache(maxsize=1)
 def _get_wikipedia():
-    return create_retriever_tool(
-        WikipediaRetriever(), "wikipedia", "Search for a query on Wikipedia"
+    wikipedia_retriever = WikipediaRetriever()
+
+    def wikipedia_search(query: str) -> str:
+        """Search Wikipedia for the given query."""
+        docs = wikipedia_retriever.get_relevant_documents(query)
+        if not docs:
+            return "No results found on Wikipedia for this query."
+
+        # Combine the first few results
+        combined_result = "\n\n".join([doc.page_content for doc in docs[:3]])
+        return combined_result
+
+    return Tool(
+        name="wikipedia",
+        func=wikipedia_search,
+        description="Search for a query on Wikipedia. Input should be a search query string.",
+        args_schema=DDGInput,  # Reuse the same schema as DDG since it's just a query string
     )
 
 
