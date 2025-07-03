@@ -111,7 +111,7 @@ def create_code_execution_graph(
 ):
     logger.info("Creating code execution subgraph")
     api_key = os.getenv("DAYTONA_API_KEY")
-    daytona_snapshot = "data-analysis:0.0.8"
+    daytona_snapshot = "data-analysis:0.0.10"
 
     supported_extensions = [
         "image/png",
@@ -164,22 +164,17 @@ def create_code_execution_graph(
         # Step 2: Transliterate all Unicode to ASCII to handle symbols like ∼, ℓ, etc.
         code = unidecode(code)
 
-        # Step 3: Escape curly braces within f-strings to prevent evaluation.
-        def escape_braces_in_fstring_content(match):
-            prefix, quote, content = match.groups()
-            # Escape single curly braces, leaving double braces untouched.
-            content = re.sub(r"(?<!{){(?!{)", "{{", content)
-            content = re.sub(r"(?<!})}(?!})", "}}", content)
-            return f"{prefix}{quote}{content}{quote}"
+        # Step 3: Remove XML-like closing tags at the end of the code
+        # This handles cases like </subgraph, </s, </sub, etc. that cause syntax errors
+        code = re.sub(r"</[a-zA-Z][a-zA-Z0-9_]*\s*(?:\n```)?$", "", code)
 
-        fstring_pattern = re.compile(
-            r"""(f|F|fr|Fr|fR|FR|rf|rF)\s*({"{3}|'{3}|"|')(.+?)\2""",
-            re.DOTALL | re.VERBOSE,
-        )
-        code = fstring_pattern.sub(escape_braces_in_fstring_content, code)
+        # Handle the case where there's just a '</' without any following characters
+        code = re.sub(r"</\s*(?:\n```)?$", "", code)
 
         if code != original_code:
-            logger.info("Applied HTML, Unicode, and f-string fixes to the code.")
+            logger.info(
+                "Applied HTML, Unicode, f-string, or XML tag fixes to the code."
+            )
 
         return code
 

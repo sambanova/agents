@@ -1219,89 +1219,151 @@ const currentStreamingStatus = computed(() => {
   }
   
   const events = props.streamingEvents;
-  let currentTool = null;
-  let toolQuery = null;
-  let latestCompletion = null;
-  let hasStreamingContent = false;
   
-  // Single pass through events to gather all necessary information
-  events.forEach(event => {
-    const data = event.data;
-    
-    // Track tool calls
-    if (event.event === 'llm_stream_chunk' && data.content?.includes('<tool>')) {
-      const toolMatch = data.content.match(/<tool>([^<]+)<\/tool>/);
-      const inputMatch = data.content.match(/<tool_input>([^<\n\r]+)/);
-      
-      if (toolMatch) {
-        currentTool = toolMatch[1];
-        toolQuery = inputMatch?.[1]?.trim();
-      }
-    }
-    
-        // Track tool completions
-    if (event.event === 'agent_completion' && data.type === 'LiberalFunctionMessage' && data.name) {
-      const { name, content } = data;
-      if (name === 'search_tavily' && Array.isArray(content)) {
-        latestCompletion = `✓ Found ${content.length} web sources`;
-      } else if (name === 'arxiv') {
-        const papers = content?.includes('Title:') ? content.split('Title:').length - 1 : 1;
-        latestCompletion = `✓ Found ${papers} arXiv papers`;
-      } else if (name === 'DaytonaCodeSandbox') {
-        latestCompletion = `✓ Code execution complete`;
-      }
-    }
-    
-    // Track deep research events
-    if (event.event === 'agent_completion') {
-      const agentType = data.additional_kwargs?.agent_type || data.agent_type;
-      const agentTypeMap = {
-        'deep_research_search_queries_plan': '◦ Planning search queries',
-        'deep_research_search_queries_plan_fixed': '↻ Plan format corrected',
-        'deep_research_search_sections': '▫ Creating research sections',
-        'deep_research_interrupt': '○ User feedback required',
-        'deep_research_search_queries_section': '• Section search queries',
-        'deep_research_search_queries_section_fixed': '↻ Section format corrected',
-        'deep_research_writer': '◆ Writing content',
-        'deep_research_grader': '◈ Evaluating quality',
-        'deep_research_end': '✓ Research complete',
-        'react_subgraph_deep_research': '◐ Deep research started',
-        'react_subgraph_financial_analysis': '◐ Financial analysis started',
-        'react_end': '✓ Response complete',
-        'financial_analysis_end': '✓ Financial analysis complete'
-      };
-      
-      if (agentTypeMap[agentType]) {
-        latestCompletion = agentTypeMap[agentType];
-      }
-    }
-    
-    // Check for streaming response content
-    if (event.event === 'llm_stream_chunk' && 
-        data.content?.trim() && 
-        !data.content.includes('<tool>')) {
-      hasStreamingContent = true;
-    }
-  });
+  // Check for most recent significant events first
+  // This ensures we show the most up-to-date status
   
-  // Return status based on priority
-  if (latestCompletion) return latestCompletion;
-  if (hasStreamingContent) return '◆ Streaming response...';
+  // 1. Check for streaming content at the end (highest priority)
+  const recentEvents = events.slice(-5); // Look at last 5 events
   
-  // Show current tool status
-  if (currentTool) {
-    const toolMap = {
-      'search_tavily': `○ Searching web: "${toolQuery || 'query'}"`,
-      'arxiv': `▫ Searching arXiv: "${toolQuery || 'query'}"`,
-      'DaytonaCodeSandbox': `◐ Executing code in sandbox`
-    };
-    return toolMap[currentTool] || `• Using ${currentTool.replace('_', ' ')}: "${toolQuery || 'executing'}"`;
+  // Check if the most recent event is streaming content
+  const lastEvent = events[events.length - 1];
+  const isLastEventStreaming = lastEvent && 
+    lastEvent.event === 'llm_stream_chunk' && 
+    lastEvent.data?.content?.trim() && 
+    !lastEvent.data.content.includes('<tool>') &&
+    !lastEvent.data.content.includes('<subgraph>');
+  
+  // Check for any recent streaming content
+  const hasRecentStreamingContent = recentEvents.some(event => 
+    event.event === 'llm_stream_chunk' && 
+    event.data?.content?.trim() && 
+    !event.data.content.includes('<tool>') &&
+    !event.data.content.includes('<subgraph>')
+  );
+  
+  // Check if we have a stream_complete event which indicates generation is finished
+  const streamComplete = events.some(e => e.event === 'stream_complete');
+  
+  // Only show "Generating response..." if we have recent streaming content AND no stream_complete
+  // AND the last event is streaming content (most reliable indicator of active generation)
+  if (hasRecentStreamingContent && !streamComplete && isLastEventStreaming) {
+    return '◆ Generating response...';
   }
   
-  // Final fallbacks
-  const lastEvent = events[events.length - 1];
-  if (lastEvent?.event === 'stream_complete') return '✓ Response complete';
+  // Check if we have a final response type
+  const hasFinalResponse = events.some(e => 
+    e.event === 'agent_completion' && 
+    isFinalAgentType(getAgentType(e))
+  );
   
+  if (hasFinalResponse || streamComplete) {
+    return '✓ Response complete';
+  }
+  
+  // 2. Check for recent tool calls
+  const recentToolCall = recentEvents.find(event => 
+    event.event === 'llm_stream_chunk' && 
+    event.data?.content && 
+    (event.data.content.includes('<tool>') || event.data.content.includes('<subgraph>'))
+  );
+  
+  if (recentToolCall) {
+    const toolMatch = recentToolCall.data.content.match(/<tool>([^<]+)<\/tool>/) || 
+                      recentToolCall.data.content.match(/<subgraph>([^<]+)<\/subgraph>/);
+    const inputMatch = recentToolCall.data.content.match(/<tool_input>([^<\n\r]+)/) || 
+                       recentToolCall.data.content.match(/<subgraph_input>([^<\n\r]+)/);
+    
+    if (toolMatch) {
+      const tool = toolMatch[1];
+      const query = inputMatch?.[1]?.trim() || '';
+      
+      if (tool === 'search_tavily') {
+        return `○ Searching web: "${query || 'query'}"`;
+      } else if (tool === 'arxiv') {
+        return `▫ Searching arXiv: "${query || 'query'}"`;
+      } else if (tool === 'DaytonaCodeSandbox') {
+        return `◐ Executing code in sandbox`;
+      } else {
+        return `• Using ${tool.replace('_', ' ')}: "${query || 'executing'}"`;
+      }
+    }
+  }
+  
+  // 3. Check for recent tool completions
+  const recentToolCompletion = recentEvents.find(event => 
+    event.event === 'agent_completion' && 
+    event.data?.type === 'LiberalFunctionMessage' && 
+    event.data?.name
+  );
+  
+  if (recentToolCompletion) {
+    const { name, content } = recentToolCompletion.data;
+    if (name === 'search_tavily' && Array.isArray(content)) {
+      return `✓ Found ${content.length} web sources`;
+    } else if (name === 'arxiv') {
+      const papers = content?.includes('Title:') ? content.split('Title:').length - 1 : 1;
+      return `✓ Found ${papers} arXiv papers`;
+    } else if (name === 'DaytonaCodeSandbox') {
+      return `✓ Code execution complete`;
+    }
+  }
+  
+  // 4. Check for special agent types (deep research, etc.)
+  const recentAgentEvent = recentEvents.find(event => 
+    event.event === 'agent_completion' && 
+    (event.data?.additional_kwargs?.agent_type || event.data?.agent_type)
+  );
+  
+  if (recentAgentEvent) {
+    const agentType = recentAgentEvent.data.additional_kwargs?.agent_type || recentAgentEvent.data.agent_type;
+    const agentTypeMap = {
+      'deep_research_search_queries_plan': '◦ Planning search queries',
+      'deep_research_search_queries_plan_fixed': '↻ Plan format corrected',
+      'deep_research_search_sections': '▫ Creating research sections',
+      'deep_research_interrupt': '○ User feedback required',
+      'deep_research_search_queries_section': '• Section search queries',
+      'deep_research_search_queries_section_fixed': '↻ Section format corrected',
+      'deep_research_writer': '◆ Writing content',
+      'deep_research_grader': '◈ Evaluating quality',
+      'deep_research_end': '✓ Research complete',
+      'code_fixer_agents': '◐ Fixing code',
+      'react_subgraph_deep_research': '◐ Deep research started',
+      'react_subgraph_financial_analysis': '◐ Financial analysis started',
+      'react_end': '✓ Response complete',
+      'financial_analysis_end': '✓ Financial analysis complete'
+    };
+    
+    if (agentTypeMap[agentType]) {
+      return agentTypeMap[agentType];
+    }
+  }
+  
+  // 5. Check for stream complete event
+  const streamCompleteEvent = events.find(e => e.event === 'stream_complete');
+  if (streamCompleteEvent) {
+    return '✓ Response complete';
+  }
+  
+  // 6. Check if we have any content at all but no recent activity
+  // This means we're probably done, but didn't get a formal completion event
+  const hasAnyContent = events.some(event => 
+    event.event === 'llm_stream_chunk' && 
+    event.data?.content?.trim() && 
+    !event.data.content.includes('<tool>') &&
+    !event.data.content.includes('<subgraph>')
+  );
+  
+  const hasRecentActivity = recentEvents.some(event => 
+    event.event === 'llm_stream_chunk' || 
+    (event.event === 'agent_completion' && event.data?.name)
+  );
+  
+  if (hasAnyContent && !hasRecentActivity) {
+    return '✓ Response complete';
+  }
+  
+  // Default fallback
   return '◦ Processing...';
 })
 
@@ -1328,51 +1390,112 @@ const isStreamingResponse = computed(() => {
 
 const finalStatusSummary = computed(() => {
   if (!props.streamingEvents || props.streamingEvents.length === 0) {
-    // For loaded conversations, generate summary from workflow data
+    // For loaded conversations, check if any workflow data indicates Daytona usage
     if (props.workflowData && props.workflowData.length > 0) {
-      const completedTasks = props.workflowData.map(workflow => {
-        if (workflow.tool_name === 'DaytonaCodeSandbox' || workflow.task === 'code_execution') {
-          return 'Code execution complete';
-        } else if (workflow.tool_name === 'search_tavily' || workflow.task === 'web_search') {
-          return 'Web search complete';
-        } else if (workflow.tool_name === 'arxiv' || workflow.task === 'arxiv_search') {
-          return 'arXiv search complete';
-        } else {
-          return `${workflow.agent_name || 'Task'} complete`;
-        }
-      });
+      const hasDaytona = props.workflowData.some(item => 
+        item.tool_name === 'DaytonaCodeSandbox' || 
+        item.task === 'code_execution' ||
+        item.agent_name === 'Daytona Sandbox'
+      );
       
-      if (completedTasks.length > 0) {
-        return `✓ ${completedTasks.join(' • ')}`;
+      if (hasDaytona) {
+        return '✓ Code execution complete';
       }
     }
     return 'Details';
   }
   
-  let completedTools = []
+  // Find the last relevant event to determine the current status
+  const events = props.streamingEvents;
   
-  props.streamingEvents.forEach(event => {
-    if (event.event === 'agent_completion' && 
-        event.data.type === 'LiberalFunctionMessage' && 
-        event.data.name) {
-      
-      if (event.data.name === 'search_tavily' && Array.isArray(event.data.content)) {
-        completedTools.push(`Found ${event.data.content.length} web sources`)
-      } else if (event.data.name === 'arxiv') {
-        const papers = event.data.content && event.data.content.includes('Title:') ? 
-          event.data.content.split('Title:').length - 1 : 1
-        completedTools.push(`Found ${papers} arXiv papers`)
-      } else if (event.data.name === 'DaytonaCodeSandbox') {
-        completedTools.push('Code execution complete')
-      }
-    }
-  })
+  // Check for final response types first (highest priority)
+  const finalResponseEvent = events.find(e => 
+    e.event === 'agent_completion' && 
+    isFinalAgentType(getAgentType(e))
+  );
   
-  if (completedTools.length > 0) {
-    return `✓ ${completedTools.join(' • ')}`
+  if (finalResponseEvent) {
+    return '✓ Response complete';
   }
   
-  return 'Details'
+  // Check for Daytona code execution
+  const hasDaytonaExecution = events.some(event => 
+    event.event === 'agent_completion' && 
+    event.data?.name === 'DaytonaCodeSandbox'
+  );
+  
+  if (hasDaytonaExecution) {
+    // Check if there are events after the code execution
+    const lastDaytonaIndex = events.findIndex(event => 
+      event.event === 'agent_completion' && 
+      event.data?.name === 'DaytonaCodeSandbox'
+    );
+    
+    // If there are significant events after code execution, show appropriate status
+    if (lastDaytonaIndex >= 0 && lastDaytonaIndex < events.length - 1) {
+      const laterEvents = events.slice(lastDaytonaIndex + 1);
+      
+      // Check for LLM streaming content after code execution
+      const hasLaterContent = laterEvents.some(event => 
+        event.event === 'llm_stream_chunk' && 
+        event.data?.content && 
+        (!event.data.content.includes('<tool>') || !event.data.content.includes('<subgraph>')) &&
+        event.data.content.trim().length > 10
+      );
+      
+      // Check for additional tool calls after code execution
+      const hasLaterToolCalls = laterEvents.some(event => 
+        (event.event === 'llm_stream_chunk' && 
+         event.data?.content && 
+         (event.data.content.includes('<tool>') || event.data.content.includes('<subgraph>'))) ||
+        (event.event === 'agent_completion' && 
+         event.data?.name && 
+         event.data.name !== 'DaytonaCodeSandbox')
+      );
+      
+      if (hasLaterToolCalls) {
+        // If there are later tool calls, use currentStreamingStatus instead
+        return currentStreamingStatus.value;
+      } else if (hasLaterContent) {
+        return '◆ Processing results...';
+      }
+    }
+    
+    return '✓ Code execution complete';
+  }
+  
+  // Check for web search results
+  const hasWebSearch = events.some(event => 
+    event.event === 'agent_completion' && 
+    event.data?.name === 'search_tavily'
+  );
+  
+  if (hasWebSearch) {
+    const sourceCount = events.find(e => 
+      e.event === 'agent_completion' && 
+      e.data?.name === 'search_tavily' && 
+      Array.isArray(e.data.content))?.data.content.length || 0;
+    
+    return `✓ Found ${sourceCount} web sources`;
+  }
+  
+  // Check for arXiv search results
+  const hasArxiv = events.some(event => 
+    event.event === 'agent_completion' && 
+    event.data?.name === 'arxiv'
+  );
+  
+  if (hasArxiv) {
+    const papers = events.find(e => 
+      e.event === 'agent_completion' && 
+      e.data?.name === 'arxiv')?.data.content?.includes('Title:') 
+      ? events.find(e => e.data?.name === 'arxiv').data.content.split('Title:').length - 1 
+      : 1;
+    
+    return `✓ Found ${papers} arXiv papers`;
+  }
+  
+  return 'Details';
 })
 
 const showSearchingAnimation = computed(() => {
@@ -1439,6 +1562,7 @@ const auditLogEvents = computed(() => {
           agentType === 'deep_research_search_queries_section_fixed' ||
           agentType === 'deep_research_writer' ||
           agentType === 'deep_research_grader' ||
+          agentType === 'code_fixer_agents' ||
           agentType === 'react_subgraph_deep_research') {
         return true // Include deep research phases in audit log
       }
@@ -1540,6 +1664,11 @@ const auditLogEvents = computed(() => {
           details = 'Evaluating section quality and completeness'
           dotClass = 'bg-gray-400'
           type = 'deep_research_grader'
+        } else if (agentType === 'code_fixer_agents') {
+          title = `Code Fixing`
+          details = 'Analyzing and fixing code issues'
+          dotClass = 'bg-gray-400'
+          type = 'code_fixer'
         }
       }
       
@@ -1640,30 +1769,34 @@ async function downloadPdf(fileId, filename) {
       }
     });
 
+    // Check if the response is ok
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      console.error('Failed to download PDF:', response.statusText);
+      return;
     }
 
-    // Get the PDF blob
+    // Convert the response to a Blob
     const blob = await response.blob();
-    
-    // Create download link
-    const url = window.URL.createObjectURL(blob);
+
+    // Create a URL for the Blob
+    const url = URL.createObjectURL(blob);
+
+    // Create a temporary link element
     const link = document.createElement('a');
     link.href = url;
-    link.download = filename || 'deep_research_report.pdf';
-    
-    // Trigger download
+    link.download = filename;
+
+    // Append the link to the body and click it to trigger the download
     document.body.appendChild(link);
     link.click();
-    
-    // Cleanup
+
+    // Clean up the temporary link
     document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-    
+
+    // Revoke the URL to free up memory
+    URL.revokeObjectURL(url);
   } catch (error) {
     console.error('Error downloading PDF:', error);
-    // You could add a toast notification here if available
   }
 }
 
@@ -1674,53 +1807,5 @@ function closeArtifactCanvas() {
   </script>
 
 <style scoped>
-.inline-ref {
-  @apply text-blue-600 hover:text-blue-800 text-xs font-medium no-underline;
-  text-decoration: none !important;
-}
-
-.inline-ref:hover {
-  @apply underline;
-}
-
-/* Status bar animations */
-.animate-spin {
-  animation: spin 1.5s linear infinite;
-}
-
-.animate-bounce {
-  animation: bounce 1s infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes bounce {
-  0%, 20%, 50%, 80%, 100% {
-    transform: translateY(0);
-  }
-  40% {
-    transform: translateY(-4px);
-  }
-  60% {
-    transform: translateY(-2px);
-  }
-}
-
-/* Smooth status transitions */
-.status-transition {
-  transition: all 0.3s ease-in-out;
-}
-
-/* Status bar hover effect */
-.status-bar:hover {
-  @apply bg-gray-100;
-  transition: background-color 0.2s ease-in-out;
-}
-</style>
+  /* Add your styles here */
+  </style>
