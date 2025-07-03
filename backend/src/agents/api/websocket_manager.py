@@ -2,17 +2,18 @@ import asyncio
 import json
 import os
 import time
-import uuid
 from datetime import datetime, timedelta, timezone
-from io import BytesIO
 from typing import Dict, Optional
 
-import markdown
 import redis
 import structlog
 from agents.api.data_types import APIKeys
 from agents.api.utils import deep_research_to_agent_thinking, generate_deep_research_pdf
 from agents.api.websocket_interface import WebSocketInterface
+from agents.components.compound.code_execution_subgraph import (
+    create_code_execution_graph,
+)
+from agents.components.compound.data_types import LiberalFunctionMessage
 from agents.components.compound.financial_analysis_subgraph import (
     create_financial_analysis_graph,
 )
@@ -22,6 +23,7 @@ from agents.storage.redis_storage import RedisStorage
 from agents.tools.langgraph_tools import RETRIEVAL_DESCRIPTION
 from fastapi import WebSocket, WebSocketDisconnect
 from langchain_core.messages import AIMessage, HumanMessage
+from langgraph.graph import END
 from starlette.websockets import WebSocketState
 
 logger = structlog.get_logger(__name__)
@@ -648,13 +650,6 @@ class WebSocketConnectionManager(WebSocketInterface):
                         "config": {},
                     },
                     {
-                        "type": "daytona",
-                        "config": {
-                            "user_id": user_id,
-                            "redis_storage": self.message_storage,
-                        },
-                    },
-                    {
                         "type": "wikipedia",
                         "config": {},
                     },
@@ -682,11 +677,11 @@ class WebSocketConnectionManager(WebSocketInterface):
             )
             config["configurable"][
                 "type==default/system_message"
-            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {len(doc_ids)} documents are available to you for retrieval. CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox tool only."
+            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {len(doc_ids)} documents are available to you for retrieval. CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph only."
         else:
             config["configurable"][
                 "type==default/system_message"
-            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox tool only."
+            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph only."
 
         if multimodal_input:
             config["configurable"][
@@ -695,11 +690,15 @@ class WebSocketConnectionManager(WebSocketInterface):
 
         config["configurable"]["type==default/subgraphs"] = {
             "financial_analysis": {
+                "description": "This subgraph is used to analyze financial data and return the a comprehensive report.",
+                "next_node": END,
                 "graph": create_financial_analysis_graph(self.redis_client),
                 "state_input_mapper": lambda x: [HumanMessage(content=x)],
                 "state_output_mapper": lambda x: x[-1],
             },
             "deep_research": {
+                "description": "This subgraph is used to generate a deep research report. Use it if the user asks for detailed information about a topic.",
+                "next_node": END,
                 "graph": create_deep_research_graph(
                     api_keys.sambanova_key, "sambanova", request_timeout=120
                 ),
@@ -709,6 +708,32 @@ class WebSocketConnectionManager(WebSocketInterface):
                     additional_kwargs={
                         "agent_type": "deep_research_end",
                     },
+                ),
+            },
+            "DaytonaCodeSandbox": {
+                "description": "This subgraph is used to execute code in a sandbox environment and return the result.",
+                "next_node": "agent",
+                "graph": create_code_execution_graph(
+                    user_id=user_id,
+                    sambanova_api_key=api_keys.sambanova_key,
+                    redis_storage=self.message_storage,
+                ),
+                "state_input_mapper": lambda x: {
+                    "code": x,
+                    "current_retry": 0,
+                    "max_retries": 5,
+                    "error_log": "",
+                    "final_result": "",
+                    "corrections_proposed": [],
+                },
+                "state_output_mapper": lambda x: LiberalFunctionMessage(
+                    name="DaytonaCodeSandbox",
+                    content=x["final_result"] if x["final_result"] else x["error_log"],
+                    additional_kwargs={
+                        "agent_type": "tool_response",
+                        "timestamp": datetime.now().isoformat(),
+                    },
+                    result={"useage": {"total_latency": 0.0}},
                 ),
             },
         }

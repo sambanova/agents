@@ -112,14 +112,14 @@ def create_financial_analysis_graph(redis_client: SecureRedisService):
     # Create the workflow with just one node
     workflow = MessageGraph()
 
-    # Add the single greeter node
-    workflow.add_node("greeter", financial_analysis_node)
+    # Add the single node
+    workflow.add_node("financial_analysis", financial_analysis_node)
 
     # Set entry point
-    workflow.set_entry_point("greeter")
+    workflow.set_entry_point("financial_analysis")
 
     # Go directly to END after the greeter node
-    workflow.add_edge("greeter", END)
+    workflow.add_edge("financial_analysis", END)
 
     # Compile and return
     return workflow.compile()

@@ -964,14 +964,14 @@ async function filterChat(msgData) {
       if (message.event === 'agent_completion') {
         // For tool calls and tool results, preserve them for comprehensive audit log and Daytona sidebar
         // but only filter them from main chat display if they're tool-related
-        const isToolCall = message.content && typeof message.content === 'string' && message.content.includes('<tool>');
-        const isToolResult = Array.isArray(message.content) || (message.additional_kwargs?.agent_type === 'react_tool');
+        const isToolCall = message.content && typeof message.content === 'string' && (message.content.includes('<tool>') || message.content.includes('<subgraph>'));
+        const isToolResult = Array.isArray(message.content) || (message.additional_kwargs?.agent_type === 'react_tool') || (message.additional_kwargs?.agent_type === 'react_subgraph_DaytonaCodeSandbox');
         const isToolResponse = message.additional_kwargs?.agent_type === 'tool_response';
-        
+
         // For Daytona sandbox tool calls/results, always preserve them for sidebar processing
         const isDaytonaRelated = (isToolCall && message.content.includes('DaytonaCodeSandbox')) ||
                                  (message.type === 'LiberalFunctionMessage' && message.name === 'DaytonaCodeSandbox');
-        
+
         if (isToolCall || isToolResult || isToolResponse || isDaytonaRelated) {
           // Preserve tool-related messages for comprehensive audit log and Daytona processing
           
@@ -1164,7 +1164,7 @@ async function filterChat(msgData) {
       (message.content && typeof message.content === 'string' && message.content.includes('<tool>')) ||
       Array.isArray(message.content) ||
       (message.type === 'LiberalFunctionMessage') ||
-      (message.additional_kwargs?.agent_type === 'react_tool') ||
+      (message.additional_kwargs?.agent_type === 'react_tool' || message.additional_kwargs?.agent_type === 'react_subgraph_DaytonaCodeSandbox') ||
       (message.additional_kwargs?.agent_type === 'tool_response') ||
       (message.name === 'DaytonaCodeSandbox')
     )
@@ -2448,7 +2448,7 @@ const isDaytonaActiveGlobal = computed(() => {
       return msg.events.some(event => {
         // Check for Daytona tool calls in streaming content
         if (event.event === 'llm_stream_chunk' && event.data?.content) {
-          return event.data.content.includes('<tool>DaytonaCodeSandbox</tool>')
+          return event.data.content.includes('<tool>DaytonaCodeSandbox</tool>') || event.data.content.includes('<subgraph>DaytonaCodeSandbox</subgraph>')
         }
         
         // Check for Daytona tool results

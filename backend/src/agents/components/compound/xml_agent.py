@@ -222,9 +222,13 @@ def get_xml_agent_executor(
 
     # Create subgraph section for the template
     if subgraphs:
-        subgraph_names = ", ".join(subgraphs.keys())
+        subgraph_descriptions = "\n".join(
+            [f"{name}: {subgraphs[name]['description']}" for name in subgraphs.keys()]
+        )
         subgraph_section = f"""
-You also have access to the following subgraphs: {subgraph_names}
+You also have access to the following subgraphs:
+
+{subgraph_descriptions}
 
 In order to use a subgraph, you can use <subgraph></subgraph> and <subgraph_input></subgraph_input> tags. You will then get back a response in the form <observation></observation>
 For example, if you have a subgraph called 'research_agent' that could conduct research, in order to research a topic you would respond:
@@ -638,7 +642,10 @@ Make sure to include both opening and closing tags for both tool and tool_input.
     # Add edges back to agent from all action nodes
     workflow.add_edge("tool_action", "agent")
     for subgraph_name in subgraphs.keys():
-        workflow.add_edge(f"subgraph_{subgraph_name}", END)
+        # We route the subgraph to the next node specified in the subgraph definition
+        workflow.add_edge(
+            f"subgraph_{subgraph_name}", subgraphs[subgraph_name]["next_node"]
+        )
 
     return workflow.compile(
         checkpointer=checkpointer,
