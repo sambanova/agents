@@ -1,19 +1,18 @@
 from agents.components.datagen.create_agent import create_agent
-from agents.components.datagen.tools.FileEdit import (
-    create_document,
-    edit_document,
-    read_document,
-)
 from agents.components.datagen.tools.persistent_daytona import (
-    daytona_create_document,
-    daytona_edit_document,
-    daytona_read_document,
+    get_daytona_create_document,
+    get_daytona_edit_document,
+    get_daytona_read_document,
 )
 
 
-def create_quality_review_agent(llm, members):
+def create_quality_review_agent(llm, members, user_id: str):
     """Create the quality review agent"""
-    tools = [daytona_create_document, daytona_read_document, daytona_edit_document]
+    tools = [
+        get_daytona_create_document(user_id),
+        get_daytona_read_document(user_id),
+        get_daytona_edit_document(user_id),
+    ]
     system_prompt = """
     You are a meticulous quality control expert responsible for reviewing and ensuring the high standard of all research outputs. Your tasks include:
 

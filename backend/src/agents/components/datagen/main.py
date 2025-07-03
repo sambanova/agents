@@ -74,7 +74,7 @@ def main(user_input: str, working_directory: str = "./data", thread_id: str = "1
 
 async def main_with_persistent_daytona(
     user_input: str,
-    user_id: str = "default_user",
+    user_id: str = "user1",
     thread_id: str = "1",
     redis_storage=None,
     data_sources=None,
@@ -108,7 +108,7 @@ async def main_with_persistent_daytona(
     language_models = setup_language_models()
 
     # Create workflow manager
-    manager = WorkflowManager(language_models)
+    manager = WorkflowManager(language_models, user_id)
 
     # Create initial state
     initial_state = {

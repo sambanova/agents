@@ -35,7 +35,7 @@ logger = structlog.get_logger(__name__)
 
 
 class WorkflowManager:
-    def __init__(self, language_models):
+    def __init__(self, language_models, user_id: str):
         """
         Initialize the workflow manager with language models.
 
@@ -56,6 +56,7 @@ class WorkflowManager:
             "QualityReview",
             "Refiner",
         ]
+        self.user_id = user_id
         self.agents = self.create_agents()
         self.setup_workflow()
 
@@ -73,26 +74,33 @@ class WorkflowManager:
         agents = {}
 
         # Create each agent using their respective creation functions
-        agents["hypothesis_agent"] = create_hypothesis_agent(llm, self.members)
+        agents["hypothesis_agent"] = create_hypothesis_agent(
+            llm, self.members, self.user_id
+        )
 
         agents["process_agent"] = create_process_agent(power_llm)
 
         agents["visualization_agent"] = create_visualization_agent(
-            llm,
-            self.members,
+            llm, self.members, self.user_id
         )
 
-        agents["code_agent"] = create_code_agent(power_llm, self.members)
+        agents["code_agent"] = create_code_agent(power_llm, self.members, self.user_id)
 
-        agents["searcher_agent"] = create_search_agent(llm, self.members)
+        agents["searcher_agent"] = create_search_agent(llm, self.members, self.user_id)
 
-        agents["report_agent"] = create_report_agent(power_llm, self.members)
+        agents["report_agent"] = create_report_agent(
+            power_llm, self.members, self.user_id
+        )
 
-        agents["quality_review_agent"] = create_quality_review_agent(llm, self.members)
+        agents["quality_review_agent"] = create_quality_review_agent(
+            llm, self.members, self.user_id
+        )
 
-        agents["note_agent"] = create_note_agent(json_llm)
+        agents["note_agent"] = create_note_agent(json_llm, self.user_id)
 
-        agents["refiner_agent"] = create_refiner_agent(power_llm, self.members)
+        agents["refiner_agent"] = create_refiner_agent(
+            power_llm, self.members, self.user_id
+        )
 
         return agents
 
@@ -265,7 +273,9 @@ class WorkflowManager:
         elif isinstance(raw, (bytes, bytearray)):
             png_bytes = raw
         else:
-            raise TypeError(f"Unexpected return type from draw_mermaid_png(): {type(raw)}")
+            raise TypeError(
+                f"Unexpected return type from draw_mermaid_png(): {type(raw)}"
+            )
 
         # 3) write straight out to disk in binary mode
         out_path = "/Users/tamasj/Downloads/graph.png"
@@ -327,4 +337,4 @@ class WorkflowManager:
                 yield event
         finally:
             # Always cleanup Daytona when done
-            await self.cleanup_persistent_daytona()
+            await self.cleanup_persistent_daytona(self.user_id)

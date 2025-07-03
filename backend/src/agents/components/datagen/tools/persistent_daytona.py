@@ -24,16 +24,11 @@ class PersistentDaytonaManager:
     Fully synchronous implementation.
     """
 
-    _instance: Optional["PersistentDaytonaManager"] = None
-    _client: Optional[Any] = None
-    _sandbox: Optional[Any] = None
-    _user_id: str = ""
-    _redis_storage: Optional[Any] = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
+    def __init__(self, user_id: str):
+        self._client: Optional[Any] = None
+        self._sandbox: Optional[Any] = None
+        self._user_id: str = user_id
+        self._redis_storage: Optional[Any] = None
 
     @classmethod
     async def initialize(
@@ -52,39 +47,37 @@ class PersistentDaytonaManager:
             snapshot: Daytona snapshot to use for the sandbox
             data_sources: List of file paths to upload to sandbox root folder
         """
-        instance = cls()
+        instance = cls(user_id)
 
-        if instance._client is None:
-            api_key = os.getenv("DAYTONA_API_KEY")
-            if not api_key:
-                raise ValueError("DAYTONA_API_KEY environment variable not set")
+        api_key = os.getenv("DAYTONA_API_KEY")
+        if not api_key:
+            raise ValueError("DAYTONA_API_KEY environment variable not set")
 
-            logger.info("Initializing persistent Daytona client", user_id=user_id)
+        logger.info("Initializing persistent Daytona client", user_id=user_id)
 
-            # For now, we'll use a simple approach
-            # In practice, this would use actual async Daytona SDK calls
-            instance._user_id = user_id
-            instance._redis_storage = redis_storage
+        # For now, we'll use a simple approach
+        # In practice, this would use actual async Daytona SDK calls
+        instance._redis_storage = redis_storage
 
-            # Placeholder for actual Daytona initialization
-            # This would be replaced with actual async Daytona SDK calls
-            config = DaytonaSDKConfig(api_key=api_key)
-            instance._client = DaytonaClient(config)
+        # Placeholder for actual Daytona initialization
+        # This would be replaced with actual async Daytona SDK calls
+        config = DaytonaSDKConfig(api_key=api_key)
+        instance._client = DaytonaClient(config)
 
-            params = CreateSandboxFromSnapshotParams(
-                snapshot=snapshot,
-            )
-            instance._sandbox = await instance._client.create(params=params)
+        params = CreateSandboxFromSnapshotParams(
+            snapshot=snapshot,
+        )
+        instance._sandbox = await instance._client.create(params=params)
 
-            logger.info(
-                "Persistent Daytona sandbox created",
-                sandbox_id=instance._sandbox,
-                user_id=user_id,
-            )
+        logger.info(
+            "Persistent Daytona sandbox created",
+            sandbox_id=instance._sandbox,
+            user_id=user_id,
+        )
 
-            # Upload files to sandbox root folder if provided
-            if data_sources:
-                await instance._upload_files(data_sources)
+        # Upload files to sandbox root folder if provided
+        if data_sources:
+            await instance._upload_files(data_sources)
 
         return instance
 
@@ -308,19 +301,9 @@ class PersistentDaytonaManager:
             self._client = None
             self._sandbox = None
 
-    @classmethod
-    def reset(cls):
-        """Reset the singleton instance (useful for testing)."""
-        if cls._instance and cls._instance._client:
-            # Note: In a real async environment, you'd want to properly await cleanup
-            # For testing/reset purposes, we'll just set to None
-            cls._instance._client = None
-            cls._instance._sandbox = None
-        cls._instance = None
-
 
 # Global manager instance
-_daytona_manager: Optional[PersistentDaytonaManager] = None
+_user_daytona_managers: Dict[str, "PersistentDaytonaManager"] = {}
 
 
 async def get_or_create_daytona_manager(
@@ -329,239 +312,286 @@ async def get_or_create_daytona_manager(
     data_sources: Optional[List[str]] = None,
 ) -> PersistentDaytonaManager:
     """Get or create the global Daytona manager."""
-    global _daytona_manager
+    global _user_daytona_managers
 
-    if _daytona_manager is None:
-        _daytona_manager = await PersistentDaytonaManager.initialize(
+    if user_id not in _user_daytona_managers:
+        logger.info(f"Creating new Daytona manager for user {user_id}")
+        _user_daytona_managers[user_id] = await PersistentDaytonaManager.initialize(
             user_id, redis_storage, data_sources=data_sources
         )
-    return _daytona_manager
+
+    return _user_daytona_managers[user_id]
 
 
-# Tool definitions using native async support
-@tool
-async def daytona_execute_code(
-    code: Annotated[str, "Python code to execute in the persistent Daytona sandbox"],
-) -> str:
-    """
-    Execute Python code in a persistent Daytona sandbox.
-    The sandbox stays alive between calls, preserving variables and files.
-    """
-    manager = await get_or_create_daytona_manager("default_user")
-    return await manager.execute_code(code)
+def get_daytona_execute_code(user_id: str):
+    """Returns a user-specific version of the daytona_execute_code tool"""
+
+    @tool
+    async def user_daytona_execute_code(
+        code: Annotated[
+            str, "Python code to execute in the persistent Daytona sandbox"
+        ],
+    ) -> str:
+        """
+        Execute Python code in a persistent Daytona sandbox.
+        The sandbox stays alive between calls, preserving variables and files.
+        """
+        manager = await get_or_create_daytona_manager(user_id)
+        return await manager.execute_code(code)
+
+    return user_daytona_execute_code
 
 
-@tool
-async def daytona_list_files(
-    directory: Annotated[str, "Directory to list files from"] = ".",
-) -> str:
-    """List files in the persistent Daytona sandbox directory."""
-    manager = await get_or_create_daytona_manager("default_user")
-    return "Files in the sandbox:\n" + "\n".join(await manager.list_files(directory))
+def get_daytona_list_files(user_id: str):
+    """Returns a user-specific version of the daytona_list_files tool"""
 
-
-@tool
-async def daytona_read_file(
-    filename: Annotated[str, "Name of the file to read from the sandbox"],
-) -> str:
-    """Read a file from the persistent Daytona sandbox."""
-    manager = await get_or_create_daytona_manager("default_user")
-    return await manager.read_file(filename)
-
-
-@tool
-async def daytona_write_file(
-    filename: Annotated[str, "Name of the file to write"],
-    content: Annotated[str, "Content to write to the file"],
-) -> str:
-    """Write content to a file in the persistent Daytona sandbox."""
-    manager = await get_or_create_daytona_manager("default_user")
-    return await manager.write_file(filename, content)
-
-
-@tool
-async def daytona_create_document(
-    points: Annotated[List[str], "List of points to be included in the document"],
-    filename: Annotated[str, "Name of the file to save the document"],
-) -> str:
-    """
-    Create and save a text document in Markdown format in the persistent Daytona sandbox.
-
-    This function takes a list of points and writes them as numbered items in a Markdown file.
-    """
-    manager = await get_or_create_daytona_manager("default_user")
-
-    try:
-        # Create the markdown content with numbered points
-        content = ""
-        for i, point in enumerate(points, 1):
-            content += f"{i}. {point}\n"
-
-        # Write the document to the sandbox
-        result = await manager.write_file(filename, content)
-        logger.info(
-            "Document created successfully in sandbox",
-            filename=filename,
-            points_count=len(points),
-        )
-        return f"Document '{filename}' created successfully in sandbox with {len(points)} points"
-
-    except Exception as e:
-        logger.error(
-            "Error creating document in sandbox", filename=filename, error=str(e)
-        )
-        return f"Error creating document '{filename}': {str(e)}"
-
-
-@tool
-async def daytona_read_document(
-    filename: Annotated[str, "Name of the file to read"],
-    start: Annotated[Optional[int], "Starting line number to read from"] = None,
-    end: Annotated[Optional[int], "Ending line number to read to"] = None,
-) -> str:
-    """
-    Read the document from the persistent Daytona sandbox.
-
-    This function reads the specified file from the sandbox and returns its content.
-    Optionally, it can return a specific range of lines.
-
-    Args:
-        filename: Name of the file to read
-        start: Starting line number to read from (0-based indexing)
-        end: Ending line number to read to (exclusive)
-
-    Returns:
-        str: The content of the document or an error message.
-    """
-    manager = await get_or_create_daytona_manager("default_user")
-
-    try:
-        # Read the file content from sandbox
-        content = await manager.read_file(filename)
-
-        # Check if file read was successful (not an error message)
-        if content.startswith("Error reading file"):
-            return content
-
-        # Split content into lines for range reading
-        lines = content.splitlines()
-
-        # Handle line range selection
-        if start is None:
-            start = 0
-
-        # Get the specified range of lines
-        selected_lines = lines[start:end]
-        result_content = "\n".join(selected_lines)
-
-        logger.info(
-            "Document read successfully from sandbox",
-            filename=filename,
-            total_lines=len(lines),
-            lines_returned=len(selected_lines),
-            start=start,
-            end=end,
+    @tool
+    async def user_daytona_list_files(
+        directory: Annotated[str, "Directory to list files from"] = ".",
+    ) -> str:
+        """List files in the persistent Daytona sandbox directory."""
+        manager = await get_or_create_daytona_manager(user_id)
+        return "Files in the sandbox:\n" + "\n".join(
+            await manager.list_files(directory)
         )
 
-        return result_content
-
-    except Exception as e:
-        logger.error(
-            "Error reading document from sandbox", filename=filename, error=str(e)
-        )
-        return f"Error reading document '{filename}': {str(e)}"
+    return user_daytona_list_files
 
 
-@tool
-async def daytona_edit_document(
-    filename: Annotated[str, "Name of the file to edit"],
-    inserts: Annotated[Dict[int, str], "Dictionary of line numbers and text to insert"],
-) -> str:
-    """
-    Edit the document in the persistent Daytona sandbox by inserting text at specific line numbers.
+def get_user_daytona_read_file(user_id: str):
+    """Returns a user-specific version of the daytona_read_file tool"""
 
-    This function reads the existing file, inserts new text at specified line numbers,
-    and saves the modified document back to the sandbox.
+    @tool
+    async def user_daytona_read_file(
+        filename: Annotated[str, "Name of the file to read from the sandbox"],
+    ) -> str:
+        """Read a file from the persistent Daytona sandbox."""
+        manager = await get_or_create_daytona_manager(user_id)
+        return await manager.read_file(filename)
 
-    Args:
-        filename (str): Name of the file to edit.
-        inserts (Dict[int, str]): Dictionary where keys are line numbers (1-based) and values are text to insert.
-
-    Returns:
-        str: A message indicating the result of the operation.
-
-    Example:
-        inserts = dict([(1, "This is the first line to insert."), (3, "This is the third line to insert.")])
-        result = await daytona_edit_document(filename="document.md", inserts=inserts)
-    """
-    manager = await get_or_create_daytona_manager("default_user")
-
-    try:
-        # Read the existing file content from sandbox
-        content = await manager.read_file(filename)
-
-        # Check if file read was successful (not an error message)
-        if content.startswith("Error reading file"):
-            return f"Error: Could not read existing document. {content}"
-
-        # Split content into lines (preserve line endings)
-        lines = content.splitlines(keepends=True)
-
-        # Convert to list without line endings for easier processing
-        lines_no_endings = [line.rstrip("\n\r") for line in lines]
-
-        # Sort inserts by line number to process from top to bottom
-        sorted_inserts = sorted(inserts.items())
-
-        # Process inserts in reverse order to maintain line numbering
-        for line_number, text in reversed(sorted_inserts):
-            if 1 <= line_number <= len(lines_no_endings) + 1:
-                # Insert at the specified line (convert from 1-based to 0-based indexing)
-                lines_no_endings.insert(line_number - 1, text)
-            else:
-                logger.error(f"Line number out of range: {line_number}")
-                return f"Error: Line number {line_number} is out of range. Document has {len(lines_no_endings)} lines."
-
-        # Reconstruct the content with newlines
-        modified_content = "\n".join(lines_no_endings)
-
-        # Write the modified content back to the sandbox
-        result = await manager.write_file(filename, modified_content)
-
-        logger.info(
-            "Document edited successfully in sandbox",
-            filename=filename,
-            original_lines=len(lines),
-            final_lines=len(lines_no_endings),
-            inserts_count=len(inserts),
-        )
-
-        return f"Document '{filename}' edited successfully in sandbox. Added {len(inserts)} insertions."
-
-    except Exception as e:
-        logger.error(
-            "Error editing document in sandbox", filename=filename, error=str(e)
-        )
-        return f"Error editing document '{filename}': {str(e)}"
+    return user_daytona_read_file
 
 
-@tool
-async def daytona_describe_data(
-    filename: Annotated[str, "Name of the file to describe"],
-) -> str:
-    """
-    Describe the data in a CSV file in the persistent Daytona sandbox.
+def get_user_daytona_write_file(user_id: str):
+    """Returns a user-specific version of the daytona_write_file tool"""
 
-    This function attempts to read a CSV file using different encodings and
-    returns information about the data structure and first few rows.
-    """
-    manager = await get_or_create_daytona_manager("default_user")
+    @tool
+    async def user_daytona_write_file(
+        filename: Annotated[str, "Name of the file to write"],
+        content: Annotated[str, "Content to write to the file"],
+    ) -> str:
+        """Write content to a file in the persistent Daytona sandbox."""
+        manager = await get_or_create_daytona_manager(user_id)
+        return await manager.write_file(filename, content)
 
-    # First check if file exists
-    try:
+    return user_daytona_write_file
 
-        # Generate pandas analysis code to run in sandbox
-        analysis_code = f'''
+
+def get_daytona_create_document(user_id: str):
+    """Returns a user-specific version of the daytona_create_document tool"""
+
+    @tool
+    async def user_daytona_create_document(
+        points: Annotated[List[str], "List of points to be included in the document"],
+        filename: Annotated[str, "Name of the file to save the document"],
+    ) -> str:
+        """
+        Create and save a text document in Markdown format in the persistent Daytona sandbox.
+
+        This function takes a list of points and writes them as numbered items in a Markdown file.
+        """
+        manager = await get_or_create_daytona_manager(user_id)
+
+        try:
+            # Create the markdown content with numbered points
+            content = ""
+            for i, point in enumerate(points, 1):
+                content += f"{i}. {point}\n"
+
+            # Write the document to the sandbox
+            result = await manager.write_file(filename, content)
+            logger.info(
+                "Document created successfully in sandbox",
+                filename=filename,
+                points_count=len(points),
+            )
+            return f"Document '{filename}' created successfully in sandbox with {len(points)} points"
+
+        except Exception as e:
+            logger.error(
+                "Error creating document in sandbox", filename=filename, error=str(e)
+            )
+            return f"Error creating document '{filename}': {str(e)}"
+
+    return user_daytona_create_document
+
+
+# User-specific version of the tool
+def get_daytona_read_document(user_id: str):
+    """Returns a user-specific version of the daytona_read_document tool"""
+
+    @tool
+    async def user_daytona_read_document(
+        filename: Annotated[str, "Name of the file to read"],
+        start: Annotated[Optional[int], "Starting line number to read from"] = None,
+        end: Annotated[Optional[int], "Ending line number to read to"] = None,
+    ) -> str:
+        """
+        Read the document from the persistent Daytona sandbox.
+
+        This function reads the specified file from the sandbox and returns its content.
+        Optionally, it can return a specific range of lines.
+
+        Args:
+            filename: Name of the file to read
+            start: Starting line number to read from (0-based indexing)
+            end: Ending line number to read to (exclusive)
+
+        Returns:
+            str: The content of the document or an error message.
+        """
+        manager = await get_or_create_daytona_manager(user_id)
+
+        try:
+            # Read the file content from sandbox
+            content = await manager.read_file(filename)
+
+            # Check if file read was successful (not an error message)
+            if content.startswith("Error reading file"):
+                return content
+
+            # Split content into lines for range reading
+            lines = content.splitlines()
+
+            # Handle line range selection
+            if start is None:
+                start = 0
+
+            # Get the specified range of lines
+            selected_lines = lines[start:end]
+            result_content = "\n".join(selected_lines)
+
+            logger.info(
+                "Document read successfully from sandbox",
+                filename=filename,
+                total_lines=len(lines),
+                lines_returned=len(selected_lines),
+                start=start,
+                end=end,
+            )
+
+            return result_content
+
+        except Exception as e:
+            logger.error(
+                "Error reading document from sandbox", filename=filename, error=str(e)
+            )
+            return f"Error reading document '{filename}': {str(e)}"
+
+    return user_daytona_read_document
+
+
+# User-specific version of the tool
+def get_daytona_edit_document(user_id: str):
+    """Returns a user-specific version of the daytona_edit_document tool"""
+
+    @tool
+    async def user_daytona_edit_document(
+        filename: Annotated[str, "Name of the file to edit"],
+        inserts: Annotated[
+            Dict[int, str], "Dictionary of line numbers and text to insert"
+        ],
+    ) -> str:
+        """
+        Edit the document in the persistent Daytona sandbox by inserting text at specific line numbers.
+
+        This function reads the existing file, inserts new text at specified line numbers,
+        and saves the modified document back to the sandbox.
+
+        Args:
+            filename (str): Name of the file to edit.
+            inserts (Dict[int, str]): Dictionary where keys are line numbers (1-based) and values are text to insert.
+
+        Returns:
+            str: A message indicating the result of the operation.
+
+        Example:
+            inserts = dict([(1, "This is the first line to insert."), (3, "This is the third line to insert.")])
+            result = await daytona_edit_document(filename="document.md", inserts=inserts)
+        """
+        manager = await get_or_create_daytona_manager(user_id)
+
+        try:
+            # Read the existing file content from sandbox
+            content = await manager.read_file(filename)
+
+            # Check if file read was successful (not an error message)
+            if content.startswith("Error reading file"):
+                return f"Error: Could not read existing document. {content}"
+
+            # Split content into lines (preserve line endings)
+            lines = content.splitlines(keepends=True)
+
+            # Convert to list without line endings for easier processing
+            lines_no_endings = [line.rstrip("\n\r") for line in lines]
+
+            # Sort inserts by line number to process from top to bottom
+            sorted_inserts = sorted(inserts.items())
+
+            # Process inserts in reverse order to maintain line numbering
+            for line_number, text in reversed(sorted_inserts):
+                if 1 <= line_number <= len(lines_no_endings) + 1:
+                    # Insert at the specified line (convert from 1-based to 0-based indexing)
+                    lines_no_endings.insert(line_number - 1, text)
+                else:
+                    logger.error(f"Line number out of range: {line_number}")
+                    return f"Error: Line number {line_number} is out of range. Document has {len(lines_no_endings)} lines."
+
+            # Reconstruct the content with newlines
+            modified_content = "\n".join(lines_no_endings)
+
+            # Write the modified content back to the sandbox
+            result = await manager.write_file(filename, modified_content)
+
+            logger.info(
+                "Document edited successfully in sandbox",
+                filename=filename,
+                original_lines=len(lines),
+                final_lines=len(lines_no_endings),
+                inserts_count=len(inserts),
+            )
+
+            return f"Document '{filename}' edited successfully in sandbox. Added {len(inserts)} insertions."
+
+        except Exception as e:
+            logger.error(
+                "Error editing document in sandbox", filename=filename, error=str(e)
+            )
+            return f"Error editing document '{filename}': {str(e)}"
+
+    return user_daytona_edit_document
+
+
+def get_daytona_describe_data(user_id: str):
+    """Returns a user-specific version of the daytona_describe_data tool"""
+
+    @tool
+    async def user_daytona_describe_data(
+        filename: Annotated[str, "Name of the file to describe"],
+    ) -> str:
+        """
+        Describe the data in a CSV file in the persistent Daytona sandbox.
+
+        This function attempts to read a CSV file using different encodings and
+        returns information about the data structure and first few rows.
+        """
+        manager = await get_or_create_daytona_manager(user_id)
+
+        # First check if file exists
+        try:
+
+            # Generate pandas analysis code to run in sandbox
+            analysis_code = f'''
 import pandas as pd
 import io
 
@@ -616,83 +646,93 @@ result = analyze_csv_data("{filename}")
 print(result)
 '''
 
-        # Execute the analysis code in the sandbox
-        result = await manager.execute_code(analysis_code)
-        return result
+            # Execute the analysis code in the sandbox
+            result = await manager.execute_code(analysis_code)
+            return result
 
-    except Exception as e:
-        return f"Error analyzing CSV data: {str(e)}"
+        except Exception as e:
+            return f"Error analyzing CSV data: {str(e)}"
+
+    return user_daytona_describe_data
 
 
-@tool
-async def daytona_pip_install(
-    packages: Annotated[
-        str,
-        "Package name(s) to install. Can be a single package or multiple packages separated by spaces",
-    ],
-) -> str:
-    """
-    Install Python packages using pip in the persistent Daytona sandbox. Only install packages after you have run some code and observed that some packages are missing.
+def get_daytona_pip_install(user_id: str):
+    """Returns a user-specific version of the daytona_pip_install tool"""
 
-    This function executes pip install commands in the sandbox to install the specified packages.
-    You can install single or multiple packages at once.
+    @tool
+    async def user_daytona_pip_install(
+        packages: Annotated[
+            str,
+            "Package name(s) to install. Can be a single package or multiple packages separated by spaces",
+        ],
+    ) -> str:
+        """
+        Install Python packages using pip in the persistent Daytona sandbox. Only install packages after you have run some code and observed that some packages are missing.
 
-    Args:
-        packages: Package name(s) to install. Examples: "pandas", "numpy matplotlib", "requests==2.28.0"
+        This function executes pip install commands in the sandbox to install the specified packages.
+        You can install single or multiple packages at once.
 
-    Returns:
-        str: Success message or error details from the installation process.
+        Args:
+            packages: Package name(s) to install. Examples: "pandas", "numpy matplotlib", "requests==2.28.0"
 
-    Examples:
-        - Install single package: packages="pandas"
-        - Install multiple packages: packages="numpy matplotlib seaborn"
-        - Install with version: packages="requests==2.28.0"
-    """
-    manager = await get_or_create_daytona_manager("default_user")
+        Returns:
+            str: Success message or error details from the installation process.
 
-    try:
-        # Split packages by space and clean them
-        package_list = [pkg.strip() for pkg in packages.split() if pkg.strip()]
+        Examples:
+            - Install single package: packages="pandas"
+            - Install multiple packages: packages="numpy matplotlib seaborn"
+            - Install with version: packages="requests==2.28.0"
+        """
+        manager = await get_or_create_daytona_manager(user_id)
 
-        if not package_list:
-            return "Error: No packages specified for installation"
+        try:
+            # Split packages by space and clean them
+            package_list = [pkg.strip() for pkg in packages.split() if pkg.strip()]
 
-        # Create pip install command
-        pip_command = f"pip install {' '.join(package_list)}"
+            if not package_list:
+                return "Error: No packages specified for installation"
 
-        logger.info(
-            "Installing packages in sandbox", packages=package_list, command=pip_command
-        )
+            # Create pip install command
+            pip_command = f"pip install {' '.join(package_list)}"
 
-        # Execute pip install using the manager's execute method
-        result = await manager.execute(pip_command, timeout=300)
+            logger.info(
+                "Installing packages in sandbox",
+                packages=package_list,
+                command=pip_command,
+            )
 
-        # Add success prefix if command succeeded
-        if not result.startswith("Error"):
-            result = f"Successfully installed: {' '.join(package_list)}\n{result}"
+            # Execute pip install using the manager's execute method
+            result = await manager.execute(pip_command, timeout=300)
 
-        logger.info(
-            "Package installation completed",
-            packages=package_list,
-            success="Successfully installed" in result,
-        )
+            # Add success prefix if command succeeded
+            if not result.startswith("Error"):
+                result = f"Successfully installed: {' '.join(package_list)}\n{result}"
 
-        return result
+            logger.info(
+                "Package installation completed",
+                packages=package_list,
+                success="Successfully installed" in result,
+            )
 
-    except Exception as e:
-        logger.error(
-            "Error installing packages in sandbox",
-            packages=packages,
-            error=str(e),
-            exc_info=True,
-        )
-        return f"Error installing packages '{packages}': {str(e)}"
+            return result
+
+        except Exception as e:
+            logger.error(
+                "Error installing packages in sandbox",
+                packages=packages,
+                error=str(e),
+                exc_info=True,
+            )
+            return f"Error installing packages '{packages}': {str(e)}"
+
+    return user_daytona_pip_install
 
 
 # Cleanup function to be called at workflow end
-async def cleanup_persistent_daytona():
-    """Clean up the persistent Daytona manager. Call this at the end of your workflow."""
-    global _daytona_manager
-    if _daytona_manager:
-        await _daytona_manager.cleanup()
-        _daytona_manager = None
+async def cleanup_persistent_daytona(user_id: str):
+    """Clean up the persistent Daytona manager for a specific user. Call this at the end of a user's workflow."""
+    global _user_daytona_managers
+    if user_id in _user_daytona_managers:
+        manager = _user_daytona_managers.pop(user_id)
+        await manager.cleanup()
+        logger.info(f"Persistent Daytona manager cleaned up for user {user_id}")

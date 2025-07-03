@@ -1,22 +1,18 @@
 from agents.components.datagen.create_agent import create_agent
-from agents.components.datagen.tools.FileEdit import (
-    collect_data,
-    create_document,
-    read_document,
+from agents.components.datagen.tools.persistent_daytona import (
+    get_daytona_create_document,
+    get_daytona_describe_data,
+    get_daytona_read_document,
 )
-from agents.components.datagen.tools.persistent_daytona import daytona_create_document, daytona_describe_data, daytona_read_document
 from agents.tools.langgraph_tools import TOOL_REGISTRY
-from langchain.agents import load_tools
-from langchain_community.tools import WikipediaQueryRun
-from langchain_community.utilities import WikipediaAPIWrapper
 
 
-def create_search_agent(llm, members):
+def create_search_agent(llm, members, user_id: str):
     """Create the search agent"""
     tools = [
-        daytona_create_document,
-        daytona_read_document,
-        daytona_describe_data,
+        get_daytona_create_document(user_id),
+        get_daytona_read_document(user_id),
+        get_daytona_describe_data(user_id),
         TOOL_REGISTRY["wikipedia"]["factory"](),
         TOOL_REGISTRY["search_tavily"]["factory"](),
         TOOL_REGISTRY["arxiv"]["factory"](),

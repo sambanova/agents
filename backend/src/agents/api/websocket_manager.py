@@ -733,6 +733,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                         "agent_type": "tool_response",
                         "timestamp": datetime.now().isoformat(),
                     },
+                    # TODO: Mesure latency for code execution
                     result={"useage": {"total_latency": 0.0}},
                 ),
             },
