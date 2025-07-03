@@ -1,5 +1,6 @@
 from agents.components.datagen.create_agent import create_agent
 from agents.components.datagen.tools.persistent_daytona import (
+    PersistentDaytonaManager,
     get_daytona_describe_data,
     get_daytona_execute_code,
     get_daytona_list_files,
@@ -7,14 +8,14 @@ from agents.components.datagen.tools.persistent_daytona import (
 )
 
 
-def create_code_agent(power_llm, members, user_id: str):
+def create_code_agent(power_llm, members, daytona_manager: PersistentDaytonaManager):
     """Create the code agent with persistent Daytona support"""
 
     tools = [
-        get_daytona_execute_code(user_id),
-        get_daytona_pip_install(user_id),
-        get_daytona_list_files(user_id),
-        get_daytona_describe_data(user_id),
+        get_daytona_execute_code(daytona_manager),
+        get_daytona_pip_install(daytona_manager),
+        get_daytona_list_files(daytona_manager),
+        get_daytona_describe_data(daytona_manager),
     ]
 
     system_prompt = """

@@ -1,5 +1,6 @@
 from agents.components.datagen.create_agent import create_agent
 from agents.components.datagen.tools.persistent_daytona import (
+    PersistentDaytonaManager,
     get_daytona_create_document,
     get_daytona_edit_document,
     get_daytona_list_files,
@@ -7,13 +8,13 @@ from agents.components.datagen.tools.persistent_daytona import (
 )
 
 
-def create_report_agent(power_llm, members, user_id: str):
+def create_report_agent(power_llm, members, daytona_manager: PersistentDaytonaManager):
     """Create the report agent"""
     tools = [
-        get_daytona_create_document(user_id),
-        get_daytona_read_document(user_id),
-        get_daytona_edit_document(user_id),
-        get_daytona_list_files(user_id),
+        get_daytona_create_document(daytona_manager),
+        get_daytona_read_document(daytona_manager),
+        get_daytona_edit_document(daytona_manager),
+        get_daytona_list_files(daytona_manager),
     ]
 
     system_prompt = """

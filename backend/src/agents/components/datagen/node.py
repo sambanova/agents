@@ -7,10 +7,7 @@ from typing import Any
 import structlog
 from agents.components.datagen.manual_agent import ManualAgent
 from agents.components.datagen.state import NoteState, State
-from agents.components.datagen.tools.persistent_daytona import (
-    PersistentDaytonaManager,
-    get_or_create_daytona_manager,
-)
+from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from langchain.agents import AgentExecutor
 from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
 from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMessage
@@ -294,7 +291,9 @@ async def refiner_node(state: State, agent: ManualAgent, name: str) -> State:
 
         # Process MD files
         for md_file in md_files:
-            materials.append(f"MD file '{md_file}':\n{await manager.read_file(md_file)}")
+            materials.append(
+                f"MD file '{md_file}':\n{await manager.read_file(md_file)}"
+            )
 
         # Process PNG files
         materials.extend(f"PNG file: '{png_file}'" for png_file in png_files)

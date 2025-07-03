@@ -1,17 +1,18 @@
 from agents.components.datagen.create_agent import create_agent
 from agents.components.datagen.tools.persistent_daytona import (
+    PersistentDaytonaManager,
     get_daytona_execute_code,
     get_daytona_list_files,
     get_daytona_read_document,
 )
 
 
-def create_visualization_agent(llm, members, user_id: str):
+def create_visualization_agent(llm, members, daytona_manager: PersistentDaytonaManager):
     """Create the visualization agent"""
     tools = [
-        get_daytona_read_document(user_id),
-        get_daytona_execute_code(user_id),
-        get_daytona_list_files(user_id),
+        get_daytona_read_document(daytona_manager),
+        get_daytona_execute_code(daytona_manager),
+        get_daytona_list_files(daytona_manager),
     ]
 
     system_prompt = """

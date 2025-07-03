@@ -1,7 +1,8 @@
 from agents.components.datagen.create_agent import create_simple_agent
+from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 
 
-def create_refiner_agent(power_llm, members, user_id: str):
+def create_refiner_agent(power_llm):
     """Create the refiner agent"""
 
     system_prompt = """

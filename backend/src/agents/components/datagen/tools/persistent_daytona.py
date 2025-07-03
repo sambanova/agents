@@ -288,7 +288,7 @@ class PersistentDaytonaManager:
                     "Closing persistent Daytona client", sandbox_id=self._sandbox
                 )
                 # Close the Daytona client which will also clean up the sandbox
-                await self._client.close()
+                await self._sandbox.delete()
                 logger.info("Persistent Daytona client closed successfully")
 
             # Reset the instance variables
@@ -302,28 +302,7 @@ class PersistentDaytonaManager:
             self._sandbox = None
 
 
-# Global manager instance
-_user_daytona_managers: Dict[str, "PersistentDaytonaManager"] = {}
-
-
-async def get_or_create_daytona_manager(
-    user_id: str,
-    redis_storage: Optional[Any] = None,
-    data_sources: Optional[List[str]] = None,
-) -> PersistentDaytonaManager:
-    """Get or create the global Daytona manager."""
-    global _user_daytona_managers
-
-    if user_id not in _user_daytona_managers:
-        logger.info(f"Creating new Daytona manager for user {user_id}")
-        _user_daytona_managers[user_id] = await PersistentDaytonaManager.initialize(
-            user_id, redis_storage, data_sources=data_sources
-        )
-
-    return _user_daytona_managers[user_id]
-
-
-def get_daytona_execute_code(user_id: str):
+def get_daytona_execute_code(manager: PersistentDaytonaManager):
     """Returns a user-specific version of the daytona_execute_code tool"""
 
     @tool
@@ -336,13 +315,12 @@ def get_daytona_execute_code(user_id: str):
         Execute Python code in a persistent Daytona sandbox.
         The sandbox stays alive between calls, preserving variables and files.
         """
-        manager = await get_or_create_daytona_manager(user_id)
         return await manager.execute_code(code)
 
     return user_daytona_execute_code
 
 
-def get_daytona_list_files(user_id: str):
+def get_daytona_list_files(manager: PersistentDaytonaManager):
     """Returns a user-specific version of the daytona_list_files tool"""
 
     @tool
@@ -350,7 +328,6 @@ def get_daytona_list_files(user_id: str):
         directory: Annotated[str, "Directory to list files from"] = ".",
     ) -> str:
         """List files in the persistent Daytona sandbox directory."""
-        manager = await get_or_create_daytona_manager(user_id)
         return "Files in the sandbox:\n" + "\n".join(
             await manager.list_files(directory)
         )
@@ -358,7 +335,7 @@ def get_daytona_list_files(user_id: str):
     return user_daytona_list_files
 
 
-def get_user_daytona_read_file(user_id: str):
+def get_daytona_read_file(manager: PersistentDaytonaManager):
     """Returns a user-specific version of the daytona_read_file tool"""
 
     @tool
@@ -366,13 +343,12 @@ def get_user_daytona_read_file(user_id: str):
         filename: Annotated[str, "Name of the file to read from the sandbox"],
     ) -> str:
         """Read a file from the persistent Daytona sandbox."""
-        manager = await get_or_create_daytona_manager(user_id)
         return await manager.read_file(filename)
 
     return user_daytona_read_file
 
 
-def get_user_daytona_write_file(user_id: str):
+def get_daytona_write_file(manager: PersistentDaytonaManager):
     """Returns a user-specific version of the daytona_write_file tool"""
 
     @tool
@@ -381,13 +357,12 @@ def get_user_daytona_write_file(user_id: str):
         content: Annotated[str, "Content to write to the file"],
     ) -> str:
         """Write content to a file in the persistent Daytona sandbox."""
-        manager = await get_or_create_daytona_manager(user_id)
         return await manager.write_file(filename, content)
 
     return user_daytona_write_file
 
 
-def get_daytona_create_document(user_id: str):
+def get_daytona_create_document(manager: PersistentDaytonaManager):
     """Returns a user-specific version of the daytona_create_document tool"""
 
     @tool
@@ -400,8 +375,6 @@ def get_daytona_create_document(user_id: str):
 
         This function takes a list of points and writes them as numbered items in a Markdown file.
         """
-        manager = await get_or_create_daytona_manager(user_id)
-
         try:
             # Create the markdown content with numbered points
             content = ""
@@ -427,7 +400,7 @@ def get_daytona_create_document(user_id: str):
 
 
 # User-specific version of the tool
-def get_daytona_read_document(user_id: str):
+def get_daytona_read_document(manager: PersistentDaytonaManager):
     """Returns a user-specific version of the daytona_read_document tool"""
 
     @tool
@@ -450,8 +423,6 @@ def get_daytona_read_document(user_id: str):
         Returns:
             str: The content of the document or an error message.
         """
-        manager = await get_or_create_daytona_manager(user_id)
-
         try:
             # Read the file content from sandbox
             content = await manager.read_file(filename)
@@ -492,7 +463,7 @@ def get_daytona_read_document(user_id: str):
 
 
 # User-specific version of the tool
-def get_daytona_edit_document(user_id: str):
+def get_daytona_edit_document(manager: PersistentDaytonaManager):
     """Returns a user-specific version of the daytona_edit_document tool"""
 
     @tool
@@ -519,8 +490,6 @@ def get_daytona_edit_document(user_id: str):
             inserts = dict([(1, "This is the first line to insert."), (3, "This is the third line to insert.")])
             result = await daytona_edit_document(filename="document.md", inserts=inserts)
         """
-        manager = await get_or_create_daytona_manager(user_id)
-
         try:
             # Read the existing file content from sandbox
             content = await manager.read_file(filename)
@@ -572,7 +541,8 @@ def get_daytona_edit_document(user_id: str):
     return user_daytona_edit_document
 
 
-def get_daytona_describe_data(user_id: str):
+# User-specific version of the tool
+def get_daytona_describe_data(manager: PersistentDaytonaManager):
     """Returns a user-specific version of the daytona_describe_data tool"""
 
     @tool
@@ -585,8 +555,6 @@ def get_daytona_describe_data(user_id: str):
         This function attempts to read a CSV file using different encodings and
         returns information about the data structure and first few rows.
         """
-        manager = await get_or_create_daytona_manager(user_id)
-
         # First check if file exists
         try:
 
@@ -656,7 +624,8 @@ print(result)
     return user_daytona_describe_data
 
 
-def get_daytona_pip_install(user_id: str):
+# User-specific version of the tool
+def get_daytona_pip_install(manager: PersistentDaytonaManager):
     """Returns a user-specific version of the daytona_pip_install tool"""
 
     @tool
@@ -683,8 +652,6 @@ def get_daytona_pip_install(user_id: str):
             - Install multiple packages: packages="numpy matplotlib seaborn"
             - Install with version: packages="requests==2.28.0"
         """
-        manager = await get_or_create_daytona_manager(user_id)
-
         try:
             # Split packages by space and clean them
             package_list = [pkg.strip() for pkg in packages.split() if pkg.strip()]
@@ -726,13 +693,3 @@ def get_daytona_pip_install(user_id: str):
             return f"Error installing packages '{packages}': {str(e)}"
 
     return user_daytona_pip_install
-
-
-# Cleanup function to be called at workflow end
-async def cleanup_persistent_daytona(user_id: str):
-    """Clean up the persistent Daytona manager for a specific user. Call this at the end of a user's workflow."""
-    global _user_daytona_managers
-    if user_id in _user_daytona_managers:
-        manager = _user_daytona_managers.pop(user_id)
-        await manager.cleanup()
-        logger.info(f"Persistent Daytona manager cleaned up for user {user_id}")

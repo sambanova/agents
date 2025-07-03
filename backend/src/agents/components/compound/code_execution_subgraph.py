@@ -131,26 +131,6 @@ def create_code_execution_graph(
     ]
     images_formats = ["image/png", "image/jpg", "image/jpeg", "image/gif", "image/svg"]
 
-    async def secure_sandbox_executor(code: str) -> dict:
-        """
-        Simulates a secure environment to execute Python code.
-        In a real application, this would be a sandboxed environment like a Docker container.
-        """
-        try:
-            # A simple check to simulate a common error.
-            if "import non_existent_library" in code:
-                raise ImportError("No module named 'non_existent_library'")
-
-            # Another check for a logic error.
-            if "result = 10 / 0" in code:
-                raise ZeroDivisionError("division by zero")
-
-            # If no errors, simulate a successful execution.
-            return {"result": "Execution successful!", "error": ""}
-        except Exception as e:
-            # Return the error message if execution fails.
-            return {"result": "", "error": f"{type(e).__name__}: {e}"}
-
     def fix_common_string_issues(code: str) -> str:
         """
         Fixes common HTML, Unicode, and f-string issues in generated Python code.
@@ -246,7 +226,7 @@ def create_code_execution_graph(
             try:
                 response = await sandbox.process.code_run(state["code"])
             except Exception as exec_error:
-                await daytona.close()
+                await sandbox.delete()
                 logger.error(
                     "Code execution failed in sandbox",
                     error=str(exec_error),
@@ -259,7 +239,7 @@ def create_code_execution_graph(
 
             if response.exit_code != 0:
                 # Ensure error detail is a string
-                await daytona.close()
+                await sandbox.delete()
                 error_detail = (
                     str(response.result) if response.result is not None else ""
                 )
@@ -440,7 +420,7 @@ def create_code_execution_graph(
                 logger.info("No charts found in response artifacts")
 
             # Clean up sandbox after processing everything
-            await daytona.close()
+            await sandbox.delete()
 
             # Add execution summary
             files_created = len(

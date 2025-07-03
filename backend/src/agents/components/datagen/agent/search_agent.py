@@ -1,5 +1,6 @@
 from agents.components.datagen.create_agent import create_agent
 from agents.components.datagen.tools.persistent_daytona import (
+    PersistentDaytonaManager,
     get_daytona_create_document,
     get_daytona_describe_data,
     get_daytona_read_document,
@@ -7,12 +8,12 @@ from agents.components.datagen.tools.persistent_daytona import (
 from agents.tools.langgraph_tools import TOOL_REGISTRY
 
 
-def create_search_agent(llm, members, user_id: str):
+def create_search_agent(llm, members, daytona_manager: PersistentDaytonaManager):
     """Create the search agent"""
     tools = [
-        get_daytona_create_document(user_id),
-        get_daytona_read_document(user_id),
-        get_daytona_describe_data(user_id),
+        get_daytona_create_document(daytona_manager),
+        get_daytona_read_document(daytona_manager),
+        get_daytona_describe_data(daytona_manager),
         TOOL_REGISTRY["wikipedia"]["factory"](),
         TOOL_REGISTRY["search_tavily"]["factory"](),
         TOOL_REGISTRY["arxiv"]["factory"](),

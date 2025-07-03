@@ -1,9 +1,11 @@
 import asyncio
 import os
 
+import redis
 import structlog
 from agents.components.datagen.state import State
 from agents.components.datagen.workflow import WorkflowManager
+from agents.storage.redis_storage import RedisStorage
 from agents.utils.llms import get_fireworks_llm, get_sambanova_llm
 from langchain_core.messages import HumanMessage
 
@@ -23,61 +25,11 @@ def setup_language_models():
     return {"llm": llm, "power_llm": power_llm, "json_llm": json_llm}
 
 
-def main(user_input: str, working_directory: str = "./data", thread_id: str = "1"):
-    """
-    Main method to run the datagen workflow
-
-    Args:
-        user_input (str): The user's input/query
-        working_directory (str): Directory for file operations
-        thread_id (str): Thread ID for conversation tracking
-    """
-    try:
-        # Set up language models
-        print("Setting up language models...")
-        language_models = setup_language_models()
-
-        # Create workflow manager
-        print("Creating workflow manager...")
-        workflow_manager = WorkflowManager(language_models, working_directory)
-
-        # Get the compiled graph
-        graph = workflow_manager.get_graph()
-
-        # Run the workflow
-        logger.info(f"Starting workflow with input: {user_input}")
-        logger.info("-" * 50)
-
-        events = graph.stream(
-            {
-                "messages": [HumanMessage(content=user_input)],
-                "hypothesis": "",
-                "process_decision": "",
-                "process": "",
-                "visualization_state": "",
-                "searcher_state": "",
-                "code_state": "",
-                "report_section": "",
-                "quality_review": "",
-                "needs_revision": False,
-                "sender": "",
-            },
-            {"configurable": {"thread_id": thread_id}, "recursion_limit": 100},
-            stream_mode="values",
-            debug=False,
-        )
-
-    except Exception as e:
-        print(f"Error running workflow: {e}")
-        raise
-
-
 async def main_with_persistent_daytona(
     user_input: str,
-    user_id: str = "user1",
-    thread_id: str = "1",
-    redis_storage=None,
-    data_sources=None,
+    user_id: str,
+    thread_id: str,
+    redis_storage: RedisStorage,
 ):
     """
     Main method to run the datagen workflow with persistent Daytona client
@@ -108,7 +60,8 @@ async def main_with_persistent_daytona(
     language_models = setup_language_models()
 
     # Create workflow manager
-    manager = WorkflowManager(language_models, user_id)
+    manager = WorkflowManager(language_models, user_id, redis_storage)
+    await manager.initialize()
 
     # Create initial state
     initial_state = {
@@ -134,9 +87,7 @@ async def main_with_persistent_daytona(
         data_sources = [
             "/Users/tamasj/Downloads/customer_satisfaction_purchase_behavior.csv"
         ]
-        async for event in manager.run_with_persistent_daytona(
-            initial_state, config, user_id, redis_storage, data_sources
-        ):
+        async for event in manager.run_workflow(initial_state, config):
             yield event
 
     except Exception as e:
@@ -156,7 +107,14 @@ if __name__ == "__main__":
         print("-" * 50)
 
         # Run the workflow and process events
-        async for event in main_with_persistent_daytona(user_input):
+        async for event in main_with_persistent_daytona(
+            user_input,
+            user_id="user1",
+            thread_id="1",
+            redis_storage=RedisStorage(
+                redis_client=redis.Redis(host="localhost", port=6379)
+            ),
+        ):
             print(f"Event: {event['messages'][-1].content}")
             print("-" * 30)
 

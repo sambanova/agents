@@ -27,6 +27,7 @@ from agents.components.datagen.router import (
 )
 from agents.components.datagen.state import State
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
+from agents.storage.redis_storage import RedisStorage
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -35,7 +36,7 @@ logger = structlog.get_logger(__name__)
 
 
 class WorkflowManager:
-    def __init__(self, language_models, user_id: str):
+    def __init__(self, language_models, user_id: str, redis_storage: RedisStorage):
         """
         Initialize the workflow manager with language models.
 
@@ -57,11 +58,25 @@ class WorkflowManager:
             "Refiner",
         ]
         self.user_id = user_id
+        self.agents = {}
+        self.daytona_manager = None  # Initialize to None
+        self.redis_storage = redis_storage
+
+    async def initialize(self):
+        """
+        Asynchronously initializes the WorkflowManager, including the Daytona manager and agents.
+        """
+        # Persistent Daytona manager
+        self.daytona_manager = await PersistentDaytonaManager.initialize(
+            user_id=self.user_id,
+            redis_storage=self.redis_storage,
+            snapshot="data-analysis:0.0.10",
+            data_sources=[
+                "/Users/tamasj/Downloads/customer_satisfaction_purchase_behavior.csv"
+            ],
+        )
         self.agents = self.create_agents()
         self.setup_workflow()
-
-        # Persistent Daytona manager
-        self.daytona_manager = None
 
     def create_agents(self):
         """Create all system agents"""
@@ -75,31 +90,50 @@ class WorkflowManager:
 
         # Create each agent using their respective creation functions
         agents["hypothesis_agent"] = create_hypothesis_agent(
-            llm, self.members, self.user_id
+            llm=llm,
+            members=self.members,
+            daytona_manager=self.daytona_manager,
         )
 
-        agents["process_agent"] = create_process_agent(power_llm)
+        agents["process_agent"] = create_process_agent(power_llm=power_llm)
 
         agents["visualization_agent"] = create_visualization_agent(
-            llm, self.members, self.user_id
+            llm=llm,
+            members=self.members,
+            daytona_manager=self.daytona_manager,
         )
 
-        agents["code_agent"] = create_code_agent(power_llm, self.members, self.user_id)
+        agents["code_agent"] = create_code_agent(
+            power_llm=power_llm,
+            members=self.members,
+            daytona_manager=self.daytona_manager,
+        )
 
-        agents["searcher_agent"] = create_search_agent(llm, self.members, self.user_id)
+        agents["searcher_agent"] = create_search_agent(
+            llm=llm,
+            members=self.members,
+            daytona_manager=self.daytona_manager,
+        )
 
         agents["report_agent"] = create_report_agent(
-            power_llm, self.members, self.user_id
+            power_llm=power_llm,
+            members=self.members,
+            daytona_manager=self.daytona_manager,
         )
 
         agents["quality_review_agent"] = create_quality_review_agent(
-            llm, self.members, self.user_id
+            llm=llm,
+            members=self.members,
+            daytona_manager=self.daytona_manager,
         )
 
-        agents["note_agent"] = create_note_agent(json_llm, self.user_id)
+        agents["note_agent"] = create_note_agent(
+            json_llm=json_llm,
+            daytona_manager=self.daytona_manager,
+        )
 
         agents["refiner_agent"] = create_refiner_agent(
-            power_llm, self.members, self.user_id
+            power_llm=power_llm,
         )
 
         return agents
@@ -247,94 +281,34 @@ class WorkflowManager:
 
         self.workflow.add_edge("NoteTaker", "Process")
         self.workflow.add_edge("Refiner", "HumanReview")
-
-        self.workflow.add_conditional_edges(
-            "HumanReview",
-            lambda state: (
-                "Process" if state and state.get("needs_revision", False) else "END"
-            ),
-            {"Process": "Process", "END": END},
-        )
+        self.workflow.add_edge("HumanReview", END)
 
         # Compile workflow
         self.memory = MemorySaver()
-        self.graph = self.workflow.compile()
-
-        raw = self.graph.get_graph().draw_mermaid_png()
-
-        # 2) if it’s str, strip any data URL prefix and decode; if it’s already bytes, just use it
-        import base64
-
-        if isinstance(raw, str):
-            # strip off "data:image/png;base64," if present
-            if raw.startswith("data:image/png;base64,"):
-                raw = raw.split(",", 1)[1]
-            png_bytes = base64.b64decode(raw)
-        elif isinstance(raw, (bytes, bytearray)):
-            png_bytes = raw
-        else:
-            raise TypeError(
-                f"Unexpected return type from draw_mermaid_png(): {type(raw)}"
-            )
-
-        # 3) write straight out to disk in binary mode
-        out_path = "/Users/tamasj/Downloads/graph.png"
-        with open(out_path, "wb") as f:
-            f.write(png_bytes)
+        self.graph = self.workflow.compile(checkpointer=self.memory)
 
     def get_graph(self):
-        """Return the compiled workflow graph"""
         return self.graph
 
-    async def initialize_persistent_daytona(
-        self, user_id: str, redis_storage=None, data_sources=None
-    ):
-        """Initialize the persistent Daytona client for the workflow."""
-        try:
-            self.daytona_manager = await PersistentDaytonaManager.initialize(
-                user_id=user_id, redis_storage=redis_storage, data_sources=data_sources
-            )
-            logger.info("Persistent Daytona client initialized for workflow")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to initialize persistent Daytona: {e}")
-            return False
-
-    async def cleanup_persistent_daytona(self):
-        """Clean up the persistent Daytona client."""
+    async def cleanup(self):
+        """Clean up the persistent Daytona manager."""
         if self.daytona_manager:
-            try:
-                await self.daytona_manager.cleanup()
-                self.daytona_manager = None
-                logger.info("Persistent Daytona client cleaned up")
-            except Exception as e:
-                logger.error(f"Error cleaning up persistent Daytona: {e}")
+            await self.daytona_manager.cleanup()
+            self.daytona_manager = None
 
-    async def run_with_persistent_daytona(
-        self, initial_state, config, user_id: str, redis_storage=None, data_sources=None
-    ):
+    async def run_workflow(self, initial_state: dict, config: dict):
         """
-        Run the workflow with persistent Daytona client.
-
-        Args:
-            initial_state: Initial state for the workflow
-            config: Configuration for the workflow
-            user_id: User ID for the Daytona session
-            redis_storage: Redis storage instance (optional)
-            data_sources: List of file paths to upload to sandbox root folder (optional)
-
-        Returns:
-            Generator of events from the workflow
+        Run the workflow with the given initial state and configuration.
         """
-        # Initialize persistent Daytona
-        await self.initialize_persistent_daytona(user_id, redis_storage, data_sources)
+        if not self.graph:
+            raise Exception("Workflow graph not set up. Call initialize() first.")
 
         try:
-            # Run the workflow
-            async for event in self.graph.astream(
+            # Run the graph
+            async for s in self.graph.astream(
                 initial_state, config, stream_mode="values"
             ):
-                yield event
+                yield s
         finally:
-            # Always cleanup Daytona when done
-            await self.cleanup_persistent_daytona(self.user_id)
+            # Ensure cleanup is called
+            await self.cleanup()
