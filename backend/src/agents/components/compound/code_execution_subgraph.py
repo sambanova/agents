@@ -228,243 +228,207 @@ def create_code_execution_graph(
         }
 
     async def execute_code(state: CorrectingExecutorState) -> Dict:
-
-        result_str = ""
-
+        result: Dict = {}
+        sandbox = None
+        daytona = None
         try:
+            # 1. Setup clients
             config = DaytonaSDKConfig(api_key=api_key)
             daytona = DaytonaClient(config)
 
+            # 2. Create sandbox
             params = CreateSandboxFromSnapshotParams(
                 snapshot=daytona_snapshot,
             )
-
             sandbox = await daytona.create(params=params)
             list_of_files = [f.name for f in await sandbox.fs.list_files(".")]
 
-            # Execute the code with timeout and error handling
+            # 3. Run code and handle errors without returning
+            response = None
+            execution_successful = False
             try:
                 response = await sandbox.process.code_run(state["code"])
+                if response.exit_code == 0:
+                    execution_successful = True
+                else:
+                    error_detail = (
+                        str(response.result) if response.result is not None else ""
+                    )
+                    logger.info(
+                        "Daytona code execution failed with non-zero exit code",
+                        exit_code=response.exit_code,
+                        error_detail=error_detail,
+                    )
+                    result = {
+                        "error_log": f"Error (Exit Code {response.exit_code}): {error_detail}",
+                        "current_retry": state["current_retry"] + 1,
+                    }
             except Exception as exec_error:
-                await sandbox.delete()
                 logger.error(
                     "Code execution failed in sandbox",
                     error=str(exec_error),
                     exc_info=True,
                 )
-                return {
+                result = {
                     "error_log": "Error during code execution: " + str(exec_error),
                     "current_retry": state["current_retry"] + 1,
                 }
 
-            if response.exit_code != 0:
-                # Ensure error detail is a string
-                await sandbox.delete()
-                error_detail = (
-                    str(response.result) if response.result is not None else ""
-                )
+            # 4. If execution was successful, process artifacts
+            if execution_successful and response:
+                result_str = f"Code executed successfully, result from the sandbox:\n\n {str(response.result) if response.result is not None else ''}"
+
                 logger.info(
-                    "Daytona code execution failed",
+                    "Daytona response",
                     exit_code=response.exit_code,
-                    error_detail=error_detail,
-                    original_code_preview=state["code"][:200],
+                    result_preview=str(response.result)[:500],
+                    artifacts=response.artifacts,
                 )
-                return {
-                    "error_log": f"Error (Exit Code {response.exit_code}): {error_detail}",
-                    "current_retry": state["current_retry"] + 1,
-                }
-            else:
-                result_str += f"Code executed successfully, result from the sandbox:\n\n {str(response.result) if response.result is not None else ''}"
 
-            # Debug: Check what we got from the response
-            logger.info(
-                "Daytona response",
-                exit_code=response.exit_code,
-                result_preview=str(response.result)[:500],
-                artifacts=response.artifacts,
-                current_retry=state["current_retry"] + 1,
-            )
+                generation_timestamp = time.time()
+                list_of_files_after_execution = await sandbox.fs.list_files(".")
+                for file in list_of_files_after_execution:
+                    mime_type, _ = mimetypes.guess_type(file.name)
 
-            generation_timestamp = time.time()
-            # Download all new files with enhanced HTML handling
-            list_of_files_after_execution = await sandbox.fs.list_files(".")
-            for file in list_of_files_after_execution:
-                mime_type, _ = mimetypes.guess_type(file.name)
-
-                # Markdown files are text/markdown
-                if mime_type is None:
-                    if file.name.lower().endswith(".md"):
-                        mime_type = "text/markdown"
-                    elif file.name.lower().endswith((".pptx", ".ppt")):
-                        # Fallback for PowerPoint files when system mimetypes are missing
-                        mime_type = (
-                            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                            if file.name.lower().endswith(".pptx")
-                            else "application/vnd.ms-powerpoint"
-                        )
-                    elif file.name.lower().endswith(".pdf"):
-                        mime_type = "application/pdf"
-                    elif file.name.lower().endswith((".docx", ".doc")):
-                        mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-
-                if file.name not in list_of_files and mime_type in supported_extensions:
-                    file_id = str(uuid.uuid4())
-                    try:
-                        content = await sandbox.fs.download_file(file.name)
-                        logger.info(
-                            "Downloaded file from sandbox",
-                            filename=file.name,
-                            size_bytes=len(content),
-                            mime_type=mime_type,
-                        )
-
-                        if mime_type == "text/html":
-                            # Try to validate and fix HTML content
-                            try:
-                                content_str = (
-                                    content.decode("utf-8")
-                                    if isinstance(content, bytes)
-                                    else str(content)
-                                )
-
-                                # Validate and potentially fix the HTML content
-                                fixed_content = validate_and_fix_html_content(
-                                    content_str, file.name
-                                )
-
-                                # If content was modified, update the stored file
-                                if fixed_content != content_str:
-                                    logger.info(
-                                        f"HTML content was enhanced for {file.name}"
-                                    )
-                                    content = (
-                                        fixed_content.encode("utf-8")
-                                        if isinstance(fixed_content, str)
-                                        else fixed_content
-                                    )
-
-                                if not (
-                                    "<html" in fixed_content.lower()
-                                    or "<body" in fixed_content.lower()
-                                ):
-                                    result_str += f"\n\n**Note**: {file.name} may not contain complete HTML structure"
-                                else:
-                                    result_str += (
-                                        f"\n\n![{file.name}](attachment:{file_id})"
-                                    )
-
-                            except Exception as html_check_error:
-                                logger.warning(
-                                    f"Could not validate HTML content: {html_check_error}"
-                                )
-                        elif mime_type in images_formats:
-                            result_str += (
-                                f"\n\n![{file.name}](redis-chart:{file_id}:{user_id})"
+                    if mime_type is None:
+                        if file.name.lower().endswith(".md"):
+                            mime_type = "text/markdown"
+                        elif file.name.lower().endswith((".pptx", ".ppt")):
+                            mime_type = (
+                                "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                                if file.name.lower().endswith(".pptx")
+                                else "application/vnd.ms-powerpoint"
                             )
-                        else:
-                            # For non-image files, still use attachment reference
-                            result_str += f"\n\n![{file.name}](attachment:{file_id})"
+                        elif file.name.lower().endswith(".pdf"):
+                            mime_type = "application/pdf"
+                        elif file.name.lower().endswith((".docx", ".doc")):
+                            mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
-                        # Store in Redis for backup/download purposes
-                        if redis_storage:
-                            await redis_storage.put_file(
-                                user_id,
-                                file_id,
-                                data=content,
-                                filename=file.name,
-                                format=mime_type,
-                                upload_timestamp=generation_timestamp,
-                                indexed=False,
-                                source="daytona",
-                            )
-                    except Exception as e:
-                        logger.error(
-                            "Error downloading file from sandbox",
-                            filename=file.name,
-                            error=str(e),
-                            exc_info=True,
-                        )
+                    if (
+                        file.name not in list_of_files
+                        and mime_type in supported_extensions
+                    ):
+                        file_id = str(uuid.uuid4())
+                        try:
+                            content = await sandbox.fs.download_file(file.name)
+                            if mime_type == "text/html":
+                                try:
+                                    content_str = (
+                                        content.decode("utf-8")
+                                        if isinstance(content, bytes)
+                                        else str(content)
+                                    )
+                                    fixed_content = validate_and_fix_html_content(
+                                        content_str, file.name
+                                    )
+                                    if fixed_content != content_str:
+                                        content = (
+                                            fixed_content.encode("utf-8")
+                                            if isinstance(fixed_content, str)
+                                            else fixed_content
+                                        )
+                                    if not (
+                                        "<html" in fixed_content.lower()
+                                        or "<body" in fixed_content.lower()
+                                    ):
+                                        result_str += f"\n\n**Note**: {file.name} may not contain complete HTML structure"
+                                    else:
+                                        result_str += (
+                                            f"\n\n![{file.name}](attachment:{file_id})"
+                                        )
+                                except Exception as html_check_error:
+                                    logger.warning(
+                                        f"Could not validate HTML content: {html_check_error}"
+                                    )
+                            elif mime_type in images_formats:
+                                result_str += f"\n\n![{file.name}](redis-chart:{file_id}:{user_id})"
+                            else:
+                                result_str += (
+                                    f"\n\n![{file.name}](attachment:{file_id})"
+                                )
 
-            # Process charts from artifacts
-            if hasattr(response.artifacts, "charts") and response.artifacts.charts:
-                logger.info(
-                    "Processing charts from artifacts",
-                    num_charts=len(response.artifacts.charts),
-                )
-                for i, chart in enumerate(response.artifacts.charts):
-                    image_id = str(uuid.uuid4())
-                    title = chart.title or f"Chart {i+1}"
-                    try:
-                        if chart.png:
-                            # Chart.png should be base64 string, convert to bytes for storage
-                            import base64
-
-                            chart_data = base64.b64decode(chart.png)
-
-                            # Store in Redis for backup/download purposes
                             if redis_storage:
                                 await redis_storage.put_file(
                                     user_id,
-                                    image_id,
-                                    data=chart_data,
-                                    filename=title,
-                                    format="png",
+                                    file_id,
+                                    data=content,
+                                    filename=file.name,
+                                    format=mime_type,
                                     upload_timestamp=generation_timestamp,
                                     indexed=False,
                                     source="daytona",
                                 )
-
-                            # Use compact Redis reference instead of data URL to save context
-                            result_str += (
-                                f"\n\n![{title}](redis-chart:{image_id}:{user_id})"
+                        except Exception as e:
+                            logger.error(
+                                "Error downloading file from sandbox",
+                                filename=file.name,
+                                error=str(e),
+                                exc_info=True,
                             )
-                            logger.info(
-                                "Successfully stored chart",
+
+                if hasattr(response.artifacts, "charts") and response.artifacts.charts:
+                    for i, chart in enumerate(response.artifacts.charts):
+                        image_id = str(uuid.uuid4())
+                        title = chart.title or f"Chart {i+1}"
+                        try:
+                            if chart.png:
+                                import base64
+
+                                chart_data = base64.b64decode(chart.png)
+                                if redis_storage:
+                                    await redis_storage.put_file(
+                                        user_id,
+                                        image_id,
+                                        data=chart_data,
+                                        filename=title,
+                                        format="png",
+                                        upload_timestamp=generation_timestamp,
+                                        indexed=False,
+                                        source="daytona",
+                                    )
+                                result_str += (
+                                    f"\n\n![{title}](redis-chart:{image_id}:{user_id})"
+                                )
+                        except Exception as e:
+                            logger.error(
+                                "Error storing chart",
                                 chart_index=i,
-                                chart_title=title,
-                                image_id=image_id,
+                                error=str(e),
+                                exc_info=True,
                             )
-                        else:
-                            logger.info("Chart has no PNG data", chart_index=i)
                             result_str += f"\n\n**Chart Generated:** {title}"
-                    except Exception as e:
-                        logger.error(
-                            "Error storing chart",
-                            chart_index=i,
-                            error=str(e),
-                            exc_info=True,
-                        )
-                        # Fallback to generic message
-                        result_str += f"\n\n**Chart Generated:** {title}"
-            else:
-                logger.info("No charts found in response artifacts")
 
-            # Clean up sandbox after processing everything
-            await sandbox.delete()
+                files_created = len(
+                    [
+                        f
+                        for f in list_of_files_after_execution
+                        if f.name not in list_of_files
+                    ]
+                )
+                if files_created > 0:
+                    result_str += f"\n\n**Execution Summary**: {files_created} file(s) created successfully."
 
-            # Add execution summary
-            files_created = len(
-                [
-                    f
-                    for f in list_of_files_after_execution
-                    if f.name not in list_of_files
-                ]
-            )
-            if files_created > 0:
-                result_str += f"\n\n**Execution Summary**: {files_created} file(s) created successfully."
-
-            return {
-                "final_result": result_str,
-                "current_retry": state["current_retry"] + 1,
-                "error_log": "",
-            }
+                result = {
+                    "final_result": result_str,
+                    "current_retry": state["current_retry"] + 1,
+                    "error_log": "",
+                }
 
         except Exception as e:
-            logger.error("Daytona code execution failed", error=str(e), exc_info=True)
-            return {
-                "error_log": "Error during Daytona code execution: " + str(e),
+            logger.error(
+                "Daytona setup or critical error failed", error=str(e), exc_info=True
+            )
+            result = {
+                "error_log": "Error during Daytona setup: " + str(e),
                 "current_retry": state["current_retry"] + 1,
             }
+        finally:
+            if sandbox:
+                await sandbox.delete()
+            if daytona:
+                await daytona.close()
+
+        return result
 
     async def analyze_error_and_propose_fix(state: CorrectingExecutorState) -> Dict:
         """
@@ -622,41 +586,3 @@ def create_code_execution_graph(
 
     # Compile and return
     return workflow.compile()
-
-
-async def main():
-    """
-    The main asynchronous function to run the graph.
-    """
-
-    with open("/Users/tamasj/Downloads/code.txt", "r") as f:
-        initial_buggy_code = f.read()
-
-    # The graph now requires the 'code' and the retry logic to be in the initial input.
-    initial_input = {
-        "code": initial_buggy_code,
-        "current_retry": 0,
-        "max_retries": 10,
-        "error_log": "",
-        "final_result": "",
-        "corrections_proposed": [],
-    }
-
-    logger.info("Starting Self-Correcting Subgraph (Async)")
-    # Invoke the graph asynchronously with ainvoke
-    final_state = await create_code_execution_graph(
-        "user1", "f9c2c30f-faa3-464f-a8fd-e7d10160c4b1", None
-    ).ainvoke(initial_input, {"recursion_limit": 50})
-
-    print("\n🏁 Subgraph Finished. Final State: 🏁")
-    print("========================================")
-    print(f"Successful: {'Yes' if final_state.get('final_result') else 'No'}")
-    print(f"Result: {final_state.get('final_result', 'N/A')}")
-    print(f"Final Code:\n{final_state['code']}")
-    print(f"Error Log:\n{final_state['error_log']}")
-    print(f"Final Result:\n{final_state['final_result']}")
-    print("========================================")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
