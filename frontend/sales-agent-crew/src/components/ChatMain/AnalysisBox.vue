@@ -192,7 +192,8 @@ const toolTimeline = computed(() =>
     .filter(
       i =>
         i.event === 'agent_completion' &&
-        i.additional_kwargs?.agent_type === 'react_tool'
+        (i.additional_kwargs?.agent_type === 'react_tool' || 
+         i.additional_kwargs?.agent_type === 'react_subgraph_DaytonaCodeSandbox')
     )
     .map(i => extractToolName(i.content))
 )
@@ -285,7 +286,8 @@ const latestToolAction = computed(() => {
   // 1) Grab only the react_tool completions
   const calls = props.streamData.filter(i =>
     i.event === 'agent_completion' &&
-    i.agent_type === 'react_tool' &&
+    (i.agent_type === 'react_tool' || 
+     i.agent_type === 'react_subgraph_DaytonaCodeSandbox') &&
     typeof i.content === 'string'
   )
   if (!calls.length) return ''

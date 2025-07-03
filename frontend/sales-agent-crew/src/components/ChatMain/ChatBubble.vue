@@ -1190,7 +1190,7 @@ const showBubble = computed(() => {
     if (String(props.data).includes('<subgraph')) return false
 
     // Internal agent types we never surface
-    const internalTypes = ['react_subgraph', 'react_tool', 'tool_response', 'routing']
+    const internalTypes = ['react_subgraph', 'react_tool', 'react_subgraph_DaytonaCodeSandbox', 'tool_response', 'routing']
     const agentType = parsedData.value?.agent_type
     if (internalTypes.includes(agentType)) return false
 

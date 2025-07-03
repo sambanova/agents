@@ -45,10 +45,9 @@ RUN pip install --no-cache-dir \
     xlsxwriter==3.2.5 \
     xgboost==3.0.2 \
     lightgbm==4.6.0 \
-    tensorflow-cpu==2.19.0 \
-    torch==2.7.1 \
     shap==0.48.0 \
-    Markdown==3.8.2
+    Markdown==3.8.2 \
+    markdown2==2.5.3
 
 
 # Keep the container running indefinitely
