@@ -3,6 +3,7 @@ import os
 
 import redis
 import structlog
+from agents.components.compound.data_science_subgraph import setup_language_models
 from agents.components.datagen.state import State
 from agents.components.datagen.workflow import WorkflowManager
 from agents.storage.redis_storage import RedisStorage
@@ -10,19 +11,6 @@ from agents.utils.llms import get_fireworks_llm, get_sambanova_llm
 from langchain_core.messages import HumanMessage
 
 logger = structlog.get_logger(__name__)
-
-
-def setup_language_models():
-    """Set up the language models needed for the workflow"""
-    # Get API keys from environment variables
-    sambanova_api_key = os.getenv("SAMBANOVA_KEY")
-
-    # Initialize language models
-    llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-V3-0324")
-    power_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-V3-0324")
-    json_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-V3-0324")
-
-    return {"llm": llm, "power_llm": power_llm, "json_llm": json_llm}
 
 
 async def main_with_persistent_daytona(
@@ -64,7 +52,7 @@ async def main_with_persistent_daytona(
 
     # Create initial state
     initial_state = {
-        "messages": [HumanMessage(content=user_input)],
+        "internal_messages": [HumanMessage(content=user_input)],
         "hypothesis": "",
         "process": "",
         "process_decision": None,
@@ -78,7 +66,10 @@ async def main_with_persistent_daytona(
     }
 
     # Configuration for the thread
-    config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 100}
+    config = {
+        "configurable": {"thread_id": thread_id},
+        "recursion_limit": 100,
+    }
 
     try:
         # Run workflow with persistent Daytona
@@ -91,7 +82,9 @@ async def main_with_persistent_daytona(
 
     except Exception as e:
         logger.error("Error in datagen workflow", error=str(e), exc_info=True)
-        error_state = State(messages=[("assistant", f"Error occurred: {str(e)}")])
+        error_state = State(
+            internal_messages=[("assistant", f"Error occurred: {str(e)}")]
+        )
         print(error_state)
 
 

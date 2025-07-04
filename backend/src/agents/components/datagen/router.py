@@ -125,7 +125,7 @@ def QualityReview_router(state: State) -> NodeType:
     NodeType: The next node to route to based on the quality review and process decision.
     """
     logger.info("Entering QualityReview_router")
-    messages = state.get("messages", [])
+    messages = state.get("internal_messages", [])
     message_before_revision = messages[-2] if len(messages) > 1 else None
 
     # Check if revision is needed

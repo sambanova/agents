@@ -41,7 +41,7 @@ async def agent_node(
 
         # Return a dictionary to be merged into the state
         return {
-            "messages": state["messages"] + [output_message],
+            "internal_messages": state["internal_messages"] + [output_message],
             state_key: output_message,
             "sender": name,
         }
@@ -52,7 +52,7 @@ async def agent_node(
         )
         # Return an error message to be added to the state
         error_message = AIMessage(content=f"Error in {name}: {str(e)}", name=name)
-        return {"messages": state["messages"] + [error_message]}
+        return {"internal_messages": state["internal_messages"] + [error_message]}
 
 
 def human_choice_node(state: State) -> State:
@@ -88,7 +88,7 @@ def human_choice_node(state: State) -> State:
 
     human_message = HumanMessage(content=content)
 
-    state["messages"].append(human_message)
+    state["internal_messages"].append(human_message)
     state["sender"] = "human"
 
     logger.info("Human choice processed")
@@ -116,14 +116,14 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
     """
     logger.info(f"Processing note agent: {name}")
     try:
-        current_messages = state.get("messages", [])
+        current_messages = state.get("internal_messages", [])
 
         head_messages, tail_messages = [], []
 
         if len(current_messages) > 6:
             head_messages = current_messages[:2]
             tail_messages = current_messages[-2:]
-            state = {**state, "messages": current_messages[2:-2]}
+            state = {**state, "internal_messages": current_messages[2:-2]}
             logger.debug("Trimmed messages for processing")
 
         result = await agent.ainvoke(state)
@@ -134,13 +134,15 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
         )
         parsed_output: NoteState = await fixing_parser.aparse(result.content)
         messages = (
-            parsed_output.messages if parsed_output.messages else current_messages
+            parsed_output.internal_messages
+            if parsed_output.internal_messages
+            else current_messages
         )
 
         combined_messages = head_messages + messages + tail_messages
 
         updated_state: State = {
-            "messages": combined_messages,
+            "internal_messages": combined_messages,
             "hypothesis": (
                 str(parsed_output.hypothesis)
                 if parsed_output.hypothesis
@@ -210,7 +212,7 @@ def _create_error_state(
     """
     logger.info(f"Creating error state for {name}: {error_type}")
     error_state: State = {
-        "messages": state.get("messages", []) + [error_message],
+        "internal_messages": state.get("internal_messages", []) + [error_message],
         "hypothesis": str(state.get("hypothesis", "")),
         "process": str(state.get("process", "")),
         "process_decision": str(state.get("process_decision", "")),
@@ -247,7 +249,9 @@ def human_review_node(state: State) -> State:
                     "Please enter your additional analysis request: "
                 ).strip()
                 if additional_request:
-                    state["messages"].append(HumanMessage(content=additional_request))
+                    state["internal_messages"].append(
+                        HumanMessage(content=additional_request)
+                    )
                     state["needs_revision"] = True
                     break
                 print("Request cannot be empty. Please try again.")
@@ -304,7 +308,7 @@ async def refiner_node(
 
         # Create refiner state
         refiner_state = state.copy()
-        refiner_state["messages"] = [AIMessage(content=report_content)]
+        refiner_state["internal_messages"] = [AIMessage(content=report_content)]
 
         try:
             # Attempt to invoke agent with full content
@@ -320,11 +324,13 @@ async def refiner_node(
                 f"Report materials (file names only):\n{simplified_materials}"
             )
 
-            refiner_state["messages"] = [AIMessage(content=simplified_report_content)]
+            refiner_state["internal_messages"] = [
+                AIMessage(content=simplified_report_content)
+            ]
             result = await agent.ainvoke(refiner_state)
 
         # Update original state - result is now an AIMessage
-        state["messages"].append(result)
+        state["internal_messages"].append(result)
         state["sender"] = name
 
         logger.info("Refiner node processing completed")
@@ -333,7 +339,9 @@ async def refiner_node(
         logger.error(
             f"Error occurred while processing refiner node: {str(e)}", exc_info=True
         )
-        state["messages"].append(AIMessage(content=f"Error: {str(e)}", name=name))
+        state["internal_messages"].append(
+            AIMessage(content=f"Error: {str(e)}", name=name)
+        )
         return state
 
 

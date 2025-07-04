@@ -21,6 +21,9 @@ class State(TypedDict):
     """TypedDict for the entire state structure."""
 
     # The sequence of messages exchanged in the conversation
+    internal_messages: Sequence[AnyMessage]
+
+    # Messages to be sent to the frontend
     messages: Sequence[AnyMessage]
 
     # The complete content of the research hypothesis
@@ -57,9 +60,15 @@ class State(TypedDict):
 class NoteState(BaseModel):
     """Pydantic model for the entire state structure."""
 
-    messages: Sequence[AIMessage] = Field(
+    internal_messages: Sequence[AIMessage] = Field(
         default_factory=list, description="List of message dictionaries"
     )
+
+    # Messages to be sent to the frontend
+    messages: Sequence[AnyMessage] = Field(
+        default_factory=list, description="List of message dictionaries"
+    )
+
     hypothesis: str = Field(default="", description="Current research hypothesis")
     process: str = Field(default="", description="Current research process")
     process_decision: str = Field(

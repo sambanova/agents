@@ -13,6 +13,9 @@ from agents.api.websocket_interface import WebSocketInterface
 from agents.components.compound.code_execution_subgraph import (
     create_code_execution_graph,
 )
+from agents.components.compound.data_science_subgraph import (
+    create_data_science_subgraph,
+)
 from agents.components.compound.data_types import LiberalFunctionMessage
 from agents.components.compound.financial_analysis_subgraph import (
     create_financial_analysis_graph,
@@ -659,7 +662,8 @@ class WebSocketConnectionManager(WebSocketInterface):
                 "user_id": user_id,
                 "api_key": api_keys.sambanova_key,
                 "message_id": message_id,
-            }
+            },
+            "recursion_limit": 50,
         }
 
         if doc_ids:
@@ -677,11 +681,11 @@ class WebSocketConnectionManager(WebSocketInterface):
             )
             config["configurable"][
                 "type==default/system_message"
-            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {len(doc_ids)} documents are available to you for retrieval. CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph only."
+            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {len(doc_ids)} documents are available to you for retrieval.\n\n CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph or data_science subgraph only."
         else:
             config["configurable"][
                 "type==default/system_message"
-            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph only."
+            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}.\n\n CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph or data_science subgraph only."
 
         if multimodal_input:
             config["configurable"][
@@ -736,6 +740,29 @@ class WebSocketConnectionManager(WebSocketInterface):
                     # TODO: Mesure latency for code execution
                     result={"useage": {"total_latency": 0.0}},
                 ),
+            },
+            "data_science": {
+                "description": "This subgraph is used to perform data science tasks.",
+                "next_node": END,
+                "graph": create_data_science_subgraph(
+                    user_id=user_id,
+                    sambanova_api_key=api_keys.sambanova_key,
+                    redis_storage=self.message_storage,
+                ),
+                "state_input_mapper": lambda x: {
+                    "internal_messages": [HumanMessage(content=x)],
+                    "hypothesis": "",
+                    "process": "",
+                    "process_decision": None,
+                    "visualization_state": "",
+                    "searcher_state": "",
+                    "code_state": "",
+                    "report_section": "",
+                    "quality_review": "",
+                    "needs_revision": False,
+                    "sender": "",
+                },
+                "state_output_mapper": lambda x: x["internal_messages"][-1],
             },
         }
 

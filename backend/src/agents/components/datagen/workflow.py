@@ -186,11 +186,13 @@ class WorkflowManager:
                     if hasattr(output_message, "content")
                     else str(output_message)
                 )
-                needs_revision = "revision needed" in content.lower() or "REVISION" in content
+                needs_revision = (
+                    "revision needed" in content.lower() or "REVISION" in content
+                )
                 logger.info(f"Quality review updated. Needs revision: {needs_revision}")
 
                 return {
-                    "messages": state["messages"] + [output_message],
+                    "internal_messages": state["internal_messages"] + [output_message],
                     "quality_review": output_message,
                     "needs_revision": needs_revision,
                     "sender": name,
@@ -203,7 +205,9 @@ class WorkflowManager:
                 error_message = AIMessage(
                     content=f"Error in {name}: {str(e)}", name=name
                 )
-                return {"messages": state["messages"] + [error_message]}
+                return {
+                    "internal_messages": state["internal_messages"] + [error_message]
+                }
 
         async def note_taker_node(state):
             return await note_agent_node(state, self.agents["note_agent"], "note_agent")

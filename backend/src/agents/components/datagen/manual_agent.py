@@ -174,11 +174,13 @@ class ManualAgent(Runnable):
         # converted to simple strings for clean prompt injection.
         template_vars = {}
         for key, value in state.items():
-            if key == "messages":
+            if key == "internal_messages":
                 template_vars[key] = value
                 continue
-            # Skip 'sender' as it's not needed by the prompt template
+            # Skip 'sender' and 'messages' as they're not needed by the prompt template
             if key == "sender":
+                continue
+            if key == "messages":
                 continue
             # Extract content from AIMessage objects
             if hasattr(value, "content"):

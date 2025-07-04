@@ -112,7 +112,7 @@ If you do not need to use a tool, respond normally without any XML tags.
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", final_system_prompt),
-            MessagesPlaceholder(variable_name="messages"),
+            MessagesPlaceholder(variable_name="internal_messages"),
             # The agent's state is now passed in a single, structured human message
             # for clarity and to avoid confusing the LLM.
             (
@@ -152,7 +152,7 @@ def create_simple_agent(
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", system_message),
-            MessagesPlaceholder(variable_name="messages"),
+            MessagesPlaceholder(variable_name="internal_messages"),
         ]
     )
 
@@ -177,7 +177,7 @@ def create_supervisor(
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", system_prompt),
-            MessagesPlaceholder(variable_name="messages"),
+            MessagesPlaceholder(variable_name="internal_messages"),
             (
                 "system",
                 "Given the conversation above, who should act next? "
@@ -274,7 +274,7 @@ Always end your response with a valid JSON object that matches the required stru
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", enhanced_system_prompt),
-            MessagesPlaceholder(variable_name="messages"),
+            MessagesPlaceholder(variable_name="internal_messages"),
             # Note: No state variables needed since note agent processes the full conversation
         ]
     )
