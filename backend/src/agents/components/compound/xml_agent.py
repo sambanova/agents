@@ -658,6 +658,7 @@ def _collapse_messages(messages):
     if len(messages) == 2 and messages[-1].additional_kwargs.get("agent_type") in [
         "financial_analysis_end",
         "deep_research_end",
+        "data_science_end",
     ]:
         log = f"{messages[0].content}<observation>{messages[1].content}</observation>"
         return AIMessage(content=log)

@@ -15,7 +15,6 @@ from agents.components.datagen.agent.visualization_agent import (
 from agents.components.datagen.node import (
     agent_node,
     human_choice_node,
-    human_review_node,
     note_agent_node,
     refiner_node,
 )
@@ -230,7 +229,6 @@ class WorkflowManager:
         self.workflow.add_node("QualityReview", quality_review_node)
         self.workflow.add_node("NoteTaker", note_taker_node)
         self.workflow.add_node("HumanChoice", human_choice_node)
-        self.workflow.add_node("HumanReview", human_review_node)
         self.workflow.add_node("Refiner", refiner_node_async)
         self.workflow.add_node("Cleanup", self.cleanup_node)
 
@@ -282,8 +280,7 @@ class WorkflowManager:
         )
 
         self.workflow.add_edge("NoteTaker", "Process")
-        self.workflow.add_edge("Refiner", "HumanReview")
-        self.workflow.add_edge("HumanReview", "Cleanup")
+        self.workflow.add_edge("Refiner", "Cleanup")
         self.workflow.add_edge("Cleanup", END)
 
         # Compile workflow

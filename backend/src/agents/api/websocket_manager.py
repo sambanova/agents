@@ -762,7 +762,14 @@ class WebSocketConnectionManager(WebSocketInterface):
                     "needs_revision": False,
                     "sender": "",
                 },
-                "state_output_mapper": lambda x: x["internal_messages"][-1],
+                "state_output_mapper": lambda x: x["internal_messages"][-1].model_copy(
+                    update={
+                        "additional_kwargs": {
+                            **(x["internal_messages"][-1].additional_kwargs or {}),
+                            "agent_type": "data_science_end",
+                        }
+                    }
+                ),
             },
         }
 
