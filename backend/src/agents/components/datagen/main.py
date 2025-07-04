@@ -61,9 +61,6 @@ async def main_with_persistent_daytona(
 
     # Create workflow manager
     manager = WorkflowManager(language_models, user_id, redis_storage)
-    await manager.initialize()
-
-    mang
 
     # Create initial state
     initial_state = {
@@ -89,38 +86,23 @@ async def main_with_persistent_daytona(
         data_sources = [
             "/Users/tamasj/Downloads/customer_satisfaction_purchase_behavior.csv"
         ]
-        async for event in manager.run_workflow(initial_state, config):
-            yield event
+        async for event in manager.graph.astream_events(initial_state, config):
+            pass
 
     except Exception as e:
         logger.error("Error in datagen workflow", error=str(e), exc_info=True)
         error_state = State(messages=[("assistant", f"Error occurred: {str(e)}")])
-        yield error_state
+        print(error_state)
 
 
 if __name__ == "__main__":
-
-    async def run_workflow():
-        """Run the workflow and process events"""
-        # Example usage
-        user_input = "Analyze the relationship between customer satisfaction and purchase behavior using machine learning techniques"
-
-        print(f"Starting datagen workflow with input: {user_input}")
-        print("-" * 50)
-
-        # Run the workflow and process events
-        async for event in main_with_persistent_daytona(
-            user_input,
+    asyncio.run(
+        main_with_persistent_daytona(
+            "Analyze the relationship between customer satisfaction and purchase behavior using machine learning techniques",
             user_id="user1",
             thread_id="1",
             redis_storage=RedisStorage(
                 redis_client=redis.Redis(host="localhost", port=6379)
             ),
-        ):
-            print(f"Event: {event['messages'][-1].content}")
-            print("-" * 30)
-
-        print("Workflow completed!")
-
-    # Run the async workflow
-    asyncio.run(run_workflow())
+        )
+    )

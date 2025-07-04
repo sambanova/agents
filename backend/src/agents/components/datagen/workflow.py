@@ -59,17 +59,9 @@ class WorkflowManager:
         ]
         self.user_id = user_id
         self.agents = {}
-        self.daytona_manager = None  
+        self.daytona_manager = None
         self.redis_storage = redis_storage
-        self.setup_workflow()
-        self.agents = self.create_agents()
-
-    async def initialize_daytona_manager(self):
-        """
-        Asynchronously initializes the WorkflowManager, including the Daytona manager and agents.
-        """
-        # Persistent Daytona manager
-        self.daytona_manager = await PersistentDaytonaManager.initialize(
+        self.daytona_manager = PersistentDaytonaManager(
             user_id=self.user_id,
             redis_storage=self.redis_storage,
             snapshot="data-analysis:0.0.10",
@@ -77,6 +69,8 @@ class WorkflowManager:
                 "/Users/tamasj/Downloads/customer_satisfaction_purchase_behavior.csv"
             ],
         )
+        self.agents = self.create_agents()
+        self.setup_workflow()
 
     def create_agents(self):
         """Create all system agents"""
@@ -179,7 +173,7 @@ class WorkflowManager:
         async def quality_review_node(state):
             name = "quality_review_agent"
             agent = self.agents[name]
-            logger.info(f"Processing special agent: {name}")
+            logger.info(f"Processing agent: {name}")
             try:
                 output_message = await agent.ainvoke(state)
 
@@ -192,7 +186,7 @@ class WorkflowManager:
                     if hasattr(output_message, "content")
                     else str(output_message)
                 )
-                needs_revision = "revision needed" in content.lower()
+                needs_revision = "revision needed" in content.lower() or "REVISION" in content
                 logger.info(f"Quality review updated. Needs revision: {needs_revision}")
 
                 return {
@@ -216,7 +210,10 @@ class WorkflowManager:
 
         async def refiner_node_async(state):
             return await refiner_node(
-                state, self.agents["refiner_agent"], "refiner_agent"
+                state=state,
+                agent=self.agents["refiner_agent"],
+                name="refiner_agent",
+                daytona_manager=self.daytona_manager,
             )
 
         # Add nodes
@@ -288,9 +285,6 @@ class WorkflowManager:
         # Compile workflow
         self.memory = MemorySaver()
         self.graph = self.workflow.compile(checkpointer=self.memory)
-
-    def get_graph(self):
-        return self.graph
 
     async def cleanup_node(self, state: dict) -> dict:
         """Node to perform cleanup."""

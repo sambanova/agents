@@ -126,13 +126,10 @@ def QualityReview_router(state: State) -> NodeType:
     """
     logger.info("Entering QualityReview_router")
     messages = state.get("messages", [])
-    last_message = messages[-1] if messages else None
     message_before_revision = messages[-2] if len(messages) > 1 else None
 
     # Check if revision is needed
-    if (last_message and "REVISION" in str(last_message.content)) or state.get(
-        "needs_revision", False
-    ):
+    if state.get("needs_revision", False):
         previous_node = (
             message_before_revision.sender if message_before_revision else ""
         )

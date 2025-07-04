@@ -163,7 +163,7 @@ class PersistentDaytonaManager:
 
             if response.exit_code != 0:
                 error_detail = result_str
-                logger.error(
+                logger.info(
                     "Daytona code execution failed",
                     exit_code=response.exit_code,
                     error_detail=error_detail,
@@ -296,6 +296,12 @@ class PersistentDaytonaManager:
                 )
                 await self._sandbox.delete()
                 logger.info("Persistent Daytona sandbox deleted successfully")
+
+            # Close the client to properly close HTTP sessions
+            if self._client:
+                logger.info("Closing persistent Daytona client")
+                await self._client.close()
+                logger.info("Persistent Daytona client closed successfully")
 
             # Reset the instance variables
             self._client = None

@@ -231,8 +231,6 @@ def human_review_node(state: State) -> State:
     Includes error handling for robustness.
     """
     try:
-        print("Current research progress:")
-        print(state)
         print("\nDo you need additional analysis or modifications?")
 
         while True:
@@ -269,7 +267,12 @@ def human_review_node(state: State) -> State:
         return None
 
 
-async def refiner_node(state: State, agent: ManualAgent, name: str) -> State:
+async def refiner_node(
+    state: State,
+    agent: ManualAgent,
+    name: str,
+    daytona_manager: PersistentDaytonaManager,
+) -> State:
     """
     Read MD file contents and PNG file names from the specified storage path,
     add them as report materials to a new message,
@@ -278,11 +281,8 @@ async def refiner_node(state: State, agent: ManualAgent, name: str) -> State:
     """
     try:
 
-        manager: PersistentDaytonaManager = await get_or_create_daytona_manager(
-            "default_user"
-        )
         # Get storage path
-        storage_path = await manager.list_files()
+        storage_path = await daytona_manager.list_files()
 
         # Collect materials
         materials = []
@@ -292,7 +292,7 @@ async def refiner_node(state: State, agent: ManualAgent, name: str) -> State:
         # Process MD files
         for md_file in md_files:
             materials.append(
-                f"MD file '{md_file}':\n{await manager.read_file(md_file)}"
+                f"MD file '{md_file}':\n{await daytona_manager.read_file(md_file)}"
             )
 
         # Process PNG files
