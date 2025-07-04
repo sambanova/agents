@@ -38,6 +38,7 @@ from agents.components.open_deep_research.utils import (
 from agents.registry.model_registry import model_registry
 from agents.utils.custom_sambanova import CustomChatSambaNovaCloud
 from agents.utils.logging_utils import setup_logging_context
+from agents.utils.message_interceptor import MessageInterceptor
 from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig, RunnableLambda
@@ -47,17 +48,6 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 logger = structlog.get_logger(__name__)
-
-
-class MessageInterceptor:
-    def __init__(self):
-        self.captured_messages = []
-
-    def capture_and_pass(self, message):
-        """Capture the message and pass it through"""
-        if isinstance(message, AIMessage):
-            self.captured_messages.append(message)
-        return message
 
 
 class LLMTimeoutError(Exception):

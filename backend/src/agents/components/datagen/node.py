@@ -1,24 +1,19 @@
-import json
-import os
-import re
-from pathlib import Path
-from typing import Any
-
 import structlog
 from agents.components.datagen.manual_agent import ManualAgent
+from agents.components.datagen.message_capture_agent import MessageCaptureAgent
 from agents.components.datagen.state import NoteState, State
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
-from langchain.agents import AgentExecutor
+from agents.utils.message_interceptor import MessageInterceptor
 from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
-from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMessage
-from openai import InternalServerError
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.runnables import RunnableLambda, RunnableSequence
 
 # Set up logger
 logger = structlog.get_logger(__name__)
 
 
 async def agent_node(
-    state: State, agent: ManualAgent, name: str, state_key: str
+    state: State, agent: ManualAgent | MessageCaptureAgent, name: str, state_key: str
 ) -> dict:
     """
     Invokes the agent and updates the state with the result.
@@ -39,9 +34,21 @@ async def agent_node(
         if output_message is None:
             raise ValueError("Agent output is None.")
 
+        if isinstance(agent, ManualAgent) and agent.llm_response:
+            captured_message = agent.llm_response
+            captured_message.additional_kwargs["agent_type"] = "data_science_ " + name
+            captured_messages = [captured_message]
+        elif isinstance(agent, MessageCaptureAgent):
+            interceptor_messages = agent.llm_interceptor.captured_messages
+            fixing_interceptor_messages = agent.llm_fixing_interceptor.captured_messages
+            captured_messages = interceptor_messages + fixing_interceptor_messages
+            for m in captured_messages:
+                m.additional_kwargs["agent_type"] = "data_science_ " + name
+
         # Return a dictionary to be merged into the state
         return {
             "internal_messages": state["internal_messages"] + [output_message],
+            "messages": captured_messages,
             state_key: output_message,
             "sender": name,
         }
@@ -116,6 +123,7 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
     """
     logger.info(f"Processing note agent: {name}")
     try:
+        messages = []
         current_messages = state.get("internal_messages", [])
 
         head_messages, tail_messages = [], []
@@ -127,19 +135,32 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
             logger.debug("Trimmed messages for processing")
 
         result = await agent.ainvoke(state)
+        if isinstance(agent, ManualAgent) and agent.llm_response:
+            captured_message = agent.llm_response
+            captured_message.additional_kwargs["agent_type"] = "data_science_ " + name
+            messages.append(captured_message)
+
+        note_agent_fixing_interceptor = MessageInterceptor()
+        fixing_model = agent.llm | RunnableLambda(
+            note_agent_fixing_interceptor.capture_and_pass
+        )
         node_state_parser = PydanticOutputParser(pydantic_object=NoteState)
         fixing_parser = OutputFixingParser.from_llm(
-            llm=agent.llm,
+            llm=fixing_model,
             parser=node_state_parser,
         )
         parsed_output: NoteState = await fixing_parser.aparse(result.content)
-        messages = (
+
+        for m in note_agent_fixing_interceptor.captured_messages:
+            m.additional_kwargs["agent_type"] = "note_agent_fixed"
+            messages.append(m)
+
+        internal_messages = (
             parsed_output.internal_messages
             if parsed_output.internal_messages
             else current_messages
         )
-
-        combined_messages = head_messages + messages + tail_messages
+        combined_messages = head_messages + internal_messages + tail_messages
 
         updated_state: State = {
             "internal_messages": combined_messages,
@@ -189,6 +210,7 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
                 else state.get("needs_revision", False)
             ),
             "sender": "note_agent",
+            "messages": messages,
         }
 
         logger.info("Updated state successfully")
@@ -213,6 +235,7 @@ def _create_error_state(
     logger.info(f"Creating error state for {name}: {error_type}")
     error_state: State = {
         "internal_messages": state.get("internal_messages", []) + [error_message],
+        "messages": [],
         "hypothesis": str(state.get("hypothesis", "")),
         "process": str(state.get("process", "")),
         "process_decision": str(state.get("process_decision", "")),
@@ -285,7 +308,7 @@ async def refiner_node(
             ]
             result = await agent.ainvoke(refiner_state)
 
-        # Update original state - result is now an AIMessage
+        # Update original state - result is now an AIMessage, note, this will be mapped as the last state, we don't need to send this thorught messages
         state["internal_messages"].append(result)
         state["sender"] = name
 

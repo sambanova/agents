@@ -530,6 +530,8 @@ class WebSocketConnectionManager(WebSocketInterface):
             ]:
 
                 if "id" in data:
+                    if data["id"] is None:
+                        pass
                     is_new = await self.message_storage.is_message_new(
                         user_id, conversation_id, data["id"]
                     )

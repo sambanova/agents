@@ -1,16 +1,12 @@
 import ast
-import asyncio
 import json
-import random
 import re
-import string
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List
 
 import structlog
 from langchain.tools import BaseTool
-from langchain_core.messages import AIMessage, HumanMessage, ToolCall
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import AIMessage
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 
 logger = structlog.get_logger(__name__)
@@ -70,6 +66,7 @@ class ManualAgent(Runnable):
         self.prompt = prompt
         self.tool_executor = ToolExecutor(tools)
         self.name = name
+        self.llm_response: AIMessage = None
         logger.info(f"ManualAgent initialized with {len(tools)} tools.")
 
     def _parse_tool_parameters(self, tool_input_content: str) -> Dict[str, Any]:
@@ -208,6 +205,8 @@ class ManualAgent(Runnable):
 
         try:
             response = await chain.ainvoke(template_vars)
+            # Store the response for capture llm calls
+            self.llm_response = response
 
             # Check if response contains tool calls and execute them
             if "<tool>" in response.content:

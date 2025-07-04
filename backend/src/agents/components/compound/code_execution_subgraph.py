@@ -16,6 +16,7 @@ from agents.utils.code_validator import (
     validate_and_fix_html_content,
 )
 from agents.utils.llms import get_sambanova_llm
+from agents.utils.message_interceptor import MessageInterceptor
 from daytona_sdk import AsyncDaytona as DaytonaClient
 from daytona_sdk import CreateSandboxFromSnapshotParams
 from daytona_sdk import DaytonaConfig as DaytonaSDKConfig
@@ -123,17 +124,6 @@ class CorrectingExecutorState(TypedDict):
     search_context: Optional[str]
     needs_research: bool
     correction_feedback: Optional[str]
-
-
-class MessageInterceptor:
-    def __init__(self):
-        self.captured_messages = []
-
-    def capture_and_pass(self, message):
-        """Capture the message and pass it through"""
-        if isinstance(message, AIMessage):
-            self.captured_messages.append(message)
-        return message
 
 
 def create_code_execution_graph(

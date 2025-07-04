@@ -5,6 +5,7 @@ import structlog
 
 # Import the manual agent
 from agents.components.datagen.manual_agent import ManualAgent
+from agents.components.datagen.message_capture_agent import MessageCaptureAgent
 from agents.components.datagen.state import NoteState, SupervisorDecision
 from langchain.agents import AgentExecutor
 from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
@@ -206,14 +207,11 @@ def create_supervisor(
         decision_content = f"Decision: {decision.next}, Task: {decision.task}"
         return AIMessage(content=decision_content)
 
-    return (
-        prompt
-        | llm
-        | OutputFixingParser.from_llm(
-            llm=llm,
-            parser=supervisor_parser,
-        )
-        | wrap_supervisor_output
+    return MessageCaptureAgent(
+        llm=llm,
+        prompt=prompt,
+        parser=supervisor_parser,
+        output_mapper=wrap_supervisor_output,
     )
 
 
