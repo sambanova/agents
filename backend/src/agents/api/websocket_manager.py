@@ -20,6 +20,7 @@ from agents.components.compound.data_types import LiberalFunctionMessage
 from agents.components.compound.financial_analysis_subgraph import (
     create_financial_analysis_graph,
 )
+from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.components.open_deep_research.graph import create_deep_research_graph
 from agents.storage.redis_service import SecureRedisService
 from agents.storage.redis_storage import RedisStorage
@@ -47,6 +48,7 @@ class WebSocketConnectionManager(WebSocketInterface):
         self.message_storage = RedisStorage(redis_client)
         # Add state storage for active connections
         self.active_sessions: Dict[str, dict] = {}
+        self.daytona_managers: Dict[str, PersistentDaytonaManager] = {}
         # Track last activity time for each session
         self.session_last_active: Dict[str, datetime] = {}
         # Session timeout (5 minutes)
@@ -639,6 +641,18 @@ class WebSocketConnectionManager(WebSocketInterface):
         # Add cleanup task
         self.cleanup_task: Optional[asyncio.Task] = None
 
+        daytona_manager = self.daytona_managers.get(user_id)
+        if not daytona_manager:
+            daytona_manager = PersistentDaytonaManager(
+                user_id=user_id,
+                redis_storage=self.message_storage,
+                snapshot="data-analysis:0.0.10",
+                data_sources=[
+                    "/Users/tamasj/Downloads/customer_satisfaction_purchase_behavior.csv"
+                ],
+            )
+            self.daytona_managers[user_id] = daytona_manager
+
         config = {
             "configurable": {
                 "type==default/tools": [
@@ -750,6 +764,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                     user_id=user_id,
                     sambanova_api_key=api_keys.sambanova_key,
                     redis_storage=self.message_storage,
+                    daytona_manager=daytona_manager,
                 ),
                 "state_input_mapper": lambda x: {
                     "internal_messages": [HumanMessage(content=x)],

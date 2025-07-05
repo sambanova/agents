@@ -35,7 +35,13 @@ logger = structlog.get_logger(__name__)
 
 
 class WorkflowManager:
-    def __init__(self, language_models, user_id: str, redis_storage: RedisStorage):
+    def __init__(
+        self,
+        language_models,
+        user_id: str,
+        redis_storage: RedisStorage,
+        daytona_manager: PersistentDaytonaManager,
+    ):
         """
         Initialize the workflow manager with language models.
 
@@ -58,16 +64,8 @@ class WorkflowManager:
         ]
         self.user_id = user_id
         self.agents = {}
-        self.daytona_manager = None
         self.redis_storage = redis_storage
-        self.daytona_manager = PersistentDaytonaManager(
-            user_id=self.user_id,
-            redis_storage=self.redis_storage,
-            snapshot="data-analysis:0.0.10",
-            data_sources=[
-                "/Users/tamasj/Downloads/customer_satisfaction_purchase_behavior.csv"
-            ],
-        )
+        self.daytona_manager = daytona_manager
         self.agents = self.create_agents()
         self.setup_workflow()
 
