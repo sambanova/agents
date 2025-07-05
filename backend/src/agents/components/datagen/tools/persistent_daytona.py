@@ -2,6 +2,7 @@ import mimetypes
 import os
 import time
 import uuid
+from ast import Tuple
 from typing import Any, Dict, List, Optional
 
 import structlog
@@ -237,7 +238,7 @@ class PersistentDaytonaManager:
             logger.error("Error listing files", directory=directory, error=str(e))
             return f"Error listing files in '{directory}': {str(e)}"
 
-    async def read_file(self, filename: str) -> str:
+    async def read_file(self, filename: str) -> tuple[bool, str]:
         """Read a file from the sandbox."""
         sandbox = await self._get_sandbox()
         if not sandbox:
@@ -245,10 +246,20 @@ class PersistentDaytonaManager:
 
         try:
             content = await sandbox.fs.download_file(filename)
-            # Decode binary content to string if needed
-            if isinstance(content, bytes):
-                content = content.decode("utf-8")
-            return content
+            mime_type = mimetypes.guess_type(filename)[0]
+            if mime_type == "text/html":
+                try:
+                    content_str = (
+                        content.decode("utf-8")
+                        if isinstance(content, bytes)
+                        else str(content)
+                    )
+                    return True, content_str
+                except Exception as e:
+                    logger.error("Error decoding file", filename=filename, error=str(e))
+                    return False, f"Error decoding file '{filename}': {str(e)}"
+            else:
+                return True, content
         except Exception as e:
             logger.error("Error reading file", filename=filename, error=str(e))
             return f"Error reading file '{filename}': {str(e)}"
@@ -355,7 +366,8 @@ def get_daytona_read_file(manager: PersistentDaytonaManager):
         filename: Annotated[str, "Name of the file to read from the sandbox"],
     ) -> str:
         """Read a file from the persistent Daytona sandbox."""
-        return await manager.read_file(filename)
+        _, content = await manager.read_file(filename)
+        return content
 
     return user_daytona_read_file
 
@@ -437,10 +449,10 @@ def get_daytona_read_document(manager: PersistentDaytonaManager):
         """
         try:
             # Read the file content from sandbox
-            content = await manager.read_file(filename)
+            success, content = await manager.read_file(filename)
 
             # Check if file read was successful (not an error message)
-            if content.startswith("Error reading file"):
+            if not success:
                 return content
 
             # Split content into lines for range reading
@@ -504,11 +516,11 @@ def get_daytona_edit_document(manager: PersistentDaytonaManager):
         """
         try:
             # Read the existing file content from sandbox
-            content = await manager.read_file(filename)
+            success, content = await manager.read_file(filename)
 
             # Check if file read was successful (not an error message)
-            if content.startswith("Error reading file"):
-                return f"Error: Could not read existing document. {content}"
+            if not success:
+                return content
 
             # Split content into lines (preserve line endings)
             lines = content.splitlines(keepends=True)

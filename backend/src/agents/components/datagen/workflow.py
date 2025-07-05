@@ -225,6 +225,8 @@ class WorkflowManager:
                 agent=self.agents["refiner_agent"],
                 name="refiner_agent",
                 daytona_manager=self.daytona_manager,
+                redis_storage=self.redis_storage,
+                user_id=self.user_id,
             )
 
         # Add nodes

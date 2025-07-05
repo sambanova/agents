@@ -1,11 +1,14 @@
+import mimetypes
 import re
 import uuid
+from datetime import datetime
 
 import structlog
 from agents.components.datagen.manual_agent import ManualAgent
 from agents.components.datagen.message_capture_agent import MessageCaptureAgent
 from agents.components.datagen.state import NoteState, State
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
+from agents.storage.redis_storage import RedisStorage
 from agents.utils.message_interceptor import MessageInterceptor
 from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
@@ -233,7 +236,7 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
 
 def parse_and_replace_charts(
     content: str, list_of_files: list[str], user_id: str
-) -> tuple[str, list[str], dict[str, str]]:
+) -> tuple[str, dict[str, str]]:
     """
     Parses content to find references to chart files and replaces them with a special markdown link.
 
@@ -260,13 +263,11 @@ def parse_and_replace_charts(
 
     modified_content = content
     file_id_mapping = {}
-    replaced_files = []
 
     for filename in found_filenames:
         if filename in list_of_files:
             file_id = str(uuid.uuid4())
             file_id_mapping[filename] = file_id
-            replaced_files.append(filename)
 
             replacement_text = f"[{filename}](redis-chart:{file_id}:{user_id})"
 
@@ -278,7 +279,7 @@ def parse_and_replace_charts(
                 replacement_text, modified_content
             )
 
-    return modified_content, replaced_files, file_id_mapping
+    return modified_content, file_id_mapping
 
 
 def _create_error_state(
@@ -310,8 +311,8 @@ async def refiner_node(
     agent: ManualAgent,
     name: str,
     daytona_manager: PersistentDaytonaManager,
-    file_id: str = "default",
-    user_id: str = "default",
+    redis_storage: RedisStorage,
+    user_id: str,
 ) -> tuple[State, dict[str, str]]:
     """
     Read MD file contents and PNG file names from the specified storage path,
@@ -331,9 +332,9 @@ async def refiner_node(
 
         # Process MD files
         for md_file in md_files:
-            materials.append(
-                f"MD file '{md_file}':\n{await daytona_manager.read_file(md_file)}"
-            )
+            success, content = await daytona_manager.read_file(md_file)
+            if success:
+                materials.append(f"MD file '{md_file}':\n{content}")
 
         # Process PNG files
         materials.extend(f"PNG file: '{png_file}'" for png_file in png_files)
@@ -369,12 +370,28 @@ async def refiner_node(
 
         # Parse and replace chart references in the result content
         if hasattr(result, "content") and result.content:
-            parsed_content, replaced_files, file_id_mapping = parse_and_replace_charts(
+            parsed_content, file_id_mapping = parse_and_replace_charts(
                 result.content, list_of_files, user_id
             )
             result.content = parsed_content
-            logger.info(f"Replaced chart references for files: {replaced_files}")
             logger.info(f"Generated file IDs: {file_id_mapping}")
+            for file_name, file_id in file_id_mapping.items():
+                success, file_content = await daytona_manager.read_file(file_name)
+                if not success:
+                    logger.error(content)
+                    continue
+                mime_type = mimetypes.guess_type(file_name)[0]
+                generation_timestamp = datetime.now().isoformat()
+                await redis_storage.put_file(
+                    user_id,
+                    file_id,
+                    data=file_content,
+                    filename=file_name,
+                    format=mime_type,
+                    upload_timestamp=generation_timestamp,
+                    indexed=False,
+                    source="data_science_agent",
+                )
 
         # Update original state - result is now an AIMessage
         # Note: this will be mapped as the last state, we don't need to send this through messages
