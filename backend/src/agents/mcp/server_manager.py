@@ -27,6 +27,9 @@ class MCPServerManager:
         self.tool_cache: Dict[str, List[Dict[str, Any]]] = {}  # server_id -> tools
         self.cache_expiry: Dict[str, float] = {}  # server_id -> expiry_time
         self.cache_ttl = 300  # 5 minutes cache TTL
+        
+        # MCP client connections for real tool execution
+        self.mcp_clients: Dict[str, Any] = {}  # server_id -> MCP client session
 
     async def start_server(self, user_id: str, server_id: str) -> bool:
         """Start an MCP server for a user."""
@@ -51,6 +54,8 @@ class MCPServerManager:
                 success = await self._start_stdio_server(user_id, config)
             elif config.transport == "http":
                 success = await self._start_http_server(user_id, config)
+            elif config.transport == "sse":
+                success = await self._start_sse_server(user_id, config)
             else:
                 logger.error("Unsupported transport type", transport=config.transport, server_id=server_id)
                 return False
@@ -187,7 +192,7 @@ class MCPServerManager:
             return MCPServerStatus.ERROR, str(e)
 
     async def discover_tools(self, user_id: str, server_id: str, force_refresh: bool = False) -> List[MCPToolInfo]:
-        """Discover available tools from an MCP server."""
+        """Discover available tools from an MCP server using real MCP connection."""
         try:
             # Check cache first
             if not force_refresh and self._is_cache_valid(server_id):
@@ -203,12 +208,37 @@ class MCPServerManager:
                 logger.warning("Server not running for tool discovery", server_id=server_id, user_id=user_id)
                 return []
 
-            # TODO: Implement actual tool discovery using langchain-mcp-adapters
-            # For now, return mock tools based on server configuration
+            # Try to discover tools using real MCP connection
+            try:
+                discovered_tools = await self._discover_tools_from_mcp(server_id, config)
+                if discovered_tools:
+                    # Cache the tools
+                    self.tool_cache[server_id] = discovered_tools
+                    self.cache_expiry[server_id] = time.time() + self.cache_ttl
+
+                    # Store in Redis
+                    await self.redis_storage.store_mcp_server_tools(user_id, server_id, discovered_tools)
+
+                    logger.info(
+                        "Tools discovered from MCP server",
+                        server_id=server_id,
+                        user_id=user_id,
+                        num_tools=len(discovered_tools),
+                    )
+
+                    return [MCPToolInfo.model_validate(tool) for tool in discovered_tools]
+            except Exception as mcp_error:
+                logger.warning(
+                    "Failed to discover tools from MCP server, falling back to mock",
+                    server_id=server_id,
+                    error=str(mcp_error),
+                )
+
+            # Fallback to mock tools if MCP discovery fails
             mock_tools = [
                 {
                     "name": f"{config.name}_tool_1",
-                    "description": f"Mock tool 1 from {config.name}",
+                    "description": f"Mock tool from {config.name} (MCP connection failed)",
                     "server_id": server_id,
                     "server_name": config.name,
                     "input_schema": {
@@ -221,7 +251,7 @@ class MCPServerManager:
                 }
             ]
 
-            # Cache the tools
+            # Cache the mock tools
             self.tool_cache[server_id] = mock_tools
             self.cache_expiry[server_id] = time.time() + self.cache_ttl
 
@@ -229,7 +259,7 @@ class MCPServerManager:
             await self.redis_storage.store_mcp_server_tools(user_id, server_id, mock_tools)
 
             logger.info(
-                "Tools discovered from MCP server",
+                "Using mock tools for MCP server",
                 server_id=server_id,
                 user_id=user_id,
                 num_tools=len(mock_tools),
@@ -435,6 +465,39 @@ class MCPServerManager:
             )
             return False
 
+    async def _start_sse_server(self, user_id: str, config: MCPServerConfig) -> bool:
+        """Start an SSE-based MCP server."""
+        try:
+            if not config.url:
+                logger.error("No URL specified for SSE server", server_id=config.server_id)
+                return False
+
+            # TODO: Implement SSE MCP server connection using langchain-mcp-adapters
+            # For now, just mark as active (similar to HTTP for now)
+            self.active_servers[config.server_id] = {
+                "user_id": user_id,
+                "config": config,
+                "transport": "sse",
+                "url": config.url,
+                "started_at": time.time(),
+            }
+
+            logger.info(
+                "Started SSE MCP server",
+                server_id=config.server_id,
+                url=config.url,
+            )
+            return True
+
+        except Exception as e:
+            logger.error(
+                "Error starting SSE MCP server",
+                server_id=config.server_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return False
+
     async def _start_health_monitoring(self, user_id: str, server_id: str) -> None:
         """Start health monitoring task for a server."""
         try:
@@ -491,15 +554,47 @@ class MCPServerManager:
             )
 
     def _convert_mcp_tool_to_langchain(self, mcp_tool: MCPToolInfo, user_id: str) -> BaseTool:
-        """Convert an MCP tool to a LangChain tool."""
-        async def tool_func(query: str) -> str:
-            # TODO: Implement actual MCP tool execution using langchain-mcp-adapters
-            # For now, return a mock response
-            return f"Mock response from {mcp_tool.name} for query: {query}"
+        """Convert an MCP tool to a LangChain tool with real MCP execution."""
+        async def tool_func(tool_input, **kwargs) -> str:
+            try:
+                # Handle both dict and string inputs
+                if isinstance(tool_input, str):
+                    # Try to parse as JSON if it's a string
+                    try:
+                        import json
+                        arguments = json.loads(tool_input)
+                    except:
+                        # If not JSON, treat as a simple query parameter
+                        arguments = {"query": tool_input}
+                elif isinstance(tool_input, dict):
+                    arguments = tool_input
+                else:
+                    arguments = {"input": str(tool_input)}
+                
+                # Try to execute the tool using real MCP connection
+                result = await self._execute_mcp_tool(mcp_tool.server_id, mcp_tool.name, arguments)
+                return result
+            except Exception as e:
+                logger.error(
+                    "MCP tool execution failed, returning mock response",
+                    tool_name=mcp_tool.name,
+                    server_id=mcp_tool.server_id,
+                    error=str(e),
+                )
+                # Fallback to mock response
+                return f"Mock response from {mcp_tool.name} for input: {tool_input} (MCP execution failed: {str(e)})"
 
-        def sync_tool_func(query: str) -> str:
-            # TODO: Implement sync version or use asyncio.run
-            return f"Mock sync response from {mcp_tool.name} for query: {query}"
+        def sync_tool_func(tool_input, **kwargs) -> str:
+            try:
+                # Use asyncio.run for sync execution
+                return asyncio.run(tool_func(tool_input, **kwargs))
+            except Exception as e:
+                logger.error(
+                    "Sync MCP tool execution failed",
+                    tool_name=mcp_tool.name,
+                    error=str(e),
+                )
+                return f"Mock sync response from {mcp_tool.name} for input: {tool_input} (execution failed)"
 
         return Tool(
             name=mcp_tool.name,
@@ -507,6 +602,162 @@ class MCPServerManager:
             func=sync_tool_func,
             coroutine=tool_func,
         )
+
+    async def _discover_tools_from_mcp(self, server_id: str, config: MCPServerConfig) -> List[Dict[str, Any]]:
+        """Discover tools from an MCP server using langchain-mcp-adapters."""
+        try:
+            # Import MCP adapters (runtime import to avoid dependency issues)
+            from langchain_mcp_adapters.client import MultiServerMCPClient
+            
+            # Create MCP client configuration based on transport type
+            if config.transport == "stdio":
+                if not config.command:
+                    raise ValueError("No command specified for stdio server")
+                
+                server_config = {
+                    config.name: {
+                        "command": config.command,
+                        "args": config.args or [],
+                        "transport": "stdio",
+                    }
+                }
+            elif config.transport in ["http", "sse"]:
+                if not config.url:
+                    raise ValueError("No URL specified for HTTP/SSE server")
+                
+                # Map our transport types to langchain-mcp-adapters transport types
+                transport = "streamable_http" if config.transport == "sse" else "http"
+                server_config = {
+                    config.name: {
+                        "url": config.url,
+                        "transport": transport,
+                    }
+                }
+            else:
+                raise ValueError(f"Unsupported transport type: {config.transport}")
+            
+            # Add environment variables if specified
+            if config.env_vars:
+                server_config[config.name]["env"] = config.env_vars
+            
+            # Create MCP client and get tools (new API pattern)
+            client = MultiServerMCPClient(server_config)
+            tools = await client.get_tools()
+            
+            # Convert tools to our format
+            discovered_tools = []
+            for tool in tools:
+                tool_info = {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "server_id": server_id,
+                    "server_name": config.name,
+                    "input_schema": getattr(tool, 'args_schema', {})
+                }
+                discovered_tools.append(tool_info)
+            
+            logger.info(
+                "Successfully discovered tools from MCP server",
+                server_id=server_id,
+                num_tools=len(discovered_tools),
+            )
+            
+            return discovered_tools
+                
+        except ImportError:
+            logger.warning("langchain-mcp-adapters not available, using mock tools")
+            raise
+        except Exception as e:
+            logger.error(
+                "Error discovering tools from MCP server",
+                server_id=server_id,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
+
+    async def _execute_mcp_tool(self, server_id: str, tool_name: str, arguments: Dict[str, Any]) -> str:
+        """Execute an MCP tool using langchain-mcp-adapters."""
+        try:
+            # For now, we'll need to recreate the connection for each tool execution
+            # In the future, we could maintain persistent connections
+            
+            # Get server config
+            server_info = self.active_servers.get(server_id)
+            if not server_info:
+                raise ValueError(f"Server {server_id} not found or not running")
+            
+            config = server_info["config"]
+            
+            # Import MCP adapters
+            from langchain_mcp_adapters.client import MultiServerMCPClient
+            
+            # Create MCP client configuration
+            if config.transport == "stdio":
+                server_config = {
+                    config.name: {
+                        "command": config.command,
+                        "args": config.args or [],
+                        "transport": "stdio",
+                    }
+                }
+            elif config.transport in ["http", "sse"]:
+                transport = "streamable_http" if config.transport == "sse" else "http"
+                server_config = {
+                    config.name: {
+                        "url": config.url,
+                        "transport": transport,
+                    }
+                }
+            else:
+                raise ValueError(f"Unsupported transport type: {config.transport}")
+            
+            if config.env_vars:
+                server_config[config.name]["env"] = config.env_vars
+            
+            # Execute tool using MCP client (new API pattern)
+            client = MultiServerMCPClient(server_config)
+            tools = await client.get_tools()
+            
+            # Find the specific tool
+            target_tool = None
+            for tool in tools:
+                if tool.name == tool_name:
+                    target_tool = tool
+                    break
+            
+            if not target_tool:
+                raise ValueError(f"Tool {tool_name} not found on server {server_id}")
+            
+            # Execute the tool
+            if hasattr(target_tool, 'ainvoke'):
+                result = await target_tool.ainvoke(arguments)
+            elif hasattr(target_tool, 'invoke'):
+                result = target_tool.invoke(arguments)
+            else:
+                # Fallback to calling the tool directly
+                result = await target_tool(**arguments)
+            
+            logger.info(
+                "Successfully executed MCP tool",
+                server_id=server_id,
+                tool_name=tool_name,
+            )
+            
+            return str(result)
+                
+        except ImportError:
+            logger.warning("langchain-mcp-adapters not available")
+            raise
+        except Exception as e:
+            logger.error(
+                "Error executing MCP tool",
+                server_id=server_id,
+                tool_name=tool_name,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
 
     async def cleanup(self) -> None:
         """Clean up all resources."""
