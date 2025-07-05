@@ -12,7 +12,8 @@ from agents.storage.redis_storage import RedisStorage
 from agents.utils.message_interceptor import MessageInterceptor
 from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
-from langchain_core.runnables import RunnableLambda, RunnableSequence
+from langchain_core.runnables import RunnableLambda
+from langgraph.types import interrupt
 
 # Set up logger
 logger = structlog.get_logger(__name__)
@@ -70,36 +71,36 @@ async def agent_node(
         return {"internal_messages": state["internal_messages"] + [error_message]}
 
 
-def human_choice_node(state: State) -> State:
+async def human_choice_node(state: State) -> State:
     """
     Handle human input to choose the next step in the process.
     If regenerating hypothesis, prompt for specific areas to modify.
     """
     logger.info("Prompting for human choice")
-    print("Please choose the next step:")
-    print("1. Regenerate hypothesis")
-    print("2. Continue the research process")
+    current_hypothesis = state.get("hypothesis", "No hypothesis yet.")
+    prompt = (
+        "Please <b>provide feedback</b> on the following plan or <b>type 'approve'.</b>\n\n"
+        + current_hypothesis.content
+    )
 
-    while True:
-        choice = input("Please enter your choice (1 or 2): ")
-        if choice in ["1", "2"]:
-            break
-        logger.warning(f"Invalid input received: {choice}")
-        print("Invalid input, please try again.")
+    feedback = interrupt(prompt)
 
-    if choice == "1":
-        modification_areas = input(
-            "Please specify which parts of the hypothesis you want to modify: "
-        )
+    if isinstance(feedback, str) and feedback.strip().lower() == "approve":
+        content = "Continue the research process"
+        state["process"] = "Continue the research process"
+        logger.info("Continuing research process")
+    elif isinstance(feedback, str) and feedback.strip():
+        modification_areas = feedback
         content = f"Regenerate hypothesis. Areas to modify: {modification_areas}"
         state["hypothesis"] = ""
         state["modification_areas"] = modification_areas
         logger.info("Hypothesis cleared for regeneration")
         logger.info(f"Areas to modify: {modification_areas}")
     else:
+        # Default to continue if feedback is empty or not a string
         content = "Continue the research process"
         state["process"] = "Continue the research process"
-        logger.info("Continuing research process")
+        logger.info("No feedback provided, continuing research process")
 
     human_message = HumanMessage(content=content)
 
