@@ -328,10 +328,17 @@ class WebSocketConnectionManager(WebSocketInterface):
                 )
 
                 # Always use enhanced agent with MCP support
-                # The DynamicToolExecutor will automatically load MCP tools if available
+                # Pass the base tools that are normally configured
+                base_tools = [
+                    {"type": "arxiv", "config": {}},
+                    {"type": "search_tavily", "config": {}},
+                    {"type": "search_tavily_answer", "config": {}},
+                    {"type": "wikipedia", "config": {}},
+                ]
+                
                 try:
                     from agents.components.compound.agent import create_enhanced_agent
-                    enhanced_agent = create_enhanced_agent(tools=[], user_id=user_id)
+                    enhanced_agent = create_enhanced_agent(tools=base_tools, user_id=user_id)
                     await enhanced_agent.astream_websocket(
                         input=input_,
                         config=config,

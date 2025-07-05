@@ -1052,6 +1052,12 @@ async def update_mcp_server(
             user_id, server_id
         )
         
+        # Invalidate tool cache after update
+        from agents.storage.global_services import get_global_dynamic_tool_loader
+        dyn_loader = get_global_dynamic_tool_loader()
+        if dyn_loader:
+            dyn_loader.invalidate_user_cache(user_id)
+
         # Handle server restart if needed
         if "enabled" in updates or "command" in updates or "args" in updates or "url" in updates:
             from agents.storage.global_services import get_global_mcp_server_manager
@@ -1170,6 +1176,12 @@ async def toggle_mcp_server(
                 content={"error": "Failed to update server status"},
             )
         
+        # Invalidate tool cache
+        from agents.storage.global_services import get_global_dynamic_tool_loader
+        dyn_loader = get_global_dynamic_tool_loader()
+        if dyn_loader:
+            dyn_loader.invalidate_user_cache(user_id)
+
         # Start or stop server based on new status
         from agents.storage.global_services import get_global_mcp_server_manager
         mcp_manager = get_global_mcp_server_manager()

@@ -172,6 +172,16 @@ def create_enhanced_agent(
     """Create an enhanced agent with MCP support, avoiding circular imports."""
     from agents.components.compound.enhanced_agent import EnhancedConfigurableAgent
     
+    # If caller supplies no tool configs, load minimal safe default tool configs
+    if not tools:
+        base_tool_types = [
+            "arxiv",
+            "search_tavily",
+            "search_tavily_answer",
+            "wikipedia",
+        ]
+        tools = [{"type": name, "config": {}} for name in base_tool_types]
+
     return (
         EnhancedConfigurableAgent(
             llm_type=llm_type,

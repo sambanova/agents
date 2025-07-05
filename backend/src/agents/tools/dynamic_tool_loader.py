@@ -204,9 +204,30 @@ class DynamicToolLoader:
         """Load static tools from the tool registry."""
         try:
             _tools = []
+            from langchain.tools import BaseTool as _BT
+            from pydantic import BaseModel
+            
             for _tool in static_tools:
-                tool_type = _tool["type"]
-                tool_config = _tool.get("config", {})
+                # If caller already provided a ready-made BaseTool instance, keep it
+                if isinstance(_tool, _BT):
+                    _tools.append(_tool)
+                    continue
+
+                # Handle Pydantic model instances (like Arxiv, Tavily, etc.)
+                if isinstance(_tool, BaseModel) and hasattr(_tool, 'type') and hasattr(_tool, 'config'):
+                    tool_type = _tool.type
+                    tool_config = _tool.config
+                # Handle dictionary configs {"type": name, "config": {...}}
+                elif isinstance(_tool, dict):
+                    try:
+                        tool_type = _tool["type"]
+                        tool_config = _tool.get("config", {})
+                    except Exception:
+                        logger.error("Invalid static tool spec, skipping", tool=_tool)
+                        continue
+                else:
+                    logger.error("Invalid static tool spec, skipping", tool=_tool)
+                    continue
 
                 try:
                     validated_config = validate_tool_config(tool_type, tool_config)
