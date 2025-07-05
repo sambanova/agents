@@ -187,6 +187,86 @@ class ToolExecutor:
             return f"Tool {action.tool} not found"
 
 
+class DynamicToolExecutor:
+    """Enhanced ToolExecutor that can load MCP tools dynamically."""
+
+    def __init__(self, static_tools, user_id: str = None):
+        self.static_tools_by_name = {tool.name: tool for tool in static_tools}
+        self.user_id = user_id
+        self.mcp_tools_cache = {}
+        self.cache_expiry = 0
+        self.cache_ttl = 300  # 5 minutes
+
+    async def ainvoke(self, action: ToolInvocation):
+        # First check static tools
+        tool = self.static_tools_by_name.get(action.tool)
+        if tool:
+            return await tool.ainvoke(action.tool_input)
+        
+        # If not found in static tools and we have a user_id, try MCP tools
+        if self.user_id:
+            mcp_tool = await self._get_mcp_tool(action.tool)
+            if mcp_tool:
+                return await mcp_tool.ainvoke(action.tool_input)
+        
+        return f"Tool {action.tool} not found"
+    
+    async def _get_mcp_tool(self, tool_name: str):
+        """Get MCP tool by name, with caching."""
+        import time
+        
+        # Check cache validity
+        if time.time() > self.cache_expiry:
+            await self._refresh_mcp_tools()
+        
+        return self.mcp_tools_cache.get(tool_name)
+    
+    async def get_all_tools(self):
+        """Get all available tools (static + MCP) for prompt generation."""
+        import time
+        
+        # Refresh MCP tools if cache is expired
+        if time.time() > self.cache_expiry:
+            await self._refresh_mcp_tools()
+        
+        # Combine static and MCP tools
+        all_tools = list(self.static_tools_by_name.values()) + list(self.mcp_tools_cache.values())
+        return all_tools
+
+    async def _refresh_mcp_tools(self):
+        """Refresh MCP tools cache."""
+        import time
+        
+        try:
+            # Import at runtime to avoid circular imports
+            from agents.storage.global_services import get_global_mcp_server_manager
+            
+            mcp_manager = get_global_mcp_server_manager()
+            if mcp_manager:
+                mcp_tools = await mcp_manager.get_user_mcp_tools(self.user_id)
+                self.mcp_tools_cache = {tool.name: tool for tool in mcp_tools}
+                self.cache_expiry = time.time() + self.cache_ttl
+                
+                logger.debug(
+                    "Refreshed MCP tools cache",
+                    user_id=self.user_id,
+                    num_mcp_tools=len(mcp_tools),
+                )
+            else:
+                logger.debug("MCP manager not available, using empty MCP tools cache")
+                self.mcp_tools_cache = {}
+                self.cache_expiry = time.time() + self.cache_ttl
+                
+        except Exception as e:
+            logger.warning(
+                "Failed to refresh MCP tools cache, using empty cache",
+                user_id=self.user_id,
+                error=str(e),
+            )
+            self.mcp_tools_cache = {}
+            self.cache_expiry = time.time() + 60  # Shorter retry interval on error
+
+
 def get_xml_agent_executor(
     tools: list[BaseTool],
     llm: LanguageModelLike,
@@ -241,19 +321,37 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
     else:
         subgraph_section = ""
 
-    formatted_system_message = xml_template.format(
-        system_message=system_message,
-        tools=render_text_description(tools),
-        tool_names=", ".join([t.name for t in tools]),
-        subgraph_section=subgraph_section,
-    )
+    # Create a function to generate system message dynamically (includes MCP tools)
+    async def _get_system_message():
+        # Get all available tools (static + MCP if using DynamicToolExecutor)
+        if isinstance(tool_executor, DynamicToolExecutor):
+            all_tools = await tool_executor.get_all_tools()
+        else:
+            all_tools = tools
+            
+        return xml_template.format(
+            system_message=system_message,
+            tools=render_text_description(all_tools),
+            tool_names=", ".join([t.name for t in all_tools]),
+            subgraph_section=subgraph_section,
+        )
 
     async def _get_messages(messages):
+        dynamic_system_message = await _get_system_message()
         return [
-            SystemMessage(content=formatted_system_message)
+            SystemMessage(content=dynamic_system_message)
         ] + await construct_chat_history(messages, llm_type)
 
-    tool_executor = ToolExecutor(tools)
+    # Use DynamicToolExecutor if user_id is provided for MCP tool support
+    if user_id:
+        tool_executor = DynamicToolExecutor(tools, user_id)
+        logger.info(
+            "Using DynamicToolExecutor for MCP tool support",
+            user_id=user_id,
+            num_static_tools=len(tools),
+        )
+    else:
+        tool_executor = ToolExecutor(tools)
 
     # Create agent node that extracts api_key from config
     async def agent_node(messages, *, config: RunnableConfig = None):

@@ -127,8 +127,6 @@ class EnhancedConfigurableAgent(RunnableBinding):
         """
         others.pop("bound", None)
         
-        self.user_id = user_id
-        
         # Create a lazy-loading agent that will load tools when needed
         def create_agent_with_tools():
             return self._create_agent_executor(tools, llm_type, system_message, subgraphs, user_id)
@@ -159,6 +157,9 @@ class EnhancedConfigurableAgent(RunnableBinding):
             kwargs=kwargs or {},
             config=config or {},
         )
+
+        # Store user_id after initialization to avoid recursion during __setattr__
+        self.user_id = user_id
 
     async def ainvoke(self, input: Any, config: Optional[RunnableConfig] = None) -> Any:
         """
@@ -242,38 +243,24 @@ class EnhancedConfigurableAgent(RunnableBinding):
         )
 
     async def _get_agent_with_dynamic_tools(self, user_id: str) -> Pregel:
-        """Get an agent executor with dynamically loaded tools for a user."""
+        """Get an agent executor with dynamic tool loading support."""
         try:
-            # Import at runtime to avoid circular imports
+            # Load static tools only - MCP tools will be loaded dynamically by DynamicToolExecutor
             from agents.tools.dynamic_tool_loader import load_tools_for_user
+            static_tools = await load_tools_for_user(user_id, self.tools, force_refresh=False)
             
-            # Load tools for the user (static + MCP)
-            all_tools = await load_tools_for_user(user_id, self.tools)
-            
-            # Create agent executor with all tools
-            return self._create_agent_executor_with_tools(all_tools, user_id)
+            # Create agent executor with static tools + user_id for dynamic MCP tool loading
+            return self._create_agent_executor_with_tools(static_tools, user_id)
             
         except Exception as e:
             logger.error(
-                "Error loading dynamic tools for user, falling back to static tools",
+                "Error creating enhanced agent, falling back to basic agent",
                 user_id=user_id,
                 error=str(e),
                 exc_info=True,
             )
-            # Fall back to static tools only
-            try:
-                from agents.tools.dynamic_tool_loader import load_tools_for_user
-                static_tools = await load_tools_for_user(user_id, self.tools)
-                return self._create_agent_executor_with_tools(static_tools, user_id)
-            except Exception as fallback_error:
-                logger.error(
-                    "Error loading even static tools, creating agent with empty tools",
-                    user_id=user_id,
-                    error=str(fallback_error),
-                    exc_info=True,
-                )
-                # Ultimate fallback - create agent with no tools
-                return self._create_agent_executor_with_tools([], user_id)
+            # Fall back to basic agent with no tools but still with user_id for MCP support
+            return self._create_agent_executor_with_tools([], user_id)
 
     def _create_agent_executor(
         self,

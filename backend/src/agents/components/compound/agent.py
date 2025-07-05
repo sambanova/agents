@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 from typing import Any, Dict, Mapping, Optional, Sequence, Union
 
@@ -160,15 +162,23 @@ class ConfigurableAgent(RunnableBinding):
             raise e
 
 
-def create_enhanced_agent():
+def create_enhanced_agent(
+    tools: Sequence[Tool],
+    llm_type: LLMType = LLMType.SN_DEEPSEEK_V3,
+    system_message: str = DEFAULT_SYSTEM_MESSAGE,
+    subgraphs: Optional[dict] = None,
+    user_id: Optional[str] = None,
+) -> "EnhancedConfigurableAgent":
     """Create an enhanced agent with MCP support, avoiding circular imports."""
     from agents.components.compound.enhanced_agent import EnhancedConfigurableAgent
     
     return (
         EnhancedConfigurableAgent(
-            llm_type=LLMType.SN_DEEPSEEK_V3,
-            tools=[],
-            system_message=DEFAULT_SYSTEM_MESSAGE,
+            llm_type=llm_type,
+            tools=tools,
+            system_message=system_message,
+            subgraphs=subgraphs,
+            user_id=user_id,
         )
         .configurable_fields(
             llm_type=ConfigurableField(id="llm_type", name="LLM Type"),
