@@ -1,8 +1,8 @@
 ########## data_types.py (FULL, UNCHANGED EXCEPT NEW FIELDS) ##########
 from pydantic import BaseModel, model_validator, Field
 from enum import Enum
-from typing import Any, List, Optional, Union, Dict
-from datetime import date
+from typing import Any, List, Optional, Union, Dict, Sequence
+from datetime import date, datetime
 from agents.components.financial_analysis.financial_analysis_crew import (
     FinancialAnalysisResult,
 )
@@ -204,3 +204,88 @@ class AgentStructuredResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
     message_id: str
     message: Optional[str] = None  # Additional message or notes from the agent
+
+
+class MCPServerConfig(BaseModel):
+    """Configuration for a user's MCP server"""
+    server_id: str = Field(..., description="Unique identifier for the MCP server")
+    name: str = Field(..., description="User-friendly name for the server")
+    description: Optional[str] = Field(None, description="Optional description of the server")
+    
+    # Connection details
+    command: Optional[str] = Field(None, description="Command to run the server (for stdio)")
+    args: Optional[List[str]] = Field(default_factory=list, description="Arguments for the command")
+    url: Optional[str] = Field(None, description="URL for HTTP-based MCP servers")
+    transport: str = Field(default="stdio", description="Transport type: 'stdio' or 'http'")
+    
+    # Environment variables and secrets
+    env_vars: Optional[Dict[str, str]] = Field(default_factory=dict, description="Environment variables for the server")
+    
+    # Status and metadata
+    enabled: bool = Field(default=True, description="Whether the server is enabled")
+    created_at: datetime = Field(default_factory=datetime.now)
+    last_updated: datetime = Field(default_factory=datetime.now)
+    last_health_check: Optional[datetime] = Field(None)
+    health_status: str = Field(default="unknown", description="Health status: 'healthy', 'unhealthy', 'unknown'")
+    
+    # Tool discovery cache
+    available_tools: Optional[List[Dict[str, Any]]] = Field(default_factory=list, description="Cached list of available tools")
+    tools_last_discovered: Optional[datetime] = Field(None)
+
+
+class MCPServerStatus(str, Enum):
+    """Status of an MCP server"""
+    HEALTHY = "healthy"
+    UNHEALTHY = "unhealthy"
+    UNKNOWN = "unknown"
+    STARTING = "starting"
+    STOPPED = "stopped"
+    ERROR = "error"
+
+
+class MCPServerCreateRequest(BaseModel):
+    """Request to create a new MCP server"""
+    name: str = Field(..., description="User-friendly name for the server")
+    description: Optional[str] = Field(None, description="Optional description")
+    command: Optional[str] = Field(None, description="Command to run the server")
+    args: Optional[List[str]] = Field(default_factory=list, description="Command arguments")
+    url: Optional[str] = Field(None, description="URL for HTTP servers")
+    transport: str = Field(default="stdio", description="Transport type")
+    env_vars: Optional[Dict[str, str]] = Field(default_factory=dict, description="Environment variables")
+    enabled: bool = Field(default=True, description="Whether to enable the server")
+
+
+class MCPServerUpdateRequest(BaseModel):
+    """Request to update an existing MCP server"""
+    name: Optional[str] = Field(None, description="Updated name")
+    description: Optional[str] = Field(None, description="Updated description")
+    command: Optional[str] = Field(None, description="Updated command")
+    args: Optional[List[str]] = Field(None, description="Updated arguments")
+    url: Optional[str] = Field(None, description="Updated URL")
+    transport: Optional[str] = Field(None, description="Updated transport")
+    env_vars: Optional[Dict[str, str]] = Field(None, description="Updated environment variables")
+    enabled: Optional[bool] = Field(None, description="Updated enabled status")
+
+
+class MCPServerListResponse(BaseModel):
+    """Response for listing MCP servers"""
+    servers: List[MCPServerConfig]
+    total: int
+
+
+class MCPToolInfo(BaseModel):
+    """Information about an MCP tool"""
+    name: str
+    description: str
+    server_id: str
+    server_name: str
+    input_schema: Optional[Dict[str, Any]] = None
+
+
+class MCPServerHealthResponse(BaseModel):
+    """Health check response for an MCP server"""
+    server_id: str
+    status: MCPServerStatus
+    message: Optional[str] = None
+    last_check: datetime
+    available_tools: List[MCPToolInfo] = Field(default_factory=list)

@@ -5,14 +5,44 @@
       <div class="fixed inset-0 bg-black opacity-30" @click="close"></div>
 
       <!-- Modal -->
-      <div class="relative w-full max-w-lg bg-white rounded-xl shadow-lg p-6">
+      <div class="relative w-full max-w-4xl bg-white rounded-xl shadow-lg p-6">
         <div class="flex justify-between items-center mb-6">
-          <h2 class="text-2xl font-semibold text-primary-brandTextPrimary">API Settings</h2>
+          <h2 class="text-2xl font-semibold text-primary-brandTextPrimary">Settings</h2>
           <button @click="close" class="text-primary-brandTextSecondary hover:text-gray-700">
             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="mb-6">
+          <div class="border-b border-gray-200">
+            <nav class="-mb-px flex space-x-8">
+              <button
+                @click="activeTab = 'api-keys'"
+                :class="[
+                  'py-2 px-1 border-b-2 font-medium text-sm',
+                  activeTab === 'api-keys'
+                    ? 'border-primary-brandColor text-primary-brandColor'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ]"
+              >
+                API Keys
+              </button>
+              <button
+                @click="activeTab = 'mcp-tools'"
+                :class="[
+                  'py-2 px-1 border-b-2 font-medium text-sm',
+                  activeTab === 'mcp-tools'
+                    ? 'border-primary-brandColor text-primary-brandColor'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ]"
+              >
+                MCP Tools
+              </button>
+            </nav>
+          </div>
         </div>
 
         <!-- Error Message -->
@@ -25,7 +55,10 @@
           {{ successMessage }}
         </div>
 
-        <div class="space-y-6">
+        <!-- Tab Content -->
+        <div class="tab-content">
+          <!-- API Keys Tab -->
+          <div v-if="activeTab === 'api-keys'" class="space-y-6">
           <!-- SambaNova API Key -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
@@ -274,6 +307,13 @@
               </button>
             </div>
           </div>
+          </div>
+
+          <!-- MCP Tools Tab -->
+          <div v-if="activeTab === 'mcp-tools'">
+            <MCPManagement />
+          </div>
+
         </div>
 
         <!-- Delete Account Confirmation Modal -->
@@ -319,6 +359,7 @@ import { encryptKey, decryptKey } from '../utils/encryption'
 import axios from 'axios'
 import emitterMitt from '@/utils/eventBus.js';
 import SelectProvider from '@/components/ChatMain/SelectProvider.vue'
+import MCPManagement from './MCPManagement.vue'
 
 const selectedOption = inject('selectedOption')
 
@@ -338,6 +379,7 @@ const emit = defineEmits(['keysUpdated'])
 const { userId } = useAuth()
 
 const isOpen = ref(false)
+const activeTab = ref('api-keys')
 const sambanovaKey = ref('')
 const exaKey = ref('')
 const serperKey = ref('')
@@ -474,6 +516,7 @@ const openModal = () => {
 // ✅ Function to manually close modal
 const close = () => {
   isOpen.value = false
+  activeTab.value = 'api-keys'
   errorMessage.value = ''
   successMessage.value = ''
 }

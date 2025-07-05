@@ -194,6 +194,7 @@ def get_xml_agent_executor(
     system_message: str,
     subgraphs: dict = None,
     checkpointer=None,
+    user_id: str = None,
 ):
     """
     Get XML agent executor that can call either tools or subgraphs with tight integration.
@@ -205,6 +206,7 @@ def get_xml_agent_executor(
         interrupt_before_action: Whether to interrupt before action execution
         subgraphs: Dictionary of subgraphs {name: compiled_graph}
         checkpointer: Optional checkpointer, if None will use global checkpointer
+        user_id: Optional user ID for context (used for logging and debugging)
     """
     logger.info(
         "Creating XML agent executor",
@@ -213,6 +215,7 @@ def get_xml_agent_executor(
         has_subgraphs=bool(subgraphs),
         subgraph_names=list(subgraphs.keys()) if subgraphs else [],
         has_checkpointer=checkpointer is not None,
+        user_id=user_id,
     )
     # Use provided checkpointer or fall back to global checkpointer
     if checkpointer is None:

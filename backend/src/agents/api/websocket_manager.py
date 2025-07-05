@@ -327,15 +327,63 @@ class WebSocketConnectionManager(WebSocketInterface):
                     multimodal_input=multimodal_input,
                 )
 
-                # Stream the response directly via WebSocket
-                await agent.astream_websocket(
-                    input=input_,
-                    config=config,
-                    websocket_manager=self,
-                    user_id=user_id,
-                    conversation_id=conversation_id,
-                    message_id=user_message_input["message_id"],
-                )
+                # Check if user has MCP servers configured and use enhanced agent if available
+                try:
+                    user_mcp_servers = await self.message_storage.list_user_mcp_servers(user_id)
+                    
+                    if user_mcp_servers:
+                        # User has MCP servers, try to use enhanced agent
+                        try:
+                            from agents.components.compound.agent import create_enhanced_agent
+                            enhanced_agent = create_enhanced_agent()
+                            await enhanced_agent.astream_websocket(
+                                input=input_,
+                                config=config,
+                                websocket_manager=self,
+                                user_id=user_id,
+                                conversation_id=conversation_id,
+                                message_id=user_message_input["message_id"],
+                            )
+                        except Exception as enhanced_error:
+                            logger.warning(
+                                "Enhanced agent failed, falling back to regular agent",
+                                error=str(enhanced_error),
+                                user_id=user_id,
+                            )
+                            # Fall back to regular agent
+                            await agent.astream_websocket(
+                                input=input_,
+                                config=config,
+                                websocket_manager=self,
+                                user_id=user_id,
+                                conversation_id=conversation_id,
+                                message_id=user_message_input["message_id"],
+                            )
+                    else:
+                        # No MCP servers, use regular agent
+                        await agent.astream_websocket(
+                            input=input_,
+                            config=config,
+                            websocket_manager=self,
+                            user_id=user_id,
+                            conversation_id=conversation_id,
+                            message_id=user_message_input["message_id"],
+                        )
+                except Exception as mcp_check_error:
+                    logger.warning(
+                        "MCP server check failed, using regular agent",
+                        error=str(mcp_check_error),
+                        user_id=user_id,
+                    )
+                    # Fall back to regular agent
+                    await agent.astream_websocket(
+                        input=input_,
+                        config=config,
+                        websocket_manager=self,
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                        message_id=user_message_input["message_id"],
+                    )
 
         except WebSocketDisconnect:
             logger.info("WebSocket connection closed", conversation_id=conversation_id)

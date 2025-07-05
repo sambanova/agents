@@ -160,6 +160,34 @@ class ConfigurableAgent(RunnableBinding):
             raise e
 
 
+def create_enhanced_agent():
+    """Create an enhanced agent with MCP support, avoiding circular imports."""
+    from agents.components.compound.enhanced_agent import EnhancedConfigurableAgent
+    
+    return (
+        EnhancedConfigurableAgent(
+            llm_type=LLMType.SN_DEEPSEEK_V3,
+            tools=[],
+            system_message=DEFAULT_SYSTEM_MESSAGE,
+        )
+        .configurable_fields(
+            llm_type=ConfigurableField(id="llm_type", name="LLM Type"),
+            system_message=ConfigurableField(id="system_message", name="Instructions"),
+            subgraphs=ConfigurableField(id="subgraphs", name="Subgraphs"),
+            tools=ConfigurableField(id="tools", name="Tools"),
+        )
+        .configurable_alternatives(
+            ConfigurableField(id="type", name="Bot Type"),
+            default_key="default",
+            prefix_keys=True,
+        )
+        .with_types(
+            input_type=Messages,
+            output_type=Sequence[AnyMessage],
+        )
+    )
+
+# Default agent using ConfigurableAgent to avoid circular imports
 agent: Pregel = (
     ConfigurableAgent(
         llm_type=LLMType.SN_DEEPSEEK_V3,

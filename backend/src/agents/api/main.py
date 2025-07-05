@@ -1,9 +1,10 @@
+import asyncio
 import json
 import os
 import time
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 from typing import Optional
 
@@ -11,7 +12,16 @@ import jwt
 import markdown
 import mlflow
 import structlog
-from agents.api.data_types import APIKeys
+from agents.api.data_types import (
+    APIKeys,
+    MCPServerConfig,
+    MCPServerCreateRequest,
+    MCPServerUpdateRequest,
+    MCPServerListResponse,
+    MCPServerHealthResponse,
+    MCPServerStatus,
+    MCPToolInfo,
+)
 from agents.api.middleware import LoggingMiddleware
 from agents.api.websocket_manager import WebSocketConnectionManager
 from agents.components.compound.xml_agent import (
@@ -39,6 +49,7 @@ from fastapi_clerk_auth import (
 )
 from langgraph.checkpoint.redis import AsyncRedisSaver
 from weasyprint import CSS, HTML
+from uuid import uuid4
 
 logger = structlog.get_logger(__name__)
 
@@ -88,6 +99,15 @@ async def lifespan(app: FastAPI):
 
     # Set global Redis storage service for tools
     set_global_redis_storage_service(app.state.redis_storage_service)
+
+    # Initialize MCP services
+        # Initialize MCP services with lazy loading to avoid circular imports
+    try:
+        from agents.storage.global_services import initialize_mcp_services
+        initialize_mcp_services(app.state.redis_storage_service)
+    except Exception as e:
+        logger.warning(f"MCP services initialization failed: {e}")
+        # Continue without MCP services - they'll be initialized on first use
 
     logger.info("Using Redis with shared connection pool")
 
@@ -708,6 +728,9 @@ async def set_api_keys(
 
         await app.state.redis_storage_service.set_user_api_key(user_id, keys)
 
+        # Create default MCP servers if this is a new user
+        await create_default_mcp_servers(user_id)
+
         return JSONResponse(
             status_code=200, content={"message": "API keys stored successfully"}
         )
@@ -834,3 +857,588 @@ async def delete_user_data(
             status_code=500,
             content={"error": f"Failed to delete user data: {str(e)}"},
         )
+
+
+# MCP Server Management Endpoints
+
+@app.get("/mcp/servers", response_model=MCPServerListResponse)
+async def list_mcp_servers(
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+):
+    """
+    List all MCP servers for the authenticated user.
+    
+    Returns:
+        MCPServerListResponse: List of user's MCP servers
+    """
+    try:
+        user_id = get_user_id_from_token(token_data)
+        if not user_id:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Invalid authentication token"},
+            )
+
+        servers = await app.state.redis_storage_service.list_user_mcp_servers(user_id)
+        
+        return MCPServerListResponse(
+            servers=servers,
+            total=len(servers)
+        )
+
+    except Exception as e:
+        logger.error(f"Error listing MCP servers: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to list MCP servers: {str(e)}"},
+        )
+
+
+@app.post("/mcp/servers")
+async def create_mcp_server(
+    server_request: MCPServerCreateRequest,
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+):
+    """
+    Create a new MCP server for the authenticated user.
+    
+    Args:
+        server_request: MCP server configuration
+        
+    Returns:
+        Created server configuration
+    """
+    try:
+        user_id = get_user_id_from_token(token_data)
+        if not user_id:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Invalid authentication token"},
+            )
+
+        # Generate unique server ID
+        server_id = str(uuid.uuid4())
+        
+        # Create server configuration
+        server_config = MCPServerConfig(
+            server_id=server_id,
+            name=server_request.name,
+            description=server_request.description,
+            command=server_request.command,
+            args=server_request.args,
+            url=server_request.url,
+            transport=server_request.transport,
+            env_vars=server_request.env_vars,
+            enabled=server_request.enabled,
+        )
+        
+        # Store server configuration
+        await app.state.redis_storage_service.store_mcp_server_config(user_id, server_config)
+        
+        # If enabled, try to start the server and discover tools
+        if server_config.enabled:
+            from agents.storage.global_services import get_global_mcp_server_manager
+            mcp_manager = get_global_mcp_server_manager()
+            if mcp_manager:
+                # Start server in background
+                asyncio.create_task(mcp_manager.start_server(user_id, server_id))
+        
+        return JSONResponse(
+            status_code=201,
+            content=server_config.model_dump(mode='json'),
+        )
+
+    except Exception as e:
+        logger.error(f"Error creating MCP server: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to create MCP server: {str(e)}"},
+        )
+
+
+@app.get("/mcp/servers/{server_id}")
+async def get_mcp_server(
+    server_id: str,
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+):
+    """
+    Get a specific MCP server configuration.
+    
+    Args:
+        server_id: ID of the MCP server
+        
+    Returns:
+        MCP server configuration
+    """
+    try:
+        user_id = get_user_id_from_token(token_data)
+        if not user_id:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Invalid authentication token"},
+            )
+
+        server_config = await app.state.redis_storage_service.get_mcp_server_config(
+            user_id, server_id
+        )
+        
+        if not server_config:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "MCP server not found"},
+            )
+        
+        return JSONResponse(
+            status_code=200,
+            content=server_config.model_dump(mode='json'),
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting MCP server: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to get MCP server: {str(e)}"},
+        )
+
+
+@app.put("/mcp/servers/{server_id}")
+async def update_mcp_server(
+    server_id: str,
+    server_request: MCPServerUpdateRequest,
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+):
+    """
+    Update an existing MCP server configuration.
+    
+    Args:
+        server_id: ID of the MCP server
+        server_request: Updated server configuration
+        
+    Returns:
+        Updated server configuration
+    """
+    try:
+        user_id = get_user_id_from_token(token_data)
+        if not user_id:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Invalid authentication token"},
+            )
+
+        # Prepare updates (only include non-None values)
+        updates = {}
+        for field, value in server_request.model_dump(exclude_none=True).items():
+            updates[field] = value
+        
+        if not updates:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "No updates provided"},
+            )
+        
+        # Update server configuration
+        success = await app.state.redis_storage_service.update_mcp_server_config(
+            user_id, server_id, updates
+        )
+        
+        if not success:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "MCP server not found"},
+            )
+        
+        # Get updated configuration
+        updated_config = await app.state.redis_storage_service.get_mcp_server_config(
+            user_id, server_id
+        )
+        
+        # Handle server restart if needed
+        if "enabled" in updates or "command" in updates or "args" in updates or "url" in updates:
+            from agents.storage.global_services import get_global_mcp_server_manager
+            mcp_manager = get_global_mcp_server_manager()
+            if mcp_manager:
+                # Restart server in background
+                asyncio.create_task(mcp_manager.restart_server(user_id, server_id))
+        
+        return JSONResponse(
+            status_code=200,
+            content=updated_config.model_dump(mode='json') if updated_config else {},
+        )
+
+    except Exception as e:
+        logger.error(f"Error updating MCP server: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to update MCP server: {str(e)}"},
+        )
+
+
+@app.delete("/mcp/servers/{server_id}")
+async def delete_mcp_server(
+    server_id: str,
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+):
+    """
+    Delete an MCP server configuration.
+    
+    Args:
+        server_id: ID of the MCP server
+        
+    Returns:
+        Success message
+    """
+    try:
+        user_id = get_user_id_from_token(token_data)
+        if not user_id:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Invalid authentication token"},
+            )
+
+        # Stop server if running
+        from agents.storage.global_services import get_global_mcp_server_manager
+        mcp_manager = get_global_mcp_server_manager()
+        if mcp_manager:
+            await mcp_manager.stop_server(user_id, server_id)
+        
+        # Delete server configuration
+        success = await app.state.redis_storage_service.delete_mcp_server_config(
+            user_id, server_id
+        )
+        
+        if not success:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "MCP server not found"},
+            )
+        
+        return JSONResponse(
+            status_code=200,
+            content={"message": "MCP server deleted successfully"},
+        )
+
+    except Exception as e:
+        logger.error(f"Error deleting MCP server: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to delete MCP server: {str(e)}"},
+        )
+
+
+@app.post("/mcp/servers/{server_id}/toggle")
+async def toggle_mcp_server(
+    server_id: str,
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+):
+    """
+    Toggle an MCP server's enabled status.
+    
+    Args:
+        server_id: ID of the MCP server
+        
+    Returns:
+        Updated server configuration
+    """
+    try:
+        user_id = get_user_id_from_token(token_data)
+        if not user_id:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Invalid authentication token"},
+            )
+
+        # Get current configuration
+        server_config = await app.state.redis_storage_service.get_mcp_server_config(
+            user_id, server_id
+        )
+        
+        if not server_config:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "MCP server not found"},
+            )
+        
+        # Toggle enabled status
+        new_enabled = not server_config.enabled
+        success = await app.state.redis_storage_service.update_mcp_server_config(
+            user_id, server_id, {"enabled": new_enabled}
+        )
+        
+        if not success:
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Failed to update server status"},
+            )
+        
+        # Start or stop server based on new status
+        from agents.storage.global_services import get_global_mcp_server_manager
+        mcp_manager = get_global_mcp_server_manager()
+        if mcp_manager:
+            if new_enabled:
+                asyncio.create_task(mcp_manager.start_server(user_id, server_id))
+            else:
+                asyncio.create_task(mcp_manager.stop_server(user_id, server_id))
+        
+        # Get updated configuration
+        updated_config = await app.state.redis_storage_service.get_mcp_server_config(
+            user_id, server_id
+        )
+        
+        return JSONResponse(
+            status_code=200,
+            content=updated_config.model_dump(mode='json') if updated_config else {},
+        )
+
+    except Exception as e:
+        logger.error(f"Error toggling MCP server: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to toggle MCP server: {str(e)}"},
+        )
+
+
+@app.get("/mcp/servers/{server_id}/health", response_model=MCPServerHealthResponse)
+async def get_mcp_server_health(
+    server_id: str,
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+):
+    """
+    Get health status of an MCP server.
+    
+    Args:
+        server_id: ID of the MCP server
+        
+    Returns:
+        Server health information
+    """
+    try:
+        user_id = get_user_id_from_token(token_data)
+        if not user_id:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Invalid authentication token"},
+            )
+
+        # Get server configuration first
+        server_config = await app.state.redis_storage_service.get_mcp_server_config(
+            user_id, server_id
+        )
+        
+        if not server_config:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "MCP server not found"},
+            )
+        
+        # Get health status from MCP manager
+        from agents.storage.global_services import get_global_mcp_server_manager
+        mcp_manager = get_global_mcp_server_manager()
+        
+        if mcp_manager:
+            status, message = await mcp_manager.health_check(user_id, server_id)
+            tools = await mcp_manager.discover_tools(user_id, server_id)
+        else:
+            status = MCPServerStatus.UNKNOWN
+            message = "MCP manager not available"
+            tools = []
+        
+        return MCPServerHealthResponse(
+            server_id=server_id,
+            status=status,
+            message=message,
+            last_check=datetime.now(),
+            available_tools=tools,
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting MCP server health: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to get MCP server health: {str(e)}"},
+        )
+
+
+@app.post("/mcp/servers/{server_id}/discover-tools")
+async def discover_mcp_tools(
+    server_id: str,
+    force_refresh: bool = Query(False, description="Force refresh tool cache"),
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+):
+    """
+    Discover tools from an MCP server.
+    
+    Args:
+        server_id: ID of the MCP server
+        force_refresh: Whether to force refresh the tool cache
+        
+    Returns:
+        List of discovered tools
+    """
+    try:
+        user_id = get_user_id_from_token(token_data)
+        if not user_id:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Invalid authentication token"},
+            )
+
+        # Check if server exists
+        server_config = await app.state.redis_storage_service.get_mcp_server_config(
+            user_id, server_id
+        )
+        
+        if not server_config:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "MCP server not found"},
+            )
+        
+        # Discover tools
+        from agents.storage.global_services import get_global_mcp_server_manager
+        mcp_manager = get_global_mcp_server_manager()
+        
+        if mcp_manager:
+            tools = await mcp_manager.discover_tools(user_id, server_id, force_refresh)
+        else:
+            tools = []
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "server_id": server_id,
+                "tools": [tool.model_dump(mode='json') for tool in tools],
+                "total": len(tools),
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Error discovering MCP tools: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to discover MCP tools: {str(e)}"},
+        )
+
+
+@app.get("/mcp/tools")
+async def get_user_mcp_tools(
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+):
+    """
+    Get all available MCP tools for the authenticated user.
+    
+    Returns:
+        Information about user's MCP tools and servers
+    """
+    try:
+        user_id = get_user_id_from_token(token_data)
+        if not user_id:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Invalid authentication token"},
+            )
+
+        # Get tool information
+        from agents.storage.global_services import get_global_dynamic_tool_loader
+        tool_loader = get_global_dynamic_tool_loader()
+        
+        if tool_loader:
+            tool_info = await tool_loader.get_user_tool_info(user_id)
+        else:
+            tool_info = {
+                "total_mcp_servers": 0,
+                "enabled_mcp_servers": 0,
+                "available_mcp_tools": 0,
+                "cached_tools": 0,
+                "cache_valid": False,
+                "servers": [],
+            }
+        
+        return JSONResponse(
+            status_code=200,
+            content=tool_info,
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting user MCP tools: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to get user MCP tools: {str(e)}"},
+        )
+
+
+@app.post("/mcp/tools/reload")
+async def reload_user_mcp_tools(
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+):
+    """
+    Reload MCP tools for the authenticated user.
+    
+    This will invalidate the tool cache and restart MCP servers if needed.
+    
+    Returns:
+        Success message
+    """
+    try:
+        user_id = get_user_id_from_token(token_data)
+        if not user_id:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Invalid authentication token"},
+            )
+
+        # Reload tools
+        from agents.storage.global_services import get_global_dynamic_tool_loader
+        tool_loader = get_global_dynamic_tool_loader()
+        
+        if tool_loader:
+            await tool_loader.reload_user_mcp_tools(user_id)
+        
+        return JSONResponse(
+            status_code=200,
+            content={"message": "MCP tools reloaded successfully"},
+        )
+
+    except Exception as e:
+        logger.error(f"Error reloading user MCP tools: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to reload MCP tools: {str(e)}"},
+        )
+
+
+async def create_default_mcp_servers(user_id: str):
+    """Create default MCP server configurations for new users."""
+    try:
+        # Check if user already has servers
+        existing_servers = await app.state.redis_storage_service.list_user_mcp_servers(user_id)
+        if existing_servers:
+            return  # User already has servers, don't create defaults
+        
+        # Create default Atlassian MCP server (disabled by default)
+        default_server = MCPServerConfig(
+            server_id=str(uuid4()),
+            name="Atlassian Integration",
+            description="Connect to your Atlassian Jira and Confluence instances for project management and knowledge base access",
+            transport="sse",
+            url="https://mcp.atlassian.com/v1/sse",
+            command="mcp-atlassian",
+            args=[
+                "--jira-url", "https://your-company.atlassian.net",
+                "--jira-username", "your.email@company.com", 
+                "--jira-token", "your_api_token",
+                "--confluence-url", "https://your-company.atlassian.net/wiki",
+                "--confluence-username", "your.email@company.com",
+                "--confluence-token", "your_api_token"
+            ],
+            env_vars={},
+            enabled=False,  # Disabled by default
+            created_at=datetime.now(timezone.utc),
+            last_updated=datetime.now(timezone.utc)
+        )
+        
+        # Store the default server
+        await app.state.redis_storage_service.store_mcp_server_config(user_id, default_server)
+        logger.info(f"Created default MCP servers for user {user_id}")
+        
+    except Exception as e:
+        logger.error(f"Error creating default MCP servers for user {user_id}: {e}")

@@ -11,6 +11,10 @@ _global_redis_storage_service: Optional[RedisStorage] = None
 _global_redis_pool: Optional[aioredis.ConnectionPool] = None
 _global_sync_redis_pool: Optional[redis.ConnectionPool] = None
 
+# MCP-related global services
+_global_mcp_server_manager: Optional["MCPServerManager"] = None
+_global_dynamic_tool_loader: Optional["DynamicToolLoader"] = None
+
 
 def get_redis_pool() -> aioredis.ConnectionPool:
     """Get or create the async Redis connection pool.
@@ -82,7 +86,93 @@ def set_global_redis_storage_service(storage_service: RedisStorage) -> None:
     _global_redis_storage_service = storage_service
 
 
+def get_global_mcp_server_manager():
+    """Get the global MCP server manager."""
+    return _global_mcp_server_manager
+
+
+def set_global_mcp_server_manager(manager: "MCPServerManager") -> None:
+    """Set the global MCP server manager."""
+    global _global_mcp_server_manager
+    _global_mcp_server_manager = manager
+
+
+def get_global_dynamic_tool_loader():
+    """Get the global dynamic tool loader."""
+    return _global_dynamic_tool_loader
+
+
+def set_global_dynamic_tool_loader(loader: "DynamicToolLoader") -> None:
+    """Set the global dynamic tool loader."""
+    global _global_dynamic_tool_loader
+    _global_dynamic_tool_loader = loader
+
+
+def initialize_mcp_services(redis_storage: RedisStorage) -> None:
+    """
+    Initialize MCP-related services with lazy loading to avoid circular imports.
+    
+    Args:
+        redis_storage: The Redis storage service to use
+    """
+    import structlog
+    logger = structlog.get_logger(__name__)
+    
+    try:
+        # Check if already initialized
+        if _global_mcp_server_manager is not None and _global_dynamic_tool_loader is not None:
+            logger.info("MCP services already initialized, skipping")
+            return
+        
+        # Import here to avoid circular imports
+        from agents.mcp.server_manager import MCPServerManager
+        from agents.tools.dynamic_tool_loader import DynamicToolLoader, set_dynamic_tool_loader
+        
+        # Create MCP server manager
+        mcp_manager = MCPServerManager(redis_storage)
+        set_global_mcp_server_manager(mcp_manager)
+        
+        # Create dynamic tool loader
+        tool_loader = DynamicToolLoader(redis_storage, mcp_manager)
+        set_global_dynamic_tool_loader(tool_loader)
+        set_dynamic_tool_loader(tool_loader)  # Set in the dynamic tool loader module too
+        
+        logger.info("MCP services initialized successfully")
+        
+    except ImportError as e:
+        logger.warning(f"MCP services not available due to missing dependencies: {e}")
+        # This is expected if MCP dependencies are not installed
+    except Exception as e:
+        logger.error("Failed to initialize MCP services", error=str(e), exc_info=True)
+        # Don't raise - let the application continue without MCP services
+
+
 def get_global_redis_storage_service() -> Optional[RedisStorage]:
     """Get the global Redis storage service."""
     global _global_redis_storage_service
     return _global_redis_storage_service
+
+
+def ensure_mcp_services_initialized() -> bool:
+    """
+    Ensure MCP services are initialized, attempting lazy initialization if needed.
+    
+    Returns:
+        bool: True if MCP services are available, False otherwise
+    """
+    global _global_mcp_server_manager, _global_dynamic_tool_loader
+    
+    # Check if already initialized
+    if _global_mcp_server_manager is not None and _global_dynamic_tool_loader is not None:
+        return True
+        
+    # Try to initialize if we have a Redis storage service
+    redis_storage = get_global_redis_storage_service()
+    if redis_storage is not None:
+        try:
+            initialize_mcp_services(redis_storage)
+            return _global_mcp_server_manager is not None and _global_dynamic_tool_loader is not None
+        except Exception:
+            return False
+    
+    return False
