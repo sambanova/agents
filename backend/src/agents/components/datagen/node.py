@@ -36,14 +36,16 @@ async def agent_node(
 
         if isinstance(agent, ManualAgent) and agent.llm_response:
             captured_message = agent.llm_response
-            captured_message.additional_kwargs["agent_type"] = "data_science_ " + name
+            captured_message.additional_kwargs["agent_type"] = f"data_science_{name}"
             captured_messages = [captured_message]
         elif isinstance(agent, MessageCaptureAgent):
             interceptor_messages = agent.llm_interceptor.captured_messages
             fixing_interceptor_messages = agent.llm_fixing_interceptor.captured_messages
             captured_messages = interceptor_messages + fixing_interceptor_messages
             for m in captured_messages:
-                m.additional_kwargs["agent_type"] = "data_science_ " + name
+                m.additional_kwargs["agent_type"] = f"data_science_{name}"
+        else:
+            pass
 
         # Return a dictionary to be merged into the state
         return {
@@ -137,7 +139,7 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
         result = await agent.ainvoke(state)
         if isinstance(agent, ManualAgent) and agent.llm_response:
             captured_message = agent.llm_response
-            captured_message.additional_kwargs["agent_type"] = "data_science_ " + name
+            captured_message.additional_kwargs["agent_type"] = f"data_science_{name}"
             messages.append(captured_message)
 
         note_agent_fixing_interceptor = MessageInterceptor()

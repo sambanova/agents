@@ -175,6 +175,13 @@ class WorkflowManager:
             logger.info(f"Processing agent: {name}")
             try:
                 output_message = await agent.ainvoke(state)
+                captured_messages = []
+                if agent.llm_response:
+                    captured_message = agent.llm_response
+                    captured_message.additional_kwargs["agent_type"] = (
+                        f"data_science_{name}"
+                    )
+                    captured_messages = [captured_message]
 
                 if output_message is None:
                     raise ValueError("Agent output is None.")
@@ -192,6 +199,7 @@ class WorkflowManager:
 
                 return {
                     "internal_messages": state["internal_messages"] + [output_message],
+                    "messages": captured_messages,
                     "quality_review": output_message,
                     "needs_revision": needs_revision,
                     "sender": name,
@@ -205,7 +213,7 @@ class WorkflowManager:
                     content=f"Error in {name}: {str(e)}", name=name
                 )
                 return {
-                    "internal_messages": state["internal_messages"] + [error_message]
+                    "internal_messages": state["internal_messages"] + [error_message],
                 }
 
         async def note_taker_node(state):
