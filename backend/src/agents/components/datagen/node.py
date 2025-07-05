@@ -1,3 +1,6 @@
+import re
+import uuid
+
 import structlog
 from agents.components.datagen.manual_agent import ManualAgent
 from agents.components.datagen.message_capture_agent import MessageCaptureAgent
@@ -228,6 +231,56 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
         )
 
 
+def parse_and_replace_charts(
+    content: str, list_of_files: list[str], user_id: str
+) -> tuple[str, list[str], dict[str, str]]:
+    """
+    Parses content to find references to chart files and replaces them with a special markdown link.
+
+    The function identifies filenames for common image formats (png, jpg, jpeg, gif, svg)
+    within the text. If a found filename is present in the `list_of_files`, it's
+    replaced by a markdown link in the format `[{filename}](redis-chart:{file_id}:{user_id})`.
+    A unique file ID is generated for each valid file.
+
+    This process handles filenames that are either plain text or enclosed in backticks.
+
+    Args:
+        content: The text content to parse.
+        list_of_files: A list of available file names to validate against.
+        user_id: The user's ID to be included in the replacement link.
+
+    Returns:
+        A tuple containing:
+        - The modified content string with chart references replaced.
+        - A list of unique file names that were found and replaced.
+        - A dictionary mapping the replaced file names to their generated unique file IDs.
+    """
+    filename_regex = re.compile(r"[\w-]+\.(?:png|jpg|jpeg|gif|svg)")
+    found_filenames = set(filename_regex.findall(content))
+
+    modified_content = content
+    file_id_mapping = {}
+    replaced_files = []
+
+    for filename in found_filenames:
+        if filename in list_of_files:
+            file_id = str(uuid.uuid4())
+            file_id_mapping[filename] = file_id
+            replaced_files.append(filename)
+
+            replacement_text = f"[{filename}](redis-chart:{file_id}:{user_id})"
+
+            # To handle filenames with optional backticks, create a regex for each filename
+            # This ensures we replace `chart.png` and chart.png without affecting other text
+            escaped_filename = re.escape(filename)
+            pattern_to_replace = re.compile(f"`?{escaped_filename}`?")
+            modified_content = pattern_to_replace.sub(
+                replacement_text, modified_content
+            )
+
+    return modified_content, replaced_files, file_id_mapping
+
+
 def _create_error_state(
     state: State, error_message: AIMessage, name: str, error_type: str
 ) -> State:
@@ -257,7 +310,9 @@ async def refiner_node(
     agent: ManualAgent,
     name: str,
     daytona_manager: PersistentDaytonaManager,
-) -> State:
+    file_id: str = "default",
+    user_id: str = "default",
+) -> tuple[State, dict[str, str]]:
     """
     Read MD file contents and PNG file names from the specified storage path,
     add them as report materials to a new message,
@@ -310,7 +365,19 @@ async def refiner_node(
             ]
             result = await agent.ainvoke(refiner_state)
 
-        # Update original state - result is now an AIMessage, note, this will be mapped as the last state, we don't need to send this thorught messages
+        list_of_files = await daytona_manager.list_files()
+
+        # Parse and replace chart references in the result content
+        if hasattr(result, "content") and result.content:
+            parsed_content, replaced_files, file_id_mapping = parse_and_replace_charts(
+                result.content, list_of_files, user_id
+            )
+            result.content = parsed_content
+            logger.info(f"Replaced chart references for files: {replaced_files}")
+            logger.info(f"Generated file IDs: {file_id_mapping}")
+
+        # Update original state - result is now an AIMessage
+        # Note: this will be mapped as the last state, we don't need to send this through messages
         state["internal_messages"].append(result)
         state["sender"] = name
 
