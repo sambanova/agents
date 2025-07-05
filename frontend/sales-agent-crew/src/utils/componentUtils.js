@@ -31,6 +31,8 @@ export function getComponentByAgentType(agentType) {
       return FinancialAnalysisEndComponent
     case 'sales_leads_end':
       return SalesLeadsEndComponent
+    case 'data_science_end':
+      return AssistantEndComponent
     case undefined:
       return AssistantEndComponent
     default:

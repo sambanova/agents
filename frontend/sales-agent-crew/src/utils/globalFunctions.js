@@ -25,7 +25,8 @@ export function formattedDuration(duration) {
       'financial_analysis_end', 
       'sales_leads_end',
       'deep_research_interrupt',
-      'deep_research_end'
+      'deep_research_end',
+      'data_science_end'
     ];
     return finalAgentTypes.includes(agentType);
   }

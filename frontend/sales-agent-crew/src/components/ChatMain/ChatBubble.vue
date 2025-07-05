@@ -590,7 +590,8 @@ const streamingResponseContent = computed(() => {
         if (agentType === 'financial_analysis_end' || 
             agentType === 'sales_leads_end' || 
             agentType === 'deep_research_end' || 
-            agentType === 'react_end') {
+            agentType === 'react_end' ||
+            agentType === 'data_science_end') {
           return ''
         }
         // For deep_research_interrupt and other final responses, ensure content is a string
@@ -646,7 +647,7 @@ const finalResponseComponent = computed(() => {
       
       const component = getComponentByAgentType(agentType)
       // Only return specific end components, skip others
-      if (['financial_analysis_end', 'sales_leads_end', 'react_end', 'deep_research_end'].includes(agentType)) {
+      if (['financial_analysis_end', 'sales_leads_end', 'react_end', 'deep_research_end', 'data_science_end'].includes(agentType)) {
         return component
       }
     }
@@ -1327,6 +1328,7 @@ const currentStreamingStatus = computed(() => {
       'deep_research_writer': '◆ Writing content',
       'deep_research_grader': '◈ Evaluating quality',
       'deep_research_end': '✓ Research complete',
+      'data_science_end': '✓ Data science complete',
       'code_fixer_agents': '◐ Fixing code',
       'react_subgraph_deep_research': '◐ Deep research started',
       'react_subgraph_financial_analysis': '◐ Financial analysis started',

@@ -247,7 +247,7 @@ class PersistentDaytonaManager:
         try:
             content = await sandbox.fs.download_file(filename)
             mime_type = mimetypes.guess_type(filename)[0]
-            if mime_type == "text/html":
+            if mime_type == "text/html" or filename.endswith(".md"):
                 try:
                     content_str = (
                         content.decode("utf-8")
