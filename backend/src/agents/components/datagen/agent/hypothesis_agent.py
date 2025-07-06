@@ -1,9 +1,17 @@
 from agents.components.datagen.create_agent import create_agent
-from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager, get_daytona_describe_data
+from agents.components.datagen.tools.persistent_daytona import (
+    PersistentDaytonaManager,
+    get_daytona_describe_data,
+)
 from agents.tools.langgraph_tools import TOOL_REGISTRY
 
 
-def create_hypothesis_agent(llm, members, daytona_manager: PersistentDaytonaManager):
+def create_hypothesis_agent(
+    llm,
+    members,
+    daytona_manager: PersistentDaytonaManager,
+    directory_content: list[str],
+):
     """Create the hypothesis agent"""
 
     base_tools = [
@@ -26,4 +34,11 @@ def create_hypothesis_agent(llm, members, daytona_manager: PersistentDaytonaMana
     Just answer a research hypothesis.
     """
 
-    return create_agent(llm, base_tools, system_prompt, members, "hypothesis_agent")
+    return create_agent(
+        llm=llm,
+        tools=base_tools,
+        system_message=system_prompt,
+        team_members=members,
+        name="hypothesis_agent",
+        directory_content=directory_content,
+    )

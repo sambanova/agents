@@ -7,7 +7,12 @@ from agents.components.datagen.tools.persistent_daytona import (
 )
 
 
-def create_visualization_agent(llm, members, daytona_manager: PersistentDaytonaManager):
+def create_visualization_agent(
+    llm,
+    members,
+    daytona_manager: PersistentDaytonaManager,
+    directory_content: list[str],
+):
     """Create the visualization agent"""
     tools = [
         get_daytona_read_document(daytona_manager),
@@ -34,4 +39,11 @@ def create_visualization_agent(llm, members, daytona_manager: PersistentDaytonaM
     - Ensure all visual elements are suitable for the target audience, with attention to color schemes and design principles.
     - Avoid over-complicating visualizations; aim for clarity and simplicity.
     """
-    return create_agent(llm, tools, system_prompt, members, "visualization_agent")
+    return create_agent(
+        llm=llm,
+        tools=tools,
+        system_message=system_prompt,
+        team_members=members,
+        name="visualization_agent",
+        directory_content=directory_content,
+    )

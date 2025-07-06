@@ -8,7 +8,12 @@ from agents.components.datagen.tools.persistent_daytona import (
 from agents.tools.langgraph_tools import TOOL_REGISTRY
 
 
-def create_search_agent(llm, members, daytona_manager: PersistentDaytonaManager):
+def create_search_agent(
+    llm,
+    members,
+    daytona_manager: PersistentDaytonaManager,
+    directory_content: list[str],
+):
     """Create the search agent"""
     tools = [
         get_daytona_create_document(daytona_manager),
@@ -31,4 +36,11 @@ def create_search_agent(llm, members, daytona_manager: PersistentDaytonaManager)
     - Present information in an organized format, with clear attributions to sources.
     - Evaluate the credibility of sources and prioritize high-quality, reliable information.
     """
-    return create_agent(llm, tools, system_prompt, members, "search_agent")
+    return create_agent(
+        llm=llm,
+        tools=tools,
+        system_message=system_prompt,
+        team_members=members,
+        name="search_agent",
+        directory_content=directory_content,
+    )

@@ -1,5 +1,6 @@
 import mimetypes
 import re
+import time
 import uuid
 from datetime import datetime
 
@@ -382,14 +383,13 @@ async def refiner_node(
                     logger.error(content)
                     continue
                 mime_type = mimetypes.guess_type(file_name)[0]
-                generation_timestamp = datetime.now().isoformat()
                 await redis_storage.put_file(
                     user_id,
                     file_id,
                     data=file_content,
                     filename=file_name,
                     format=mime_type,
-                    upload_timestamp=generation_timestamp,
+                    upload_timestamp=time.time(),
                     indexed=False,
                     source="data_science_agent",
                 )

@@ -8,7 +8,12 @@ from agents.components.datagen.tools.persistent_daytona import (
 )
 
 
-def create_report_agent(power_llm, members, daytona_manager: PersistentDaytonaManager):
+def create_report_agent(
+    power_llm,
+    members,
+    daytona_manager: PersistentDaytonaManager,
+    directory_content: list[str],
+):
     """Create the report agent"""
     tools = [
         get_daytona_create_document(daytona_manager),
@@ -31,4 +36,11 @@ def create_report_agent(power_llm, members, daytona_manager: PersistentDaytonaMa
     - Maintain an objective, academic tone throughout the report.
     - Cite all sources using APA style and ensure that all findings are supported by evidence.
     """
-    return create_agent(power_llm, tools, system_prompt, members, "report_agent")
+    return create_agent(
+        llm=power_llm,
+        tools=tools,
+        system_message=system_prompt,
+        team_members=members,
+        name="report_agent",
+        directory_content=directory_content,
+    )

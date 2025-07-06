@@ -20,8 +20,15 @@ def create_data_science_subgraph(
     sambanova_api_key: str,
     redis_storage: RedisStorage,
     daytona_manager: PersistentDaytonaManager,
+    directory_content: list[str],
 ):
     language_models = setup_language_models(sambanova_api_key)
-    manager = WorkflowManager(language_models, user_id, redis_storage, daytona_manager)
+    manager = WorkflowManager(
+        language_models,
+        user_id,
+        redis_storage,
+        daytona_manager,
+        directory_content,
+    )
 
     return manager.graph

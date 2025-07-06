@@ -640,13 +640,15 @@ class WebSocketConnectionManager(WebSocketInterface):
         # Add cleanup task
         self.cleanup_task: Optional[asyncio.Task] = None
 
+        indexed_doc_ids = []
+        data_analysis_doc_ids = []
+        directory_content = []
         for doc_id in doc_ids:
-            indexed_doc_ids = []
-            data_analysis_doc_ids = []
             if doc_id["indexed"]:
                 indexed_doc_ids.append(doc_id["id"])
             if doc_id["format"] == "text/csv":
                 data_analysis_doc_ids.append(doc_id["id"])
+                directory_content.append(doc_id["filename"])
 
         retrieval_prompt = ""
         if indexed_doc_ids:
@@ -773,13 +775,14 @@ class WebSocketConnectionManager(WebSocketInterface):
 
         if data_analysis_doc_ids:
             config["configurable"]["type==default/subgraphs"]["data_science"] = {
-                "description": "This subgraph is used to perform data science tasks.",
+                "description": "This subgraph is used to perform data science tasks. Use it for any machine learning and data analysis tasks when the user provides a dataset.",
                 "next_node": END,
                 "graph": create_data_science_subgraph(
                     user_id=user_id,
                     sambanova_api_key=api_keys.sambanova_key,
                     redis_storage=self.message_storage,
                     daytona_manager=daytona_manager,
+                    directory_content=directory_content,
                 ),
                 "state_input_mapper": lambda x: {
                     "internal_messages": [HumanMessage(content=x)],

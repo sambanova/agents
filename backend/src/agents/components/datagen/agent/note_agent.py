@@ -7,7 +7,10 @@ from agents.components.datagen.tools.persistent_daytona import (
 )
 
 
-def create_note_agent(json_llm, daytona_manager: PersistentDaytonaManager):
+def create_note_agent(
+    json_llm,
+    daytona_manager: PersistentDaytonaManager,
+):
     """Create the note agent"""
     tools = [get_daytona_read_document(daytona_manager)]
     system_prompt = """
@@ -22,4 +25,8 @@ def create_note_agent(json_llm, daytona_manager: PersistentDaytonaManager):
 
     Your output should be well-organized and easy to integrate with other project documentation.
     """
-    return base_create_note_agent(json_llm, tools, system_prompt)
+    return base_create_note_agent(
+        llm=json_llm,
+        tools=tools,
+        system_prompt=system_prompt,
+    )

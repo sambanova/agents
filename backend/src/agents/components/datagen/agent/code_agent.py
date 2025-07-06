@@ -8,7 +8,12 @@ from agents.components.datagen.tools.persistent_daytona import (
 )
 
 
-def create_code_agent(power_llm, members, daytona_manager: PersistentDaytonaManager):
+def create_code_agent(
+    power_llm,
+    members,
+    daytona_manager: PersistentDaytonaManager,
+    directory_content: list[str],
+):
     """Create the code agent with persistent Daytona support"""
 
     tools = [
@@ -40,4 +45,11 @@ def create_code_agent(power_llm, members, daytona_manager: PersistentDaytonaMana
     - Use daytona_describe_data to analyze CSV files before processing them.
     """
 
-    return create_agent(power_llm, tools, system_prompt, members, "code_agent")
+    return create_agent(
+        llm=power_llm,
+        tools=tools,
+        system_message=system_prompt,
+        team_members=members,
+        name="code_agent",
+        directory_content=directory_content,
+    )

@@ -58,6 +58,7 @@ def create_agent(
     tools: list,
     system_message: str,
     team_members: list[str],
+    directory_content: list[str],
     name: str,
 ) -> ManualAgent:
     """
@@ -67,7 +68,6 @@ def create_agent(
 
     team_members_str = ", ".join(team_members)
     tool_descriptions = _format_tools(tools)
-    directory_contents_str = "customer_satisfaction_purchase_behavior.csv"
 
     # This is a static prompt that is fully constructed once.
     final_system_prompt = f"""You are a specialized AI assistant in a data analysis team.
@@ -78,7 +78,7 @@ Work autonomously according to your specialty, using the tools available to you.
 Your other team members (and other teams) will collaborate with you based on their specialties. You are one of the following team members: {team_members_str}.
 
 The initial contents of your working directory are:
-{directory_contents_str}
+{','.join(directory_content)}
 Use the daytona_list_files tool to check for updates in the directory contents when needed.
 
 TOOL USAGE INSTRUCTIONS:

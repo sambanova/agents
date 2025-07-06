@@ -41,6 +41,7 @@ class WorkflowManager:
         user_id: str,
         redis_storage: RedisStorage,
         daytona_manager: PersistentDaytonaManager,
+        directory_content: list[str],
     ):
         """
         Initialize the workflow manager with language models.
@@ -66,6 +67,7 @@ class WorkflowManager:
         self.agents = {}
         self.redis_storage = redis_storage
         self.daytona_manager = daytona_manager
+        self.directory_content = directory_content
         self.agents = self.create_agents()
         self.setup_workflow()
 
@@ -84,6 +86,7 @@ class WorkflowManager:
             llm=llm,
             members=self.members,
             daytona_manager=self.daytona_manager,
+            directory_content=self.directory_content,
         )
 
         agents["process_agent"] = create_process_agent(power_llm=power_llm)
@@ -92,30 +95,35 @@ class WorkflowManager:
             llm=llm,
             members=self.members,
             daytona_manager=self.daytona_manager,
+            directory_content=self.directory_content,
         )
 
         agents["code_agent"] = create_code_agent(
             power_llm=power_llm,
             members=self.members,
             daytona_manager=self.daytona_manager,
+            directory_content=self.directory_content,
         )
 
         agents["searcher_agent"] = create_search_agent(
             llm=llm,
             members=self.members,
             daytona_manager=self.daytona_manager,
+            directory_content=self.directory_content,
         )
 
         agents["report_agent"] = create_report_agent(
             power_llm=power_llm,
             members=self.members,
             daytona_manager=self.daytona_manager,
+            directory_content=self.directory_content,
         )
 
         agents["quality_review_agent"] = create_quality_review_agent(
             llm=llm,
             members=self.members,
             daytona_manager=self.daytona_manager,
+            directory_content=self.directory_content,
         )
 
         agents["note_agent"] = create_note_agent(

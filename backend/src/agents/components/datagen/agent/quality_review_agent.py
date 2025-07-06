@@ -8,7 +8,10 @@ from agents.components.datagen.tools.persistent_daytona import (
 
 
 def create_quality_review_agent(
-    llm, members, daytona_manager: PersistentDaytonaManager
+    llm,
+    members,
+    daytona_manager: PersistentDaytonaManager,
+    directory_content: list[str],
 ):
     """Create the quality review agent"""
     tools = [
@@ -27,4 +30,11 @@ def create_quality_review_agent(
 
     After your review, if revisions are needed, respond with 'REVISION' as a prefix, set needs_revision=True, and provide specific feedback on parts that need improvement. If no revisions are necessary, respond with 'CONTINUE' as a prefix and set needs_revision=False.
     """
-    return create_agent(llm, tools, system_prompt, members, "quality_review_agent")
+    return create_agent(
+        llm=llm,
+        tools=tools,
+        system_message=system_prompt,
+        team_members=members,
+        name="quality_review_agent",
+        directory_content=directory_content,
+    )
