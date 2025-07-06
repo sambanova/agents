@@ -5,6 +5,7 @@ import FinancialAnalysisComponent from '@/components/ChatMain/ResponseTypes/Fina
 import DeepResearchComponent from '@/components/ChatMain/ResponseTypes/DeepResearchComponent.vue'
 import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue'
 import AssistantEndComponent from '@/components/ChatMain/ResponseTypes/AssistantEndComponent.vue'
+import AssistantEndComponentWithCharts from '@/components/ChatMain/ResponseTypes/AssistantEndComponentWithCharts.vue'
 import FinancialAnalysisEndComponent from '@/components/ChatMain/ResponseTypes/FinancialAnalysisEndComponent.vue'
 import SalesLeadsEndComponent from '@/components/ChatMain/ResponseTypes/SalesLeadsEndComponent.vue'
 
@@ -32,7 +33,7 @@ export function getComponentByAgentType(agentType) {
     case 'sales_leads_end':
       return SalesLeadsEndComponent
     case 'data_science_end':
-      return AssistantEndComponent
+      return AssistantEndComponentWithCharts
     case undefined:
       return AssistantEndComponent
     default:

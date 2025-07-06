@@ -248,7 +248,8 @@ class PersistentDaytonaManager:
         """Read a file from the sandbox."""
         sandbox = await self._get_sandbox()
         if not sandbox:
-            raise RuntimeError("Daytona sandbox not initialized.")
+            logger.error("Daytona sandbox not initialized.")
+            return False, "Error reading file: Daytona sandbox not initialized."
 
         try:
             content = await sandbox.fs.download_file(filename)
@@ -268,7 +269,7 @@ class PersistentDaytonaManager:
                 return True, content
         except Exception as e:
             logger.error("Error reading file", filename=filename, error=str(e))
-            return f"Error reading file '{filename}': {str(e)}"
+            return False, f"Error reading file '{filename}': {str(e)}"
 
     async def write_file(self, filename: str, content: str) -> str:
         """Write content to a file in the sandbox."""

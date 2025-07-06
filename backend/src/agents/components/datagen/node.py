@@ -1,4 +1,5 @@
 import mimetypes
+import os
 import re
 import time
 import uuid
@@ -252,50 +253,71 @@ def parse_and_replace_charts(
     content: str, list_of_files: list[str], user_id: str
 ) -> tuple[str, dict[str, str]]:
     """
-    Parses content to find references to chart files and replaces them with a special markdown link.
+    Parses content to find custom chart placeholders and replaces them with
+    a nested markdown structure compatible with the frontend.
 
-    The function identifies filenames for common image formats (png, jpg, jpeg, gif, svg)
-    within the text. If a found filename is present in the `list_of_files`, it's
-    replaced by a markdown link in the format `[{filename}](redis-chart:{file_id}:{user_id})`.
-    A unique file ID is generated for each valid file.
+    This function looks for two types of placeholders:
+    - `[chart: filename.png]` for embedded images.
+    - `[chart-link: filename.png]` for links to charts.
 
-    This process handles filenames that are either plain text or enclosed in backticks.
-
-    Args:
-        content: The text content to parse.
-        list_of_files: A list of available file names to validate against.
-        user_id: The user's ID to be included in the replacement link.
-
-    Returns:
-        A tuple containing:
-        - The modified content string with chart references replaced.
-        - A list of unique file names that were found and replaced.
-        - A dictionary mapping the replaced file names to their generated unique file IDs.
+    It replaces them with `![description]([filename.png](redis-chart:file_id:user_id))`
+    for images and `[description]([filename.png](redis-chart:file_id:user_id))` for links,
+    where the description is derived from the context around the placeholder.
     """
     logger.debug(f"Parsing chart references for user {user_id}")
-    filename_regex = re.compile(r"[\w-]+\.(?:png|jpg|jpeg|gif|svg)")
-    found_filenames = set(filename_regex.findall(content))
-    logger.debug(f"Found {len(found_filenames)} potential chart filenames")
+
+    # Regex to find all chart placeholders, capturing the type (link or chart) and the filename
+    placeholder_regex = re.compile(r"\[(chart|chart-link):\s*([^\]]+?)\s*\]")
 
     modified_content = content
     file_id_mapping = {}
 
-    for filename in found_filenames:
+    # Create a list of matches to iterate over, as we'll be modifying the string
+    matches = list(placeholder_regex.finditer(content))
+
+    for match in matches:
+        placeholder_type, filename = match.groups()
+
         if filename in list_of_files:
-            file_id = str(uuid.uuid4())
-            file_id_mapping[filename] = file_id
+            if filename not in file_id_mapping:
+                # Generate a unique file ID only once per file
+                file_id = str(uuid.uuid4())
+                file_id_mapping[filename] = file_id
+            else:
+                file_id = file_id_mapping[filename]
 
-            replacement_text = f"[{filename}](redis-chart:{file_id}:{user_id})"
+            # The inner markdown link is always the same
+            inner_link = f"[{filename}](redis-chart:{file_id}:{user_id})"
 
-            # To handle filenames with optional backticks, create a regex for each filename
-            # This ensures we replace `chart.png` and chart.png without affecting other text
-            escaped_filename = re.escape(filename)
-            pattern_to_replace = re.compile(f"`?{escaped_filename}`?")
-            modified_content = pattern_to_replace.sub(
-                replacement_text, modified_content
+            # Try to find a descriptive text for the outer markdown.
+            # Look for a preceding markdown header or text on the same line.
+            # This is a simple heuristic.
+            start_pos = match.start()
+            line_start = content.rfind("\n", 0, start_pos) + 1
+            line = content[line_start:start_pos].strip()
+
+            # Simple check if the line is a header or just text
+            if line.startswith("#"):
+                description = line.lstrip("# ").strip()
+            elif line:
+                description = line.strip().rstrip(":")
+            else:
+                description = os.path.splitext(filename)[0].replace("_", " ").title()
+
+            if placeholder_type == "chart":
+                # Create a markdown image
+                replacement_text = f"![{description}]({inner_link})"
+            else:  # chart-link
+                # Create a markdown link
+                replacement_text = f"[{description}]({inner_link})"
+
+            # Replace the original placeholder with the final nested markdown
+            # We must replace the original match string, in case of multiple identical placeholders
+            modified_content = modified_content.replace(
+                match.group(0), replacement_text, 1
             )
 
-    logger.debug(f"Replaced {len(file_id_mapping)} chart references")
+    logger.debug(f"Replaced {len(matches)} chart references")
     return modified_content, file_id_mapping
 
 
