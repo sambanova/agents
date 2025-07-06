@@ -1811,6 +1811,7 @@ const addMessage = async () => {
           format: fullDoc.format || 'unknown',
           id: fullDoc.file_id,
           indexed: fullDoc.indexed || false,
+          filename: fullDoc.filename || 'unknown',
         };
       }
     });

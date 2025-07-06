@@ -68,6 +68,7 @@ def create_agent(
 
     team_members_str = ", ".join(team_members)
     tool_descriptions = _format_tools(tools)
+    directory_content_str = "\n".join(directory_content)
 
     # This is a static prompt that is fully constructed once.
     final_system_prompt = f"""You are a specialized AI assistant in a data analysis team.
@@ -78,8 +79,13 @@ Work autonomously according to your specialty, using the tools available to you.
 Your other team members (and other teams) will collaborate with you based on their specialties. You are one of the following team members: {team_members_str}.
 
 The initial contents of your working directory are:
-{','.join(directory_content)}
-Use the daytona_list_files tool to check for updates in the directory contents when needed.
+{directory_content_str}
+
+IMPORTANT: These files have been provided by the user for your analysis. You should prioritize using these user-provided files in your work. Make sure to:
+- Read and analyze the files the user has provided
+- Use the data and information from these files as your primary source
+- Base your analysis, research, and conclusions on the content of these user-provided files
+- Use the daytona_list_files tool to check for updates in the directory contents when needed
 
 TOOL USAGE INSTRUCTIONS:
 You have access to the following tools:
