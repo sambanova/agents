@@ -524,3 +524,316 @@ class RedisStorage:
             )
 
         return cumulative_usage
+
+    # MCP Server Storage Methods
+
+    def _get_mcp_server_key(self, user_id: str, server_id: str) -> str:
+        """Get the Redis key for storing MCP server configuration"""
+        return f"mcp_servers:{user_id}:{server_id}"
+
+    def _get_user_mcp_servers_key(self, user_id: str) -> str:
+        """Get the Redis key for user's MCP servers list"""
+        return f"user_mcp_servers:{user_id}"
+
+    def _get_mcp_server_tools_key(self, user_id: str, server_id: str) -> str:
+        """Get the Redis key for storing MCP server tools discovery results"""
+        return f"mcp_server_tools:{user_id}:{server_id}"
+
+    async def store_mcp_server_config(
+        self, user_id: str, server_config: "MCPServerConfig"
+    ) -> None:
+        """Store MCP server configuration in Redis."""
+        try:
+            from agents.api.data_types import MCPServerConfig
+            
+            # Update timestamps
+            server_config.last_updated = time.time()
+            
+            # Store server configuration
+            server_key = self._get_mcp_server_key(user_id, server_config.server_id)
+            await self.redis_client.set(
+                server_key, 
+                json.dumps(server_config.model_dump(mode='json')), 
+                user_id
+            )
+            
+            # Add to user's server list
+            user_servers_key = self._get_user_mcp_servers_key(user_id)
+            await self.redis_client.sadd(user_servers_key, server_config.server_id)
+            
+            logger.info(
+                "MCP server configuration stored",
+                server_id=server_config.server_id,
+                user_id=user_id,
+                server_name=server_config.name,
+            )
+            
+        except Exception as e:
+            logger.error(
+                "Error storing MCP server configuration",
+                server_id=server_config.server_id,
+                user_id=user_id,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
+
+    async def get_mcp_server_config(
+        self, user_id: str, server_id: str
+    ) -> Optional["MCPServerConfig"]:
+        """Get MCP server configuration from Redis."""
+        try:
+            from agents.api.data_types import MCPServerConfig
+            
+            # Verify server belongs to user
+            if not await self.verify_mcp_server_belongs_to_user(user_id, server_id):
+                return None
+                
+            server_key = self._get_mcp_server_key(user_id, server_id)
+            config_str = await self.redis_client.get(server_key, user_id)
+            
+            if not config_str:
+                return None
+                
+            config_data = json.loads(config_str)
+            return MCPServerConfig.model_validate(config_data)
+            
+        except Exception as e:
+            logger.error(
+                "Error retrieving MCP server configuration",
+                server_id=server_id,
+                user_id=user_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return None
+
+    async def update_mcp_server_config(
+        self, user_id: str, server_id: str, updates: Dict[str, Any]
+    ) -> bool:
+        """Update MCP server configuration in Redis."""
+        try:
+            # Get existing configuration
+            existing_config = await self.get_mcp_server_config(user_id, server_id)
+            if not existing_config:
+                return False
+                
+            # Apply updates
+            config_dict = existing_config.model_dump()
+            config_dict.update(updates)
+            config_dict["last_updated"] = time.time()
+            
+            # Validate updated configuration
+            from agents.api.data_types import MCPServerConfig
+            updated_config = MCPServerConfig.model_validate(config_dict)
+            
+            # Store updated configuration
+            server_key = self._get_mcp_server_key(user_id, server_id)
+            await self.redis_client.set(
+                server_key, 
+                json.dumps(updated_config.model_dump(mode='json')), 
+                user_id
+            )
+            
+            logger.info(
+                "MCP server configuration updated",
+                server_id=server_id,
+                user_id=user_id,
+                updates=list(updates.keys()),
+            )
+            return True
+            
+        except Exception as e:
+            logger.error(
+                "Error updating MCP server configuration",
+                server_id=server_id,
+                user_id=user_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return False
+
+    async def delete_mcp_server_config(self, user_id: str, server_id: str) -> bool:
+        """Delete MCP server configuration from Redis."""
+        try:
+            # Verify server belongs to user
+            if not await self.verify_mcp_server_belongs_to_user(user_id, server_id):
+                return False
+                
+            # Delete server configuration
+            server_key = self._get_mcp_server_key(user_id, server_id)
+            tools_key = self._get_mcp_server_tools_key(user_id, server_id)
+            user_servers_key = self._get_user_mcp_servers_key(user_id)
+            
+            # Remove from all locations
+            await self.redis_client.delete(server_key)
+            await self.redis_client.delete(tools_key)
+            await self.redis_client.srem(user_servers_key, server_id)
+            
+            logger.info(
+                "MCP server configuration deleted",
+                server_id=server_id,
+                user_id=user_id,
+            )
+            return True
+            
+        except Exception as e:
+            logger.error(
+                "Error deleting MCP server configuration",
+                server_id=server_id,
+                user_id=user_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return False
+
+    async def list_user_mcp_servers(self, user_id: str) -> List["MCPServerConfig"]:
+        """List all MCP servers for a user."""
+        try:
+            user_servers_key = self._get_user_mcp_servers_key(user_id)
+            server_ids = await self.redis_client.smembers(user_servers_key)
+            
+            if not server_ids:
+                return []
+                
+            # Get configuration for each server
+            servers = []
+            for server_id in server_ids:
+                if isinstance(server_id, bytes):
+                    server_id = server_id.decode("utf-8")
+                    
+                config = await self.get_mcp_server_config(user_id, server_id)
+                if config:
+                    servers.append(config)
+                    
+            return servers
+            
+        except Exception as e:
+            logger.error(
+                "Error listing MCP servers for user",
+                user_id=user_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return []
+
+    async def verify_mcp_server_belongs_to_user(
+        self, user_id: str, server_id: str
+    ) -> bool:
+        """Verify if an MCP server belongs to a user."""
+        user_servers_key = self._get_user_mcp_servers_key(user_id)
+        return await self.redis_client.sismember(user_servers_key, server_id)
+
+    async def store_mcp_server_tools(
+        self, user_id: str, server_id: str, tools: List[Dict[str, Any]]
+    ) -> None:
+        """Store discovered MCP server tools in Redis."""
+        try:
+            # Verify server belongs to user
+            if not await self.verify_mcp_server_belongs_to_user(user_id, server_id):
+                raise ValueError(f"Server {server_id} does not belong to user {user_id}")
+                
+            tools_key = self._get_mcp_server_tools_key(user_id, server_id)
+            tools_data = {
+                "tools": tools,
+                "discovered_at": time.time(),
+                "server_id": server_id,
+            }
+            
+            await self.redis_client.set(
+                tools_key, 
+                json.dumps(tools_data), 
+                user_id
+            )
+            
+            # Update server config with tools info
+            await self.update_mcp_server_config(
+                user_id, 
+                server_id, 
+                {
+                    "available_tools": tools,
+                    "tools_last_discovered": time.time(),
+                }
+            )
+            
+            logger.info(
+                "MCP server tools stored",
+                server_id=server_id,
+                user_id=user_id,
+                num_tools=len(tools),
+            )
+            
+        except Exception as e:
+            logger.error(
+                "Error storing MCP server tools",
+                server_id=server_id,
+                user_id=user_id,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
+
+    async def get_mcp_server_tools(
+        self, user_id: str, server_id: str
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Get discovered MCP server tools from Redis."""
+        try:
+            # Verify server belongs to user
+            if not await self.verify_mcp_server_belongs_to_user(user_id, server_id):
+                return None
+                
+            tools_key = self._get_mcp_server_tools_key(user_id, server_id)
+            tools_str = await self.redis_client.get(tools_key, user_id)
+            
+            if not tools_str:
+                return None
+                
+            tools_data = json.loads(tools_str)
+            return tools_data.get("tools", [])
+            
+        except Exception as e:
+            logger.error(
+                "Error retrieving MCP server tools",
+                server_id=server_id,
+                user_id=user_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return None
+
+    async def update_mcp_server_health(
+        self, user_id: str, server_id: str, health_status: str, message: Optional[str] = None
+    ) -> bool:
+        """Update MCP server health status."""
+        try:
+            updates = {
+                "health_status": health_status,
+                "last_health_check": time.time(),
+            }
+            
+            return await self.update_mcp_server_config(user_id, server_id, updates)
+            
+        except Exception as e:
+            logger.error(
+                "Error updating MCP server health",
+                server_id=server_id,
+                user_id=user_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return False
+
+    async def get_user_enabled_mcp_servers(self, user_id: str) -> List["MCPServerConfig"]:
+        """Get all enabled MCP servers for a user."""
+        try:
+            all_servers = await self.list_user_mcp_servers(user_id)
+            return [server for server in all_servers if server.enabled]
+            
+        except Exception as e:
+            logger.error(
+                "Error getting enabled MCP servers",
+                user_id=user_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return []

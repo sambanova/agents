@@ -332,15 +332,42 @@ class WebSocketConnectionManager(WebSocketInterface):
                     multimodal_input=multimodal_input,
                 )
 
-                # Stream the response directly via WebSocket
-                await agent.astream_websocket(
-                    input=input_,
-                    config=config,
-                    websocket_manager=self,
-                    user_id=user_id,
-                    conversation_id=conversation_id,
-                    message_id=user_message_input["message_id"],
-                )
+                # Always use enhanced agent with MCP support
+                # Pass the base tools that are normally configured
+                base_tools = [
+                    {"type": "arxiv", "config": {}},
+                    {"type": "search_tavily", "config": {}},
+                    {"type": "search_tavily_answer", "config": {}},
+                    {"type": "wikipedia", "config": {}},
+                ]
+                
+                try:
+                    from agents.components.compound.agent import create_enhanced_agent
+                    enhanced_agent = create_enhanced_agent(tools=base_tools, user_id=user_id)
+                    await enhanced_agent.astream_websocket(
+                        input=input_,
+                        config=config,
+                        websocket_manager=self,
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                        message_id=user_message_input["message_id"],
+                    )
+                except Exception as enhanced_error:
+                    logger.warning(
+                        "Enhanced agent failed, falling back to regular agent",
+                        error=str(enhanced_error),
+                        user_id=user_id,
+                        exc_info=True,
+                    )
+                    # Fall back to regular agent (this should be very rare now)
+                    await agent.astream_websocket(
+                        input=input_,
+                        config=config,
+                        websocket_manager=self,
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                        message_id=user_message_input["message_id"],
+                    )
 
         except WebSocketDisconnect:
             logger.info("WebSocket connection closed", conversation_id=conversation_id)

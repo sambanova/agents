@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 from typing import Any, Dict, Mapping, Optional, Sequence, Union
 
@@ -160,6 +162,52 @@ class ConfigurableAgent(RunnableBinding):
             raise e
 
 
+def create_enhanced_agent(
+    tools: Sequence[Tool],
+    llm_type: LLMType = LLMType.SN_DEEPSEEK_V3,
+    system_message: str = DEFAULT_SYSTEM_MESSAGE,
+    subgraphs: Optional[dict] = None,
+    user_id: Optional[str] = None,
+) -> "EnhancedConfigurableAgent":
+    """Create an enhanced agent with MCP support, avoiding circular imports."""
+    from agents.components.compound.enhanced_agent import EnhancedConfigurableAgent
+    
+    # If caller supplies no tool configs, load minimal safe default tool configs
+    if not tools:
+        base_tool_types = [
+            "arxiv",
+            "search_tavily",
+            "search_tavily_answer",
+            "wikipedia",
+        ]
+        tools = [{"type": name, "config": {}} for name in base_tool_types]
+
+    return (
+        EnhancedConfigurableAgent(
+            llm_type=llm_type,
+            tools=tools,
+            system_message=system_message,
+            subgraphs=subgraphs,
+            user_id=user_id,
+        )
+        .configurable_fields(
+            llm_type=ConfigurableField(id="llm_type", name="LLM Type"),
+            system_message=ConfigurableField(id="system_message", name="Instructions"),
+            subgraphs=ConfigurableField(id="subgraphs", name="Subgraphs"),
+            tools=ConfigurableField(id="tools", name="Tools"),
+        )
+        .configurable_alternatives(
+            ConfigurableField(id="type", name="Bot Type"),
+            default_key="default",
+            prefix_keys=True,
+        )
+        .with_types(
+            input_type=Messages,
+            output_type=Sequence[AnyMessage],
+        )
+    )
+
+# Default agent using ConfigurableAgent to avoid circular imports
 agent: Pregel = (
     ConfigurableAgent(
         llm_type=LLMType.SN_DEEPSEEK_V3,
