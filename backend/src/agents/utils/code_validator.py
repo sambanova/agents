@@ -236,10 +236,10 @@ def strip_markdown_code_blocks(code_str):
             )
             # Wrap in Python code to write the content to a file
             file_extension = "html"
-            if "<style" in code_str.lower() or "css" in original_code.lower():
+            if "<style" in code_str.lower() or "css" in code_str.lower():
                 file_extension = "css"
             elif (
-                "function" in code_str.lower() or "javascript" in original_code.lower()
+                "function" in code_str.lower() or "javascript" in code_str.lower()
             ):
                 file_extension = "js"
 

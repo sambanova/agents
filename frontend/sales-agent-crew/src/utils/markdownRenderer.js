@@ -8,6 +8,7 @@ marked.setOptions({
   headerIds: true,
   mangle: false,      // leave emails intact
   smartypants: true,  // typographic replacements
+  sanitize: false,    // Allow blob URLs
   // Syntax highlighting (you can swap in highlight.js or prism)
   highlight: (code, lang) => {
     // very basic example; swap for a real highlighter in prod

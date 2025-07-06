@@ -340,10 +340,13 @@ class WebSocketConnectionManager(WebSocketInterface):
                     {"type": "search_tavily_answer", "config": {}},
                     {"type": "wikipedia", "config": {}},
                 ]
-                
+
                 try:
                     from agents.components.compound.agent import create_enhanced_agent
-                    enhanced_agent = create_enhanced_agent(tools=base_tools, user_id=user_id)
+
+                    enhanced_agent = create_enhanced_agent(
+                        tools=base_tools, user_id=user_id
+                    )
                     await enhanced_agent.astream_websocket(
                         input=input_,
                         config=config,
@@ -680,12 +683,13 @@ class WebSocketConnectionManager(WebSocketInterface):
         retrieval_prompt = ""
         if indexed_doc_ids:
             retrieval_prompt = (
-                f"{len(doc_ids)} documents are available to you for retrieval.\n\n"
+                f"{len(doc_ids)} documents are available for retrieval.\n\n"
             )
 
         data_analysis_prompt = ""
         if data_analysis_doc_ids:
-            data_analysis_prompt = f"{len(data_analysis_doc_ids)} documents are available to you to use in data science subgraph.\n\n"
+            data_analysis_prompt = f"The following datasets are available to use in data science subgraph:\n\n"
+            data_analysis_prompt += "\n".join(directory_content)
 
         daytona_manager = self.daytona_managers.get(user_id)
         if not daytona_manager:

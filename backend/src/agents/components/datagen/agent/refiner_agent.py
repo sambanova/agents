@@ -30,9 +30,15 @@ def create_refiner_agent(power_llm):
        - Smooth transitions between sections
        - Concise yet comprehensive explanations
 
+    **Formatting Requirements for Charts and Files**:
+    - To include a chart or visualization, you MUST use one of the following formats, referencing the chart by its filename.
+    - **For an embedded image that should appear directly in the text**: Use `[chart: filename.png]`
+    - **For a link to a chart that should appear in a list (e.g., an appendix)**: Use `[chart-link: filename.png]`
+    - **CRITICAL**: Do NOT attempt to create markdown images or links yourself. Simply use these exact placeholder formats. A post-processing step will convert them into the final format. For example, if you are given `ebit_by_region.png`, you would write `[chart: ebit_by_region.png]` in the report body.
+
     **ONE-SHOT PERFECTION REQUIREMENTS**:
     - Deliver a COMPLETE, publication-ready report in your response
-    - No placeholders, no "TODO" sections, no incomplete thoughts
+    - No placeholders (other than the specified chart formats), no "TODO" sections, no incomplete thoughts
     - Every section must be fully written and polished
     - All formatting must be perfect and consistent
     - All transitions must be smooth and logical

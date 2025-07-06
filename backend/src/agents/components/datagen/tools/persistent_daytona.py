@@ -61,6 +61,7 @@ class PersistentDaytonaManager:
         """Get the sandbox instance, creating it if it doesn't exist."""
         if self._sandbox is None:
             if not self._client:
+                logger.error("Daytona client not initialized.")
                 raise RuntimeError("Daytona client not initialized.")
 
             logger.info(
@@ -128,6 +129,7 @@ class PersistentDaytonaManager:
         """Execute code in the persistent sandbox."""
         sandbox = await self._get_sandbox()
         if not sandbox:
+            logger.error("Daytona sandbox not initialized. Call initialize() first.")
             raise RuntimeError(
                 "Daytona sandbox not initialized. Call initialize() first."
             )
@@ -246,7 +248,8 @@ class PersistentDaytonaManager:
         """Read a file from the sandbox."""
         sandbox = await self._get_sandbox()
         if not sandbox:
-            raise RuntimeError("Daytona sandbox not initialized.")
+            logger.error("Daytona sandbox not initialized.")
+            return False, "Error reading file: Daytona sandbox not initialized."
 
         try:
             content = await sandbox.fs.download_file(filename)
@@ -266,7 +269,7 @@ class PersistentDaytonaManager:
                 return True, content
         except Exception as e:
             logger.error("Error reading file", filename=filename, error=str(e))
-            return f"Error reading file '{filename}': {str(e)}"
+            return False, f"Error reading file '{filename}': {str(e)}"
 
     async def write_file(self, filename: str, content: str) -> str:
         """Write content to a file in the sandbox."""
@@ -647,6 +650,12 @@ print(result)
             return result
 
         except Exception as e:
+            logger.error(
+                "Error analyzing CSV data",
+                filename=filename,
+                error=str(e),
+                exc_info=True,
+            )
             return f"Error analyzing CSV data: {str(e)}"
 
     return user_daytona_describe_data

@@ -41,4 +41,12 @@ export function formattedDuration(duration) {
     return agentType === 'financial_analysis_end';
   }
 
+  /**
+   * Get the Clerk authentication token
+   * @returns {Promise<string>} - The authentication token
+   */
+  export async function getClerkToken() {
+    return await window.Clerk.session.getToken();
+  }
+
   
