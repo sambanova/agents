@@ -1803,8 +1803,16 @@ const addMessage = async () => {
   };
 
   if (selectedDocuments.value && selectedDocuments.value.length > 0) {
-    messagePayload.document_ids = selectedDocuments.value.map((doc) => {
-      return typeof doc === 'string' ? doc : doc.file_id;
+    messagePayload.document_ids = selectedDocuments.value.map((docId) => {
+      // Find the full document object from uploadedDocuments
+      const fullDoc = uploadedDocuments.value.find(doc => doc.file_id === docId);
+      if (fullDoc) {
+        return {
+          format: fullDoc.format || 'unknown',
+          id: fullDoc.file_id,
+          indexed: fullDoc.indexed || false,
+        };
+      }
     });
   } else {
     messagePayload.document_ids = [];

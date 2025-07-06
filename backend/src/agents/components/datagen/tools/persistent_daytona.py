@@ -6,6 +6,7 @@ from ast import Tuple
 from typing import Any, Dict, List, Optional
 
 import structlog
+from agents.storage.redis_storage import RedisStorage
 from agents.utils.code_validator import patch_plot_code_str, strip_markdown_code_blocks
 
 # Import Daytona SDK components - using sync versions
@@ -28,9 +29,9 @@ class PersistentDaytonaManager:
     def __init__(
         self,
         user_id: str,
-        redis_storage: Optional[Any] = None,
-        snapshot: str = "data-analysis:0.0.9",
-        data_sources: Optional[List[str]] = None,
+        redis_storage: RedisStorage,
+        snapshot: str = "data-analysis:0.0.10",
+        file_ids: Optional[List[str]] = None,
     ):
         """
         Initialize the persistent Daytona client. The sandbox will be created on first use.
@@ -39,13 +40,13 @@ class PersistentDaytonaManager:
             user_id: User identifier for the session
             redis_storage: Redis storage instance for file management
             snapshot: Daytona snapshot to use for the sandbox
-            data_sources: List of file paths to upload to sandbox root folder
+            file_ids: List of file IDs stored in Redis to upload to sandbox root folder
         """
         self._sandbox: Optional[Any] = None
         self._user_id = user_id
         self._redis_storage = redis_storage
         self._snapshot = snapshot
-        self._data_sources = data_sources
+        self._file_ids = file_ids
 
         api_key = os.getenv("DAYTONA_API_KEY")
         if not api_key:
@@ -79,21 +80,21 @@ class PersistentDaytonaManager:
             )
 
             # Upload files to sandbox root folder if provided
-            if self._data_sources:
-                await self._upload_files(self._data_sources)
+            if self._file_ids:
+                await self._upload_files(self._file_ids)
 
         return self._sandbox
 
-    async def _upload_files(self, file_paths: List[str]) -> None:
+    async def _upload_files(self, file_ids: List[str]) -> None:
         """Upload files to the sandbox root folder."""
         logger.info(
             "Uploading files to sandbox",
-            file_count=len(file_paths),
+            file_count=len(file_ids),
         )
 
         try:
-            for file_path in file_paths:
-                await self._upload_file_to_sandbox(file_path)
+            for file_id in file_ids:
+                await self._upload_file_to_sandbox(file_id)
 
             logger.info("Files uploaded successfully")
 
@@ -101,23 +102,26 @@ class PersistentDaytonaManager:
             logger.error("Error uploading files", error=str(e), exc_info=True)
             raise
 
-    async def _upload_file_to_sandbox(self, file_path: str) -> None:
+    async def _upload_file_to_sandbox(self, file_id: str) -> None:
         """Upload a single file to the sandbox root folder."""
-        if not os.path.exists(file_path):
-            logger.warning("File not found, skipping", file_path=file_path)
-            return
-
         try:
-            filename = os.path.basename(file_path)
+            # Get file data and metadata from Redis
+            file_data, file_metadata = await self._redis_storage.get_file(
+                self._user_id, file_id
+            )
 
-            with open(file_path, "rb") as f:
-                content = f.read()
+            if not file_data or not file_metadata:
+                logger.warning("File not found in Redis, skipping", file_id=file_id)
+                return
 
-            await self._sandbox.fs.upload_file(content, filename)
-            logger.info("Uploaded file", filename=filename, source_path=file_path)
+            # Extract the original filename from metadata
+            filename = file_metadata.get("filename", file_id)
+
+            await self._sandbox.fs.upload_file(file_data, filename)
+            logger.info("Uploaded file", filename=filename, file_id=file_id)
 
         except Exception as e:
-            logger.error("Error uploading file", file_path=file_path, error=str(e))
+            logger.error("Error uploading file", file_id=file_id, error=str(e))
             raise
 
     async def execute_code(self, code: str) -> str:

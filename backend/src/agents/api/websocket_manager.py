@@ -3,7 +3,7 @@ import json
 import os
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import redis
 import structlog
@@ -377,11 +377,10 @@ class WebSocketConnectionManager(WebSocketInterface):
         image_content = []
         multimodal_input = False
         for doc in user_message_input["document_ids"]:
-            metadata = await self.message_storage.get_file_metadata(user_id, doc)
-            format = metadata["format"].split("/")[0]
+            format = doc["format"].split("/")[0]
             if format == "image":
                 retrived_content = await self.message_storage.get_file_as_base64(
-                    user_id, doc
+                    user_id, doc["id"]
                 )
                 if retrived_content:
                     image_content.append(
@@ -635,11 +634,29 @@ class WebSocketConnectionManager(WebSocketInterface):
         provider: str,
         message_id: str,
         llm_type: str,
-        doc_ids: tuple,
+        doc_ids: Dict[str, Any],
         multimodal_input: bool,
     ):
         # Add cleanup task
         self.cleanup_task: Optional[asyncio.Task] = None
+
+        for doc_id in doc_ids:
+            indexed_doc_ids = []
+            data_analysis_doc_ids = []
+            if doc_id["indexed"]:
+                indexed_doc_ids.append(doc_id["id"])
+            if doc_id["format"] == "text/csv":
+                data_analysis_doc_ids.append(doc_id["id"])
+
+        retrieval_prompt = ""
+        if indexed_doc_ids:
+            retrieval_prompt = (
+                f"{len(doc_ids)} documents are available to you for retrieval.\n\n"
+            )
+
+        data_analysis_prompt = ""
+        if data_analysis_doc_ids:
+            data_analysis_prompt = f"{len(data_analysis_doc_ids)} documents are available to you to use in data science subgraph.\n\n"
 
         daytona_manager = self.daytona_managers.get(user_id)
         if not daytona_manager:
@@ -647,9 +664,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                 user_id=user_id,
                 redis_storage=self.message_storage,
                 snapshot="data-analysis:0.0.10",
-                data_sources=[
-                    "/Users/tamasj/Downloads/customer_satisfaction_purchase_behavior.csv"
-                ],
+                file_ids=data_analysis_doc_ids,
             )
             self.daytona_managers[user_id] = daytona_manager
 
@@ -682,26 +697,9 @@ class WebSocketConnectionManager(WebSocketInterface):
             "recursion_limit": 50,
         }
 
-        if doc_ids:
-            config["configurable"]["type==default/tools"].append(
-                {
-                    "type": "retrieval",
-                    "config": {
-                        "user_id": user_id,
-                        "doc_ids": doc_ids,
-                        "description": RETRIEVAL_DESCRIPTION,
-                        "api_key": api_keys.sambanova_key,
-                        "redis_client": self.sync_redis_client,
-                    },
-                }
-            )
-            config["configurable"][
-                "type==default/system_message"
-            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {len(doc_ids)} documents are available to you for retrieval.\n\n CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph or data_science subgraph only."
-        else:
-            config["configurable"][
-                "type==default/system_message"
-            ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}.\n\n CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph or data_science subgraph only."
+        config["configurable"][
+            "type==default/system_message"
+        ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {retrieval_prompt} {data_analysis_prompt} CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph or data_science subgraph only."
 
         if multimodal_input:
             config["configurable"][
@@ -757,7 +755,24 @@ class WebSocketConnectionManager(WebSocketInterface):
                     result={"useage": {"total_latency": 0.0}},
                 ),
             },
-            "data_science": {
+        }
+
+        if indexed_doc_ids:
+            config["configurable"]["type==default/tools"].append(
+                {
+                    "type": "retrieval",
+                    "config": {
+                        "user_id": user_id,
+                        "doc_ids": indexed_doc_ids,
+                        "description": RETRIEVAL_DESCRIPTION,
+                        "api_key": api_keys.sambanova_key,
+                        "redis_client": self.sync_redis_client,
+                    },
+                }
+            )
+
+        if data_analysis_doc_ids:
+            config["configurable"]["type==default/subgraphs"]["data_science"] = {
                 "description": "This subgraph is used to perform data science tasks.",
                 "next_node": END,
                 "graph": create_data_science_subgraph(
@@ -787,7 +802,6 @@ class WebSocketConnectionManager(WebSocketInterface):
                         }
                     }
                 ),
-            },
-        }
+            }
 
         return config
