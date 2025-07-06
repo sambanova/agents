@@ -61,6 +61,7 @@ class PersistentDaytonaManager:
         """Get the sandbox instance, creating it if it doesn't exist."""
         if self._sandbox is None:
             if not self._client:
+                logger.error("Daytona client not initialized.")
                 raise RuntimeError("Daytona client not initialized.")
 
             logger.info(
@@ -128,6 +129,7 @@ class PersistentDaytonaManager:
         """Execute code in the persistent sandbox."""
         sandbox = await self._get_sandbox()
         if not sandbox:
+            logger.error("Daytona sandbox not initialized. Call initialize() first.")
             raise RuntimeError(
                 "Daytona sandbox not initialized. Call initialize() first."
             )
@@ -647,6 +649,12 @@ print(result)
             return result
 
         except Exception as e:
+            logger.error(
+                "Error analyzing CSV data",
+                filename=filename,
+                error=str(e),
+                exc_info=True,
+            )
             return f"Error analyzing CSV data: {str(e)}"
 
     return user_daytona_describe_data

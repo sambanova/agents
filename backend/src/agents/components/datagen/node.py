@@ -46,15 +46,21 @@ async def agent_node(
             captured_message = agent.llm_response
             captured_message.additional_kwargs["agent_type"] = f"data_science_{name}"
             captured_messages = [captured_message]
+            logger.debug(f"Captured {len(captured_messages)} messages from ManualAgent")
         elif isinstance(agent, MessageCaptureAgent):
             interceptor_messages = agent.llm_interceptor.captured_messages
             fixing_interceptor_messages = agent.llm_fixing_interceptor.captured_messages
             captured_messages = interceptor_messages + fixing_interceptor_messages
             for m in captured_messages:
                 m.additional_kwargs["agent_type"] = f"data_science_{name}"
+            logger.debug(
+                f"Captured {len(captured_messages)} messages from MessageCaptureAgent"
+            )
         else:
-            pass
+            captured_messages = []
+            logger.debug(f"No messages captured from agent type: {type(agent)}")
 
+        logger.info(f"Agent {name} processed successfully")
         # Return a dictionary to be merged into the state
         return {
             "internal_messages": state["internal_messages"] + [output_message],
@@ -77,7 +83,7 @@ async def human_choice_node(state: State) -> State:
     Handle human input to choose the next step in the process.
     If regenerating hypothesis, prompt for specific areas to modify.
     """
-    logger.info("Prompting for human choice")
+    logger.info("Processing human choice node")
     current_hypothesis = state.get("hypothesis", "No hypothesis yet.")
     prompt = (
         "Please <b>provide feedback</b> on the following plan or <b>type 'approve'.</b>\n\n"
@@ -85,30 +91,31 @@ async def human_choice_node(state: State) -> State:
     )
 
     feedback = interrupt(prompt)
+    logger.debug(f"Received feedback: {feedback}")
 
     if isinstance(feedback, str) and feedback.strip().lower() == "approve":
         content = "Continue the research process"
         state["process"] = "Continue the research process"
-        logger.info("Continuing research process")
+        logger.info("Human approved - continuing research process")
     elif isinstance(feedback, str) and feedback.strip():
         modification_areas = feedback
         content = f"Regenerate hypothesis. Areas to modify: {modification_areas}"
         state["hypothesis"] = ""
         state["modification_areas"] = modification_areas
-        logger.info("Hypothesis cleared for regeneration")
-        logger.info(f"Areas to modify: {modification_areas}")
+        logger.info("Human provided feedback - hypothesis cleared for regeneration")
+        logger.debug(f"Modification areas: {modification_areas}")
     else:
         # Default to continue if feedback is empty or not a string
         content = "Continue the research process"
         state["process"] = "Continue the research process"
-        logger.info("No feedback provided, continuing research process")
+        logger.info("No feedback provided - continuing research process")
 
     human_message = HumanMessage(content=content)
 
     state["internal_messages"].append(human_message)
     state["sender"] = "human"
 
-    logger.info("Human choice processed")
+    logger.info("Human choice node processing completed")
     return state
 
 
@@ -119,7 +126,7 @@ def create_message(message: dict[str], name: str) -> BaseMessage:
     content = message.get("content", "")
     message_type = message.get("type", "").lower()
 
-    logger.debug(f"Creating message of type {message_type} for {name}")
+    logger.debug(f"Creating message of type '{message_type}' for agent '{name}'")
     return (
         HumanMessage(content=content)
         if message_type == "human"
@@ -142,7 +149,9 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
             head_messages = current_messages[:2]
             tail_messages = current_messages[-2:]
             state = {**state, "internal_messages": current_messages[2:-2]}
-            logger.debug("Trimmed messages for processing")
+            logger.debug(
+                f"Trimmed messages for processing - keeping {len(head_messages)} head and {len(tail_messages)} tail messages"
+            )
 
         result = await agent.ainvoke(state)
         if isinstance(agent, ManualAgent) and agent.llm_response:
@@ -150,6 +159,7 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
             captured_message.additional_kwargs["agent_type"] = f"data_science_{name}"
             messages.append(captured_message)
 
+        logger.debug("Setting up output fixing parser")
         note_agent_fixing_interceptor = MessageInterceptor()
         fixing_model = agent.llm | RunnableLambda(
             note_agent_fixing_interceptor.capture_and_pass
@@ -164,6 +174,8 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
         for m in note_agent_fixing_interceptor.captured_messages:
             m.additional_kwargs["agent_type"] = "note_agent_fixed"
             messages.append(m)
+
+        logger.debug(f"Parsed output and captured {len(messages)} messages")
 
         internal_messages = (
             parsed_output.internal_messages
@@ -223,11 +235,11 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
             "messages": messages,
         }
 
-        logger.info("Updated state successfully")
+        logger.info(f"Note agent {name} processed successfully")
         return updated_state
 
     except Exception as e:
-        logger.error(f"Unexpected error in note_agent_node: {e}", exc_info=True)
+        logger.error(f"Error in note_agent_node {name}: {e}", exc_info=True)
         return _create_error_state(
             state,
             AIMessage(content=f"Unexpected error: {str(e)}", name=name),
@@ -260,8 +272,10 @@ def parse_and_replace_charts(
         - A list of unique file names that were found and replaced.
         - A dictionary mapping the replaced file names to their generated unique file IDs.
     """
+    logger.debug(f"Parsing chart references for user {user_id}")
     filename_regex = re.compile(r"[\w-]+\.(?:png|jpg|jpeg|gif|svg)")
     found_filenames = set(filename_regex.findall(content))
+    logger.debug(f"Found {len(found_filenames)} potential chart filenames")
 
     modified_content = content
     file_id_mapping = {}
@@ -281,6 +295,7 @@ def parse_and_replace_charts(
                 replacement_text, modified_content
             )
 
+    logger.debug(f"Replaced {len(file_id_mapping)} chart references")
     return modified_content, file_id_mapping
 
 
@@ -290,7 +305,7 @@ def _create_error_state(
     """
     Create an error state when an exception occurs.
     """
-    logger.info(f"Creating error state for {name}: {error_type}")
+    logger.warning(f"Creating error state for {name}: {error_type}")
     error_state: State = {
         "internal_messages": state.get("internal_messages", []) + [error_message],
         "messages": [],
@@ -322,21 +337,25 @@ async def refiner_node(
     then process with the agent and update the original state.
     If token limit is exceeded, use only MD file names instead of full content.
     """
+    logger.info(f"Processing refiner node: {name} for user {user_id}")
     try:
-
         # Get storage path
         storage_path = await daytona_manager.list_files()
+        logger.debug(f"Retrieved {len(storage_path)} files from storage")
 
         # Collect materials
         materials = []
         md_files = [s for s in storage_path if s.endswith("md")]
         png_files = [s for s in storage_path if s.endswith("png")]
+        logger.debug(f"Found {len(md_files)} MD files and {len(png_files)} PNG files")
 
         # Process MD files
         for md_file in md_files:
             success, content = await daytona_manager.read_file(md_file)
             if success:
                 materials.append(f"MD file '{md_file}':\n{content}")
+            else:
+                logger.warning(f"Failed to read MD file: {md_file}")
 
         # Process PNG files
         materials.extend(f"PNG file: '{png_file}'" for png_file in png_files)
@@ -351,10 +370,13 @@ async def refiner_node(
 
         try:
             # Attempt to invoke agent with full content
+            logger.debug("Attempting to invoke agent with full content")
             result = await agent.ainvoke(refiner_state)
         except Exception as token_error:
             # If token limit is exceeded, retry with only MD file names
-            logger.warning("Token limit exceeded. Retrying with MD file names only.")
+            logger.warning(
+                f"Token limit exceeded, retrying with file names only: {token_error}"
+            )
             md_file_names = [f"MD file: '{md_file}'" for md_file in md_files]
             png_file_names = [f"PNG file: '{png_file}'" for png_file in png_files]
 
@@ -376,11 +398,12 @@ async def refiner_node(
                 result.content, list_of_files, user_id
             )
             result.content = parsed_content
-            logger.info(f"Generated file IDs: {file_id_mapping}")
+            logger.debug(f"Generated {len(file_id_mapping)} file ID mappings")
+
             for file_name, file_id in file_id_mapping.items():
                 success, file_content = await daytona_manager.read_file(file_name)
                 if not success:
-                    logger.error(content)
+                    logger.error(f"Failed to read file for storage: {file_name}")
                     continue
                 mime_type = mimetypes.guess_type(file_name)[0]
                 await redis_storage.put_file(
@@ -393,18 +416,17 @@ async def refiner_node(
                     indexed=False,
                     source="data_science_agent",
                 )
+                logger.debug(f"Stored file {file_name} with ID {file_id}")
 
         # Update original state - result is now an AIMessage
         # Note: this will be mapped as the last state, we don't need to send this through messages
         state["internal_messages"].append(result)
         state["sender"] = name
 
-        logger.info("Refiner node processing completed")
+        logger.info(f"Refiner node {name} processing completed successfully")
         return state
     except Exception as e:
-        logger.error(
-            f"Error occurred while processing refiner node: {str(e)}", exc_info=True
-        )
+        logger.error(f"Error in refiner node {name}: {str(e)}", exc_info=True)
         state["internal_messages"].append(
             AIMessage(content=f"Error: {str(e)}", name=name)
         )
