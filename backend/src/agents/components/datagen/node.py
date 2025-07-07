@@ -235,10 +235,12 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
                 if parsed_output.needs_revision
                 else state.get("needs_revision", False)
             ),
+            "messages": messages,
         }
 
         # Clear and replace messages to force replacement behavior
         state["internal_messages"].clear()
+        state["messages"].clear()
 
         logger.info(f"Note agent {name} processed successfully")
         return updated_state

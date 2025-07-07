@@ -749,7 +749,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                 "state_output_mapper": lambda x: x[-1],
             },
             "deep_research": {
-                "description": "This subgraph is used to generate a deep research report. Use it if the user asks for detailed information about a topic.",
+                "description": "This subgraph generates comprehensive research reports with multiple perspectives, sources, and analysis. Use when the user requests: detailed research, in-depth analysis, comprehensive reports, market research, academic research, or thorough investigation of any topic. IMPORTANT: Pass the user's specific research question or topic as a clear, focused query. Extract the core research intent from the user's message and formulate it as a specific research question or topic statement. Examples: 'AI impact on healthcare industry', 'sustainable energy solutions for developing countries', 'cryptocurrency market trends 2024'.",
                 "next_node": END,
                 "graph": create_deep_research_graph(
                     api_keys.sambanova_key, "sambanova", request_timeout=120
@@ -763,7 +763,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                 ),
             },
             "DaytonaCodeSandbox": {
-                "description": "This subgraph is used to execute code in a sandbox environment and return the result.",
+                "description": "This subgraph executes Python code in a secure sandbox environment. Use for: data exploration, basic analysis, code debugging, file operations, simple calculations, data visualization, and any general programming tasks. Perfect for examining datasets, creating plots, or running straightforward code snippets.",
                 "next_node": "agent",
                 "graph": create_code_execution_graph(
                     user_id=user_id,
@@ -807,7 +807,7 @@ class WebSocketConnectionManager(WebSocketInterface):
 
         if data_analysis_doc_ids:
             config["configurable"]["type==default/subgraphs"]["data_science"] = {
-                "description": "This subgraph is used to perform data science tasks. Use it for any machine learning and data analysis tasks when the user provides a dataset.",
+                "description": "This subgraph performs comprehensive end-to-end data science workflows with multiple specialized agents. Use ONLY for complex projects requiring: machine learning model development, predictive analytics, statistical modeling, hypothesis testing, or multi-step data science pipelines. IMPORTANT: Pass the user's natural language request (e.g., 'build a machine learning model to predict customer churn', 'perform statistical analysis on sales trends'), NOT code. Do NOT use for simple data exploration - use DaytonaCodeSandbox instead.",
                 "next_node": END,
                 "graph": create_data_science_subgraph(
                     user_id=user_id,
