@@ -1435,7 +1435,7 @@ async def create_default_mcp_servers(user_id: str):
                 description="Connect to your Atlassian Jira and Confluence instances for project management and knowledge base access",
                 transport="stdio",
                 url=None,
-                command="UVX",
+                command="uvx",
                 args=[
                     "mcp-atlassian",
                     "--jira-url", "https://your-company.atlassian.net",
@@ -1459,6 +1459,7 @@ async def create_default_mcp_servers(user_id: str):
                     "run",
                     "-i",
                     "--rm",
+                    "-e"
                     "GITHUB_PERSONAL_ACCESS_TOKEN",
                     "ghcr.io/github/github-mcp-server"
                 ],
@@ -1476,7 +1477,7 @@ async def create_default_mcp_servers(user_id: str):
                 description="Web content fetching and scraping",
                 transport="stdio",
                 url=None,
-                command="UVX",
+                command="uvx",
                 args=[
                     "mcp-server-fetch"
                 ],

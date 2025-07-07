@@ -26,7 +26,7 @@ RUN /root/.local/bin/uv sync --no-dev --no-install-project
 
 FROM python:3.11-slim-bookworm
 
-# Install runtime dependencies for weasyprint
+# Install runtime dependencies for weasyprint + MCP server tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libcairo2 \
@@ -35,6 +35,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdk-pixbuf-2.0-0 \
     libffi-dev \
     shared-mime-info \
+    curl \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Docker CLI for MCP servers
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
+    && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js and npm for npx
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -44,6 +59,9 @@ COPY --from=dependencies /app/.venv ./.venv
 
 # Copy UV binary (CACHED LAYER - 36MB) 
 COPY --from=dependencies /root/.local/bin/uv /usr/local/bin/uv
+
+# Create uvx symlink for MCP servers (uvx is part of uv)
+RUN ln -s /usr/local/bin/uv /usr/local/bin/uvx
 
 # Copy project config (needed for local package install)
 COPY pyproject.toml ./
