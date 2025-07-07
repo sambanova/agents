@@ -749,7 +749,7 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
         name="DaytonaCodeSandbox",
         func=sync_run_daytona_code_wrapper,
         coroutine=async_run_daytona_code,
-        description="MANDATORY tool for ALL file creation tasks. After gathering information, write ALL code directly inside this tool - NEVER in response text. For: PDF, HTML, PowerPoint, charts, dashboards, reports, visualizations, data analysis. FORBIDDEN: Showing code outside this tool. REQUIRED: Search (if needed) → immediate sandbox usage. Zero explanations between. Always save outputs to current directory ('./'). Use functions, error handling, clear variable names. For HTML: embed images as base64 data URLs.",
+        description="MANDATORY tool for ALL file creation tasks. After gathering information, write ALL code directly inside this tool - NEVER in response text. For: PDF, HTML, PowerPoint, charts, dashboards, reports, visualizations, data analysis. FORBIDDEN: Showing code outside this tool. REQUIRED: Search (if needed) → immediate sandbox usage. Zero explanations between. Always save outputs to current directory ('./'). Use functions, error handling, clear variable names. For HTML file creation: you must ALWAYS embed images as base64 to avoid external dependencies and ensure the report is self-contained.",
         args_schema=PythonREPLInput,
     )
 

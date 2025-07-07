@@ -81,7 +81,8 @@ PROGRAMMING BEST PRACTICES:
 - Structure code with functions and proper error handling
 - Use meaningful variable names and add comments
 - Validate inputs and test incrementally
-- Save all outputs to current directory ('./')
+- ALWAYS Save all created artifacts to current directory ('./')
+- For HTML file creation: you must ALWAYS embed images as base64 to avoid external dependencies 
 
 TECHNICAL NOTES:
 - For seaborn styling: use plt.style.use('seaborn-v0_8') or core matplotlib styles, avoid 'seaborn' alone
