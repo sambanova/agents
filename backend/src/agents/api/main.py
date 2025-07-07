@@ -1454,14 +1454,10 @@ async def create_default_mcp_servers(user_id: str):
                 description="The GitHub MCP Server is a Model Context Protocol (MCP) server that provides seamless integration with GitHub APIs, enabling advanced automation and repository management capabilities for large language models",
                 transport="stdio",
                 url=None,
-                command="docker",
+                command="npx",
                 args=[
-                    "run",
-                    "-i",
-                    "--rm",
-                    "-e"
-                    "GITHUB_PERSONAL_ACCESS_TOKEN",
-                    "ghcr.io/github/github-mcp-server"
+                    "-y",
+                    "@modelcontextprotocol/server-github"
                 ],
                 env_vars={
                     "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_YOUR_PERSONAL_ACCESS_TOKEN_HERE"
