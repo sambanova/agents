@@ -1426,30 +1426,70 @@ async def create_default_mcp_servers(user_id: str):
         if existing_servers:
             return  # User already has servers, don't create defaults
         
-        # Create default Atlassian MCP server (disabled by default)
-        default_server = MCPServerConfig(
-            server_id=str(uuid4()),
-            name="Atlassian Integration",
-            description="Connect to your Atlassian Jira and Confluence instances for project management and knowledge base access",
-            transport="sse",
-            url="https://mcp.atlassian.com/v1/sse",
-            command="mcp-atlassian",
-            args=[
-                "--jira-url", "https://your-company.atlassian.net",
-                "--jira-username", "your.email@company.com", 
-                "--jira-token", "your_api_token",
-                "--confluence-url", "https://your-company.atlassian.net/wiki",
-                "--confluence-username", "your.email@company.com",
-                "--confluence-token", "your_api_token"
-            ],
-            env_vars={},
-            enabled=False,  # Disabled by default
-            created_at=datetime.now(timezone.utc),
-            last_updated=datetime.now(timezone.utc)
-        )
+        # Create default MCP servers (all disabled by default)
+        default_servers = [
+            # Jira MCP server
+            MCPServerConfig(
+                server_id=str(uuid4()),
+                name="Jira",
+                description="Connect to your Atlassian Jira and Confluence instances for project management and knowledge base access",
+                transport="stdio",
+                url=None,
+                command="UVX",
+                args=[
+                    "mcp-atlassian",
+                    "--jira-url", "https://your-company.atlassian.net",
+                    "--jira-username", "your.email@company.com", 
+                    "--jira-token", "your_api_token"
+                ],
+                env_vars={},
+                enabled=False,  # Disabled by default
+                created_at=datetime.now(timezone.utc),
+                last_updated=datetime.now(timezone.utc)
+            ),
+            # GitHub MCP server
+            MCPServerConfig(
+                server_id=str(uuid4()),
+                name="GitHub",
+                description="The GitHub MCP Server is a Model Context Protocol (MCP) server that provides seamless integration with GitHub APIs, enabling advanced automation and repository management capabilities for large language models",
+                transport="stdio",
+                url=None,
+                command="docker",
+                args=[
+                    "run",
+                    "-i",
+                    "--rm",
+                    "GITHUB_PERSONAL_ACCESS_TOKEN",
+                    "ghcr.io/github/github-mcp-server"
+                ],
+                env_vars={
+                    "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_YOUR_PERSONAL_ACCESS_TOKEN_HERE"
+                },
+                enabled=False,  # Disabled by default
+                created_at=datetime.now(timezone.utc),
+                last_updated=datetime.now(timezone.utc)
+            ),
+            # Fetch MCP server
+            MCPServerConfig(
+                server_id=str(uuid4()),
+                name="Fetch",
+                description="Web content fetching and scraping",
+                transport="stdio",
+                url=None,
+                command="UVX",
+                args=[
+                    "mcp-server-fetch"
+                ],
+                env_vars={},
+                enabled=False,  # Disabled by default
+                created_at=datetime.now(timezone.utc),
+                last_updated=datetime.now(timezone.utc)
+            )
+        ]
         
-        # Store the default server
-        await app.state.redis_storage_service.store_mcp_server_config(user_id, default_server)
+        # Store all default servers
+        for server in default_servers:
+            await app.state.redis_storage_service.store_mcp_server_config(user_id, server)
         logger.info(f"Created default MCP servers for user {user_id}")
         
     except Exception as e:
