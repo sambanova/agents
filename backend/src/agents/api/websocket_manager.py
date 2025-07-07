@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 import redis
 import structlog
 from agents.api.data_types import APIKeys
-from agents.api.utils import deep_research_to_agent_thinking, generate_deep_research_pdf
+from agents.api.utils import generate_deep_research_pdf, to_agent_thinking
 from agents.api.websocket_interface import WebSocketInterface
 from agents.components.compound.code_execution_subgraph import (
     create_code_execution_graph,
@@ -633,7 +633,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                         )
                         # Continue without PDF - don't fail the message sending
 
-                content = deep_research_to_agent_thinking(data)
+                content = to_agent_thinking(data)
                 if content:
                     # Map to old format persist it and send it
                     await self.message_storage.save_message(

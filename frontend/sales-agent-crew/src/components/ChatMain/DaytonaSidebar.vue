@@ -12,7 +12,7 @@
         </div>
         <div>
           <h3 class="text-lg font-semibold text-gray-900">Canvas</h3>
-          <p class="text-sm text-gray-600">Data Analysis & Artefact Generation</p>
+          <p class="text-sm text-gray-600">Data Analysis & Artifact Generation</p>
         </div>
       </div>
       

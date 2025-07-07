@@ -348,7 +348,7 @@ async def generate_deep_research_pdf(content: str) -> Optional[str]:
         return None
 
 
-def deep_research_to_agent_thinking(payload: dict) -> Optional[dict]:
+def to_agent_thinking(payload: dict) -> Optional[dict]:
     """
     Convert deep research markdown content to agent thinking content.
     """
@@ -364,6 +364,14 @@ def deep_research_to_agent_thinking(payload: dict) -> Optional[dict]:
             "deep_research_search_queries_section_fixed",
             "deep_research_writer",
             "deep_research_grader",
+            "data_science_hypothesis_agent",
+            "data_science_process_agent",
+            "data_science_code_agent",
+            "data_science_quality_review_agent",
+            "data_science_note_agent",
+            "data_science_process_agent",
+            "data_science_report_agent",
+            "data_science_visualization_agent",
         ]:
             return {
                 "event": "think",
