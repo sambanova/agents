@@ -52,6 +52,24 @@ def add_messages_deduplicated(
     return result
 
 
+def replace_messages(
+    left: Sequence[AnyMessage], right: Sequence[AnyMessage]
+) -> Sequence[AnyMessage]:
+    """
+    Custom reducer that replaces messages entirely with the new ones.
+    Used for frontend messages that should be replaced per agent execution.
+    """
+    # If right is empty, keep left to avoid clearing messages unintentionally
+    if not right:
+        return left if left else []
+
+    # Convert to list if needed
+    if not isinstance(right, list):
+        right = list(right)
+
+    return right
+
+
 class SupervisorDecision(BaseModel):
     """
     Decision about which agent should act next and what task they should perform.
@@ -109,49 +127,33 @@ class State(TypedDict):
 
 
 class NoteState(BaseModel):
-    """Pydantic model for the entire state structure."""
+    """Pydantic model for parsing agent outputs - no state management annotations needed."""
 
-    internal_messages: Annotated[Sequence[AIMessage], add_messages_deduplicated] = (
-        Field(default_factory=list, description="List of message dictionaries")
-    )
-
-    # Messages to be sent to the frontend
-    messages: Annotated[Sequence[AnyMessage], add_messages_deduplicated] = Field(
-        default_factory=list, description="List of message dictionaries"
+    messages_summary: str = Field(
+        default="", description="Summary of the messages exchanged"
     )
 
-    hypothesis: Annotated[str, lambda left, right: right] = Field(
-        default="", description="Current research hypothesis"
-    )
-    process: Annotated[str, lambda left, right: right] = Field(
-        default="", description="Current research process"
-    )
-    process_decision: Annotated[str, lambda left, right: right] = Field(
+    hypothesis: str = Field(default="", description="Current research hypothesis")
+    process: str = Field(default="", description="Current research process")
+    process_decision: str = Field(
         default="", description="Decision about the next process step"
     )
-    visualization_state: Annotated[str, lambda left, right: right] = Field(
+    visualization_state: str = Field(
         default="", description="Current state of data visualization"
     )
-    searcher_state: Annotated[str, lambda left, right: right] = Field(
+    searcher_state: str = Field(
         default="", description="Current state of the search process"
     )
-    code_state: Annotated[str, lambda left, right: right] = Field(
-        default="", description="Current state of code development"
-    )
-    report_section: Annotated[str, lambda left, right: right] = Field(
+    code_state: str = Field(default="", description="Current state of code development")
+    report_section: str = Field(
         default="", description="Content of the report sections"
     )
-    quality_review: Annotated[str, lambda left, right: right] = Field(
-        default="", description="Feedback from quality review"
-    )
-    needs_revision: Annotated[bool, lambda left, right: right] = Field(
+    quality_review: str = Field(default="", description="Feedback from quality review")
+    needs_revision: bool = Field(
         default=False, description="Flag indicating if revision is needed"
     )
-    sender: Annotated[str, lambda left, right: right] = Field(
-        default="", description="Identifier of the last message sender"
-    )
 
-    modification_areas: Annotated[str, lambda left, right: right] = Field(
+    modification_areas: str = Field(
         default="", description="The areas of the hypothesis that need to be modified"
     )
 

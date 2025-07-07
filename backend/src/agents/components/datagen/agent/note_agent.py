@@ -12,7 +12,6 @@ def create_note_agent(
     daytona_manager: PersistentDaytonaManager,
 ):
     """Create the note agent"""
-    tools = [get_daytona_read_document(daytona_manager)]
     system_prompt = """
     You are a meticulous research process note-taker. Your main responsibility is to observe, summarize, and document the actions and findings of the research team. Your tasks include:
 
@@ -27,6 +26,5 @@ def create_note_agent(
     """
     return base_create_note_agent(
         llm=note_agent_llm,
-        tools=tools,
         system_prompt=system_prompt,
     )

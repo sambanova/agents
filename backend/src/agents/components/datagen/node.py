@@ -64,22 +64,27 @@ async def agent_node(
             logger.debug(f"No messages captured from agent type: {type(agent)}")
 
         logger.info(f"Agent {name} processed successfully")
-        # Return a dictionary to be merged into the state
         return {
-            "internal_messages": state["internal_messages"] + [output_message],
+            "internal_messages": [output_message],
             "messages": captured_messages,
             state_key: output_message,
             "sender": name,
         }
 
     except Exception as e:
-        logger.error(
-            f"Error occurred while processing agent in agent_node {name}: {str(e)}",
-            exc_info=True,
+        logger.info(
+            f"Error occurred while processing agent in agent_node {name}: {str(e)}"
         )
         # Return an error message to be added to the state
-        error_message = AIMessage(content=f"Error in {name}: {str(e)}", name=name)
-        return {"internal_messages": state["internal_messages"] + [error_message]}
+        error_message = AIMessage(
+            content=f"Error in {name}: {str(e)}",
+            name=name,
+            id=str(uuid.uuid4()),
+            sender=name,
+        )
+        return {
+            "internal_messages": [error_message],
+        }
 
 
 async def human_choice_node(state: State) -> State:
@@ -139,12 +144,14 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
         if len(current_messages) > 6:
             head_messages = current_messages[:2]
             tail_messages = current_messages[-2:]
-            state = {**state, "internal_messages": current_messages[2:-2]}
+            trimmed_state = {**state, "internal_messages": current_messages[2:-2]}
             logger.debug(
                 f"Trimmed messages for processing - keeping {len(head_messages)} head and {len(tail_messages)} tail messages"
             )
+        else:
+            trimmed_state = state
 
-        result = await agent.ainvoke(state)
+        result = await agent.ainvoke(trimmed_state)
         if isinstance(agent, ManualAgent) and agent.llm_response:
             captured_message = agent.llm_response
             captured_message.additional_kwargs["agent_type"] = f"data_science_{name}"
@@ -168,12 +175,18 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
 
         logger.debug(f"Parsed output and captured {len(messages)} messages")
 
-        internal_messages = (
-            parsed_output.internal_messages
-            if parsed_output.internal_messages
-            else current_messages
-        )
-        combined_messages = head_messages + internal_messages + tail_messages
+        if parsed_output.messages_summary:
+            messages_summary = [
+                AIMessage(
+                    content=parsed_output.messages_summary,
+                    id=str(uuid.uuid4()),
+                    sender=name,
+                )
+            ]
+        else:
+            messages_summary = []
+
+        combined_messages = head_messages + messages_summary + tail_messages
 
         updated_state: State = {
             "internal_messages": combined_messages,
@@ -222,9 +235,10 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
                 if parsed_output.needs_revision
                 else state.get("needs_revision", False)
             ),
-            "sender": "note_agent",
-            "messages": messages,
         }
+
+        # Clear and replace messages to force replacement behavior
+        state["internal_messages"].clear()
 
         logger.info(f"Note agent {name} processed successfully")
         return updated_state
@@ -370,7 +384,7 @@ async def refiner_node(
                 logger.warning(f"Failed to read MD file: {md_file}")
 
         # Process PNG files
-        materials.extend(f"PNG file: '{png_file}'" for png_file in png_files)
+        materials.extend(f"Available charts: '{png_file}'" for png_file in png_files)
 
         # Combine materials
         combined_materials = "\n\n".join(materials)

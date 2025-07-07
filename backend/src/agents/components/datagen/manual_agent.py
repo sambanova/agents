@@ -240,7 +240,6 @@ class ManualAgent(Runnable):
                         content=final_content,
                         sender=self.name,
                         id=response.id,
-                        sender=self.name,
                     )
 
             # No tool calls, return regular response
@@ -248,7 +247,6 @@ class ManualAgent(Runnable):
                 content=response.content,
                 sender=self.name,
                 id=response.id,
-                sender=self.name,
             )
         except Exception as e:
             logger.error(f"Error invoking LLM chain: {e}")
