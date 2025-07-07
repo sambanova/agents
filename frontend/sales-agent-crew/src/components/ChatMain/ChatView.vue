@@ -206,7 +206,7 @@
                 class="flex items-center justify-between focus:outline-none mb-2"
               >
                 <h3 class="text-sm font-medium text-gray-700">
-                  User Artefacts ({{ uploadedDocuments.length }})
+                  User Artifacts ({{ uploadedDocuments.length }})
                 </h3>
                 <svg
                   :class="{ 'transform rotate-180': isExpanded }"
