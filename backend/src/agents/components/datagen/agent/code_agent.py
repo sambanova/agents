@@ -9,7 +9,7 @@ from agents.components.datagen.tools.persistent_daytona import (
 
 
 def create_code_agent(
-    power_llm,
+    code_agent_llm,
     members,
     daytona_manager: PersistentDaytonaManager,
     directory_content: list[str],
@@ -46,7 +46,7 @@ def create_code_agent(
     """
 
     return create_agent(
-        llm=power_llm,
+        llm=code_agent_llm,
         tools=tools,
         system_message=system_prompt,
         team_members=members,

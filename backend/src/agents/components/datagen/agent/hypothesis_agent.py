@@ -7,7 +7,7 @@ from agents.tools.langgraph_tools import TOOL_REGISTRY
 
 
 def create_hypothesis_agent(
-    llm,
+    hypothesis_agent_llm,
     members,
     daytona_manager: PersistentDaytonaManager,
     directory_content: list[str],
@@ -35,7 +35,7 @@ def create_hypothesis_agent(
     """
 
     return create_agent(
-        llm=llm,
+        llm=hypothesis_agent_llm,
         tools=base_tools,
         system_message=system_prompt,
         team_members=members,

@@ -236,10 +236,20 @@ class ManualAgent(Runnable):
 
                     # Create final response with tool result
                     final_content = f"{response.content}\n<observation>{tool_result}</observation>\n"
-                    return AIMessage(content=final_content, sender=self.name)
+                    return AIMessage(
+                        content=final_content,
+                        sender=self.name,
+                        id=response.id,
+                        sender=self.name,
+                    )
 
             # No tool calls, return regular response
-            return AIMessage(content=response.content, sender=self.name)
+            return AIMessage(
+                content=response.content,
+                sender=self.name,
+                id=response.id,
+                sender=self.name,
+            )
         except Exception as e:
             logger.error(f"Error invoking LLM chain: {e}")
             # Re-raise to be handled by the calling invoke/ainvoke method

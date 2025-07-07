@@ -1,5 +1,6 @@
 import os
 from typing import List
+import uuid
 
 import structlog
 
@@ -211,7 +212,9 @@ def create_supervisor(
     def wrap_supervisor_output(decision):
         # Convert SupervisorDecision to a simple AIMessage with structured content
         decision_content = f"Decision: {decision.next}, Task: {decision.task}"
-        return AIMessage(content=decision_content)
+        return AIMessage(
+            content=decision_content, id=str(uuid.uuid4()), sender="supervisor"
+        )
 
     return MessageCaptureAgent(
         llm=llm,

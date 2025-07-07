@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
@@ -691,7 +692,7 @@ class WebSocketConnectionManager(WebSocketInterface):
             data_analysis_prompt = f"The following datasets are available to use in data science subgraph:\n\n"
             data_analysis_prompt += "\n".join(directory_content)
 
-        daytona_manager = self.daytona_managers.get(user_id)
+        daytona_manager = self.daytona_managers.get(f"{user_id}:{thread_id}")
         if not daytona_manager:
             daytona_manager = PersistentDaytonaManager(
                 user_id=user_id,
@@ -699,7 +700,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                 snapshot="data-analysis:0.0.10",
                 file_ids=data_analysis_doc_ids,
             )
-            self.daytona_managers[user_id] = daytona_manager
+            self.daytona_managers[f"{user_id}:{thread_id}"] = daytona_manager
 
         config = {
             "configurable": {
@@ -816,7 +817,9 @@ class WebSocketConnectionManager(WebSocketInterface):
                     directory_content=directory_content,
                 ),
                 "state_input_mapper": lambda x: {
-                    "internal_messages": [HumanMessage(content=x)],
+                    "internal_messages": [
+                        HumanMessage(content=x, id=str(uuid.uuid4()))
+                    ],
                     "hypothesis": "",
                     "process": "",
                     "process_decision": None,

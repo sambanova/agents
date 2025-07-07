@@ -9,7 +9,7 @@ from agents.components.datagen.tools.persistent_daytona import (
 
 
 def create_report_agent(
-    power_llm,
+    report_agent_llm,
     members,
     daytona_manager: PersistentDaytonaManager,
     directory_content: list[str],
@@ -37,7 +37,7 @@ def create_report_agent(
     - Cite all sources using APA style and ensure that all findings are supported by evidence.
     """
     return create_agent(
-        llm=power_llm,
+        llm=report_agent_llm,
         tools=tools,
         system_message=system_prompt,
         team_members=members,

@@ -34,7 +34,7 @@ class PersistentDaytonaManager:
         file_ids: Optional[List[str]] = None,
     ):
         """
-        Initialize the persistent Daytona client. The sandbox will be created on first use.
+        Initialize the persistent Daytona manager. The client and sandbox will be created on first use.
 
         Args:
             user_id: User identifier for the session
@@ -43,26 +43,27 @@ class PersistentDaytonaManager:
             file_ids: List of file IDs stored in Redis to upload to sandbox root folder
         """
         self._sandbox: Optional[Any] = None
+        self._client: Optional[DaytonaClient] = None
         self._user_id = user_id
         self._redis_storage = redis_storage
         self._snapshot = snapshot
         self._file_ids = file_ids
 
-        api_key = os.getenv("DAYTONA_API_KEY")
-        if not api_key:
-            raise ValueError("DAYTONA_API_KEY environment variable not set")
-
-        logger.info("Initializing persistent Daytona client", user_id=self._user_id)
-
-        config = DaytonaSDKConfig(api_key=api_key)
-        self._client: DaytonaClient = DaytonaClient(config)
-
     async def _get_sandbox(self):
         """Get the sandbox instance, creating it if it doesn't exist."""
         if self._sandbox is None:
-            if not self._client:
-                logger.error("Daytona client not initialized.")
-                raise RuntimeError("Daytona client not initialized.")
+            if self._client is None:
+                api_key = os.getenv("DAYTONA_API_KEY")
+                if not api_key:
+                    raise ValueError("DAYTONA_API_KEY environment variable not set")
+
+                logger.info(
+                    "Initializing persistent Daytona client on first use",
+                    user_id=self._user_id,
+                )
+
+                config = DaytonaSDKConfig(api_key=api_key)
+                self._client = DaytonaClient(config)
 
             logger.info(
                 "Creating persistent Daytona sandbox on first use",
@@ -167,6 +168,12 @@ class PersistentDaytonaManager:
 
             # Ensure result is a string, even if None or other types
             result_str = str(response.result) if response.result is not None else ""
+
+            # Cap the result length to prevent overwhelming output
+            MAX_RESULT_LENGTH = 10000  # 10KB limit
+            if len(result_str) > MAX_RESULT_LENGTH:
+                truncated_result = result_str[:MAX_RESULT_LENGTH]
+                result_str = f"{truncated_result}\n\n[OUTPUT TRUNCATED - Original length: {len(result_str)} characters, showing first {MAX_RESULT_LENGTH} characters]"
 
             if response.exit_code != 0:
                 error_detail = result_str
@@ -597,6 +604,7 @@ import io
 def analyze_csv_data(file_path: str) -> str:
     """Analyze CSV data with multiple encoding attempts"""
     encodings = ["utf-8", "latin1", "iso-8859-1", "cp1252"]
+    last_exception = None
     
     for encoding in encodings:
         try:
@@ -636,9 +644,13 @@ Sample Data (first 5 rows):
             return summary
             
         except Exception as e:
+            last_exception = e
             continue
     
-    return f"Error: Unable to read CSV file '{{file_path}}' with any supported encoding (utf-8, latin1, iso-8859-1, cp1252)"
+    error_message = f"Error: Unable to read CSV file '{{file_path}}' with any supported encoding (utf-8, latin1, iso-8859-1, cp1252)."
+    if last_exception:
+        error_message += f"\\nLast error: {{repr(last_exception)}}"
+    return error_message
 
 # Analyze the data
 result = analyze_csv_data("{filename}")

@@ -36,7 +36,9 @@ async def agent_node(
     Returns:
         A dictionary containing the updated state.
     """
-    logger.info(f"Processing agent: {name} to update state key: '{state_key}'")
+    logger.info(
+        f"Processing agent in agent node: {name} to update state key: '{state_key}'"
+    )
     try:
         output_message = await agent.ainvoke(state)
 
@@ -72,7 +74,8 @@ async def agent_node(
 
     except Exception as e:
         logger.error(
-            f"Error occurred while processing agent {name}: {str(e)}", exc_info=True
+            f"Error occurred while processing agent in agent_node {name}: {str(e)}",
+            exc_info=True,
         )
         # Return an error message to be added to the state
         error_message = AIMessage(content=f"Error in {name}: {str(e)}", name=name)
@@ -94,9 +97,10 @@ async def human_choice_node(state: State) -> State:
     feedback = interrupt(prompt)
     logger.debug(f"Received feedback: {feedback}")
 
-    if isinstance(feedback, str) and feedback.strip().lower() == "approve":
+    if isinstance(feedback, str) and feedback == True:
         content = "Continue the research process"
         state["process"] = "Continue the research process"
+        state["modification_areas"] = ""
         logger.info("Human approved - continuing research process")
     elif isinstance(feedback, str) and feedback.strip():
         modification_areas = feedback
@@ -109,30 +113,16 @@ async def human_choice_node(state: State) -> State:
         # Default to continue if feedback is empty or not a string
         content = "Continue the research process"
         state["process"] = "Continue the research process"
+        state["modification_areas"] = ""
         logger.info("No feedback provided - continuing research process")
 
-    human_message = HumanMessage(content=content)
+    human_message = HumanMessage(content=content, id=str(uuid.uuid4()))
 
     state["internal_messages"].append(human_message)
     state["sender"] = "human"
 
     logger.info("Human choice node processing completed")
     return state
-
-
-def create_message(message: dict[str], name: str) -> BaseMessage:
-    """
-    Create a BaseMessage object based on the message type.
-    """
-    content = message.get("content", "")
-    message_type = message.get("type", "").lower()
-
-    logger.debug(f"Creating message of type '{message_type}' for agent '{name}'")
-    return (
-        HumanMessage(content=content)
-        if message_type == "human"
-        else AIMessage(content=content, name=name)
-    )
 
 
 async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
@@ -408,7 +398,11 @@ async def refiner_node(
             )
 
             refiner_state["internal_messages"] = [
-                AIMessage(content=simplified_report_content)
+                AIMessage(
+                    content=simplified_report_content,
+                    id=str(uuid.uuid4()),
+                    sender=name,
+                )
             ]
             result = await agent.ainvoke(refiner_state)
 
@@ -442,7 +436,13 @@ async def refiner_node(
 
         # Update original state - result is now an AIMessage
         # Note: this will be mapped as the last state, we don't need to send this through messages
-        state["internal_messages"].append(result)
+        state["internal_messages"].append(
+            AIMessage(
+                content=result.content,
+                id=result.id,
+                sender=name,
+            )
+        )
         state["sender"] = name
 
         logger.info(f"Refiner node {name} processing completed successfully")
@@ -450,7 +450,12 @@ async def refiner_node(
     except Exception as e:
         logger.error(f"Error in refiner node {name}: {str(e)}", exc_info=True)
         state["internal_messages"].append(
-            AIMessage(content=f"Error: {str(e)}", name=name)
+            AIMessage(
+                content=f"Error: {str(e)}",
+                name=name,
+                id=str(uuid.uuid4()),
+                sender=name,
+            )
         )
         return state
 

@@ -1,7 +1,7 @@
 from agents.components.datagen.create_agent import create_agent, create_supervisor
 
 
-def create_process_agent(power_llm):
+def create_process_agent(process_agent_llm):
     """Create the process/supervisor agent"""
     system_prompt = """
     You are a research supervisor responsible for overseeing and coordinating a comprehensive data analysis project, resulting in a complete and cohesive research report. Your primary tasks include:
@@ -50,4 +50,4 @@ def create_process_agent(power_llm):
     """
 
     member = ["Visualization", "Search", "Coder", "Report"]
-    return create_supervisor(power_llm, system_prompt, member)
+    return create_supervisor(process_agent_llm, system_prompt, member)
