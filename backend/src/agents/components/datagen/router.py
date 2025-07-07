@@ -38,7 +38,7 @@ def human_choice_router(state: State) -> NodeType:
     logger.info("Entering human_choice_router")
 
     # Check if user chose to regenerate hypothesis (choice 1)
-    if "modification_areas" in state:
+    if "modification_areas" in state and state["modification_areas"]:
         logger.info("User chose to regenerate hypothesis. Routing to: Hypothesis")
         return "Hypothesis"
 

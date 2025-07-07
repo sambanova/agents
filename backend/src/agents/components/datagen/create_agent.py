@@ -1,4 +1,5 @@
 import os
+import uuid
 from typing import List
 
 import structlog
@@ -211,7 +212,9 @@ def create_supervisor(
     def wrap_supervisor_output(decision):
         # Convert SupervisorDecision to a simple AIMessage with structured content
         decision_content = f"Decision: {decision.next}, Task: {decision.task}"
-        return AIMessage(content=decision_content)
+        return AIMessage(
+            content=decision_content, id=str(uuid.uuid4()), sender="supervisor"
+        )
 
     return MessageCaptureAgent(
         llm=llm,
@@ -223,7 +226,6 @@ def create_supervisor(
 
 def create_note_agent(
     llm: LanguageModelLike,
-    tools: list,
     system_prompt: str,
 ) -> ManualAgent:
     """
@@ -235,9 +237,6 @@ def create_note_agent(
     parser = PydanticOutputParser(pydantic_object=NoteState)
     output_format = parser.get_format_instructions()
 
-    # Format tools for the note agent
-    tool_descriptions = _format_tools(tools)
-
     # Enhanced system prompt for JSON output with tool capabilities
     # Escape curly braces in output_format to prevent f-string conflicts
     escaped_output_format = output_format.replace("{", "{{").replace("}", "}}")
@@ -248,27 +247,6 @@ You are a meticulous research process note-taker with access to tools for readin
 
 IMPORTANT: You must format your response as a JSON object with the following structure:
 {escaped_output_format}
-
-TOOL USAGE INSTRUCTIONS:
-You have access to the following tools:
-{tool_descriptions}
-
-To use a tool, you MUST respond with a single XML block in the following format:
-<tool>tool_name</tool>
-<tool_input>
-<parameter_name1>value1</parameter_name1>
-<parameter_name2>value2</parameter_name2>
-</tool_input>
-
-For example, to use daytona_create_document:
-<tool>daytona_create_document</tool>
-<tool_input>
-<points>["Point 1", "Point 2", "Point 3"]</points>
-<filename>my_document.md</filename>
-</tool_input>
-
-You will then get back the results in an <observation> tag.
-If you do not need to use a tool, respond normally without any XML tags.
 
 RESPONSE FORMAT:
 Always end your response with a valid JSON object that matches the required structure above. Do not include any text after the JSON object.
@@ -284,4 +262,4 @@ Always end your response with a valid JSON object that matches the required stru
     )
 
     logger.info("Manual note agent created successfully")
-    return ManualAgent(llm=llm, tools=tools, prompt=prompt, name="note_agent")
+    return ManualAgent(llm=llm, tools=[], prompt=prompt, name="note_agent")

@@ -1,3 +1,5 @@
+import uuid
+
 import structlog
 from agents.components.datagen.agent.code_agent import create_code_agent
 from agents.components.datagen.agent.hypothesis_agent import create_hypothesis_agent
@@ -76,20 +78,26 @@ class WorkflowManager:
         # Get language models
         llm = self.language_models["llm"]
         power_llm = self.language_models["power_llm"]
-        json_llm = self.language_models["json_llm"]
+        report_agent_llm = self.language_models["report_agent_llm"]
+        code_agent_llm = self.language_models["code_agent_llm"]
+        note_agent_llm = self.language_models["note_agent_llm"]
+        hypothesis_agent_llm = self.language_models["hypothesis_agent_llm"]
+        process_agent_llm = self.language_models["process_agent_llm"]
 
         # Create agents dictionary
         agents = {}
 
         # Create each agent using their respective creation functions
         agents["hypothesis_agent"] = create_hypothesis_agent(
-            llm=llm,
+            hypothesis_agent_llm=hypothesis_agent_llm,
             members=self.members,
             daytona_manager=self.daytona_manager,
             directory_content=self.directory_content,
         )
 
-        agents["process_agent"] = create_process_agent(power_llm=power_llm)
+        agents["process_agent"] = create_process_agent(
+            process_agent_llm=process_agent_llm
+        )
 
         agents["visualization_agent"] = create_visualization_agent(
             llm=llm,
@@ -99,7 +107,7 @@ class WorkflowManager:
         )
 
         agents["code_agent"] = create_code_agent(
-            power_llm=power_llm,
+            code_agent_llm=code_agent_llm,
             members=self.members,
             daytona_manager=self.daytona_manager,
             directory_content=self.directory_content,
@@ -113,7 +121,7 @@ class WorkflowManager:
         )
 
         agents["report_agent"] = create_report_agent(
-            power_llm=power_llm,
+            report_agent_llm=report_agent_llm,
             members=self.members,
             daytona_manager=self.daytona_manager,
             directory_content=self.directory_content,
@@ -127,7 +135,7 @@ class WorkflowManager:
         )
 
         agents["note_agent"] = create_note_agent(
-            json_llm=json_llm,
+            note_agent_llm=note_agent_llm,
             daytona_manager=self.daytona_manager,
         )
 
@@ -178,7 +186,7 @@ class WorkflowManager:
         async def quality_review_node(state):
             name = "quality_review_agent"
             agent = self.agents[name]
-            logger.info(f"Processing agent: {name}")
+            logger.info(f"Processing agent in quality review node: {name}")
             try:
                 output_message = await agent.ainvoke(state)
                 captured_messages = []
@@ -212,11 +220,13 @@ class WorkflowManager:
                 }
             except Exception as e:
                 logger.error(
-                    f"Error occurred while processing agent {name}: {str(e)}",
+                    f"Error occurred while processing agent in quality review node {name}: {str(e)}",
                     exc_info=True,
                 )
                 error_message = AIMessage(
-                    content=f"Error in {name}: {str(e)}", name=name
+                    content=f"Error in {name}: {str(e)}",
+                    id=str(uuid.uuid4()),
+                    sender=name,
                 )
                 return {
                     "internal_messages": state["internal_messages"] + [error_message],
@@ -263,9 +273,6 @@ class WorkflowManager:
             human_choice_router,
             {"Hypothesis": "Hypothesis", "Process": "Process"},
         )
-
-        # Add edge from HumanChoice to Process
-        self.workflow.add_edge("HumanChoice", "Process")
 
         self.workflow.add_conditional_edges(
             "Process",

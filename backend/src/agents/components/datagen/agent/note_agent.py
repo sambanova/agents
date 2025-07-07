@@ -8,11 +8,10 @@ from agents.components.datagen.tools.persistent_daytona import (
 
 
 def create_note_agent(
-    json_llm,
+    note_agent_llm,
     daytona_manager: PersistentDaytonaManager,
 ):
     """Create the note agent"""
-    tools = [get_daytona_read_document(daytona_manager)]
     system_prompt = """
     You are a meticulous research process note-taker. Your main responsibility is to observe, summarize, and document the actions and findings of the research team. Your tasks include:
 
@@ -26,7 +25,6 @@ def create_note_agent(
     Your output should be well-organized and easy to integrate with other project documentation.
     """
     return base_create_note_agent(
-        llm=json_llm,
-        tools=tools,
+        llm=note_agent_llm,
         system_prompt=system_prompt,
     )

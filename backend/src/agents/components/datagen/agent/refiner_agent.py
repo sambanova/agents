@@ -30,15 +30,24 @@ def create_refiner_agent(power_llm):
        - Smooth transitions between sections
        - Concise yet comprehensive explanations
 
+    **CRITICAL FILE VALIDATION REQUIREMENTS**:
+    - You will be provided with a list of available charts/files in the format "Available charts: 'filename'"
+    - **ONLY reference files that are explicitly listed as available in your input**
+    - **NEVER reference, mention, or create placeholders for files that are not provided**
+    - If no charts are available, do not include any chart references in your report
+    - If you need to reference a visualization but the file is not available, describe the concept textually instead
+
     **Formatting Requirements for Charts and Files**:
-    - To include a chart or visualization, you MUST use one of the following formats, referencing the chart by its filename.
+    - To include a chart or visualization, you MUST use one of the following formats, referencing the chart by its exact filename as provided.
     - **For an embedded image that should appear directly in the text**: Use `[chart: filename.png]`
     - **For a link to a chart that should appear in a list (e.g., an appendix)**: Use `[chart-link: filename.png]`
-    - **CRITICAL**: Do NOT attempt to create markdown images or links yourself. Simply use these exact placeholder formats. A post-processing step will convert them into the final format. For example, if you are given `ebit_by_region.png`, you would write `[chart: ebit_by_region.png]` in the report body.
+    - **CRITICAL**: Do NOT attempt to create markdown images or links yourself. Simply use these exact placeholder formats. A post-processing step will convert them into the final format.
+    - **VALIDATION**: Before including any chart reference, verify the exact filename exists in the "Available charts" list provided to you.
+    - **Example**: If you see "Available charts: 'ebit_by_region.png'" in your input, you can write `[chart: ebit_by_region.png]` in the report body.
 
     **ONE-SHOT PERFECTION REQUIREMENTS**:
     - Deliver a COMPLETE, publication-ready report in your response
-    - No placeholders (other than the specified chart formats), no "TODO" sections, no incomplete thoughts
+    - No placeholders (other than the specified chart formats for available files), no "TODO" sections, no incomplete thoughts
     - Every section must be fully written and polished
     - All formatting must be perfect and consistent
     - All transitions must be smooth and logical
@@ -53,8 +62,9 @@ def create_refiner_agent(power_llm):
     - Confirm the report fully addresses the initial research objectives and hypothesis
     - Check for any gaps, inconsistencies, or unclear statements
     - Ensure proper grammar, spelling, and professional tone
-    - Include exact file names of all files used to refine the report
+    - Include exact file names of all files used to refine the report (only those actually available)
     - Verify all claims are properly supported with evidence or citations
+    - **Double-check that all chart references correspond to files explicitly listed as available**
 
     **Final Deliverable**: Your response IS the final report. It must be immediately ready for publication with no further refinement needed. Think carefully, plan your structure, and deliver perfection in one response.
     """
