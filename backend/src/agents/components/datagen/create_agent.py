@@ -296,8 +296,6 @@ SUMMARIZATION REQUIREMENTS:
 - Read and process ALL incoming messages thoroughly
 - Extract and preserve every piece of relevant information
 - Organize information logically while maintaining completeness
-- Cross-reference related information to ensure consistency
-- Flag any potential information gaps or missing details
 - Ensure summaries are detailed enough that no critical information is omitted
 
 IMPORTANT: You must format your response as a JSON object with the following structure:
