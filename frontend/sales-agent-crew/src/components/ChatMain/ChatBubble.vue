@@ -1328,6 +1328,14 @@ const currentStreamingStatus = computed(() => {
       'deep_research_writer': '◆ Writing content',
       'deep_research_grader': '◈ Evaluating quality',
       'deep_research_end': '✓ Research complete',
+      "data_science_hypothesis_agent": "◦ Generating hypothesis",
+      "data_science_process_agent": "◦ Processing data",
+      "data_science_code_agent": "◦ Generating code",
+      "data_science_quality_review_agent": "◈ Reviewing quality",
+      "data_science_note_agent": "◦ Generating note",
+      "data_science_process_agent": "◦ Processing data",
+      "data_science_report_agent": "◦ Generating report",
+      "data_science_visualization_agent": "◦ Visualizing data",
       'data_science_end': '✓ Data science complete',
       'code_fixer_agents': '◐ Fixing code',
       'react_subgraph_deep_research': '◐ Deep research started',
@@ -1564,6 +1572,14 @@ const auditLogEvents = computed(() => {
           agentType === 'deep_research_search_queries_section_fixed' ||
           agentType === 'deep_research_writer' ||
           agentType === 'deep_research_grader' ||
+          agentType === 'data_science_hypothesis_agent' ||
+          agentType === 'data_science_process_agent' ||
+          agentType === 'data_science_code_agent' ||
+          agentType === 'data_science_quality_review_agent' ||
+          agentType === 'data_science_note_agent' ||
+          agentType === 'data_science_process_agent' ||
+          agentType === 'data_science_report_agent' ||
+          agentType === 'data_science_visualization_agent' ||
           agentType === 'code_fixer_agents' ||
           agentType === 'react_subgraph_deep_research') {
         return true // Include deep research phases in audit log
@@ -1671,6 +1687,47 @@ const auditLogEvents = computed(() => {
           details = 'Analyzing and fixing code issues'
           dotClass = 'bg-gray-400'
           type = 'code_fixer'
+        }
+        else if (agentType === 'data_science_hypothesis_agent') {
+          title = `Hypothesis Generation`
+          details = 'Generating hypothesis for data science'
+          dotClass = 'bg-gray-400'
+          type = 'data_science_hypothesis_agent'
+        } else if (agentType === 'data_science_process_agent') {
+          title = `Data Science Process`
+          details = 'Processing data for data science'
+          dotClass = 'bg-gray-400'
+          type = 'data_science_process_agent'
+        } else if (agentType === 'data_science_code_agent') {
+          title = `Code Generation`
+          details = 'Generating code for data science'
+          dotClass = 'bg-gray-400'
+          type = 'data_science_code_agent'
+        } else if (agentType === 'data_science_quality_review_agent') {
+          title = `Quality Review`
+          details = 'Reviewing quality of data science'
+          dotClass = 'bg-gray-400'
+          type = 'data_science_quality_review_agent'
+        } else if (agentType === 'data_science_note_agent') {
+          title = `Summarizing`
+          details = 'Summarizing data science'
+          dotClass = 'bg-gray-400'
+          type = 'data_science_note_agent'
+        } else if (agentType === 'data_science_process_agent') {
+          title = `Data Science Process`
+          details = 'Processing data for data science'
+          dotClass = 'bg-gray-400'
+          type = 'data_science_process_agent'
+        } else if (agentType === 'data_science_report_agent') {
+          title = `Generating Report`
+          details = 'Generating report for data science'
+          dotClass = 'bg-gray-400'
+          type = 'data_science_report_agent'
+        } else if (agentType === 'data_science_visualization_agent') {
+          title = `Visualizing Data`
+          details = 'Visualizing data for data science'
+          dotClass = 'bg-gray-400'
+          type = 'data_science_visualization_agent'
         }
       }
       
