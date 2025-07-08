@@ -142,9 +142,33 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
         head_messages, tail_messages = [], []
 
         if len(current_messages) > 6:
-            head_messages = current_messages[:2]
+
+            # Find research hypothesis in the messages
+            user_continue_message_index = [
+                i
+                for i, m in enumerate(current_messages)
+                if m.content.startswith("Continue the research process")
+            ]
+
+            if len(user_continue_message_index) == 1:
+                user_input = current_messages[0]
+                continue_message = current_messages[user_continue_message_index[0]]
+                research_hypothesis = current_messages[
+                    user_continue_message_index[0] - 1
+                ]
+                head_messages = [user_input, research_hypothesis, continue_message]
+            # Fallback to the first message if no continue message is found
+            else:
+                logger.warning(
+                    "No continue message found, falling back to first two messages"
+                )
+                head_messages = current_messages[:2]
+
             tail_messages = current_messages[-2:]
-            trimmed_state = {**state, "internal_messages": current_messages[2:-2]}
+            trimmed_state = {
+                **state,
+                "internal_messages": head_messages + tail_messages,
+            }
             logger.debug(
                 f"Trimmed messages for processing - keeping {len(head_messages)} head and {len(tail_messages)} tail messages"
             )
@@ -175,21 +199,8 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
 
         logger.debug(f"Parsed output and captured {len(messages)} messages")
 
-        if parsed_output.messages_summary:
-            messages_summary = [
-                AIMessage(
-                    content=parsed_output.messages_summary,
-                    id=str(uuid.uuid4()),
-                    sender=name,
-                )
-            ]
-        else:
-            messages_summary = []
-
-        combined_messages = head_messages + messages_summary + tail_messages
-
         updated_state: State = {
-            "internal_messages": combined_messages,
+            "internal_messages": trimmed_state["internal_messages"],
             "hypothesis": (
                 str(parsed_output.hypothesis)
                 if parsed_output.hypothesis
@@ -234,6 +245,11 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
                 bool(parsed_output.needs_revision)
                 if parsed_output.needs_revision
                 else state.get("needs_revision", False)
+            ),
+            "agent_scratchpad": (
+                str(parsed_output.agent_scratchpad)
+                if parsed_output.agent_scratchpad
+                else state.get("agent_scratchpad", "")
             ),
             "messages": messages,
         }

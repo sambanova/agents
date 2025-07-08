@@ -30,7 +30,6 @@ from agents.components.datagen.state import State
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.storage.redis_storage import RedisStorage
 from langchain_core.messages import AIMessage
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
 logger = structlog.get_logger(__name__)
@@ -298,9 +297,7 @@ class WorkflowManager:
         self.workflow.add_edge("Refiner", "Cleanup")
         self.workflow.add_edge("Cleanup", END)
 
-        # Compile workflow
-        self.memory = MemorySaver()
-        self.graph = self.workflow.compile(checkpointer=self.memory)
+        self.graph = self.workflow.compile()
 
     async def cleanup_node(self, state: dict) -> dict:
         """Node to perform cleanup."""

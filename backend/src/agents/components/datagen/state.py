@@ -125,13 +125,12 @@ class State(TypedDict):
     # The areas of the hypothesis that need to be modified
     modification_areas: Annotated[str, lambda left, right: right] = ""
 
+    # Scratchpad for the agent to use for its own purposes
+    agent_scratchpad: Annotated[str, lambda left, right: right] = ""
+
 
 class NoteState(BaseModel):
     """Pydantic model for parsing agent outputs - no state management annotations needed."""
-
-    messages_summary: str = Field(
-        default="", description="Summary of the messages exchanged"
-    )
 
     hypothesis: str = Field(default="", description="Current research hypothesis")
     process: str = Field(default="", description="Current research process")
@@ -155,6 +154,10 @@ class NoteState(BaseModel):
 
     modification_areas: str = Field(
         default="", description="The areas of the hypothesis that need to be modified"
+    )
+
+    agent_scratchpad: str = Field(
+        default="", description="Note down anything you want to remember"
     )
 
     class Config:

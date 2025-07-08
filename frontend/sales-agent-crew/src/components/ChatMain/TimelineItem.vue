@@ -234,6 +234,78 @@ function parseResponseText(text) {
     text = JSON.stringify(text);
   }
 
+  // Define agent types that should use section-based parsing
+  const sectionBasedAgents = [
+    'Enhanced Competitor Finder Agent',
+    'Competitor Analysis Agent', 
+    'Fundamental Analysis Agent',
+    'Risk Assessment Agent',
+    'Financial News Agent',
+    'Technical Analysis Agent',
+    'Aggregator Agent'
+  ];
+
+  // Define agent types that have structured JSON responses
+  const jsonStructuredAgents = [
+    'Supervisor Agent',
+    'Note Taker Agent'
+  ];
+
+  // Check if current agent should use section-based parsing
+  const shouldUseSectionParsing = sectionBasedAgents.includes(props.data.agent_name);
+  const shouldUseJsonParsing = jsonStructuredAgents.includes(props.data.agent_name);
+  console.log('shouldUseJsonParsing', shouldUseJsonParsing);
+
+  // Handle JSON structured agents
+  if (shouldUseJsonParsing) {
+    try {
+      // Handle markdown-wrapped JSON (```json ... ```)
+      let cleanedText = text.trim();
+      
+      // Remove markdown code block formatting
+      if (cleanedText.startsWith('```json') || cleanedText.startsWith('```')) {
+        // Remove opening ```json or ```
+        cleanedText = cleanedText.replace(/^```(?:json)?\s*\n?/i, '');
+        // Remove closing ```
+        cleanedText = cleanedText.replace(/\n?\s*```\s*$/i, '');
+      }
+      
+      const jsonData = JSON.parse(cleanedText.trim());
+      const result = {};
+      
+      if (props.data.agent_name === 'Supervisor Agent') {
+        // Handle Supervisor Agent format: { "next": "...", "task": "..." }
+        result['Next Agent'] = jsonData.next || 'Not specified';
+        result['Task'] = jsonData.task || 'No task provided';
+      } else if (props.data.agent_name === 'Note Taker Agent') {
+        // Handle Note Taker Agent format with multiple fields
+        if (jsonData.hypothesis) result['Hypothesis'] = jsonData.hypothesis;
+        if (jsonData.process) result['Process'] = jsonData.process;
+        if (jsonData.process_decision) result['Process Decision'] = jsonData.process_decision;
+        if (jsonData.code_state) result['Code State'] = jsonData.code_state;
+        if (jsonData.report_section) result['Report Section'] = jsonData.report_section;
+        if (jsonData.quality_review) result['Quality Review'] = jsonData.quality_review;
+        if (jsonData.needs_revision !== undefined) result['Needs Revision'] = jsonData.needs_revision ? 'Yes' : 'No';
+        if (jsonData.modification_areas) result['Modification Areas'] = jsonData.modification_areas;
+        if (jsonData.agent_scratchpad) result['Agent Scratchpad'] = jsonData.agent_scratchpad;
+        if (jsonData.visualization_state) result['Visualization State'] = jsonData.visualization_state;
+        if (jsonData.searcher_state) result['Searcher State'] = jsonData.searcher_state;
+      }
+      
+      return result;
+    } catch (error) {
+      // If JSON parsing fails, fall back to markdown
+      console.warn('Failed to parse JSON for structured agent:', error);
+      return { markdown: marked(text) };
+    }
+  }
+
+  // If this agent type should use markdown parsing, render as markdown
+  if (!shouldUseSectionParsing) {
+    return { markdown: marked(text) };
+  }
+
+  // Section-based parsing for financial analysis agents
   // Check for special markers.
   const markers = ['Thought:', 'Final Answer:', 'Action Input:', 'Action:'];
   const hasMarker = markers.some((marker) => text.includes(marker));

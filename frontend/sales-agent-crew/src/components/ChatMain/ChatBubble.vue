@@ -1290,17 +1290,17 @@ const currentStreamingStatus = computed(() => {
         return `▫ Searching arXiv: "${query || 'query'}"`;
       } else if (tool === 'DaytonaCodeSandbox') {
         return `◐ Executing code in sandbox`;
-      } else if (tool === 'daytona_execute_code') {
+      } else if (tool === 'user_daytona_execute_code') {
         return `◐ Executing code in sandbox`;
-      } else if (tool === 'daytona_create_document') {
+      } else if (tool === 'user_daytona_create_document') {
         return `◐ Creating document`;
-      } else if (tool === 'daytona_describe_data') {
+      } else if (tool === 'user_daytona_describe_data') {
         return `◐ Describing data`;
-      } else if (tool === 'daytona_edit_document') {
+      } else if (tool === 'user_daytona_edit_document') {
         return `◐ Editing document`;
-      } else if (tool === 'daytona_read_document') {
+      } else if (tool === 'user_daytona_read_document') {
         return `◐ Reading document`;
-      } else if (tool === 'daytona_list_files') {
+      } else if (tool === 'user_daytona_list_files') {
         return `◐ Listing files`;
       } else {
         return `• Using ${tool.replace('_', ' ')}: "${query || 'executing'}"`;

@@ -14,8 +14,8 @@ from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.tools import tool
 from langchain_core.language_models.base import LanguageModelLike
 from langchain_core.messages import AIMessage
-from langchain_core.tools import BaseTool
 from langchain_core.runnables import Runnable
+from langchain_core.tools import BaseTool
 
 logger = structlog.get_logger(__name__)
 
@@ -138,6 +138,7 @@ Code State: {code_state}
 Report Section: {report_section}
 Quality Review: {quality_review}
 Needs Revision: {needs_revision}
+Agent Scratchpad: {agent_scratchpad}
 ---
 Based on your role and the current state, please proceed with your task.
 """,
@@ -210,18 +211,10 @@ def create_supervisor(
     # Log successful creation of supervisor
     logger.info("Supervisor created successfully")
 
-    def wrap_supervisor_output(decision):
-        # Convert SupervisorDecision to a simple AIMessage with structured content
-        decision_content = f"Decision: {decision.next}, Task: {decision.task}"
-        return AIMessage(
-            content=decision_content, id=str(uuid.uuid4()), sender="supervisor"
-        )
-
     return MessageCaptureAgent(
         llm=llm,
         prompt=prompt,
         parser=supervisor_parser,
-        output_mapper=wrap_supervisor_output,
     )
 
 
@@ -257,8 +250,24 @@ Always end your response with a valid JSON object that matches the required stru
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", enhanced_system_prompt),
+            (
+                "human",
+                """
+PREVIOUS STATE:
+---
+Hypothesis: {hypothesis}
+Process: {process}
+Process Decision: {process_decision}
+Visualization State: {visualization_state}
+Searcher State: {searcher_state}
+Code State: {code_state}
+Report Section: {report_section}
+Quality Review: {quality_review}
+Needs Revision: {needs_revision}
+Agent Scratchpad: {agent_scratchpad}
+""",
+            ),
             MessagesPlaceholder(variable_name="internal_messages"),
-            # Note: No state variables needed since note agent processes the full conversation
         ]
     )
 
