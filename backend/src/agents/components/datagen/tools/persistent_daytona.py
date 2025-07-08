@@ -184,7 +184,10 @@ class PersistentDaytonaManager:
                     original_code_preview=code[:200],
                 )
                 return f"Error (Exit Code {response.exit_code}): {error_detail}"
-            logger.info("Code executed successfully")
+            logger.info(
+                "Code executed successfully",
+                result_str=result_str[:1000],
+            )
             return result_str
 
         except Exception as e:

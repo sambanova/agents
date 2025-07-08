@@ -1,24 +1,10 @@
-from agents.components.datagen.create_agent import create_agent
-from agents.components.datagen.tools.persistent_daytona import (
-    PersistentDaytonaManager,
-    get_daytona_create_document,
-    get_daytona_edit_document,
-    get_daytona_read_document,
-)
+from agents.components.datagen.create_agent import create_simple_agent
 
 
 def create_quality_review_agent(
-    llm,
-    members,
-    daytona_manager: PersistentDaytonaManager,
-    directory_content: list[str],
+    quality_review_agent_llm,
 ):
     """Create the quality review agent"""
-    tools = [
-        get_daytona_create_document(daytona_manager),
-        get_daytona_read_document(daytona_manager),
-        get_daytona_edit_document(daytona_manager),
-    ]
     system_prompt = """
     You are a meticulous quality control expert responsible for reviewing and ensuring the high standard of all research outputs. Your tasks include:
 
@@ -30,11 +16,7 @@ def create_quality_review_agent(
 
     After your review, if revisions are needed, respond with 'REVISION' as a prefix, set needs_revision=True, and provide specific feedback on parts that need improvement. If no revisions are necessary, respond with 'CONTINUE' as a prefix and set needs_revision=False.
     """
-    return create_agent(
-        llm=llm,
-        tools=tools,
+    return create_simple_agent(
+        llm=quality_review_agent_llm,
         system_message=system_prompt,
-        team_members=members,
-        name="quality_review_agent",
-        directory_content=directory_content,
     )

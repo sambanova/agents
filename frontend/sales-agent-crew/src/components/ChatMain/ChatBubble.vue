@@ -1290,6 +1290,18 @@ const currentStreamingStatus = computed(() => {
         return `▫ Searching arXiv: "${query || 'query'}"`;
       } else if (tool === 'DaytonaCodeSandbox') {
         return `◐ Executing code in sandbox`;
+      } else if (tool === 'daytona_execute_code') {
+        return `◐ Executing code in sandbox`;
+      } else if (tool === 'daytona_create_document') {
+        return `◐ Creating document`;
+      } else if (tool === 'daytona_describe_data') {
+        return `◐ Describing data`;
+      } else if (tool === 'daytona_edit_document') {
+        return `◐ Editing document`;
+      } else if (tool === 'daytona_read_document') {
+        return `◐ Reading document`;
+      } else if (tool === 'daytona_list_files') {
+        return `◐ Listing files`;
       } else {
         return `• Using ${tool.replace('_', ' ')}: "${query || 'executing'}"`;
       }
@@ -1337,10 +1349,10 @@ const currentStreamingStatus = computed(() => {
       "data_science_process_agent": "◦ Processing data",
       "data_science_code_agent": "◦ Generating code",
       "data_science_quality_review_agent": "◈ Reviewing quality",
-      "data_science_note_agent": "◦ Generating note",
+      "data_science_note_agent": "◦ Summarizing",
       "data_science_process_agent": "◦ Processing data",
       "data_science_report_agent": "◦ Generating report",
-      "data_science_visualization_agent": "◦ Visualizing data",
+      "data_science_visualization_agent": "◦ Visualizing",
       'data_science_end': '✓ Data science complete',
       'code_fixer_agents': '◐ Fixing code',
       'react_subgraph_deep_research': '◐ Deep research started',

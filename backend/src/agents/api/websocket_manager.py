@@ -733,7 +733,11 @@ class WebSocketConnectionManager(WebSocketInterface):
 
         config["configurable"][
             "type==default/system_message"
-        ] = f"You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {retrieval_prompt} {data_analysis_prompt} CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph or data_science subgraph only."
+        ] = f"""
+You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {retrieval_prompt} {data_analysis_prompt} 
+CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph or data_science subgraph only.
+If the user includes any datasets you MUST use the data_science subgraph to analyze the data.
+"""
 
         if multimodal_input:
             config["configurable"][

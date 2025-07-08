@@ -15,6 +15,7 @@ from langchain.tools import tool
 from langchain_core.language_models.base import LanguageModelLike
 from langchain_core.messages import AIMessage
 from langchain_core.tools import BaseTool
+from langchain_core.runnables import Runnable
 
 logger = structlog.get_logger(__name__)
 
@@ -151,7 +152,7 @@ Based on your role and the current state, please proceed with your task.
 def create_simple_agent(
     llm: LanguageModelLike,
     system_message: str,
-) -> ManualAgent:
+) -> Runnable:
     """
     Create a manual agent with the given language model, tools, system message, and team members.
     """

@@ -2,7 +2,7 @@ from agents.components.datagen.create_agent import create_simple_agent
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 
 
-def create_refiner_agent(power_llm):
+def create_refiner_agent(refiner_agent_llm):
     """Create the refiner agent"""
 
     system_prompt = """
@@ -68,4 +68,4 @@ def create_refiner_agent(power_llm):
 
     **Final Deliverable**: Your response IS the final report. It must be immediately ready for publication with no further refinement needed. Think carefully, plan your structure, and deliver perfection in one response.
     """
-    return create_simple_agent(power_llm, system_prompt)
+    return create_simple_agent(refiner_agent_llm, system_prompt)

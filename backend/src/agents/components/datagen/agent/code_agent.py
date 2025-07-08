@@ -32,11 +32,6 @@ def create_code_agent(
     4. Adhering to PEP 8 standards and ensuring code readability with meaningful variable and function names.
     5. Any output data must be saved to the sandbox directory. Also print the file name in the output.
 
-    **Available Tools:**
-    - daytona_execute_code: Execute Python code in the persistent sandbox
-    - daytona_list_files: List files in the sandbox directory
-    - daytona_describe_data: Analyze CSV data with encoding detection and detailed structure analysis
-
     Constraints:
     - Focus solely on data processing tasks; do not generate visualizations or write non-Python code.
     - Provide only valid, executable Python code, including necessary comments for complex logic.

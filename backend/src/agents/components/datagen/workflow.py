@@ -83,6 +83,8 @@ class WorkflowManager:
         note_agent_llm = self.language_models["note_agent_llm"]
         hypothesis_agent_llm = self.language_models["hypothesis_agent_llm"]
         process_agent_llm = self.language_models["process_agent_llm"]
+        quality_review_agent_llm = self.language_models["quality_review_agent_llm"]
+        refiner_agent_llm = self.language_models["refiner_agent_llm"]
 
         # Create agents dictionary
         agents = {}
@@ -128,10 +130,7 @@ class WorkflowManager:
         )
 
         agents["quality_review_agent"] = create_quality_review_agent(
-            llm=llm,
-            members=self.members,
-            daytona_manager=self.daytona_manager,
-            directory_content=self.directory_content,
+            quality_review_agent_llm=quality_review_agent_llm,
         )
 
         agents["note_agent"] = create_note_agent(
@@ -140,7 +139,7 @@ class WorkflowManager:
         )
 
         agents["refiner_agent"] = create_refiner_agent(
-            power_llm=power_llm,
+            refiner_agent_llm=refiner_agent_llm,
         )
 
         return agents
@@ -189,14 +188,7 @@ class WorkflowManager:
             logger.info(f"Processing agent in quality review node: {name}")
             try:
                 output_message = await agent.ainvoke(state)
-                captured_messages = []
-                if agent.llm_response:
-                    captured_message = agent.llm_response
-                    captured_message.additional_kwargs["agent_type"] = (
-                        f"data_science_{name}"
-                    )
-                    captured_messages = [captured_message]
-
+                output_message.additional_kwargs["agent_type"] = f"data_science_{name}"
                 if output_message is None:
                     raise ValueError("Agent output is None.")
 
@@ -213,7 +205,7 @@ class WorkflowManager:
 
                 return {
                     "internal_messages": state["internal_messages"] + [output_message],
-                    "messages": captured_messages,
+                    "messages": [output_message],
                     "quality_review": output_message,
                     "needs_revision": needs_revision,
                     "sender": name,
