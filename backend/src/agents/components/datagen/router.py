@@ -114,7 +114,7 @@ def hypothesis_router(state: State) -> NodeType:
     return result
 
 
-def QualityReview_router(state: State) -> NodeType:
+def quality_review_router(state: State) -> NodeType:
     """
     Route based on the quality review outcome and process decision.
 
@@ -124,12 +124,14 @@ def QualityReview_router(state: State) -> NodeType:
     Returns:
     NodeType: The next node to route to based on the quality review and process decision.
     """
-    logger.info("Entering QualityReview_router")
+    logger.info("Entering quality_review_router")
     messages = state.get("internal_messages", [])
     message_before_revision = messages[-2] if len(messages) > 1 else None
 
     # Check if revision is needed
-    if state.get("needs_revision", False):
+    if state.get("quality_review", {}).get("continue_research", True):
+        return "NoteTaker"
+    else:
         previous_node = (
             message_before_revision.sender if message_before_revision else ""
         )
@@ -142,9 +144,6 @@ def QualityReview_router(state: State) -> NodeType:
         result = revision_routes.get(previous_node, "NoteTaker")
         logger.info(f"Revision needed. Routing to: {result}")
         return result
-
-    else:
-        return "NoteTaker"
 
 
 def process_router(state: State) -> ProcessNodeType:

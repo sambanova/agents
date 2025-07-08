@@ -7,7 +7,11 @@ import structlog
 # Import the manual agent
 from agents.components.datagen.manual_agent import ManualAgent
 from agents.components.datagen.message_capture_agent import MessageCaptureAgent
-from agents.components.datagen.state import NoteState, SupervisorDecision
+from agents.components.datagen.state import (
+    NoteState,
+    QualityReviewDecision,
+    SupervisorDecision,
+)
 from langchain.agents import AgentExecutor
 from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -168,6 +172,43 @@ def create_simple_agent(
 
     logger.info("Manual agent created successfully")
     return prompt | llm
+
+
+def create_quality_review_agent(
+    llm: LanguageModelLike,
+    system_message: str,
+) -> Runnable:
+    """
+    Create a manual agent with the given language model, tools, system message, and team members.
+    """
+    logger.info("Creating refiner agent")
+
+    quality_review_parser = PydanticOutputParser(pydantic_object=QualityReviewDecision)
+    format_instructions = quality_review_parser.get_format_instructions()
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", system_message),
+            MessagesPlaceholder(variable_name="internal_messages"),
+            (
+                "system",
+                "Given the conversation above, should we continue the research process or repeat the previous step? "
+                "Your response MUST be a JSON object conforming to the following schema:\n"
+                "```json\n"  # Emphasize JSON block for LLM
+                "{format_instructions}\n"
+                "```\n"
+                "Do NOT include any other text or explanation, only the JSON object.",
+            ),
+        ]
+    ).partial(format_instructions=format_instructions)
+
+    logger.info("Manual agent created successfully")
+    return MessageCaptureAgent(
+        llm=llm,
+        prompt=prompt,
+        parser=quality_review_parser,
+        output_mapper=lambda x: x,
+    )
 
 
 def create_supervisor(

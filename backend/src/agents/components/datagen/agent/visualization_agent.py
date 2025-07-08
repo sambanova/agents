@@ -28,6 +28,7 @@ def create_visualization_agent(
     3. Providing executable Python code (using libraries such as matplotlib, seaborn, or plotly) that generates these visualizations.
     4. Including well-defined titles, axis labels, legends, and saving the visualizations as files.
     5. Offering brief but clear interpretations of the visual findings.
+    6. You MUST run all the code you generate using the daytona_execute_code tool.
 
     **File Saving Guidelines:**
     - Save all visualizations as files with descriptive and meaningful filenames.

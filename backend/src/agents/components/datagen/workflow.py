@@ -14,6 +14,7 @@ from agents.components.datagen.agent.search_agent import create_search_agent
 from agents.components.datagen.agent.visualization_agent import (
     create_visualization_agent,
 )
+from agents.components.datagen.message_capture_agent import MessageCaptureAgent
 from agents.components.datagen.node import (
     agent_node,
     human_choice_node,
@@ -21,10 +22,10 @@ from agents.components.datagen.node import (
     refiner_node,
 )
 from agents.components.datagen.router import (
-    QualityReview_router,
     human_choice_router,
     hypothesis_router,
     process_router,
+    quality_review_router,
 )
 from agents.components.datagen.state import State
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
@@ -183,29 +184,40 @@ class WorkflowManager:
 
         async def quality_review_node(state):
             name = "quality_review_agent"
-            agent = self.agents[name]
+            agent: MessageCaptureAgent = self.agents[name]
             logger.info(f"Processing agent in quality review node: {name}")
             try:
-                output_message = await agent.ainvoke(state)
-                output_message.additional_kwargs["agent_type"] = f"data_science_{name}"
-                if output_message is None:
-                    raise ValueError("Agent output is None.")
 
-                # Special logic for quality review: check for "revision needed"
-                content = (
-                    output_message.content
-                    if hasattr(output_message, "content")
-                    else str(output_message)
+                trimmed_state = {
+                    **state,
+                    "internal_messages": state["internal_messages"][-1:],
+                }
+                output_message = await agent.ainvoke(trimmed_state)
+
+                interceptor_messages = agent.llm_interceptor.captured_messages
+                fixing_interceptor_messages = (
+                    agent.llm_fixing_interceptor.captured_messages
                 )
-                needs_revision = (
-                    "revision needed" in content.lower() or "REVISION" in content
+                captured_messages = interceptor_messages + fixing_interceptor_messages
+                for m in captured_messages:
+                    m.additional_kwargs["agent_type"] = f"data_science_{name}"
+                logger.debug(
+                    f"Captured {len(captured_messages)} messages from MessageCaptureAgent"
                 )
+
+                needs_revision = not output_message.continue_research
                 logger.info(f"Quality review updated. Needs revision: {needs_revision}")
 
+                output_ai_message = AIMessage(
+                    content=f"Quality review: Continue research: {output_message.continue_research}, Reason: {output_message.reason}",
+                    id=str(uuid.uuid4()),
+                    sender=name,
+                )
+
                 return {
-                    "internal_messages": state["internal_messages"] + [output_message],
-                    "messages": [output_message],
-                    "quality_review": output_message,
+                    "internal_messages": [output_ai_message],
+                    "messages": captured_messages,
+                    "quality_review": output_message.model_dump(),
                     "needs_revision": needs_revision,
                     "sender": name,
                 }
@@ -283,7 +295,7 @@ class WorkflowManager:
 
         self.workflow.add_conditional_edges(
             "QualityReview",
-            QualityReview_router,
+            quality_review_router,
             {
                 "Visualization": "Visualization",
                 "Search": "Search",

@@ -1,4 +1,4 @@
-from agents.components.datagen.create_agent import create_simple_agent
+from agents.components.datagen.create_agent import create_quality_review_agent as create_quality_review_agent_function
 
 
 def create_quality_review_agent(
@@ -16,7 +16,7 @@ def create_quality_review_agent(
 
     After your review, if revisions are needed, respond with 'REVISION' as a prefix, set needs_revision=True, and provide specific feedback on parts that need improvement. If no revisions are necessary, respond with 'CONTINUE' as a prefix and set needs_revision=False.
     """
-    return create_simple_agent(
+    return create_quality_review_agent_function(
         llm=quality_review_agent_llm,
         system_message=system_prompt,
     )

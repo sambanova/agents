@@ -248,7 +248,8 @@ function parseResponseText(text) {
   // Define agent types that have structured JSON responses
   const jsonStructuredAgents = [
     'Supervisor Agent',
-    'Note Taker Agent'
+    'Note Taker Agent',
+    'Quality Review Agent'
   ];
 
   // Check if current agent should use section-based parsing
@@ -290,8 +291,10 @@ function parseResponseText(text) {
         if (jsonData.agent_scratchpad) result['Agent Scratchpad'] = jsonData.agent_scratchpad;
         if (jsonData.visualization_state) result['Visualization State'] = jsonData.visualization_state;
         if (jsonData.searcher_state) result['Searcher State'] = jsonData.searcher_state;
+      } else if (props.data.agent_name === 'Quality Review Agent') {
+        if ('continue_research' in jsonData) result['Continue'] = jsonData.continue_research ? 'Yes' : 'No';
+        if (jsonData.reason) result['Reason'] = jsonData.reason;
       }
-      
       return result;
     } catch (error) {
       // If JSON parsing fails, fall back to markdown

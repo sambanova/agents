@@ -83,6 +83,17 @@ class SupervisorDecision(BaseModel):
     )
 
 
+class QualityReviewDecision(BaseModel):
+    """
+    Decision about whether the report needs revision.
+    """
+
+    continue_research: bool = Field(
+        description="Whether the research process should continue or previous step should be repeated."
+    )
+    reason: str = Field(description="The reason for the decision.")
+
+
 class State(TypedDict):
     """TypedDict for the entire state structure."""
 
