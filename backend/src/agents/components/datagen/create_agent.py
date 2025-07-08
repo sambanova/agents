@@ -134,15 +134,11 @@ If you do not need to use a tool, respond normally without any XML tags.
 CURRENT STATE:
 ---
 Hypothesis: {hypothesis}
-Process: {process}
 Process Decision: {process_decision}
 Visualization State: {visualization_state}
 Searcher State: {searcher_state}
 Code State: {code_state}
-Report Section: {report_section}
-Quality Review: {quality_review}
-Needs Revision: {needs_revision}
-Agent Scratchpad: {agent_scratchpad}
+Report State: {report_state}
 ---
 Based on your role and the current state, please proceed with your task.
 """,
@@ -305,15 +301,11 @@ Always end your response with a valid JSON object that matches the required stru
 PREVIOUS STATE:
 ---
 Hypothesis: {hypothesis}
-Process: {process}
 Process Decision: {process_decision}
 Visualization State: {visualization_state}
 Searcher State: {searcher_state}
 Code State: {code_state}
-Report Section: {report_section}
-Quality Review: {quality_review}
-Needs Revision: {needs_revision}
-Agent Scratchpad: {agent_scratchpad}
+Report State: {report_state}
 """,
             ),
             MessagesPlaceholder(variable_name="internal_messages"),

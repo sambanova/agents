@@ -164,18 +164,13 @@ def process_router(state: State) -> ProcessNodeType:
     decision_str: str = ""
 
     try:
-        if isinstance(process_decision, AIMessage):
+        if isinstance(process_decision, str):
             # Parse decision from AIMessage content
             # Expected format: "Decision: Coder\nTask: ..."
-            content = process_decision.content
-            decision_match = re.search(r"Decision:\s*(\w+)", content)
+            decision_match = re.search(r"Decision:\s*(\w+)", process_decision)
             if decision_match:
                 decision_str = decision_match.group(1)
             logger.debug(f"Parsed decision from AIMessage: {decision_str}")
-        elif isinstance(process_decision, dict):
-            decision_str = str(process_decision.get("next", ""))
-        else:
-            decision_str = str(process_decision)
     except Exception as e:
         logger.error(f"Error processing decision: {e}")
         decision_str = ""

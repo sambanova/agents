@@ -195,9 +195,9 @@ class ManualAgent(Runnable):
             "visualization_state",
             "searcher_state",
             "code_state",
-            "report_section",
+            "report_state",
             "quality_review",
-            "needs_revision",
+            "agent_scratchpad",
         ]
         for key in expected_keys:
             if key not in template_vars:

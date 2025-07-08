@@ -1,55 +1,28 @@
 import operator
+import uuid
+from dataclasses import dataclass
 from typing import Annotated, Sequence, TypedDict
 
 from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel, Field
 
 
-def add_messages_deduplicated(
-    left: Sequence[AnyMessage], right: Sequence[AnyMessage]
+@dataclass
+class Replace:
+    """A signal to replace the state value instead of appending."""
+
+    value: str | Sequence[AnyMessage]
+
+
+def add_messages(
+    left: Sequence[AnyMessage], right: Sequence[AnyMessage] | Replace
 ) -> Sequence[AnyMessage]:
     """
-    Custom reducer that deduplicates messages based on their ID.
-    Similar to the deduplication logic in stream.py.
+    Custom reducer that adds messages to the state.
     """
-    # Convert to lists if needed
-    if not isinstance(left, list):
-        left = list(left) if left else []
-    if not isinstance(right, list):
-        right = list(right) if right else []
-
-    # Track existing message IDs
-    existing_messages = {}
-    result = []
-
-    # Process existing messages first
-    for msg in left:
-        if isinstance(msg, dict):
-            msg_id = msg.get("id")
-        else:
-            msg_id = getattr(msg, "id", None)
-
-        if msg_id:
-            existing_messages[msg_id] = msg
-        result.append(msg)
-
-    # Process new messages and deduplicate
-    for msg in right:
-        if isinstance(msg, dict):
-            msg_id = msg.get("id")
-        else:
-            msg_id = getattr(msg, "id", None)
-
-        # Skip duplicates
-        if msg_id and msg_id in existing_messages and msg == existing_messages[msg_id]:
-            continue
-
-        # Add new or updated message
-        if msg_id:
-            existing_messages[msg_id] = msg
-        result.append(msg)
-
-    return result
+    if isinstance(right, Replace):
+        return right.value
+    return left + right
 
 
 def replace_messages(
@@ -68,6 +41,12 @@ def replace_messages(
         right = list(right)
 
     return right
+
+
+def dynamic_reducer(left: str, right: str | Replace) -> str:
+    if isinstance(right, Replace):
+        return right.value
+    return left + " " + right
 
 
 class SupervisorDecision(BaseModel):
@@ -98,10 +77,10 @@ class State(TypedDict):
     """TypedDict for the entire state structure."""
 
     # The sequence of messages exchanged in the conversation
-    internal_messages: Annotated[Sequence[AnyMessage], add_messages_deduplicated]
+    internal_messages: Annotated[Sequence[AnyMessage], add_messages]
 
     # Messages to be sent to the frontend
-    messages: Annotated[Sequence[AnyMessage], add_messages_deduplicated]
+    messages: Annotated[Sequence[AnyMessage], replace_messages]
 
     # The complete content of the research hypothesis
     hypothesis: Annotated[str, lambda left, right: right] = ""
@@ -113,22 +92,19 @@ class State(TypedDict):
     process_decision: Annotated[str, lambda left, right: right] = ""
 
     # The current state of data visualization planning and execution
-    visualization_state: Annotated[str, lambda left, right: right] = ""
+    visualization_state: Annotated[str, dynamic_reducer] = ""
 
     # The current state of the search process, including queries and results
-    searcher_state: Annotated[str, lambda left, right: right] = ""
+    searcher_state: Annotated[str, dynamic_reducer] = ""
 
     # The current state of Coder development, including scripts and outputs
-    code_state: Annotated[str, lambda left, right: right] = ""
+    code_state: Annotated[str, dynamic_reducer] = ""
 
     # The content of the report sections being written
-    report_section: Annotated[str, lambda left, right: right] = ""
+    report_state: Annotated[str, dynamic_reducer] = ""
 
     # The feedback and comments from the quality review process
     quality_review: Annotated[str, lambda left, right: right] = ""
-
-    # A boolean flag indicating if the current output requires revision
-    needs_revision: Annotated[bool, lambda left, right: right] = False
 
     # The identifier of the agent who sent the last message
     sender: Annotated[str, lambda left, right: right] = ""
@@ -136,39 +112,12 @@ class State(TypedDict):
     # The areas of the hypothesis that need to be modified
     modification_areas: Annotated[str, lambda left, right: right] = ""
 
-    # Scratchpad for the agent to use for its own purposes
-    agent_scratchpad: Annotated[str, lambda left, right: right] = ""
-
 
 class NoteState(BaseModel):
     """Pydantic model for parsing agent outputs - no state management annotations needed."""
 
-    hypothesis: str = Field(default="", description="Current research hypothesis")
-    process: str = Field(default="", description="Current research process")
-    process_decision: str = Field(
-        default="", description="Decision about the next process step"
-    )
-    visualization_state: str = Field(
-        default="", description="Current state of data visualization"
-    )
-    searcher_state: str = Field(
-        default="", description="Current state of the search process"
-    )
-    code_state: str = Field(default="", description="Current state of code development")
-    report_section: str = Field(
-        default="", description="Content of the report sections"
-    )
-    quality_review: str = Field(default="", description="Feedback from quality review")
-    needs_revision: bool = Field(
-        default=False, description="Flag indicating if revision is needed"
-    )
-
-    modification_areas: str = Field(
-        default="", description="The areas of the hypothesis that need to be modified"
-    )
-
-    agent_scratchpad: str = Field(
-        default="", description="Note down anything you want to remember"
+    internal_messages: list[str] = Field(
+        default=[], description="Messages of the current conversation"
     )
 
     class Config:

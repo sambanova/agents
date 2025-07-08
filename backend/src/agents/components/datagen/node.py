@@ -8,7 +8,7 @@ from datetime import datetime
 import structlog
 from agents.components.datagen.manual_agent import ManualAgent
 from agents.components.datagen.message_capture_agent import MessageCaptureAgent
-from agents.components.datagen.state import NoteState, State
+from agents.components.datagen.state import NoteState, Replace, State
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.storage.redis_storage import RedisStorage
 from agents.utils.message_interceptor import MessageInterceptor
@@ -67,7 +67,7 @@ async def agent_node(
         return {
             "internal_messages": [output_message],
             "messages": captured_messages,
-            state_key: output_message,
+            state_key: output_message.content,
             "sender": name,
         }
 
@@ -96,7 +96,7 @@ async def human_choice_node(state: State) -> State:
     current_hypothesis = state.get("hypothesis", "No hypothesis yet.")
     prompt = (
         "Please <b>provide feedback</b> on the following plan or <b>type 'approve'.</b>\n\n"
-        + current_hypothesis.content
+        + current_hypothesis
     )
 
     feedback = interrupt(prompt)
@@ -123,11 +123,11 @@ async def human_choice_node(state: State) -> State:
 
     human_message = HumanMessage(content=content, id=str(uuid.uuid4()))
 
-    state["internal_messages"].append(human_message)
-    state["sender"] = "human"
-
     logger.info("Human choice node processing completed")
-    return state
+    return {
+        "internal_messages": [human_message],
+        "sender": "human",
+    }
 
 
 async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
@@ -157,17 +157,21 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
                     user_continue_message_index[0] - 1
                 ]
                 head_messages = [user_input, research_hypothesis, continue_message]
+                remaining_messages = current_messages[
+                    user_continue_message_index[0] + 1 : -2
+                ]
             # Fallback to the first message if no continue message is found
             else:
                 logger.warning(
                     "No continue message found, falling back to first two messages"
                 )
                 head_messages = current_messages[:2]
+                remaining_messages = current_messages[2:-2]
 
             tail_messages = current_messages[-2:]
             trimmed_state = {
                 **state,
-                "internal_messages": head_messages + tail_messages,
+                "internal_messages": remaining_messages,
             }
             logger.debug(
                 f"Trimmed messages for processing - keeping {len(head_messages)} head and {len(tail_messages)} tail messages"
@@ -199,76 +203,22 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
 
         logger.debug(f"Parsed output and captured {len(messages)} messages")
 
-        updated_state: State = {
-            "internal_messages": trimmed_state["internal_messages"],
-            "hypothesis": (
-                str(parsed_output.hypothesis)
-                if parsed_output.hypothesis
-                else state.get("hypothesis", "")
-            ),
-            "process": (
-                str(parsed_output.process)
-                if parsed_output.process
-                else state.get("process", "")
-            ),
-            "process_decision": (
-                str(parsed_output.process_decision)
-                if parsed_output.process_decision
-                else state.get("process_decision", "")
-            ),
-            "visualization_state": (
-                str(parsed_output.visualization_state)
-                if parsed_output.visualization_state
-                else state.get("visualization_state", "")
-            ),
-            "searcher_state": (
-                str(parsed_output.searcher_state)
-                if parsed_output.searcher_state
-                else state.get("searcher_state", "")
-            ),
-            "code_state": (
-                str(parsed_output.code_state)
-                if parsed_output.code_state
-                else state.get("code_state", "")
-            ),
-            "report_section": (
-                str(parsed_output.report_section)
-                if parsed_output.report_section
-                else state.get("report_section", "")
-            ),
-            "quality_review": (
-                str(parsed_output.quality_review)
-                if parsed_output.quality_review
-                else state.get("quality_review", "")
-            ),
-            "needs_revision": bool(
-                bool(parsed_output.needs_revision)
-                if parsed_output.needs_revision
-                else state.get("needs_revision", False)
-            ),
-            "agent_scratchpad": (
-                str(parsed_output.agent_scratchpad)
-                if parsed_output.agent_scratchpad
-                else state.get("agent_scratchpad", "")
-            ),
-            "messages": messages,
-        }
-
-        # Clear and replace messages to force replacement behavior
-        state["internal_messages"].clear()
-        state["messages"].clear()
+        new_messages = [
+            AIMessage(content=msg, name=name, id=str(uuid.uuid4()), sender=name)
+            for msg in parsed_output.internal_messages
+        ]
+        updated_internal_messages = new_messages if new_messages else current_messages
+        combined_messages = head_messages + updated_internal_messages + tail_messages
 
         logger.info(f"Note agent {name} processed successfully")
-        return updated_state
+        return {
+            "messages": messages,
+            "internal_messages": Replace(value=combined_messages),
+        }
 
     except Exception as e:
         logger.error(f"Error in note_agent_node {name}: {e}", exc_info=True)
-        return _create_error_state(
-            state,
-            AIMessage(content=f"Unexpected error: {str(e)}", name=name),
-            name,
-            "Unexpected error",
-        )
+        return {}
 
 
 def parse_and_replace_charts(
@@ -341,30 +291,6 @@ def parse_and_replace_charts(
 
     logger.debug(f"Replaced {len(matches)} chart references")
     return modified_content, file_id_mapping
-
-
-def _create_error_state(
-    state: State, error_message: AIMessage, name: str, error_type: str
-) -> State:
-    """
-    Create an error state when an exception occurs.
-    """
-    logger.warning(f"Creating error state for {name}: {error_type}")
-    error_state: State = {
-        "internal_messages": state.get("internal_messages", []) + [error_message],
-        "messages": [],
-        "hypothesis": str(state.get("hypothesis", "")),
-        "process": str(state.get("process", "")),
-        "process_decision": str(state.get("process_decision", "")),
-        "visualization_state": str(state.get("visualization_state", "")),
-        "searcher_state": str(state.get("searcher_state", "")),
-        "code_state": str(state.get("code_state", "")),
-        "report_section": str(state.get("report_section", "")),
-        "quality_review": str(state.get("quality_review", "")),
-        "needs_revision": bool(state.get("needs_revision", False)),
-        "sender": "note_agent",
-    }
-    return error_state
 
 
 async def refiner_node(
@@ -490,6 +416,3 @@ async def refiner_node(
             )
         )
         return state
-
-
-logger.info("Agent processing module initialized")

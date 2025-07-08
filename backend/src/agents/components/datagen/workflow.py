@@ -179,7 +179,7 @@ class WorkflowManager:
 
         async def report_node(state):
             return await agent_node(
-                state, self.agents["report_agent"], "report_agent", "report_section"
+                state, self.agents["report_agent"], "report_agent", "report_state"
             )
 
         async def quality_review_node(state):
@@ -205,9 +205,6 @@ class WorkflowManager:
                     f"Captured {len(captured_messages)} messages from MessageCaptureAgent"
                 )
 
-                needs_revision = not output_message.continue_research
-                logger.info(f"Quality review updated. Needs revision: {needs_revision}")
-
                 output_ai_message = AIMessage(
                     content=f"Quality review: Continue research: {output_message.continue_research}, Reason: {output_message.reason}",
                     id=str(uuid.uuid4()),
@@ -218,7 +215,6 @@ class WorkflowManager:
                     "internal_messages": [output_ai_message],
                     "messages": captured_messages,
                     "quality_review": output_message.model_dump(),
-                    "needs_revision": needs_revision,
                     "sender": name,
                 }
             except Exception as e:

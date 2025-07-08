@@ -280,17 +280,7 @@ function parseResponseText(text) {
         result['Task'] = jsonData.task || 'No task provided';
       } else if (props.data.agent_name === 'Note Taker Agent') {
         // Handle Note Taker Agent format with multiple fields
-        if (jsonData.hypothesis) result['Hypothesis'] = jsonData.hypothesis;
-        if (jsonData.process) result['Process'] = jsonData.process;
-        if (jsonData.process_decision) result['Process Decision'] = jsonData.process_decision;
-        if (jsonData.code_state) result['Code State'] = jsonData.code_state;
-        if (jsonData.report_section) result['Report Section'] = jsonData.report_section;
-        if (jsonData.quality_review) result['Quality Review'] = jsonData.quality_review;
-        if (jsonData.needs_revision !== undefined) result['Needs Revision'] = jsonData.needs_revision ? 'Yes' : 'No';
-        if (jsonData.modification_areas) result['Modification Areas'] = jsonData.modification_areas;
-        if (jsonData.agent_scratchpad) result['Agent Scratchpad'] = jsonData.agent_scratchpad;
-        if (jsonData.visualization_state) result['Visualization State'] = jsonData.visualization_state;
-        if (jsonData.searcher_state) result['Searcher State'] = jsonData.searcher_state;
+        if (jsonData.internal_messages) result['Internal Messages'] = jsonData.internal_messages;
       } else if (props.data.agent_name === 'Quality Review Agent') {
         if ('continue_research' in jsonData) result['Continue'] = jsonData.continue_research ? 'Yes' : 'No';
         if (jsonData.reason) result['Reason'] = jsonData.reason;
