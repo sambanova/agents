@@ -190,7 +190,7 @@ class WorkflowManager:
 
                 trimmed_state = {
                     **state,
-                    "internal_messages": state["internal_messages"][-1:],
+                    "internal_messages": state["internal_messages"][-2:],
                 }
                 output_message = await agent.ainvoke(trimmed_state)
 

@@ -128,21 +128,14 @@ If you do not need to use a tool, respond normally without any XML tags.
             MessagesPlaceholder(variable_name="internal_messages"),
             # The agent's state is now passed in a single, structured human message
             # for clarity and to avoid confusing the LLM.
-            (
-                "human",
-                """
-CURRENT STATE:
----
-Hypothesis: {hypothesis}
-Process Decision: {process_decision}
-Visualization State: {visualization_state}
-Searcher State: {searcher_state}
-Code State: {code_state}
-Report State: {report_state}
----
-Based on your role and the current state, please proceed with your task.
-""",
-            ),
+            ("ai", "hypothesis: {hypothesis}"),
+            ("ai", "process: {process}"),
+            ("ai", "process_decision: {process_decision}"),
+            ("ai", "visualization_state: {visualization_state}"),
+            ("ai", "searcher_state: {searcher_state}"),
+            ("ai", "code_state: {code_state}"),
+            ("ai", "report_state: {report_state}"),
+            ("ai", "quality_review: {quality_review}"),
         ]
     )
 
@@ -309,19 +302,6 @@ Always end your response with a valid JSON object that matches the required stru
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", enhanced_system_prompt),
-            (
-                "human",
-                """
-PREVIOUS STATE:
----
-Hypothesis: {hypothesis}
-Process Decision: {process_decision}
-Visualization State: {visualization_state}
-Searcher State: {searcher_state}
-Code State: {code_state}
-Report State: {report_state}
-""",
-            ),
             MessagesPlaceholder(variable_name="internal_messages"),
         ]
     )

@@ -14,12 +14,12 @@ def setup_language_models(sambanova_api_key: str):
         sambanova_api_key, "Meta-Llama-3.3-70B-Instruct"
     )
     code_agent_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-R1-0528")
-    note_agent_llm = get_sambanova_llm(
-        sambanova_api_key, "Llama-4-Maverick-17B-128E-Instruct"
-    )
+    note_agent_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-V3-0324")
     process_agent_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-V3-0324")
     hypothesis_agent_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-V3-0324")
-    quality_review_agent_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-V3-0324")
+    quality_review_agent_llm = get_sambanova_llm(
+        sambanova_api_key, "Llama-4-Maverick-17B-128E-Instruct"
+    )
     refiner_agent_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-V3-0324")
 
     return {

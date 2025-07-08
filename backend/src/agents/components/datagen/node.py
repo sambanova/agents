@@ -207,7 +207,9 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
             AIMessage(content=msg, name=name, id=str(uuid.uuid4()), sender=name)
             for msg in parsed_output.internal_messages
         ]
-        updated_internal_messages = new_messages if new_messages else current_messages
+        updated_internal_messages = (
+            new_messages if len(new_messages) > 0 else current_messages
+        )
         combined_messages = head_messages + updated_internal_messages + tail_messages
 
         logger.info(f"Note agent {name} processed successfully")
