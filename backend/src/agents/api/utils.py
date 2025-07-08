@@ -353,6 +353,23 @@ def to_agent_thinking(payload: dict) -> Optional[dict]:
     Convert deep research markdown content to agent thinking content.
     """
 
+    event_to_agent_name_mapping = {
+        "deep_research_search_queries_plan": "Search Agent",
+        "deep_research_search_queries_plan_fixed": "Search Agent",
+        "deep_research_search_sections": "Planner Agent",
+        "deep_research_search_queries_section": "Search Queries Agent",
+        "deep_research_search_queries_section_fixed": "Search Queries Agent",
+        "deep_research_writer": "Writer Agent",
+        "deep_research_grader": "Grader Agent",
+        "data_science_hypothesis_agent": "Hypothesis Agent",
+        "data_science_process_agent": "Supervisor Agent",
+        "data_science_code_agent": "Code Agent",
+        "data_science_quality_review_agent": "Quality Review Agent",
+        "data_science_note_agent": "Note Taker Agent",
+        "data_science_report_agent": "Report Agent",
+        "data_science_visualization_agent": "Visualization Agent",
+    }
+
     try:
         if payload.get("event") == "agent_completion" and payload.get(
             "additional_kwargs", {}
@@ -369,7 +386,6 @@ def to_agent_thinking(payload: dict) -> Optional[dict]:
             "data_science_code_agent",
             "data_science_quality_review_agent",
             "data_science_note_agent",
-            "data_science_process_agent",
             "data_science_report_agent",
             "data_science_visualization_agent",
         ]:
@@ -379,12 +395,18 @@ def to_agent_thinking(payload: dict) -> Optional[dict]:
                     {
                         "user_id": payload["user_id"],
                         "message_id": payload["message_id"],
-                        "agent_name": "deep_resarch",
+                        "agent_name": event_to_agent_name_mapping.get(
+                            payload["additional_kwargs"]["agent_type"],
+                            "Agent",
+                        ),
                         "text": payload["content"],
                         "task": payload["additional_kwargs"]["agent_type"],
                         "metadata": {
                             "workflow_name": "deep_research",
-                            "agent_name": "deep_research",
+                            "agent_name": event_to_agent_name_mapping.get(
+                                payload["additional_kwargs"]["agent_type"],
+                                "Agent",
+                            ),
                             "llm_name": payload["response_metadata"]["model_name"],
                             "duration": payload["response_metadata"]["usage"][
                                 "total_latency"

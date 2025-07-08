@@ -78,6 +78,7 @@
               :provider="provider"
               :sidebarOpen="showDaytonaSidebar"
               :isInDeepResearch="isInDeepResearch"
+              :isInDataScience="isInDataScience"
               @open-daytona-sidebar="handleOpenDaytonaSidebar"
               @open-artifact-canvas="handleOpenArtifactCanvas"
             />
@@ -786,6 +787,9 @@ watch(
       // Reset deep research state for new conversation
       isInDeepResearch.value = false;
       
+      // Reset data science state for new conversation
+      isInDataScience.value = false;
+      
       // Reset sidebar state when switching conversations
       showDaytonaSidebar.value = false;
       currentDaytonaEvents.value = [];
@@ -896,6 +900,9 @@ const runMetrics = ref(new Map());
 
 // Track deep research state
 const isInDeepResearch = ref(false);
+
+// Track data science state
+const isInDataScience = ref(false);
 
 watch(
   () => agentThoughtsData.value,
@@ -1280,6 +1287,13 @@ async function filterChat(msgData) {
         isInDeepResearch.value = true;
       } else if (agentType === 'deep_research_end') {
         isInDeepResearch.value = false;
+      }
+      
+      // Restore data science state
+      if (agentType === 'deep_research_interrupt') {
+        isInDataScience.value = true;
+      } else if (agentType === 'data_science_end') {
+        isInDataScience.value = false;
       }
     });
 
@@ -1914,6 +1928,13 @@ async function connectWebSocket() {
             isInDeepResearch.value = true;
           } else if (agentType === 'deep_research_end') {
             isInDeepResearch.value = false;
+          }
+          
+          // Update data science state based on agent type
+          if (agentType === 'react_subgraph_data_science') {
+            isInDataScience.value = true;
+          } else if (agentType === 'data_science_end') {
+            isInDataScience.value = false;
           }
           
           // Update cumulative token usage if present

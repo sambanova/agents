@@ -445,6 +445,11 @@ import { isFinalAgentType } from '@/utils/globalFunctions.js'
   isInDeepResearch: {
     type: Boolean,
     default: false
+  },
+  
+  isInDataScience: {
+    type: Boolean,
+    default: false
   }
   
   })
@@ -618,7 +623,7 @@ const streamingResponseContent = computed(() => {
       
       const content = event.data.content.trim()
 
-      if (props.isInDeepResearch) {
+      if (props.isInDeepResearch || props.isInDataScience) {
         return ''
       }
 
