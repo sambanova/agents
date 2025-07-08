@@ -18,9 +18,11 @@ class MessageCaptureAgent(Runnable):
         prompt: ChatPromptTemplate,
         llm: LanguageModelLike,
         parser: PydanticOutputParser,
+        output_mapper: Callable,
     ):
         self.llm = llm
         self.parser = parser
+        self.output_mapper = output_mapper
         self.prompt = prompt
         self.llm_interceptor = MessageInterceptor()
         self.llm_fixing_interceptor = MessageInterceptor()
@@ -43,6 +45,7 @@ class MessageCaptureAgent(Runnable):
                 llm=fixing_model,
                 parser=self.parser,
             )
+            | self.output_mapper
         ).ainvoke(state)
 
     def invoke(self, state: Dict[str, Any]) -> AIMessage:

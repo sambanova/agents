@@ -211,10 +211,18 @@ def create_supervisor(
     # Log successful creation of supervisor
     logger.info("Supervisor created successfully")
 
+    def wrap_supervisor_output(decision):
+        # Convert SupervisorDecision to a simple AIMessage with structured content
+        decision_content = f"Decision: {decision.next}, Task: {decision.task}"
+        return AIMessage(
+            content=decision_content, id=str(uuid.uuid4()), sender="supervisor"
+        )
+
     return MessageCaptureAgent(
         llm=llm,
         prompt=prompt,
         parser=supervisor_parser,
+        output_mapper=wrap_supervisor_output,
     )
 
 
