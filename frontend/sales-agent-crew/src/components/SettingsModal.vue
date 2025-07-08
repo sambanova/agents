@@ -386,7 +386,9 @@ const serperKey = ref('')
 const fireworksKey = ref('')
 const errorMessage = ref('')
 const successMessage = ref('')
-const selectedModel = ref('DeepSeek V3')
+// Available model options - update both here and in the template when adding new models
+const AVAILABLE_MODELS = ['DeepSeek V3']
+const selectedModel = ref(null)
 const keysLoaded = ref(false)
 // Key visibility controls
 const sambanovaKeyVisible = ref(false)
@@ -403,7 +405,6 @@ const missingKeys = ref({
 })
 
 
-// ✅ Function to load saved keys
 const loadKeys = async () => {
   if (!userId.value) return;
 
@@ -430,13 +431,11 @@ const loadKeys = async () => {
     }
 
     // Handle model selection
-    if (!savedModel || savedModel === 'null' || savedModel === 'undefined' || savedModel.trim() === '') {
+    if (!savedModel || savedModel === 'null' || savedModel === 'undefined' || savedModel.trim() === '' || !AVAILABLE_MODELS.includes(savedModel)) {
       selectedModel.value = 'DeepSeek V3';
       localStorage.setItem(`selected_model_${userId.value}`, 'DeepSeek V3');
     } else {
       selectedModel.value = savedModel;
-      // Update localStorage with the normalized value
-      localStorage.setItem(`selected_model_${userId.value}`, savedModel);
     }
     
   } catch (error) {

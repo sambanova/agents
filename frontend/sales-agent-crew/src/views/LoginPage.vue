@@ -49,9 +49,16 @@
               </button>
             </p>
           </div>
-          <div class="text-center mt-4 flex flex-row justify-between w-full">
-            <a class="underline text-[12px]" href="/terms-of-service">Terms Of Service</a>
-            <a class="underline text-[12px]" target="_blank" href="https://sambanova.ai/privacy-policy">Privacy Policy</a>
+          <div class="text-center mt-4">
+            <div class="mb-2">
+              <a class="underline text-[12px]" href="/terms-of-service">Terms Of Service</a>
+              <span class="mx-2 text-[12px]">|</span>
+              <a class="underline text-[12px]" target="_blank" href="https://sambanova.ai/privacy-policy">Privacy Policy</a>
+            </div>
+            <div class="text-[10px] text-gray-500 mb-1">Vendors</div>
+            <div>
+              <a class="underline text-[12px]" target="_blank" href="https://www.daytona.io/company/terms-of-service">Daytona Terms of Service</a>
+            </div>
           </div>
         </div>
         

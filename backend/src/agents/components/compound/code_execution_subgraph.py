@@ -131,7 +131,7 @@ def create_code_execution_graph(
 ):
     logger.info("Creating code execution subgraph")
     api_key = os.getenv("DAYTONA_API_KEY")
-    daytona_snapshot = "data-analysis:0.0.10"
+    daytona_snapshot = os.getenv("DAYTONA_SNAPSHOT")
 
     supported_extensions = [
         "image/png",

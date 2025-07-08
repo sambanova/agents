@@ -457,8 +457,10 @@ def _get_daytona(user_id: str, redis_storage: RedisStorage):
             config = DaytonaSDKConfig(api_key=api_key)
             daytona = DaytonaClient(config)
 
+            daytona_snapshot = os.getenv("DAYTONA_SNAPSHOT")
+
             params = CreateSandboxFromSnapshotParams(
-                snapshot="data-analysis:0.0.8",
+                snapshot=daytona_snapshot,
             )
 
             # Strip markdown formatting before processing
