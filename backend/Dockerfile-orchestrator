@@ -17,13 +17,16 @@ RUN pip install \
     redis==5.2.1 \
     python-dotenv \
     pydantic==2.10.5 \
-    "mcp>=0.9.0"
+    "mcp>=0.9.0" \
+    "structlog>=24.1.0" \
+    "langchain-mcp-adapters>=0.0.9" \
+    cryptography
 
 # Set working directory
 WORKDIR /app
 
-# Copy source code
-COPY src/orchestrator/ ./src/orchestrator/
+# Copy source code - need the full src directory for imports
+COPY src/ ./src/
 
 # Set Python path for imports
 ENV PYTHONPATH=/app
