@@ -431,8 +431,17 @@ async def start_server(server_id: str, x_user_id: Optional[str] = Header(None)):
     if not config.enabled:
         logger.warning(f"Server {server_id} is disabled")
         return JSONResponse({"server_id": server_id, "status": "disabled"})
+
+    # If the server is already running, simply touch the last-used timestamp and return
+    # RUNNING without restarting the process.  This makes the endpoint idempotent and
+    # avoids unnecessary restarts that introduce latency.
+    if process_manager.is_running(user_id, server_id):
+        logger.info(f"Server {server_id} already running for user {user_id} – skipping start")
+        process_manager.touch(user_id, server_id)
+        await redis_client.update_server_status(user_id, server_id, MCPServerStatus.RUNNING)
+        return JSONResponse({"server_id": server_id, "status": MCPServerStatus.RUNNING.value})
     
-    # Start the server process
+    # Start the server process (or restart if not running)
     logger.info(f"Starting server process for {server_id}")
     success = await process_manager.start_server(user_id, server_id, config)
     
