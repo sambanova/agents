@@ -17,7 +17,8 @@ RUN pip install \
     redis==5.2.1 \
     python-dotenv \
     pydantic==2.10.5 \
-    "structlog>=24.1.0"
+    "structlog>=24.1.0" \
+    uv
 
 # Set working directory
 WORKDIR /app

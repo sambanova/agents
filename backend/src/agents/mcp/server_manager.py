@@ -105,6 +105,14 @@ class MCPServerManager:
                 try:
                     await self._delegate("POST", f"/servers/{server_id}/start", user_id)
                     # health monitoring still local (we rely on orch status)
+                    # Track remote server locally so subsequent tool calls succeed
+                    self.active_servers[server_id] = {
+                        "user_id": user_id,
+                        "config": config,
+                        "transport": config.transport or "stdio",
+                        "remote": True,
+                        "started_at": time.time(),
+                    }
                     await self._start_health_monitoring(user_id, server_id)
                     await self.redis_storage.update_mcp_server_health(
                         user_id, server_id, MCPServerStatus.STARTING.value
@@ -166,6 +174,9 @@ class MCPServerManager:
                     await self.redis_storage.update_mcp_server_health(
                         user_id, server_id, MCPServerStatus.STOPPED.value
                     )
+                    # Remove from local active registry
+                    if server_id in self.active_servers:
+                        self.active_servers.pop(server_id, None)
                     return True
                 except Exception as e:
                     logger.error("Orchestrator stop failed", error=str(e))
@@ -506,6 +517,10 @@ class MCPServerManager:
             if proc is None:
                 return False
             return proc.returncode is None  # None ⇒ still running
+
+        # Remote orchestrator-managed server: we treat presence as running
+        if server_info.get("remote"):
+            return True
 
         # For http/sse transports we assume running as long as we have the info
         return True
