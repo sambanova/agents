@@ -125,17 +125,21 @@ If you do not need to use a tool, respond normally without any XML tags.
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", final_system_prompt),
-            MessagesPlaceholder(variable_name="internal_messages"),
-            # The agent's state is now passed in a single, structured human message
-            # for clarity and to avoid confusing the LLM.
-            ("ai", "hypothesis: {hypothesis}"),
-            ("ai", "process: {process}"),
-            ("ai", "process_decision: {process_decision}"),
-            ("ai", "visualization_state: {visualization_state}"),
-            ("ai", "searcher_state: {searcher_state}"),
-            ("ai", "code_state: {code_state}"),
-            ("ai", "report_state: {report_state}"),
-            ("ai", "quality_review: {quality_review}"),
+            (
+                "human",
+                """
+CURRENT STATE:
+- Hypothesis: {hypothesis} \n\n
+- Process Decision: {process_decision} \n\n
+- Visualization State: {visualization_state} \n\n
+- Searcher State: {searcher_state} \n\n
+- Code State: {code_state} \n\n
+- Report State: {report_state} \n\n
+- Quality Review: {quality_review} \n\n
+
+Based on your role and the current state, please proceed with your task.
+""",
+            ),
         ]
     )
 

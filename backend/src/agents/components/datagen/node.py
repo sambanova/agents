@@ -168,10 +168,22 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
                 head_messages = current_messages[:2]
                 remaining_messages = current_messages[2:-2]
 
+            # Separate remaining_messages based on whether name matches
+            mapped_messages = [
+                msg
+                for msg in remaining_messages
+                if hasattr(msg, "name") and msg.name == name
+            ]
+            non_mapped_messages = [
+                msg
+                for msg in remaining_messages
+                if not hasattr(msg, "name") or msg.name != name
+            ]
+
             tail_messages = current_messages[-2:]
             trimmed_state = {
                 **state,
-                "internal_messages": remaining_messages,
+                "internal_messages": non_mapped_messages,
             }
             logger.debug(
                 f"Trimmed messages for processing - keeping {len(head_messages)} head and {len(tail_messages)} tail messages"
@@ -210,7 +222,9 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
         updated_internal_messages = (
             new_messages if len(new_messages) > 0 else current_messages
         )
-        combined_messages = head_messages + updated_internal_messages + tail_messages
+        combined_messages = (
+            head_messages + mapped_messages + updated_internal_messages + tail_messages
+        )
 
         logger.info(f"Note agent {name} processed successfully")
         return {
