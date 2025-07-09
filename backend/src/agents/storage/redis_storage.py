@@ -596,13 +596,13 @@ class RedisStorage:
                 "last_updated": server_config.last_updated,
             }
             
-            # Store without encryption for orchestrator
+            # Store without encryption for orchestrator (use parent Redis methods directly)
             orch_key = f"orch_mcp_servers:{user_id}:{server_config.server_id}"
-            await self.redis_client.client.set(orch_key, json.dumps(orch_config))
+            await super(type(self.redis_client), self.redis_client).set(orch_key, json.dumps(orch_config))
             
             # Also maintain user server list for orchestrator
             orch_user_key = f"orch_user_mcp_servers:{user_id}"
-            await self.redis_client.client.sadd(orch_user_key, server_config.server_id)
+            await super(type(self.redis_client), self.redis_client).sadd(orch_user_key, server_config.server_id)
             
         except Exception as e:
             logger.warning(f"Failed to store orchestrator config: {e}")
@@ -708,8 +708,8 @@ class RedisStorage:
             await self.redis_client.srem(user_servers_key, server_id)
             
             # Remove from orchestrator locations
-            await self.redis_client.client.delete(orch_server_key)
-            await self.redis_client.client.srem(orch_user_key, server_id)
+            await super(type(self.redis_client), self.redis_client).delete(orch_server_key)
+            await super(type(self.redis_client), self.redis_client).srem(orch_user_key, server_id)
             
             logger.info(
                 "MCP server configuration deleted",

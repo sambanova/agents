@@ -59,7 +59,19 @@ class SimpleRedisClient:
         await self.connect()
         key = f"orch_mcp_servers:{user_id}:{server_id}"
         config_str = await self.client.get(key)
+        
+        # If orchestrator key doesn't exist, try to read from regular encrypted key
         if not config_str:
+            logger.info(f"Orchestrator key not found for {server_id}, trying encrypted key")
+            regular_key = f"mcp_servers:{user_id}:{server_id}"
+            config_str = await self.client.get(regular_key)
+            
+            if config_str:
+                logger.warning(f"Found encrypted data for {server_id} but orchestrator can't decrypt it. Server config unavailable.")
+                return None
+        
+        if not config_str:
+            logger.warning(f"No config found for server {server_id} in any location")
             return None
         
         # Parse the stored JSON config
@@ -76,7 +88,7 @@ class SimpleRedisClient:
                 status=MCPServerStatus.STOPPED  # Default to stopped, will be updated by process manager
             )
         except Exception as e:
-            logger.error(f"Failed to parse server config: {e}")
+            logger.error(f"Failed to parse server config for {server_id}: {e}")
             return None
     
     async def update_server_status(self, user_id: str, server_id: str, status: MCPServerStatus):
@@ -91,40 +103,80 @@ class SimpleRedisClient:
         enabled_servers = []
         
         try:
+            logger.info("Starting scan for orchestrator MCP servers...")
+            
             # Scan for all orch_user_mcp_servers keys to get user lists
             cursor = 0
+            user_keys_found = []
             while True:
                 cursor, keys = await self.client.scan(cursor, match="orch_user_mcp_servers:*", count=100)
-                
-                for key in keys:
-                    try:
-                        # Parse key: orch_user_mcp_servers:user_id
-                        parts = key.split(":", 1)
-                        if len(parts) != 2:
-                            continue
-                        
-                        user_id = parts[1]
-                        
-                        # Get all server IDs for this user
-                        server_ids = await self.client.smembers(key)
-                        
-                        for server_id in server_ids:
-                            if isinstance(server_id, bytes):
-                                server_id = server_id.decode("utf-8")
-                            
-                            # Get server config
-                            config = await self.get_server_config(user_id, server_id)
-                            if config and config.enabled:
-                                enabled_servers.append((user_id, server_id, config))
-                    
-                    except Exception as e:
-                        logger.warning(f"Error processing user key {key}: {e}")
-                        continue
+                user_keys_found.extend(keys)
                 
                 if cursor == 0:
                     break
             
-            logger.info(f"Found {len(enabled_servers)} enabled MCP servers across all users")
+            logger.info(f"Found {len(user_keys_found)} orchestrator user keys: {user_keys_found}")
+            
+            # If no orchestrator keys found, try to scan regular user keys as fallback
+            if not user_keys_found:
+                logger.info("No orchestrator keys found, checking for regular user_mcp_servers keys as fallback...")
+                cursor = 0
+                while True:
+                    cursor, keys = await self.client.scan(cursor, match="user_mcp_servers:*", count=100)
+                    for key in keys:
+                        # Convert regular key to orchestrator format for processing
+                        orch_key = key.replace("user_mcp_servers:", "orch_user_mcp_servers:")
+                        user_keys_found.append(orch_key)
+                    
+                    if cursor == 0:
+                        break
+                
+                logger.info(f"Found {len(user_keys_found)} regular user keys to check")
+            
+            for key in user_keys_found:
+                try:
+                    # Parse key: orch_user_mcp_servers:user_id
+                    parts = key.split(":", 1)
+                    if len(parts) != 2:
+                        logger.warning(f"Invalid key format: {key}")
+                        continue
+                    
+                    user_id = parts[1]
+                    logger.info(f"Processing user {user_id}")
+                    
+                    # Get all server IDs for this user (try orchestrator key first, then regular key)
+                    server_ids = await self.client.smembers(key)
+                    if not server_ids and key.startswith("orch_"):
+                        # Try regular key as fallback
+                        regular_key = key.replace("orch_user_mcp_servers:", "user_mcp_servers:")
+                        server_ids = await self.client.smembers(regular_key)
+                        logger.info(f"Using regular key {regular_key} as fallback")
+                    
+                    logger.info(f"User {user_id} has {len(server_ids)} servers: {server_ids}")
+                    
+                    for server_id in server_ids:
+                        if isinstance(server_id, bytes):
+                            server_id = server_id.decode("utf-8")
+                        
+                        logger.info(f"Checking server {server_id} for user {user_id}")
+                        
+                        # Get server config
+                        config = await self.get_server_config(user_id, server_id)
+                        if config:
+                            logger.info(f"Server {server_id} config: enabled={config.enabled}, command={config.command}")
+                            if config.enabled:
+                                enabled_servers.append((user_id, server_id, config))
+                                logger.info(f"Added enabled server {server_id} to startup list")
+                            else:
+                                logger.info(f"Server {server_id} is disabled, skipping")
+                        else:
+                            logger.warning(f"No config found for server {server_id}")
+                
+                except Exception as e:
+                    logger.warning(f"Error processing user key {key}: {e}")
+                    continue
+            
+            logger.info(f"Scan complete: found {len(enabled_servers)} enabled MCP servers across all users")
             return enabled_servers
             
         except Exception as e:
@@ -140,13 +192,25 @@ class ProcessManager:
         try:
             process_key = f"{user_id}:{server_id}"
             
+            logger.info(f"ProcessManager starting server {server_id} for user {user_id}")
+            logger.info(f"Command: {config.command}, Args: {config.args}, Env: {config.env}")
+            
             # Stop existing process if running
             if process_key in self.processes:
+                logger.info(f"Stopping existing process for {server_id}")
                 await self.stop_server(user_id, server_id)
+            
+            # Validate command
+            if not config.command:
+                logger.error(f"No command specified for server {server_id}")
+                return False
             
             # Start new process
             cmd = [config.command] + config.args
             env = {**os.environ, **config.env}
+            
+            logger.info(f"Executing command: {' '.join(cmd)}")
+            logger.info(f"Environment variables: {list(config.env.keys())}")
             
             process = subprocess.Popen(
                 cmd,
@@ -156,12 +220,22 @@ class ProcessManager:
                 text=True
             )
             
+            # Wait a moment to check if process started successfully
+            await asyncio.sleep(0.1)
+            if process.poll() is not None:
+                # Process already exited
+                stdout, stderr = process.communicate()
+                logger.error(f"Process for {server_id} exited immediately. Exit code: {process.returncode}")
+                logger.error(f"Stdout: {stdout}")
+                logger.error(f"Stderr: {stderr}")
+                return False
+            
             self.processes[process_key] = process
-            logger.info(f"Started MCP server {server_id} for user {user_id}")
+            logger.info(f"Successfully started MCP server {server_id} for user {user_id} (PID: {process.pid})")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to start server {server_id}: {e}")
+            logger.error(f"Failed to start server {server_id}: {e}", exc_info=True)
             return False
     
     async def stop_server(self, user_id: str, server_id: str) -> bool:
@@ -244,15 +318,26 @@ async def startup_event():
     redis_host = os.getenv("REDIS_HOST", "localhost")
     redis_port = int(os.getenv("REDIS_PORT", "6379"))
     
+    logger.info(f"Connecting to Redis at {redis_host}:{redis_port}")
+    
     redis_client = SimpleRedisClient(redis_host, redis_port)
     process_manager = ProcessManager()
     
     # Load and start all enabled servers on startup
+    logger.info("Scanning for enabled MCP servers...")
     enabled_servers = await redis_client.get_all_enabled_servers()
+    logger.info(f"Found {len(enabled_servers)} enabled servers")
+    
     for user_id, server_id, config in enabled_servers:
+        logger.info(f"Starting server {server_id} for user {user_id} (command: {config.command})")
         success = await process_manager.start_server(user_id, server_id, config)
         status = MCPServerStatus.RUNNING if success else MCPServerStatus.ERROR
         await redis_client.update_server_status(user_id, server_id, status)
+        
+        if success:
+            logger.info(f"Successfully started server {server_id}")
+        else:
+            logger.error(f"Failed to start server {server_id}")
     
     # Start health monitoring
     health_monitor_task = asyncio.create_task(health_monitor_loop())
@@ -290,21 +375,29 @@ async def _ensure_user_header(user_id: Optional[str]) -> str:
 async def start_server(server_id: str, x_user_id: Optional[str] = Header(None)):
     user_id = await _ensure_user_header(x_user_id)
     
+    logger.info(f"Received start request for server {server_id} from user {user_id}")
+    
     # Get server config from Redis
     config = await redis_client.get_server_config(user_id, server_id)
     if not config:
+        logger.error(f"Server config not found for {server_id}")
         return JSONResponse({"server_id": server_id, "status": "error", "message": "Server config not found"})
     
+    logger.info(f"Found config for server {server_id}: command={config.command}, args={config.args}, enabled={config.enabled}")
+    
     if not config.enabled:
+        logger.warning(f"Server {server_id} is disabled")
         return JSONResponse({"server_id": server_id, "status": "disabled"})
     
     # Start the server process
+    logger.info(f"Starting server process for {server_id}")
     success = await process_manager.start_server(user_id, server_id, config)
     
     # Update status in Redis
     status = MCPServerStatus.RUNNING if success else MCPServerStatus.ERROR
     await redis_client.update_server_status(user_id, server_id, status)
     
+    logger.info(f"Server {server_id} start result: success={success}, status={status}")
     return JSONResponse({"server_id": server_id, "status": status.value})
 
 @app.post("/servers/{server_id}/stop")
