@@ -40,8 +40,17 @@ class MCPServerManager:
         # Health check configuration - less aggressive monitoring
         self.health_check_interval = 120  # Check every 2 minutes instead of 30 seconds
         self.restart_failure_count: Dict[str, int] = {}  # Track restart failures per server
-        self.max_restart_attempts = 3  # Maximum restart attempts before giving up
+        self.max_restart_attempts = 3
         self.restart_backoff_time = 300  # 5 minutes backoff after max attempts reached
+
+        # NEW: Connection management and circuit breaker for robustness
+        self.connection_failures: Dict[str, int] = {}  # server_id -> failure count
+        self.connection_backoff: Dict[str, float] = {}  # server_id -> next retry time
+        self.max_connection_failures = 3  # Max failures before circuit breaker
+        self.connection_backoff_time = 30  # Initial backoff time in seconds
+        self.max_backoff_time = 300  # Maximum backoff time (5 minutes)
+        self.client_validation_cache: Dict[str, float] = {}  # server_id -> last validation time
+        self.validation_ttl = 60  # Re-validate clients every minute
 
     async def start_server(self, user_id: str, server_id: str) -> bool:
         """Start an MCP server for a user."""
@@ -654,14 +663,56 @@ class MCPServerManager:
             )
 
     async def _get_or_create_mcp_client(self, server_id: str, config: MCPServerConfig):
-        """Get or create a persistent MCP client for a server."""
+        """Get or create a persistent MCP client for a server with robust error handling."""
         try:
-            # Check if we have a cached client
-            if server_id in self.mcp_clients:
-                # Update last used time
-                self.client_last_used[server_id] = time.time()
-                return self.mcp_clients[server_id]
+            current_time = time.time()
+            
+            # Check if we're in backoff mode for this server
+            if server_id in self.connection_backoff and current_time < self.connection_backoff[server_id]:
+                backoff_remaining = self.connection_backoff[server_id] - current_time
+                logger.debug(
+                    "Server in connection backoff",
+                    server_id=server_id,
+                    backoff_remaining=int(backoff_remaining)
+                )
+                return None
 
+            # Check if we have a cached client that's been validated recently
+            if server_id in self.mcp_clients:
+                last_validation = self.client_validation_cache.get(server_id, 0)
+                if current_time - last_validation < self.validation_ttl:
+                    # Update last used time
+                    self.client_last_used[server_id] = current_time
+                    return self.mcp_clients[server_id]
+                
+                # Validate existing client
+                try:
+                    client = self.mcp_clients[server_id]
+                    # Quick validation - try to get tools with timeout
+                    await asyncio.wait_for(client.get_tools(), timeout=5)
+                    self.client_validation_cache[server_id] = current_time
+                    self.client_last_used[server_id] = current_time
+                    # Reset failure count on successful validation
+                    self.connection_failures.pop(server_id, None)
+                    return client
+                except Exception as e:
+                    logger.warning(
+                        "Client validation failed, will recreate",
+                        server_id=server_id,
+                        error=str(e)
+                    )
+                    await self._cleanup_failed_client(server_id)
+
+            # Create new client
+            return await self._create_new_mcp_client(server_id, config)
+                
+        except Exception as e:
+            await self._handle_connection_failure(server_id, e)
+            return None
+
+    async def _create_new_mcp_client(self, server_id: str, config: MCPServerConfig):
+        """Create a new MCP client with timeout and error handling."""
+        try:
             # Import MCP adapters
             from langchain_mcp_adapters.client import MultiServerMCPClient
             
@@ -696,13 +747,24 @@ class MCPServerManager:
             if config.env_vars:
                 server_config[config.name]["env"] = config.env_vars
             
-            # Create and cache the client
-            client = MultiServerMCPClient(server_config)
+            # Create client with timeout
+            logger.info("Creating new MCP client", server_id=server_id, transport=config.transport)
+            client = await asyncio.wait_for(
+                self._create_client_with_initialization(server_config),
+                timeout=30  # 30 second timeout for client creation
+            )
+            
+            # Cache the client
             self.mcp_clients[server_id] = client
             self.client_last_used[server_id] = time.time()
+            self.client_validation_cache[server_id] = time.time()
+            
+            # Reset failure tracking on success
+            self.connection_failures.pop(server_id, None)
+            self.connection_backoff.pop(server_id, None)
             
             logger.info(
-                "Created persistent MCP client",
+                "Created new persistent MCP client",
                 server_id=server_id,
                 transport=config.transport,
             )
@@ -712,6 +774,10 @@ class MCPServerManager:
         except ImportError:
             logger.warning("langchain-mcp-adapters not available")
             return None
+        except asyncio.TimeoutError:
+            logger.error("Timeout creating MCP client", server_id=server_id)
+            await self._handle_connection_failure(server_id, Exception("Client creation timeout"))
+            return None
         except Exception as e:
             logger.error(
                 "Error creating MCP client",
@@ -719,7 +785,75 @@ class MCPServerManager:
                 error=str(e),
                 exc_info=True,
             )
+            await self._handle_connection_failure(server_id, e)
             return None
+
+    async def _create_client_with_initialization(self, server_config: Dict[str, Any]):
+        """Create and initialize MCP client with proper error handling."""
+        from langchain_mcp_adapters.client import MultiServerMCPClient
+        
+        client = MultiServerMCPClient(server_config)
+        
+        # Test the client by getting tools (this will initialize the connection)
+        await client.get_tools()
+        
+        return client
+
+    async def _cleanup_failed_client(self, server_id: str):
+        """Clean up a failed MCP client connection."""
+        try:
+            if server_id in self.mcp_clients:
+                client = self.mcp_clients[server_id]
+                if hasattr(client, 'close'):
+                    try:
+                        await asyncio.wait_for(client.close(), timeout=5)
+                    except:
+                        pass  # Ignore close errors
+                del self.mcp_clients[server_id]
+            
+            # Clear related cache entries
+            self.client_last_used.pop(server_id, None)
+            self.client_validation_cache.pop(server_id, None)
+            
+            logger.debug("Cleaned up failed MCP client", server_id=server_id)
+            
+        except Exception as e:
+            logger.warning("Error cleaning up failed client", server_id=server_id, error=str(e))
+
+    async def _handle_connection_failure(self, server_id: str, error: Exception):
+        """Handle connection failures with exponential backoff."""
+        current_time = time.time()
+        
+        # Increment failure count
+        failure_count = self.connection_failures.get(server_id, 0) + 1
+        self.connection_failures[server_id] = failure_count
+        
+        # Calculate backoff time with exponential increase
+        if failure_count >= self.max_connection_failures:
+            backoff_time = min(
+                self.connection_backoff_time * (2 ** (failure_count - self.max_connection_failures)),
+                self.max_backoff_time
+            )
+            self.connection_backoff[server_id] = current_time + backoff_time
+            
+            logger.warning(
+                "Connection failures exceeded threshold, entering backoff",
+                server_id=server_id,
+                failure_count=failure_count,
+                backoff_seconds=int(backoff_time),
+                error=str(error)
+            )
+        else:
+            logger.warning(
+                "Connection failure recorded",
+                server_id=server_id,
+                failure_count=failure_count,
+                max_failures=self.max_connection_failures,
+                error=str(error)
+            )
+        
+        # Clean up the failed client
+        await self._cleanup_failed_client(server_id)
 
     def _convert_mcp_tool_to_langchain(self, mcp_tool: MCPToolInfo, user_id: str) -> BaseTool:
         """Convert an MCP tool to a LangChain tool with efficient MCP execution using persistent connections."""
@@ -772,105 +906,198 @@ class MCPServerManager:
         )
 
     async def _discover_tools_from_mcp(self, server_id: str, config: MCPServerConfig) -> List[Dict[str, Any]]:
-        """Discover tools from an MCP server using persistent client connection."""
-        try:
-            # Use persistent client connection
-            client = await self._get_or_create_mcp_client(server_id, config)
-            if not client:
-                raise Exception("Could not create MCP client")
-            
-            # Get tools using persistent client
-            tools = await client.get_tools()
-            
-            # Convert tools to our format
-            discovered_tools = []
-            for tool in tools:
-                tool_info = {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "server_id": server_id,
-                    "server_name": config.name,
-                    "input_schema": getattr(tool, 'args_schema', {})
-                }
-                discovered_tools.append(tool_info)
-            
-            logger.info(
-                "Successfully discovered tools from MCP server using persistent client",
-                server_id=server_id,
-                num_tools=len(discovered_tools),
-            )
-            
-            return discovered_tools
+        """Discover tools from an MCP server using persistent client connection with robust error handling."""
+        max_retries = 2
+        retry_delay = 1
+        
+        for attempt in range(max_retries + 1):
+            try:
+                # Use persistent client connection with validation
+                client = await self._get_or_create_mcp_client(server_id, config)
+                if not client:
+                    raise Exception("Could not create MCP client - in backoff or creation failed")
                 
-        except ImportError:
-            logger.warning("langchain-mcp-adapters not available, using mock tools")
-            raise
-        except Exception as e:
-            logger.error(
-                "Error discovering tools from MCP server",
-                server_id=server_id,
-                error=str(e),
-                exc_info=True,
-            )
-            raise
+                # Get tools using persistent client with timeout
+                logger.debug("Discovering tools from MCP server", server_id=server_id, attempt=attempt + 1)
+                tools = await asyncio.wait_for(client.get_tools(), timeout=15)
+                
+                # Convert tools to our format
+                discovered_tools = []
+                for tool in tools:
+                    tool_info = {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "server_id": server_id,
+                        "server_name": config.name,
+                        "input_schema": getattr(tool, 'args_schema', {})
+                    }
+                    discovered_tools.append(tool_info)
+                
+                logger.info(
+                    "Successfully discovered tools from MCP server",
+                    server_id=server_id,
+                    num_tools=len(discovered_tools),
+                    attempt=attempt + 1
+                )
+                
+                return discovered_tools
+                    
+            except asyncio.TimeoutError:
+                error_msg = f"Tool discovery timeout (attempt {attempt + 1})"
+                logger.warning(error_msg, server_id=server_id)
+                
+                if attempt < max_retries:
+                    await self._cleanup_failed_client(server_id)
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                else:
+                    await self._handle_connection_failure(server_id, Exception(error_msg))
+                    raise Exception(error_msg)
+                    
+            except ImportError:
+                logger.warning("langchain-mcp-adapters not available, using mock tools")
+                raise
+            except Exception as e:
+                error_msg = str(e)
+                logger.warning(
+                    "Tool discovery failed",
+                    server_id=server_id,
+                    attempt=attempt + 1,
+                    error=error_msg
+                )
+                
+                # Clean up client on any error during discovery
+                await self._cleanup_failed_client(server_id)
+                
+                if attempt < max_retries:
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                else:
+                    await self._handle_connection_failure(server_id, e)
+                    logger.error(
+                        "Error discovering tools from MCP server",
+                        server_id=server_id,
+                        error=error_msg,
+                        exc_info=True,
+                    )
+                    raise
+        
+        # Should not reach here
+        raise Exception(f"Tool discovery failed after {max_retries + 1} attempts")
 
     async def _execute_mcp_tool(self, server_id: str, tool_name: str, arguments: Dict[str, Any]) -> str:
-        """Execute an MCP tool using persistent client connection."""
-        try:
-            # Get server config
-            server_info = self.active_servers.get(server_id)
-            if not server_info:
-                raise ValueError(f"Server {server_id} not found or not running")
-            
-            config = server_info["config"]
-            
-            # Use persistent client connection
-            client = await self._get_or_create_mcp_client(server_id, config)
-            if not client:
-                raise Exception("Could not get MCP client")
-            
-            # Get tools from client
-            tools = await client.get_tools()
-            
-            # Find the specific tool
-            target_tool = None
-            for tool in tools:
-                if tool.name == tool_name:
-                    target_tool = tool
-                    break
-            
-            if not target_tool:
-                raise ValueError(f"Tool {tool_name} not found on server {server_id}")
-            
-            # Execute the tool
-            if hasattr(target_tool, 'ainvoke'):
-                result = await target_tool.ainvoke(arguments)
-            elif hasattr(target_tool, 'invoke'):
-                result = target_tool.invoke(arguments)
-            else:
-                # Fallback to calling the tool directly
-                result = await target_tool(**arguments)
-            
-            logger.info(
-                "Successfully executed MCP tool using persistent client",
-                server_id=server_id,
-                tool_name=tool_name,
-            )
-            
-            return str(result)
+        """Execute an MCP tool using persistent client connection with robust error handling."""
+        max_retries = 2
+        retry_delay = 1
+        
+        for attempt in range(max_retries + 1):
+            try:
+                # Get server config
+                server_info = self.active_servers.get(server_id)
+                if not server_info:
+                    raise ValueError(f"Server {server_id} not found or not running")
                 
-        except ImportError:
-            logger.warning("langchain-mcp-adapters not available")
-            raise
-        except Exception as e:
-            logger.error(
-                "Error executing MCP tool",
-                server_id=server_id,
-                tool_name=tool_name,
-                error=str(e),
-                exc_info=True,
-            )
-            raise
+                config = server_info["config"]
+                
+                # Use persistent client connection with validation
+                client = await self._get_or_create_mcp_client(server_id, config)
+                if not client:
+                    raise Exception("Could not get MCP client - in backoff or creation failed")
+                
+                # Get tools from client with timeout
+                tools = await asyncio.wait_for(client.get_tools(), timeout=10)
+                
+                # Find the specific tool
+                target_tool = None
+                for tool in tools:
+                    if tool.name == tool_name:
+                        target_tool = tool
+                        break
+                
+                if not target_tool:
+                    raise ValueError(f"Tool {tool_name} not found on server {server_id}")
+                
+                # Execute the tool with timeout
+                logger.debug(
+                    "Executing MCP tool",
+                    server_id=server_id,
+                    tool_name=tool_name,
+                    attempt=attempt + 1
+                )
+                
+                if hasattr(target_tool, 'ainvoke'):
+                    result = await asyncio.wait_for(target_tool.ainvoke(arguments), timeout=30)
+                elif hasattr(target_tool, 'invoke'):
+                    result = await asyncio.wait_for(
+                        asyncio.to_thread(target_tool.invoke, arguments),
+                        timeout=30
+                    )
+                else:
+                    # Fallback to calling the tool directly
+                    result = await asyncio.wait_for(target_tool(**arguments), timeout=30)
+                
+                logger.info(
+                    "Successfully executed MCP tool",
+                    server_id=server_id,
+                    tool_name=tool_name,
+                    attempt=attempt + 1
+                )
+                
+                return str(result)
+                    
+            except asyncio.TimeoutError:
+                error_msg = f"Tool execution timeout (attempt {attempt + 1})"
+                logger.warning(error_msg, server_id=server_id, tool_name=tool_name)
+                
+                if attempt < max_retries:
+                    # Clean up client on timeout and retry
+                    await self._cleanup_failed_client(server_id)
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                else:
+                    await self._handle_connection_failure(server_id, Exception(error_msg))
+                    raise Exception(error_msg)
+                    
+            except Exception as e:
+                error_msg = str(e)
+                logger.warning(
+                    "MCP tool execution failed",
+                    server_id=server_id,
+                    tool_name=tool_name,
+                    attempt=attempt + 1,
+                    error=error_msg
+                )
+                
+                # Check if this is a connection-related error
+                if any(keyword in error_msg.lower() for keyword in [
+                    'connection', 'timeout', 'closed', 'broken', 'taskgroup', 'mcp error'
+                ]):
+                    # Clean up client and retry for connection errors
+                    await self._cleanup_failed_client(server_id)
+                    
+                    if attempt < max_retries:
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2
+                        continue
+                    else:
+                        await self._handle_connection_failure(server_id, e)
+                        raise
+                else:
+                    # For non-connection errors, don't retry
+                    logger.error(
+                        "MCP tool execution failed with non-connection error",
+                        server_id=server_id,
+                        tool_name=tool_name,
+                        error=error_msg,
+                        exc_info=True,
+                    )
+                    raise
+        
+        # Should not reach here
+        raise Exception(f"Tool execution failed after {max_retries + 1} attempts")
 
     async def cleanup_unused_clients(self) -> int:
         """Clean up unused MCP clients to free resources."""
@@ -952,6 +1179,9 @@ class MCPServerManager:
             self.mcp_clients.clear()
             self.client_last_used.clear()
             self.restart_failure_count.clear()
+            self.connection_failures.clear()
+            self.connection_backoff.clear()
+            self.client_validation_cache.clear()
             
             logger.info("MCP server manager cleanup completed")
             
