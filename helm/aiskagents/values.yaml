@@ -189,3 +189,7 @@ orchestrator:
   extraEnv: []
     # - name: MCP_DEBUG
     #   value: "true" 
+  env:
+    MCP_IDLE_TIMEOUT: "900"
+    ORCH_SKIP_AUTOSTART: "false"
+    MCP_NODE_OPTIONS: "--max-old-space-size=256" 

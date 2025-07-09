@@ -13,6 +13,7 @@ import sys
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from enum import Enum
+import time
 
 import httpx
 import structlog
@@ -187,6 +188,8 @@ class SimpleRedisClient:
 class ProcessManager:
     def __init__(self):
         self.processes: Dict[str, subprocess.Popen] = {}
+        self.last_used: Dict[str, float] = {}
+        self.IDLE_TIMEOUT = int(os.getenv("MCP_IDLE_TIMEOUT", "900"))  # 15 min default
     
     async def start_server(self, user_id: str, server_id: str, config: MCPServerConfig) -> bool:
         try:
@@ -208,6 +211,10 @@ class ProcessManager:
             # Start new process
             cmd = [config.command] + config.args
             env = {**os.environ, **config.env}
+            # Constrain Node.js memory usage if configured
+            node_opts = os.getenv("MCP_NODE_OPTIONS")
+            if node_opts and "NODE_OPTIONS" not in env:
+                env["NODE_OPTIONS"] = node_opts
             
             
             process = subprocess.Popen(
@@ -229,6 +236,7 @@ class ProcessManager:
                 return False
             
             self.processes[process_key] = process
+            self.last_used[process_key] = time.time()
             logger.info(f"Successfully started MCP server {server_id} for user {user_id} (PID: {process.pid})")
             return True
             
@@ -251,6 +259,7 @@ class ProcessManager:
                     process.kill()
                 
                 del self.processes[process_key]
+                self.last_used.pop(process_key, None)
                 logger.info(f"Stopped MCP server {server_id} for user {user_id}")
             
             return True
@@ -266,6 +275,9 @@ class ProcessManager:
         
         process = self.processes[process_key]
         return process.poll() is None
+
+    def touch(self, user_id: str, server_id: str):
+        self.last_used[f"{user_id}:{server_id}"] = time.time()
 
 # Service initialization
 app = FastAPI(title="MCP-Orchestrator", version="0.1.0")
@@ -302,7 +314,18 @@ async def health_monitor_loop():
                 else:
                     # Update status to running
                     await redis_client.update_server_status(user_id, server_id, MCPServerStatus.RUNNING)
-                    
+
+            # Idle shutdown
+            # Stop servers that have been idle beyond timeout
+            now = time.time()
+            for proc_key in list(process_manager.processes.keys()):
+                last = process_manager.last_used.get(proc_key, now)
+                if now - last > process_manager.IDLE_TIMEOUT:
+                    u_id, s_id = proc_key.split(":", 1)
+                    logger.info(f"Stopping idle server {s_id} for user {u_id}")
+                    await process_manager.stop_server(u_id, s_id)
+                    await redis_client.update_server_status(u_id, s_id, MCPServerStatus.STOPPED)
+
         except asyncio.CancelledError:
             logger.info("Health monitor loop cancelled")
             break
@@ -321,21 +344,24 @@ async def startup_event():
     redis_client = SimpleRedisClient(redis_host, redis_port)
     process_manager = ProcessManager()
     
-    # Load and start all enabled servers on startup
-    logger.info("Scanning for enabled MCP servers...")
-    enabled_servers = await redis_client.get_all_enabled_servers()
-    logger.info(f"Found {len(enabled_servers)} enabled servers")
-    
-    for user_id, server_id, config in enabled_servers:
-        logger.info(f"Starting server {server_id} for user {user_id} (command: {config.command})")
-        success = await process_manager.start_server(user_id, server_id, config)
-        status = MCPServerStatus.RUNNING if success else MCPServerStatus.ERROR
-        await redis_client.update_server_status(user_id, server_id, status)
-        
-        if success:
-            logger.info(f"Successfully started server {server_id}")
-        else:
-            logger.error(f"Failed to start server {server_id}")
+    if os.getenv("ORCH_SKIP_AUTOSTART", "false").lower() != "true":
+        # Load and start all enabled servers on startup
+        logger.info("Scanning for enabled MCP servers...")
+        enabled_servers = await redis_client.get_all_enabled_servers()
+        logger.info(f"Found {len(enabled_servers)} enabled servers")
+
+        for user_id, server_id, config in enabled_servers:
+            logger.info(f"Starting server {server_id} for user {user_id} (command: {config.command})")
+            success = await process_manager.start_server(user_id, server_id, config)
+            status = MCPServerStatus.RUNNING if success else MCPServerStatus.ERROR
+            await redis_client.update_server_status(user_id, server_id, status)
+            
+            if success:
+                logger.info(f"Successfully started server {server_id}")
+            else:
+                logger.error(f"Failed to start server {server_id}")
+    else:
+        logger.info("ORCH_SKIP_AUTOSTART=true → skipping automatic server startup")
     
     # Start health monitoring
     health_monitor_task = asyncio.create_task(health_monitor_loop())
@@ -421,6 +447,8 @@ async def server_status(server_id: str, x_user_id: Optional[str] = Header(None))
     
     # Check if process is actually running
     is_running = process_manager.is_running(user_id, server_id)
+    if is_running:
+        process_manager.touch(user_id, server_id)
     status = MCPServerStatus.RUNNING if is_running else MCPServerStatus.STOPPED
     
     # Update Redis with actual status
