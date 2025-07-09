@@ -17,6 +17,7 @@ import time
 
 import httpx
 import structlog
+import random
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -184,6 +185,18 @@ class SimpleRedisClient:
             logger.error(f"Error scanning for enabled servers: {e}")
             return []
 
+    async def set_running(self, user_id: str, server_id: str):
+        await self.connect()
+        await self.client.set(f"orch_running:{user_id}:{server_id}", "1")
+
+    async def clear_running(self, user_id: str, server_id: str):
+        await self.connect()
+        await self.client.delete(f"orch_running:{user_id}:{server_id}")
+
+    async def is_running(self, user_id: str, server_id: str) -> bool:
+        await self.connect()
+        return await self.client.exists(f"orch_running:{user_id}:{server_id}") == 1
+
 # Simple process manager
 class ProcessManager:
     def __init__(self):
@@ -237,6 +250,7 @@ class ProcessManager:
             
             self.processes[process_key] = process
             self.last_used[process_key] = time.time()
+            await redis_client.set_running(user_id, server_id)
             logger.info(f"Successfully started MCP server {server_id} for user {user_id} (PID: {process.pid})")
             return True
             
@@ -260,6 +274,7 @@ class ProcessManager:
                 
                 del self.processes[process_key]
                 self.last_used.pop(process_key, None)
+                await redis_client.clear_running(user_id, server_id)
                 logger.info(f"Stopped MCP server {server_id} for user {user_id}")
             
             return True
@@ -291,7 +306,7 @@ async def health_monitor_loop():
     """Periodic health monitoring to ensure servers stay running."""
     while True:
         try:
-            await asyncio.sleep(60)  # Check every minute
+            await asyncio.sleep(60 + random.uniform(0, 15))  # jitter 0-15s
             
             # Get all enabled servers
             enabled_servers = await redis_client.get_all_enabled_servers()
@@ -324,6 +339,7 @@ async def health_monitor_loop():
                     u_id, s_id = proc_key.split(":", 1)
                     logger.info(f"Stopping idle server {s_id} for user {u_id}")
                     await process_manager.stop_server(u_id, s_id)
+                    await redis_client.clear_running(u_id, s_id)
                     await redis_client.update_server_status(u_id, s_id, MCPServerStatus.STOPPED)
 
         except asyncio.CancelledError:
@@ -351,6 +367,9 @@ async def startup_event():
         logger.info(f"Found {len(enabled_servers)} enabled servers")
 
         for user_id, server_id, config in enabled_servers:
+            if await redis_client.is_running(user_id, server_id):
+                logger.info(f"Server {server_id} already running according to Redis flag – skipping autostart")
+                continue
             logger.info(f"Starting server {server_id} for user {user_id} (command: {config.command})")
             success = await process_manager.start_server(user_id, server_id, config)
             status = MCPServerStatus.RUNNING if success else MCPServerStatus.ERROR
