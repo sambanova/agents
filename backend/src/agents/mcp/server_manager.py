@@ -185,15 +185,20 @@ class MCPServerManager:
                 return MCPServerStatus.STOPPED, "Server process not running"
 
             # TODO: Implement actual MCP health check using langchain-mcp-adapters
-            # For now, just check if process is alive
+            # For stdio transports we inspect the subprocess; for http/sse we
+            # currently assume the server is healthy (a more sophisticated ping
+            # can be added later).
+
             if server_id in self.server_processes:
                 process = self.server_processes[server_id]
-                if process.poll() is None:
+                if process.returncode is None:  # Process still running
                     return MCPServerStatus.HEALTHY, "Server process running"
                 else:
                     return MCPServerStatus.ERROR, "Server process terminated"
 
-            return MCPServerStatus.UNKNOWN, "Server status unknown"
+            # If there's no local subprocess then this is an HTTP/SSE server –
+            # treat as healthy for now.
+            return MCPServerStatus.HEALTHY, "Remote server assumed healthy"
 
         except Exception as e:
             logger.error(
@@ -387,8 +392,31 @@ class MCPServerManager:
             return 0
 
     def _is_server_running(self, server_id: str) -> bool:
-        """Check if a server is currently running."""
-        return server_id in self.active_servers
+        """Check if a server is currently running.
+
+        For ``stdio`` transports we additionally confirm that the underlying
+        subprocess has not exited (``returncode`` is ``None``).  Previously we
+        only checked membership in ``self.active_servers`` which meant crashed
+        processes were still considered alive, leading to misleading health
+        reports and restart loops.  For ``http`` and ``sse`` transports we
+        keep the original behaviour because there is no local subprocess to
+        inspect.
+        """
+        if server_id not in self.active_servers:
+            return False
+
+        server_info = self.active_servers[server_id]
+        transport = server_info.get("transport")
+
+        # For stdio-based servers verify the subprocess is still running
+        if transport == "stdio":
+            proc = self.server_processes.get(server_id)
+            if proc is None:
+                return False
+            return proc.returncode is None  # None ⇒ still running
+
+        # For http/sse transports we assume running as long as we have the info
+        return True
 
     def _is_cache_valid(self, server_id: str) -> bool:
         """Check if the tool cache is still valid for a server."""
