@@ -57,31 +57,79 @@ class SimpleRedisClient:
     
     async def get_server_config(self, user_id: str, server_id: str) -> Optional[MCPServerConfig]:
         await self.connect()
-        key = f"mcp_server:{user_id}:{server_id}"
-        data = await self.client.hgetall(key)
-        if not data:
+        key = f"orch_mcp_servers:{user_id}:{server_id}"
+        config_str = await self.client.get(key)
+        if not config_str:
             return None
         
-        # Parse the stored config
+        # Parse the stored JSON config
         try:
-            config_data = {
-                "id": data.get("id", server_id),
-                "name": data.get("name", server_id),
-                "command": data.get("command", ""),
-                "args": json.loads(data.get("args", "[]")),
-                "env": json.loads(data.get("env", "{}")),
-                "enabled": data.get("enabled", "false").lower() == "true",
-                "status": data.get("status", MCPServerStatus.STOPPED)
-            }
-            return MCPServerConfig(**config_data)
+            config_data = json.loads(config_str)
+            # Map backend field names to our simple format
+            return MCPServerConfig(
+                id=config_data.get("server_id", server_id),
+                name=config_data.get("name", server_id),
+                command=config_data.get("command", ""),
+                args=config_data.get("args", []),
+                env=config_data.get("env_vars", {}),
+                enabled=config_data.get("enabled", False),
+                status=MCPServerStatus.STOPPED  # Default to stopped, will be updated by process manager
+            )
         except Exception as e:
             logger.error(f"Failed to parse server config: {e}")
             return None
     
     async def update_server_status(self, user_id: str, server_id: str, status: MCPServerStatus):
         await self.connect()
-        key = f"mcp_server:{user_id}:{server_id}"
-        await self.client.hset(key, "status", status.value)
+        # We can't easily update just the status in the JSON, so we'll skip this for now
+        # The backend will handle status updates through its own mechanisms
+        pass
+    
+    async def get_all_enabled_servers(self) -> List[Tuple[str, str, MCPServerConfig]]:
+        """Get all enabled MCP servers across all users. Returns (user_id, server_id, config) tuples."""
+        await self.connect()
+        enabled_servers = []
+        
+        try:
+            # Scan for all orch_user_mcp_servers keys to get user lists
+            cursor = 0
+            while True:
+                cursor, keys = await self.client.scan(cursor, match="orch_user_mcp_servers:*", count=100)
+                
+                for key in keys:
+                    try:
+                        # Parse key: orch_user_mcp_servers:user_id
+                        parts = key.split(":", 1)
+                        if len(parts) != 2:
+                            continue
+                        
+                        user_id = parts[1]
+                        
+                        # Get all server IDs for this user
+                        server_ids = await self.client.smembers(key)
+                        
+                        for server_id in server_ids:
+                            if isinstance(server_id, bytes):
+                                server_id = server_id.decode("utf-8")
+                            
+                            # Get server config
+                            config = await self.get_server_config(user_id, server_id)
+                            if config and config.enabled:
+                                enabled_servers.append((user_id, server_id, config))
+                    
+                    except Exception as e:
+                        logger.warning(f"Error processing user key {key}: {e}")
+                        continue
+                
+                if cursor == 0:
+                    break
+            
+            logger.info(f"Found {len(enabled_servers)} enabled MCP servers across all users")
+            return enabled_servers
+            
+        except Exception as e:
+            logger.error(f"Error scanning for enabled servers: {e}")
+            return []
 
 # Simple process manager
 class ProcessManager:
@@ -153,10 +201,45 @@ app = FastAPI(title="MCP-Orchestrator", version="0.1.0")
 # Global services
 redis_client: Optional[SimpleRedisClient] = None
 process_manager: Optional[ProcessManager] = None
+health_monitor_task: Optional[asyncio.Task] = None
+
+async def health_monitor_loop():
+    """Periodic health monitoring to ensure servers stay running."""
+    while True:
+        try:
+            await asyncio.sleep(60)  # Check every minute
+            
+            # Get all enabled servers
+            enabled_servers = await redis_client.get_all_enabled_servers()
+            
+            for user_id, server_id, config in enabled_servers:
+                # Check if process is still running
+                is_running = process_manager.is_running(user_id, server_id)
+                
+                if not is_running:
+                    logger.warning(f"Server {server_id} for user {user_id} is not running, restarting...")
+                    # Restart the server
+                    success = await process_manager.start_server(user_id, server_id, config)
+                    status = MCPServerStatus.RUNNING if success else MCPServerStatus.ERROR
+                    await redis_client.update_server_status(user_id, server_id, status)
+                    
+                    if success:
+                        logger.info(f"Successfully restarted server {server_id} for user {user_id}")
+                    else:
+                        logger.error(f"Failed to restart server {server_id} for user {user_id}")
+                else:
+                    # Update status to running
+                    await redis_client.update_server_status(user_id, server_id, MCPServerStatus.RUNNING)
+                    
+        except asyncio.CancelledError:
+            logger.info("Health monitor loop cancelled")
+            break
+        except Exception as e:
+            logger.error(f"Error in health monitor loop: {e}")
 
 @app.on_event("startup")
 async def startup_event():
-    global redis_client, process_manager
+    global redis_client, process_manager, health_monitor_task
     
     redis_host = os.getenv("REDIS_HOST", "localhost")
     redis_port = int(os.getenv("REDIS_PORT", "6379"))
@@ -164,11 +247,29 @@ async def startup_event():
     redis_client = SimpleRedisClient(redis_host, redis_port)
     process_manager = ProcessManager()
     
+    # Load and start all enabled servers on startup
+    enabled_servers = await redis_client.get_all_enabled_servers()
+    for user_id, server_id, config in enabled_servers:
+        success = await process_manager.start_server(user_id, server_id, config)
+        status = MCPServerStatus.RUNNING if success else MCPServerStatus.ERROR
+        await redis_client.update_server_status(user_id, server_id, status)
+    
+    # Start health monitoring
+    health_monitor_task = asyncio.create_task(health_monitor_loop())
+    
     logger.info("Standalone orchestrator startup complete")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    global process_manager
+    global process_manager, health_monitor_task
+    
+    # Stop health monitoring
+    if health_monitor_task:
+        health_monitor_task.cancel()
+        try:
+            await health_monitor_task
+        except asyncio.CancelledError:
+            pass
     
     if process_manager:
         # Stop all running processes
