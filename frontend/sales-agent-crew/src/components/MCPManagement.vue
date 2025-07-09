@@ -186,8 +186,6 @@
                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-brandColor"
                 >
                   <option value="stdio">stdio</option>
-                  <option value="http">http</option>
-                  <option value="sse">sse</option>
                 </select>
               </div>
             </div>

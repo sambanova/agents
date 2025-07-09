@@ -265,7 +265,16 @@ class MCPServerManager:
             if self.orchestrator_url:
                 try:
                     data = await self._delegate("GET", f"/servers/{server_id}/status", user_id)
-                    status = MCPServerStatus(data.get("status", "unknown"))
+                    raw_status = data.get("status", "unknown")
+                    # Map orchestrator statuses to backend enum
+                    if raw_status in ("running", "healthy"):
+                        status = MCPServerStatus.HEALTHY
+                    elif raw_status in ("starting",):
+                        status = MCPServerStatus.STARTING
+                    elif raw_status in ("stopped",):
+                        status = MCPServerStatus.STOPPED
+                    else:
+                        status = MCPServerStatus.ERROR
                     return status, data.get("message", "")
                 except Exception as e:
                     logger.error("Orchestrator health request failed", error=str(e))
