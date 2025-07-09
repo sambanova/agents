@@ -1,0 +1,43 @@
+# MCP Orchestrator Dockerfile
+FROM python:3.11-slim
+
+# Install system dependencies for MCP servers
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast Python package management
+RUN pip install uv
+
+# Set working directory
+WORKDIR /app
+
+# Copy Python dependencies
+COPY pyproject.toml uv.lock ./
+
+# Install Python dependencies
+RUN uv sync --frozen
+
+# Copy source code
+COPY src/ ./src/
+
+# Set Python path for imports
+ENV PYTHONPATH=/app/src
+
+# Create non-root user for security
+RUN useradd -m -u 1000 orchestrator
+RUN chown -R orchestrator:orchestrator /app
+USER orchestrator
+
+# Expose port
+EXPOSE 8090
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8090/health || exit 1
+
+# Run orchestrator
+CMD ["uv", "run", "uvicorn", "src.orchestrator.main:app", "--host", "0.0.0.0", "--port", "8090"] 

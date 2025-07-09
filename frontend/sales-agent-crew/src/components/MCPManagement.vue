@@ -88,23 +88,7 @@
               </div>
             </div>
             <div class="flex items-center space-x-2 ml-4">
-              <!-- Server Start/Stop buttons -->
-              <button 
-                v-if="server.enabled && server.health_status === 'stopped'"
-                @click="startServer(server)"
-                :disabled="server.starting"
-                class="px-3 py-1 bg-green-100 text-green-800 hover:bg-green-200 rounded text-sm font-medium transition-colors disabled:opacity-50"
-              >
-                {{ server.starting ? 'Starting...' : 'Start' }}
-              </button>
-              <button 
-                v-if="server.enabled && (server.health_status === 'healthy' || server.health_status === 'running')"
-                @click="stopServer(server)"
-                :disabled="server.stopping"
-                class="px-3 py-1 bg-red-100 text-red-800 hover:bg-red-200 rounded text-sm font-medium transition-colors disabled:opacity-50"
-              >
-                {{ server.stopping ? 'Stopping...' : 'Stop' }}
-              </button>
+              <!-- Start/Stop removed: orchestrator auto-manages lifecycle -->
               <button 
                 @click="toggleServer(server)"
                 :class="[
@@ -404,8 +388,6 @@ async function loadServers() {
     // Initialize additional properties for UI state
     servers.value.forEach(server => {
       server.health_status_loading = false
-      server.starting = false
-      server.stopping = false
     })
     
     // Only load health status for enabled servers on initial load
@@ -465,57 +447,7 @@ async function refreshServerHealth(server) {
   await loadServerDetailsForServers([server])
 }
 
-// Start server
-async function startServer(server) {
-  server.starting = true
-  try {
-    await axios.post(`${import.meta.env.VITE_API_URL}/mcp/servers/${server.server_id}/start`, {}, {
-      headers: {
-        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
-      }
-    })
-    
-    // Wait a moment then refresh status
-    setTimeout(async () => {
-      await refreshServerHealth(server)
-    }, 2000)
-    
-    success.value = `Server "${server.name}" start command sent`
-    clearMessages()
-  } catch (err) {
-    error.value = `Failed to start server "${server.name}"`
-    console.error('Error starting server:', err)
-    clearMessages()
-  } finally {
-    server.starting = false
-  }
-}
-
-// Stop server
-async function stopServer(server) {
-  server.stopping = true
-  try {
-    await axios.post(`${import.meta.env.VITE_API_URL}/mcp/servers/${server.server_id}/stop`, {}, {
-      headers: {
-        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
-      }
-    })
-    
-    // Wait a moment then refresh status
-    setTimeout(async () => {
-      await refreshServerHealth(server)
-    }, 1000)
-    
-    success.value = `Server "${server.name}" stop command sent`
-    clearMessages()
-  } catch (err) {
-    error.value = `Failed to stop server "${server.name}"`
-    console.error('Error stopping server:', err)
-    clearMessages()
-  } finally {
-    server.stopping = false
-  }
-}
+// Start/stop functions removed – orchestrator handles lifecycle automatically
 
 // Toggle server enabled/disabled
 async function toggleServer(server) {

@@ -38,6 +38,16 @@ class MCPServerManager:
         # never block (keyed by server_id)
         self.output_tasks: Dict[str, asyncio.Task] = {}
 
+        # Optional external orchestrator URL.  If defined, all lifecycle
+        # operations are delegated via HTTP rather than spawning locally.  This
+        # lets the main API pod remain lightweight while a dedicated
+        # orchestrator handles heavy studio binaries.
+        self.orchestrator_url: Optional[str] = os.getenv("MCP_ORCHESTRATOR_URL")
+
+        # Lazily-created httpx client session for orchestrator calls
+        self._orch_client: Optional["httpx.AsyncClient"] = None
+
+
     def _get_or_create_mcp_client(self, server_id: str, config: MCPServerConfig):
         """Return a cached MultiServerMCPClient for the given server, creating one if needed."""
         from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -91,6 +101,22 @@ class MCPServerManager:
                 return True
 
             # Start server based on transport type
+            if self.orchestrator_url:
+                try:
+                    await self._delegate("POST", f"/servers/{server_id}/start", user_id)
+                    # health monitoring still local (we rely on orch status)
+                    await self._start_health_monitoring(user_id, server_id)
+                    await self.redis_storage.update_mcp_server_health(
+                        user_id, server_id, MCPServerStatus.STARTING.value
+                    )
+                    return True
+                except Exception as e:
+                    logger.error("Orchestrator start failed", error=str(e))
+                    await self.redis_storage.update_mcp_server_health(
+                        user_id, server_id, MCPServerStatus.ERROR.value
+                    )
+                    return False
+
             if config.transport == "stdio":
                 success = await self._start_stdio_server(user_id, config)
             elif config.transport == "http":
@@ -134,6 +160,17 @@ class MCPServerManager:
     async def stop_server(self, user_id: str, server_id: str) -> bool:
         """Stop an MCP server for a user."""
         try:
+            if self.orchestrator_url:
+                try:
+                    await self._delegate("POST", f"/servers/{server_id}/stop", user_id)
+                    await self.redis_storage.update_mcp_server_health(
+                        user_id, server_id, MCPServerStatus.STOPPED.value
+                    )
+                    return True
+                except Exception as e:
+                    logger.error("Orchestrator stop failed", error=str(e))
+                    return False
+
             if not self._is_server_running(server_id):
                 logger.info("Server not running", server_id=server_id, user_id=user_id)
                 return True
@@ -214,6 +251,15 @@ class MCPServerManager:
     async def health_check(self, user_id: str, server_id: str) -> Tuple[MCPServerStatus, Optional[str]]:
         """Perform health check on an MCP server."""
         try:
+            if self.orchestrator_url:
+                try:
+                    data = await self._delegate("GET", f"/servers/{server_id}/status", user_id)
+                    status = MCPServerStatus(data.get("status", "unknown"))
+                    return status, data.get("message", "")
+                except Exception as e:
+                    logger.error("Orchestrator health request failed", error=str(e))
+                    return MCPServerStatus.ERROR, str(e)
+
             config = await self.redis_storage.get_mcp_server_config(user_id, server_id)
             if not config:
                 return MCPServerStatus.ERROR, "Server configuration not found"
@@ -860,3 +906,20 @@ class MCPServerManager:
             
         except Exception as e:
             logger.error("Error during cleanup", error=str(e), exc_info=True) 
+
+    async def _orch(self) -> "httpx.AsyncClient":
+        """Return a shared httpx.AsyncClient for orchestrator calls."""
+        import httpx
+        if self._orch_client is None:
+            timeout = httpx.Timeout(30.0)
+            self._orch_client = httpx.AsyncClient(base_url=self.orchestrator_url, timeout=timeout)
+        return self._orch_client
+
+    async def _delegate(self, method: str, path: str, user_id: str, **kwargs):
+        """Send request to orchestrator and return JSON result."""
+        client = await self._orch()
+        headers = kwargs.pop("headers", {})
+        headers["X-User-Id"] = user_id
+        resp = await client.request(method, path, headers=headers, **kwargs)
+        resp.raise_for_status()
+        return resp.json() 
