@@ -187,8 +187,17 @@ class MCPServerManager:
             # TODO: Implement actual MCP health check using langchain-mcp-adapters
             # For now, just check if process is alive
             if server_id in self.server_processes:
-                process = self.server_processes[server_id]
-                if process.poll() is None:
+                proc = self.server_processes[server_id]
+                try:
+                    # For subprocess.Popen we have poll(), for asyncio.Process we use returncode
+                    if hasattr(proc, "poll"):
+                        running = proc.poll() is None
+                    else:
+                        running = proc.returncode is None
+                except Exception:
+                    running = False
+
+                if running:
                     return MCPServerStatus.HEALTHY, "Server process running"
                 else:
                     return MCPServerStatus.ERROR, "Server process terminated"
