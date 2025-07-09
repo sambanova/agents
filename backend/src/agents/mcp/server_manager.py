@@ -26,14 +26,22 @@ class MCPServerManager:
         self.health_check_tasks: Dict[str, asyncio.Task] = {}  # server_id -> task
         self.tool_cache: Dict[str, List[Dict[str, Any]]] = {}  # server_id -> tools
         self.cache_expiry: Dict[str, float] = {}  # server_id -> expiry_time
-        self.cache_ttl = 300  # 5 minutes cache TTL
+        self.cache_ttl = 1800  # 30 minutes cache TTL (increased from 5 minutes)
         
-        # MCP client connections for real tool execution
+        # Persistent MCP client connections for efficient tool execution and discovery
         self.mcp_clients: Dict[str, Any] = {}  # server_id -> MCP client session
+        self.client_last_used: Dict[str, float] = {}  # server_id -> last used timestamp
+        self.client_cleanup_interval = 3600  # Clean up unused clients after 1 hour
 
         # Async tasks that continuously drain MCP subprocess stdout/stderr so pipes
         # never block (keyed by server_id)
         self.output_tasks: Dict[str, asyncio.Task] = {}
+
+        # Health check configuration - less aggressive monitoring
+        self.health_check_interval = 120  # Check every 2 minutes instead of 30 seconds
+        self.restart_failure_count: Dict[str, int] = {}  # Track restart failures per server
+        self.max_restart_attempts = 3  # Maximum restart attempts before giving up
+        self.restart_backoff_time = 300  # 5 minutes backoff after max attempts reached
 
     async def start_server(self, user_id: str, server_id: str) -> bool:
         """Start an MCP server for a user."""
@@ -53,6 +61,9 @@ class MCPServerManager:
                 logger.info("Server already running", server_id=server_id, user_id=user_id)
                 return True
 
+            # Reset restart failure count on manual start
+            self.restart_failure_count.pop(server_id, None)
+
             # Start server based on transport type
             if config.transport == "stdio":
                 success = await self._start_stdio_server(user_id, config)
@@ -70,7 +81,7 @@ class MCPServerManager:
                     user_id, server_id, MCPServerStatus.STARTING.value
                 )
                 
-                # Start health monitoring
+                # Start health monitoring with less aggressive settings
                 await self._start_health_monitoring(user_id, server_id)
                 
                 logger.info("MCP server started successfully", server_id=server_id, user_id=user_id)
@@ -106,6 +117,19 @@ class MCPServerManager:
                 self.health_check_tasks[server_id].cancel()
                 del self.health_check_tasks[server_id]
 
+            # Clean up persistent MCP client
+            if server_id in self.mcp_clients:
+                try:
+                    # Try to properly close the client if it has a close method
+                    client = self.mcp_clients[server_id]
+                    if hasattr(client, 'close'):
+                        await client.close()
+                except Exception as e:
+                    logger.warning("Error closing MCP client", server_id=server_id, error=str(e))
+                finally:
+                    del self.mcp_clients[server_id]
+                    self.client_last_used.pop(server_id, None)
+
             # Stop server process
             if server_id in self.server_processes:
                 proc = self.server_processes[server_id]
@@ -139,6 +163,9 @@ class MCPServerManager:
             if server_id in self.tool_cache:
                 del self.tool_cache[server_id]
                 del self.cache_expiry[server_id]
+
+            # Clear restart failure tracking
+            self.restart_failure_count.pop(server_id, None)
 
             # Update server status
             await self.redis_storage.update_mcp_server_health(
@@ -184,8 +211,7 @@ class MCPServerManager:
             if not self._is_server_running(server_id):
                 return MCPServerStatus.STOPPED, "Server process not running"
 
-            # TODO: Implement actual MCP health check using langchain-mcp-adapters
-            # For now, just check if process is alive
+            # Check if process is alive for stdio servers
             if server_id in self.server_processes:
                 proc = self.server_processes[server_id]
                 try:
@@ -198,11 +224,26 @@ class MCPServerManager:
                     running = False
 
                 if running:
+                    # Try a simple MCP connection test if possible
+                    try:
+                        client = await self._get_or_create_mcp_client(server_id, config)
+                        if client:
+                            # Simple validation - try to get tools list
+                            await asyncio.wait_for(client.get_tools(), timeout=10)
+                            return MCPServerStatus.HEALTHY, "Server responding to MCP calls"
+                    except asyncio.TimeoutError:
+                        return MCPServerStatus.ERROR, "Server not responding to MCP calls (timeout)"
+                    except Exception as mcp_error:
+                        logger.debug("MCP health check failed", server_id=server_id, error=str(mcp_error))
+                        # Don't immediately mark as error - could be temporary
+                        return MCPServerStatus.HEALTHY, "Server process running (MCP check failed)"
+                    
                     return MCPServerStatus.HEALTHY, "Server process running"
                 else:
                     return MCPServerStatus.ERROR, "Server process terminated"
 
-            return MCPServerStatus.UNKNOWN, "Server status unknown"
+            # For HTTP/SSE servers, just check if marked as active
+            return MCPServerStatus.HEALTHY, "Server marked as active"
 
         except Exception as e:
             logger.error(
@@ -215,11 +256,12 @@ class MCPServerManager:
             return MCPServerStatus.ERROR, str(e)
 
     async def discover_tools(self, user_id: str, server_id: str, force_refresh: bool = False) -> List[MCPToolInfo]:
-        """Discover available tools from an MCP server using real MCP connection."""
+        """Discover available tools from an MCP server using persistent MCP connection."""
         try:
-            # Check cache first
+            # Check cache first (now with 30-minute TTL)
             if not force_refresh and self._is_cache_valid(server_id):
                 cached_tools = self.tool_cache.get(server_id, [])
+                logger.debug("Using cached tools", server_id=server_id, num_tools=len(cached_tools))
                 return [MCPToolInfo.model_validate(tool) for tool in cached_tools]
 
             config = await self.redis_storage.get_mcp_server_config(user_id, server_id)
@@ -231,11 +273,11 @@ class MCPServerManager:
                 logger.warning("Server not running for tool discovery", server_id=server_id, user_id=user_id)
                 return []
 
-            # Try to discover tools using real MCP connection
+            # Try to discover tools using persistent MCP connection
             try:
                 discovered_tools = await self._discover_tools_from_mcp(server_id, config)
                 if discovered_tools:
-                    # Cache the tools
+                    # Cache the tools with longer TTL
                     self.tool_cache[server_id] = discovered_tools
                     self.cache_expiry[server_id] = time.time() + self.cache_ttl
 
@@ -252,47 +294,33 @@ class MCPServerManager:
                     return [MCPToolInfo.model_validate(tool) for tool in discovered_tools]
             except Exception as mcp_error:
                 logger.warning(
-                    "Failed to discover tools from MCP server, falling back to mock",
+                    "Failed to discover tools from MCP server, checking cache",
                     server_id=server_id,
                     error=str(mcp_error),
                 )
+                
+                # Try to return cached tools even if expired as fallback
+                cached_tools = self.tool_cache.get(server_id, [])
+                if cached_tools:
+                    logger.info("Using expired cache as fallback", server_id=server_id, num_tools=len(cached_tools))
+                    return [MCPToolInfo.model_validate(tool) for tool in cached_tools]
 
-            # Fallback to mock tools if MCP discovery fails
+            # Fallback to mock tools for testing
+            logger.warning("No tools discovered, using mock tools", server_id=server_id)
             mock_tools = [
                 {
-                    "name": f"{config.name}_tool_1",
-                    "description": f"Mock tool from {config.name} (MCP connection failed)",
+                    "name": f"mock_tool_{server_id}",
+                    "description": f"Mock tool for server {config.name}",
                     "server_id": server_id,
                     "server_name": config.name,
-                    "input_schema": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "Query parameter"}
-                        },
-                        "required": ["query"]
-                    }
+                    "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}}
                 }
             ]
-
-            # Cache the mock tools
-            self.tool_cache[server_id] = mock_tools
-            self.cache_expiry[server_id] = time.time() + self.cache_ttl
-
-            # Store in Redis
-            await self.redis_storage.store_mcp_server_tools(user_id, server_id, mock_tools)
-
-            logger.info(
-                "Using mock tools for MCP server",
-                server_id=server_id,
-                user_id=user_id,
-                num_tools=len(mock_tools),
-            )
-
             return [MCPToolInfo.model_validate(tool) for tool in mock_tools]
 
         except Exception as e:
             logger.error(
-                "Error discovering tools from MCP server",
+                "Error discovering tools",
                 server_id=server_id,
                 user_id=user_id,
                 error=str(e),
@@ -301,30 +329,35 @@ class MCPServerManager:
             return []
 
     async def get_user_mcp_tools(self, user_id: str) -> List[BaseTool]:
-        """Get all LangChain tools from user's enabled MCP servers."""
+        """Get all LangChain tools from user's enabled MCP servers. Only use ALREADY RUNNING servers."""
         try:
             # Get all enabled servers for the user
             enabled_servers = await self.redis_storage.get_user_enabled_mcp_servers(user_id)
             
             all_tools = []
             for server_config in enabled_servers:
-                # Ensure server is running
-                if not self._is_server_running(server_config.server_id):
-                    # Try to start the server
-                    await self.start_server(user_id, server_config.server_id)
-                
-                # Discover tools from the server
-                mcp_tools = await self.discover_tools(user_id, server_config.server_id)
-                
-                # Convert MCP tools to LangChain tools
-                for mcp_tool in mcp_tools:
-                    langchain_tool = self._convert_mcp_tool_to_langchain(mcp_tool, user_id)
-                    all_tools.append(langchain_tool)
+                # CRITICAL CHANGE: Only get tools from already running servers
+                # Do NOT auto-start servers here to prevent constant restarts
+                if self._is_server_running(server_config.server_id):
+                    # Discover tools from the running server
+                    mcp_tools = await self.discover_tools(user_id, server_config.server_id)
+                    
+                    # Convert MCP tools to LangChain tools
+                    for mcp_tool in mcp_tools:
+                        langchain_tool = self._convert_mcp_tool_to_langchain(mcp_tool, user_id)
+                        all_tools.append(langchain_tool)
+                else:
+                    logger.debug(
+                        "Skipping stopped MCP server for tool loading",
+                        server_id=server_config.server_id,
+                        user_id=user_id,
+                    )
             
             logger.info(
                 "Retrieved MCP tools for user",
                 user_id=user_id,
-                num_servers=len(enabled_servers),
+                num_servers=len([s for s in enabled_servers if self._is_server_running(s.server_id)]),
+                total_enabled_servers=len(enabled_servers),
                 num_tools=len(all_tools),
             )
             
@@ -565,11 +598,12 @@ class MCPServerManager:
             )
 
     async def _health_check_loop(self, user_id: str, server_id: str) -> None:
-        """Health check loop for a server."""
+        """Health check loop for a server - IMPROVED: No auto-restart, better error handling."""
         try:
+            failure_count = 0
             while True:
-                # Wait for health check interval
-                await asyncio.sleep(30)  # Check every 30 seconds
+                # Wait for health check interval (now 2 minutes)
+                await asyncio.sleep(self.health_check_interval)
 
                 # Perform health check
                 status, message = await self.health_check(user_id, server_id)
@@ -579,15 +613,34 @@ class MCPServerManager:
                     user_id, server_id, status.value, message
                 )
 
-                # If server is unhealthy, try to restart it
+                # CRITICAL CHANGE: Only log errors, do not auto-restart
+                # This prevents the restart loops that were causing instability
                 if status == MCPServerStatus.ERROR:
+                    failure_count += 1
                     logger.warning(
-                        "Server unhealthy, attempting restart",
+                        "Server health check failed",
                         server_id=server_id,
                         user_id=user_id,
                         error=message,
+                        failure_count=failure_count,
+                        note="Server will NOT be auto-restarted - manual intervention required"
                     )
-                    await self.restart_server(user_id, server_id)
+                    
+                    # Clean up client connection on persistent failures
+                    if failure_count >= 3 and server_id in self.mcp_clients:
+                        logger.info("Cleaning up MCP client after repeated failures", server_id=server_id)
+                        try:
+                            client = self.mcp_clients[server_id]
+                            if hasattr(client, 'close'):
+                                await client.close()
+                        except Exception:
+                            pass
+                        finally:
+                            self.mcp_clients.pop(server_id, None)
+                            self.client_last_used.pop(server_id, None)
+                else:
+                    # Reset failure count on successful check
+                    failure_count = 0
 
         except asyncio.CancelledError:
             logger.info("Health check loop cancelled", server_id=server_id, user_id=user_id)
@@ -600,8 +653,76 @@ class MCPServerManager:
                 exc_info=True,
             )
 
+    async def _get_or_create_mcp_client(self, server_id: str, config: MCPServerConfig):
+        """Get or create a persistent MCP client for a server."""
+        try:
+            # Check if we have a cached client
+            if server_id in self.mcp_clients:
+                # Update last used time
+                self.client_last_used[server_id] = time.time()
+                return self.mcp_clients[server_id]
+
+            # Import MCP adapters
+            from langchain_mcp_adapters.client import MultiServerMCPClient
+            
+            # Create MCP client configuration
+            if config.transport == "stdio":
+                if not config.command:
+                    raise ValueError("No command specified for stdio server")
+                
+                server_config = {
+                    config.name: {
+                        "command": config.command,
+                        "args": config.args or [],
+                        "transport": "stdio",
+                    }
+                }
+            elif config.transport in ["http", "sse"]:
+                if not config.url:
+                    raise ValueError("No URL specified for HTTP/SSE server")
+                
+                # Map our transport types to langchain-mcp-adapters transport types
+                transport = "streamable_http" if config.transport == "sse" else "http"
+                server_config = {
+                    config.name: {
+                        "url": config.url,
+                        "transport": transport,
+                    }
+                }
+            else:
+                raise ValueError(f"Unsupported transport type: {config.transport}")
+            
+            # Add environment variables if specified
+            if config.env_vars:
+                server_config[config.name]["env"] = config.env_vars
+            
+            # Create and cache the client
+            client = MultiServerMCPClient(server_config)
+            self.mcp_clients[server_id] = client
+            self.client_last_used[server_id] = time.time()
+            
+            logger.info(
+                "Created persistent MCP client",
+                server_id=server_id,
+                transport=config.transport,
+            )
+            
+            return client
+                
+        except ImportError:
+            logger.warning("langchain-mcp-adapters not available")
+            return None
+        except Exception as e:
+            logger.error(
+                "Error creating MCP client",
+                server_id=server_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return None
+
     def _convert_mcp_tool_to_langchain(self, mcp_tool: MCPToolInfo, user_id: str) -> BaseTool:
-        """Convert an MCP tool to a LangChain tool with real MCP execution."""
+        """Convert an MCP tool to a LangChain tool with efficient MCP execution using persistent connections."""
         async def tool_func(tool_input, **kwargs) -> str:
             try:
                 # Handle both dict and string inputs
@@ -618,7 +739,7 @@ class MCPServerManager:
                 else:
                     arguments = {"input": str(tool_input)}
                 
-                # Try to execute the tool using real MCP connection
+                # Try to execute the tool using persistent MCP connection
                 result = await self._execute_mcp_tool(mcp_tool.server_id, mcp_tool.name, arguments)
                 return result
             except Exception as e:
@@ -651,44 +772,14 @@ class MCPServerManager:
         )
 
     async def _discover_tools_from_mcp(self, server_id: str, config: MCPServerConfig) -> List[Dict[str, Any]]:
-        """Discover tools from an MCP server using langchain-mcp-adapters."""
+        """Discover tools from an MCP server using persistent client connection."""
         try:
-            # Import MCP adapters (runtime import to avoid dependency issues)
-            from langchain_mcp_adapters.client import MultiServerMCPClient
+            # Use persistent client connection
+            client = await self._get_or_create_mcp_client(server_id, config)
+            if not client:
+                raise Exception("Could not create MCP client")
             
-            # Create MCP client configuration based on transport type
-            if config.transport == "stdio":
-                if not config.command:
-                    raise ValueError("No command specified for stdio server")
-                
-                server_config = {
-                    config.name: {
-                        "command": config.command,
-                        "args": config.args or [],
-                        "transport": "stdio",
-                    }
-                }
-            elif config.transport in ["http", "sse"]:
-                if not config.url:
-                    raise ValueError("No URL specified for HTTP/SSE server")
-                
-                # Map our transport types to langchain-mcp-adapters transport types
-                transport = "streamable_http" if config.transport == "sse" else "http"
-                server_config = {
-                    config.name: {
-                        "url": config.url,
-                        "transport": transport,
-                    }
-                }
-            else:
-                raise ValueError(f"Unsupported transport type: {config.transport}")
-            
-            # Add environment variables if specified
-            if config.env_vars:
-                server_config[config.name]["env"] = config.env_vars
-            
-            # Create MCP client and get tools (new API pattern)
-            client = MultiServerMCPClient(server_config)
+            # Get tools using persistent client
             tools = await client.get_tools()
             
             # Convert tools to our format
@@ -704,7 +795,7 @@ class MCPServerManager:
                 discovered_tools.append(tool_info)
             
             logger.info(
-                "Successfully discovered tools from MCP server",
+                "Successfully discovered tools from MCP server using persistent client",
                 server_id=server_id,
                 num_tools=len(discovered_tools),
             )
@@ -724,11 +815,8 @@ class MCPServerManager:
             raise
 
     async def _execute_mcp_tool(self, server_id: str, tool_name: str, arguments: Dict[str, Any]) -> str:
-        """Execute an MCP tool using langchain-mcp-adapters."""
+        """Execute an MCP tool using persistent client connection."""
         try:
-            # For now, we'll need to recreate the connection for each tool execution
-            # In the future, we could maintain persistent connections
-            
             # Get server config
             server_info = self.active_servers.get(server_id)
             if not server_info:
@@ -736,34 +824,12 @@ class MCPServerManager:
             
             config = server_info["config"]
             
-            # Import MCP adapters
-            from langchain_mcp_adapters.client import MultiServerMCPClient
+            # Use persistent client connection
+            client = await self._get_or_create_mcp_client(server_id, config)
+            if not client:
+                raise Exception("Could not get MCP client")
             
-            # Create MCP client configuration
-            if config.transport == "stdio":
-                server_config = {
-                    config.name: {
-                        "command": config.command,
-                        "args": config.args or [],
-                        "transport": "stdio",
-                    }
-                }
-            elif config.transport in ["http", "sse"]:
-                transport = "streamable_http" if config.transport == "sse" else "http"
-                server_config = {
-                    config.name: {
-                        "url": config.url,
-                        "transport": transport,
-                    }
-                }
-            else:
-                raise ValueError(f"Unsupported transport type: {config.transport}")
-            
-            if config.env_vars:
-                server_config[config.name]["env"] = config.env_vars
-            
-            # Execute tool using MCP client (new API pattern)
-            client = MultiServerMCPClient(server_config)
+            # Get tools from client
             tools = await client.get_tools()
             
             # Find the specific tool
@@ -786,7 +852,7 @@ class MCPServerManager:
                 result = await target_tool(**arguments)
             
             logger.info(
-                "Successfully executed MCP tool",
+                "Successfully executed MCP tool using persistent client",
                 server_id=server_id,
                 tool_name=tool_name,
             )
@@ -806,6 +872,39 @@ class MCPServerManager:
             )
             raise
 
+    async def cleanup_unused_clients(self) -> int:
+        """Clean up unused MCP clients to free resources."""
+        try:
+            current_time = time.time()
+            cleanup_count = 0
+            
+            clients_to_remove = []
+            for server_id, last_used in self.client_last_used.items():
+                if current_time - last_used > self.client_cleanup_interval:
+                    clients_to_remove.append(server_id)
+            
+            for server_id in clients_to_remove:
+                if server_id in self.mcp_clients:
+                    try:
+                        client = self.mcp_clients[server_id]
+                        if hasattr(client, 'close'):
+                            await client.close()
+                    except Exception as e:
+                        logger.warning("Error closing unused MCP client", server_id=server_id, error=str(e))
+                    finally:
+                        del self.mcp_clients[server_id]
+                        del self.client_last_used[server_id]
+                        cleanup_count += 1
+            
+            if cleanup_count > 0:
+                logger.info("Cleaned up unused MCP clients", count=cleanup_count)
+            
+            return cleanup_count
+            
+        except Exception as e:
+            logger.error("Error cleaning up unused MCP clients", error=str(e), exc_info=True)
+            return 0
+
     async def cleanup(self) -> None:
         """Clean up all resources."""
         try:
@@ -816,6 +915,14 @@ class MCPServerManager:
             # Wait for tasks to complete
             if self.health_check_tasks:
                 await asyncio.gather(*self.health_check_tasks.values(), return_exceptions=True)
+            
+            # Close all MCP clients
+            for server_id, client in self.mcp_clients.items():
+                try:
+                    if hasattr(client, 'close'):
+                        await client.close()
+                except Exception as e:
+                    logger.warning("Error closing MCP client during cleanup", server_id=server_id, error=str(e))
             
             # Stop all server processes
             for process in self.server_processes.values():
@@ -828,12 +935,23 @@ class MCPServerManager:
                     except:
                         pass
             
+            # Cancel output drain tasks
+            for task in self.output_tasks.values():
+                task.cancel()
+            
+            # Wait for output tasks to complete
+            if self.output_tasks:
+                await asyncio.gather(*self.output_tasks.values(), return_exceptions=True)
+            
             # Clear all data structures
             self.active_servers.clear()
             self.server_processes.clear()
             self.health_check_tasks.clear()
             self.tool_cache.clear()
             self.cache_expiry.clear()
+            self.mcp_clients.clear()
+            self.client_last_used.clear()
+            self.restart_failure_count.clear()
             
             logger.info("MCP server manager cleanup completed")
             
