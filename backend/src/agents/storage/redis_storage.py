@@ -545,9 +545,10 @@ class RedisStorage:
         """Store MCP server configuration in Redis."""
         try:
             from agents.api.data_types import MCPServerConfig
+            from datetime import datetime, timezone
             
             # Update timestamps
-            server_config.last_updated = time.time()
+            server_config.last_updated = datetime.now(timezone.utc)
             
             # Store server configuration (encrypted)
             server_key = self._get_mcp_server_key(user_id, server_config.server_id)
@@ -593,7 +594,7 @@ class RedisStorage:
                 "env_vars": server_config.env_vars or {},
                 "enabled": server_config.enabled,
                 "health_status": server_config.health_status,
-                "last_updated": server_config.last_updated,
+                "last_updated": server_config.last_updated.isoformat() if hasattr(server_config.last_updated, "isoformat") else server_config.last_updated,
             }
             
             # Store without encryption for orchestrator (use parent Redis methods directly)
@@ -651,7 +652,8 @@ class RedisStorage:
             # Apply updates
             config_dict = existing_config.model_dump()
             config_dict.update(updates)
-            config_dict["last_updated"] = time.time()
+            from datetime import datetime, timezone
+            config_dict["last_updated"] = datetime.now(timezone.utc)
             
             # Validate updated configuration
             from agents.api.data_types import MCPServerConfig
