@@ -31,6 +31,10 @@ class MCPServerManager:
         # MCP client connections for real tool execution
         self.mcp_clients: Dict[str, Any] = {}  # server_id -> MCP client session
 
+        # Async tasks that continuously drain MCP subprocess stdout/stderr so pipes
+        # never block (keyed by server_id)
+        self.output_tasks: Dict[str, asyncio.Task] = {}
+
     async def start_server(self, user_id: str, server_id: str) -> bool:
         """Start an MCP server for a user."""
         try:
@@ -104,14 +108,19 @@ class MCPServerManager:
 
             # Stop server process
             if server_id in self.server_processes:
-                process = self.server_processes[server_id]
+                proc = self.server_processes[server_id]
                 try:
-                    process.terminate()
-                    # Wait for graceful shutdown
-                    await asyncio.sleep(2)
-                    if process.poll() is None:
-                        process.kill()
-                    process.wait()
+                    import signal, os
+                    # Terminate the entire process-group (created with start_new_session)
+                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                    try:
+                        await asyncio.wait_for(proc.wait(), timeout=5)
+                    except asyncio.TimeoutError:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                        await proc.wait()
+                except ProcessLookupError:
+                    # Already gone
+                    pass
                 except Exception as e:
                     logger.warning("Error stopping server process", error=str(e))
                 finally:
@@ -120,6 +129,11 @@ class MCPServerManager:
             # Clean up active server info
             if server_id in self.active_servers:
                 del self.active_servers[server_id]
+
+            # Cancel stdout drain task if running
+            if server_id in self.output_tasks:
+                self.output_tasks[server_id].cancel()
+                del self.output_tasks[server_id]
 
             # Clear tool cache
             if server_id in self.tool_cache:
@@ -394,19 +408,43 @@ class MCPServerManager:
             if config.env_vars:
                 env.update(config.env_vars)
 
-            # Start the process
             cmd = [config.command] + (config.args or [])
-            process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+
+            # Launch asynchronously so we don't block the event loop and ensure we
+            # create a new session (process-group) so we can cleanly terminate the
+            # whole tree later.
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
                 env=env,
-                text=True,
+                start_new_session=True,  # gives us a dedicated process-group
             )
+
+            # Drain stdout in background to avoid pipe back-pressure deadlocks
+            async def _drain_output(proc: asyncio.subprocess.Process, sid: str):
+                try:
+                    if proc.stdout is None:
+                        return
+                    async for raw_line in proc.stdout:
+                        try:
+                            line = raw_line.decode().rstrip()
+                        except AttributeError:
+                            # Already str
+                            line = raw_line.rstrip()
+                        logger.info("[mcp:%s] %s", config.name, line)
+                except asyncio.CancelledError:
+                    # normal on shutdown
+                    pass
+                except Exception as e:
+                    logger.warning("Error reading MCP stdout", server_id=sid, error=str(e))
+
+            drain_task = asyncio.create_task(_drain_output(process, config.server_id))
 
             # Store process and server info
             self.server_processes[config.server_id] = process
+            self.output_tasks[config.server_id] = drain_task
             self.active_servers[config.server_id] = {
                 "user_id": user_id,
                 "config": config,
