@@ -193,7 +193,7 @@ class ProcessManager:
             process_key = f"{user_id}:{server_id}"
             
             logger.info(f"ProcessManager starting server {server_id} for user {user_id}")
-            logger.debug(f"Command: {config.command}, Args: {config.args}")  # env hidden
+           # env hidden
             
             # Stop existing process if running
             if process_key in self.processes:
@@ -209,7 +209,6 @@ class ProcessManager:
             cmd = [config.command] + config.args
             env = {**os.environ, **config.env}
             
-            logger.debug(f"Executing command: {' '.join(cmd)}")
             
             process = subprocess.Popen(
                 cmd,
