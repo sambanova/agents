@@ -19,47 +19,36 @@ spec:
         {{- include "aiskagents.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: orchestrator
     spec:
-      {{- with .Values.orchestrator.imagePullSecrets }}
+      {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "aiskagents.serviceAccountName" . }}
-      securityContext:
-        {{- toYaml .Values.orchestrator.podSecurityContext | nindent 8 }}
       containers:
         - name: orchestrator
-          securityContext:
-            {{- toYaml .Values.orchestrator.securityContext | nindent 12 }}
           image: "{{ .Values.orchestrator.image.repository }}:{{ .Values.orchestrator.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.orchestrator.image.pullPolicy }}
+          imagePullPolicy: {{ .Values.orchestrator.image.pullPolicy | default "IfNotPresent" }}
           ports:
             - name: http
               containerPort: 8090
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /health
+              path: {{ .Values.orchestrator.probes.liveness.path }}
               port: http
-            initialDelaySeconds: 30
-            periodSeconds: 30
+            initialDelaySeconds: {{ .Values.orchestrator.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.orchestrator.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.orchestrator.probes.liveness.timeoutSeconds }}
           readinessProbe:
             httpGet:
-              path: /health
+              path: {{ .Values.orchestrator.probes.readiness.path }}
               port: http
-            initialDelaySeconds: 5
-            periodSeconds: 10
+            initialDelaySeconds: {{ .Values.orchestrator.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.orchestrator.probes.readiness.periodSeconds }}
           env:
-            - name: REDIS_HOST
-              value: {{ .Values.redis.host | quote }}
-            - name: REDIS_PORT
-              value: {{ .Values.redis.port | quote }}
-            - name: REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "aiskagents.fullname" . }}-orchestrator-secrets
-                  key: redis-password
-            - name: REDIS_SSL
-              value: {{ .Values.redis.ssl | quote }}
+            {{- range $key, $value := .Values.orchestrator.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
             {{- with .Values.orchestrator.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -74,16 +63,4 @@ spec:
         - name: tmp
           emptyDir: {}
         - name: mcp-cache
-          emptyDir: {}
-      {{- with .Values.orchestrator.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.orchestrator.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.orchestrator.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }} 
+          emptyDir: {} 
