@@ -77,7 +77,6 @@ class WorkflowManager:
         """Create all system agents"""
         # Get language models
         llm = self.language_models["llm"]
-        power_llm = self.language_models["power_llm"]
         report_agent_llm = self.language_models["report_agent_llm"]
         code_agent_llm = self.language_models["code_agent_llm"]
         note_agent_llm = self.language_models["note_agent_llm"]
@@ -188,9 +187,15 @@ class WorkflowManager:
             logger.info(f"Processing agent in quality review node: {name}")
             try:
 
+                # Provide more context by including the last 5 messages instead of just 2
+                # This gives the quality review agent better context for decision making
                 trimmed_state = {
                     **state,
-                    "internal_messages": state["internal_messages"][-2:],
+                    "internal_messages": (
+                        state["internal_messages"][-5:]
+                        if len(state["internal_messages"]) > 5
+                        else state["internal_messages"]
+                    ),
                 }
                 output_message = await agent.ainvoke(trimmed_state)
 
@@ -206,7 +211,7 @@ class WorkflowManager:
                 )
 
                 output_ai_message = AIMessage(
-                    content=f"Quality review: Continue research: {output_message.continue_research}, Reason: {output_message.reason}",
+                    content=f"Quality review: Passed: {output_message.passed}, Reason: {output_message.reason}",
                     id=str(uuid.uuid4()),
                     sender=name,
                 )

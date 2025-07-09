@@ -282,7 +282,7 @@ function parseResponseText(text) {
         // Handle Note Taker Agent format with multiple fields
         if (jsonData.internal_messages) result['Internal Messages'] = jsonData.internal_messages;
       } else if (props.data.agent_name === 'Quality Review Agent') {
-        if ('continue_research' in jsonData) result['Continue'] = jsonData.continue_research ? 'Yes' : 'No';
+        if ('passed' in jsonData) result['Passed'] = jsonData.passed ? 'Yes' : 'No';
         if (jsonData.reason) result['Reason'] = jsonData.reason;
       }
       return result;

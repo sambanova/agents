@@ -129,7 +129,7 @@ def quality_review_router(state: State) -> NodeType:
     message_before_revision = messages[-2] if len(messages) > 1 else None
 
     # Check if revision is needed
-    if state.get("quality_review", {}).get("continue_research", True):
+    if state.get("quality_review", {}).get("passed", True):
         return "NoteTaker"
     else:
         previous_node = (

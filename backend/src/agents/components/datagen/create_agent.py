@@ -185,7 +185,7 @@ def create_quality_review_agent(
             MessagesPlaceholder(variable_name="internal_messages"),
             (
                 "system",
-                "Given the conversation above, should we continue the research process or repeat the previous step? "
+                "Given the conversation above, did the previous step pass the quality review? "
                 "Your response MUST be a JSON object conforming to the following schema:\n"
                 "```json\n"  # Emphasize JSON block for LLM
                 "{format_instructions}\n"

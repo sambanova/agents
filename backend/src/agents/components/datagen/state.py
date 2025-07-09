@@ -67,8 +67,8 @@ class QualityReviewDecision(BaseModel):
     Decision about whether the report needs revision.
     """
 
-    continue_research: bool = Field(
-        description="Whether the research process should continue or previous step should be repeated."
+    passed: bool = Field(
+        description="Whether the previous step passed the quality review."
     )
     reason: str = Field(description="The reason for the decision.")
 
