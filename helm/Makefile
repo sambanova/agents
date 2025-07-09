@@ -23,7 +23,7 @@ VALUES_FILE = ./aiskagents/values.$(ENV).yaml
 # Extract backend repository from values file
 BACKEND_REPO = $(shell grep -A3 "backend:" $(VALUES_FILE) | grep "repository:" | sed 's/.*repository: *//')
 FRONTEND_REPO = $(shell grep -A3 "frontend:" $(VALUES_FILE) | grep "repository:" | sed 's/.*repository: *//')
-ORCHESTRATOR_REPO = $(shell grep -A3 "orchestrator:" $(VALUES_FILE) | grep "repository:" | sed 's/.*repository: *//')
+ORCHESTRATOR_REPO = $(shell grep -A5 "orchestrator:" $(VALUES_FILE) | grep "repository:" | sed 's/.*repository: *//')
 
 # Extract frontend environment variables from values file
 VITE_API_URL = $(shell grep -A20 "frontend:" $(VALUES_FILE) | grep "VITE_API_URL:" | sed 's/.*VITE_API_URL: *//;s/"//g')
