@@ -267,17 +267,29 @@
                   />
                   <input 
                     v-model="envVar.value"
-                    type="text"
+                    :type="envVar.show ? 'text' : 'password'"
                     class="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-brandColor"
                     placeholder="variable_value"
                   />
                   <button 
                     type="button"
+                    @click="envVar.show = !envVar.show"
+                    class="px-2 text-gray-500 hover:text-gray-700"
+                  >
+                    <svg v-if="envVar.show" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-5.523 0-10-4.477-10-10 0-1.384.28-2.705.785-3.913m3.295-2.795A9.964 9.964 0 0112 3c5.523 0 10 4.477 10 10 0 1.648-.402 3.203-1.113 4.575M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18M9.88 9.88A3 3 0 0112 9c1.657 0 3 1.343 3 3 0 .46-.104.896-.288 1.288M6.26 6.26C4.091 7.82 2.427 10.266 2 13c2 5 7 9 10 9 1.797 0 3.487-.506 4.919-1.386M17.657 17.657C19.889 16.083 21.573 13.648 22 11c-2-5-7-9-10-9-1.52 0-2.963.354-4.248.987" />
+                    </svg>
+                  </button>
+                  <button 
+                    type="button"
                     @click="removeEnvVar(index)"
-                    class="px-3 py-2 text-red-600 hover:text-red-800"
+                    class="px-2 text-red-600 hover:text-red-800"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
                 </div>
@@ -519,7 +531,7 @@ function editServer(server) {
     url: server.url || '',
     command: server.command || '',
     args: [...(server.args || [])],
-    envVars: Object.entries(server.env_vars || {}).map(([key, value]) => ({ key, value })),
+    envVars: Object.entries(server.env_vars || {}).map(([key, value]) => ({ key, value, show: false })),
     enabled: server.enabled
   }
   showAddServer.value = true
@@ -624,7 +636,7 @@ function removeArg(index) {
 
 // Add/remove environment variables
 function addEnvVar() {
-  serverForm.value.envVars.push({ key: '', value: '' })
+  serverForm.value.envVars.push({ key: '', value: '', show: false })
 }
 
 function removeEnvVar(index) {
