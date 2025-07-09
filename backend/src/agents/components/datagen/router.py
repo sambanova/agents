@@ -39,13 +39,10 @@ def human_choice_router(state: State) -> NodeType:
 
     # Check if user chose to regenerate hypothesis (choice 1)
     if "modification_areas" in state and state["modification_areas"]:
-        logger.info("User chose to regenerate hypothesis. Routing to: Hypothesis")
+        logger.info("User choose to regenerate hypothesis. Routing to: Hypothesis")
         return "Hypothesis"
-
-    # Check if user chose to continue (choice 2)
-    process_content = state.get("process", "")
-    if "continue the research process" in str(process_content).lower():
-        logger.info("User chose to continue research. Routing to: Process")
+    elif "modification_areas" in state and not state["modification_areas"]:
+        logger.info("User choose to continue research. Routing to: Process")
         return "Process"
 
     # Default to Process if unclear

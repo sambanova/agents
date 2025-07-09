@@ -835,6 +835,8 @@ async function loadPreviousChat(convId) {
 
   try {
     initialLoading.value = true;
+    // Prevent auto-opening sidebar from historical data
+    daytonaSidebarClosed.value = true;
     console.log('Loading previous chat:', convId);
     
     const resp = await axios.get(
@@ -1754,6 +1756,9 @@ const addMessage = async () => {
   
   isLoading.value = true;
   errorMessage.value = '';
+  
+  // Reset manual close flag when starting new streaming - allow auto-open for new streams
+  daytonaSidebarClosed.value = false;
 
   workflowData.value = [];
 
@@ -2437,14 +2442,15 @@ const selectedArtifact = ref(null)
 
 // Functions for managing the single DaytonaSidebar
 function closeDaytonaSidebar() {
+  console.log('Manual Daytona sidebar close requested')
   showDaytonaSidebar.value = false
-  daytonaSidebarClosed.value = true // Mark as manually closed
+  daytonaSidebarClosed.value = true // Prevent auto-opens until user starts new streaming or manually reopens
 }
 
 function handleOpenDaytonaSidebar(specificEvents = null) {
-  console.log('Opening Daytona sidebar...')
+  console.log('Manual Daytona sidebar open requested')
   showDaytonaSidebar.value = true
-  daytonaSidebarClosed.value = false
+  daytonaSidebarClosed.value = false // Allow future auto-opens since user manually opened
   
   // Use specific events if provided, otherwise collect all events
   if (specificEvents && specificEvents.length > 0) {
@@ -2500,7 +2506,16 @@ const isDaytonaActiveGlobal = computed(() => {
 
 // Watch for Daytona activity and automatically open sidebar
 watch(isDaytonaActiveGlobal, (isActive) => {
-  if (isActive && !daytonaSidebarClosed.value) {
+  // Only auto-open the sidebar if:
+  // 1. Daytona activity is detected
+  // 2. User hasn't manually closed it
+  // 3. We're currently actively streaming (not loading historical data)
+  // 4. Not during initial page load
+  if (isActive && 
+      !daytonaSidebarClosed.value && 
+      isLoading.value && 
+      !initialLoading.value) {
+    console.log('Auto-opening Daytona sidebar during active streaming')
     showDaytonaSidebar.value = true
     updateCurrentDaytonaEvents()
     // Close artifact canvas if it's open since we're using sidebar now

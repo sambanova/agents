@@ -3,18 +3,15 @@ import os
 import re
 import time
 import uuid
-from datetime import datetime
+from typing import Any, Callable
 
 import structlog
 from agents.components.datagen.manual_agent import ManualAgent
 from agents.components.datagen.message_capture_agent import MessageCaptureAgent
-from agents.components.datagen.state import NoteState, Replace, State
+from agents.components.datagen.state import Replace, State
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.storage.redis_storage import RedisStorage
-from agents.utils.message_interceptor import MessageInterceptor
-from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
-from langchain_core.runnables import RunnableLambda
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import interrupt
 
 # Set up logger
@@ -22,7 +19,11 @@ logger = structlog.get_logger(__name__)
 
 
 async def agent_node(
-    state: State, agent: ManualAgent | MessageCaptureAgent, name: str, state_key: str
+    state: State,
+    agent: ManualAgent | MessageCaptureAgent,
+    name: str,
+    state_key: str,
+    output_processor: dict[str, Callable[..., Any]] | None = None,
 ) -> dict:
     """
     Invokes the agent and updates the state with the result.
@@ -39,6 +40,8 @@ async def agent_node(
     logger.info(
         f"Processing agent in agent node: {name} to update state key: '{state_key}'"
     )
+    new_state = {}
+
     try:
         output_message = await agent.ainvoke(state)
 
@@ -64,7 +67,14 @@ async def agent_node(
             logger.debug(f"No messages captured from agent type: {type(agent)}")
 
         logger.info(f"Agent {name} processed successfully")
+
+        # Process the output with the output processor if provided
+        if output_processor:
+            for key, processor in output_processor.items():
+                new_state[key] = processor(output_message.content)
+
         return {
+            **new_state,
             "internal_messages": [output_message],
             "messages": captured_messages,
             state_key: output_message.content,
@@ -102,29 +112,30 @@ async def human_choice_node(state: State) -> State:
     feedback = interrupt(prompt)
     logger.debug(f"Received feedback: {feedback}")
 
+    update_state = {}
+
     if isinstance(feedback, str) and feedback == True:
         content = "Continue the research process"
-        state["process"] = "Continue the research process"
-        state["modification_areas"] = ""
+        update_state["modification_areas"] = ""
         logger.info("Human approved - continuing research process")
     elif isinstance(feedback, str) and feedback.strip():
         modification_areas = feedback
         content = f"Regenerate hypothesis. Areas to modify: {modification_areas}"
-        state["hypothesis"] = ""
-        state["modification_areas"] = modification_areas
+        update_state["hypothesis"] = ""
+        update_state["modification_areas"] = modification_areas
         logger.info("Human provided feedback - hypothesis cleared for regeneration")
         logger.debug(f"Modification areas: {modification_areas}")
     else:
         # Default to continue if feedback is empty or not a string
         content = "Continue the research process"
-        state["process"] = "Continue the research process"
-        state["modification_areas"] = ""
+        update_state["modification_areas"] = ""
         logger.info("No feedback provided - continuing research process")
 
     human_message = HumanMessage(content=content, id=str(uuid.uuid4()))
 
     logger.info("Human choice node processing completed")
     return {
+        **update_state,
         "internal_messages": [human_message],
         "sender": "human",
     }
@@ -197,27 +208,15 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
             captured_message.additional_kwargs["agent_type"] = f"data_science_{name}"
             messages.append(captured_message)
 
-        logger.debug("Setting up output fixing parser")
-        note_agent_fixing_interceptor = MessageInterceptor()
-        fixing_model = agent.llm | RunnableLambda(
-            note_agent_fixing_interceptor.capture_and_pass
-        )
-        node_state_parser = PydanticOutputParser(pydantic_object=NoteState)
-        fixing_parser = OutputFixingParser.from_llm(
-            llm=fixing_model,
-            parser=node_state_parser,
-        )
-        parsed_output: NoteState = await fixing_parser.aparse(result.content)
-
-        for m in note_agent_fixing_interceptor.captured_messages:
-            m.additional_kwargs["agent_type"] = "note_agent_fixed"
-            messages.append(m)
-
         logger.debug(f"Parsed output and captured {len(messages)} messages")
 
         new_messages = [
-            AIMessage(content=msg, name=name, id=str(uuid.uuid4()), sender=name)
-            for msg in parsed_output.internal_messages
+            AIMessage(
+                content=result.content,
+                name=name,
+                id=str(uuid.uuid4()),
+                sender=name,
+            )
         ]
         updated_internal_messages = (
             new_messages if len(new_messages) > 0 else current_messages

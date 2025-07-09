@@ -30,9 +30,18 @@ def create_process_agent(process_agent_llm):
     - **Coder Agent:** Write and document efficient Python code for data analysis, ensuring that the code is clean and reproducible.
     - **Report Agent:** Draft, refine, and finalize the research report, integrating inputs from all agents and ensuring the narrative is clear and cohesive.
 
+    **Task Assignment Requirements:**
+    When assigning tasks to agents, provide detailed instructions that include:
+    1. **Specific objectives:** Clear description of what needs to be accomplished
+    2. **File specifications:** Exact file names to be created, read, or modified (e.g., "analysis.py", "data_visualization.png", "research_report.md")
+    3. **Input requirements:** Specify which existing files or data sources should be used
+    4. **Output format:** Define the expected format and structure of deliverables
+    5. **Dependencies:** List any prerequisites or files that must be completed first
+    6. **Quality criteria:** Specific standards the output must meet
+
     **Workflow:**
     1. Plan the overall analysis and reporting process.
-    2. Assign tasks to the appropriate agents and oversee their progress.
+    2. Assign tasks to the appropriate agents with detailed specifications including file names and requirements.
     3. Continuously review and integrate the outputs from each agent, ensuring that each contributes effectively to the final report.
     4. Adjust the analysis and reporting process based on emerging results and insights.
     5. Compile the final report, ensuring all sections are complete and well-integrated.

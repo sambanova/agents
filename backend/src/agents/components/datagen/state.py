@@ -85,11 +85,11 @@ class State(TypedDict):
     # The complete content of the research hypothesis
     hypothesis: Annotated[str, lambda left, right: right] = ""
 
-    # The complete content of the research process
-    process: Annotated[str, lambda left, right: right] = ""
-
     # next process
     process_decision: Annotated[str, lambda left, right: right] = ""
+
+    # The current task description
+    task: Annotated[str, lambda left, right: right] = ""
 
     # The current state of data visualization planning and execution
     visualization_state: Annotated[str, dynamic_reducer] = ""
@@ -112,15 +112,3 @@ class State(TypedDict):
     # The areas of the hypothesis that need to be modified
     modification_areas: Annotated[str, lambda left, right: right] = ""
 
-
-class NoteState(BaseModel):
-    """Pydantic model for parsing agent outputs - no state management annotations needed."""
-
-    internal_messages: list[str] = Field(
-        default=[], description="Messages of the current conversation"
-    )
-
-    class Config:
-        arbitrary_types_allowed = (
-            True  # Allow BaseMessage type without explicit validator
-        )

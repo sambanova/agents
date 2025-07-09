@@ -1,3 +1,4 @@
+import re
 import uuid
 
 import structlog
@@ -154,8 +155,15 @@ class WorkflowManager:
             )
 
         async def process_node(state):
+            output_processor = {
+                "task": lambda x: re.search(r"Task:\s*(.*)", x).group(1)
+            }
             return await agent_node(
-                state, self.agents["process_agent"], "process_agent", "process_decision"
+                state=state,
+                agent=self.agents["process_agent"],
+                name="process_agent",
+                state_key="process_decision",
+                output_processor=output_processor,
             )
 
         async def visualization_node(state):

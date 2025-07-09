@@ -1,4 +1,6 @@
-from agents.components.datagen.create_agent import create_agent
+from agents.components.datagen.create_agent import (
+    create_hypothesis_agent as create_hypothesis_agent_function,
+)
 from agents.components.datagen.tools.persistent_daytona import (
     PersistentDaytonaManager,
     get_daytona_describe_data,
@@ -34,7 +36,7 @@ def create_hypothesis_agent(
     Just answer a research hypothesis.
     """
 
-    return create_agent(
+    return create_hypothesis_agent_function(
         llm=hypothesis_agent_llm,
         tools=base_tools,
         system_message=system_prompt,

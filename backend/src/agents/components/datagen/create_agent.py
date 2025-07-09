@@ -7,13 +7,9 @@ import structlog
 # Import the manual agent
 from agents.components.datagen.manual_agent import ManualAgent
 from agents.components.datagen.message_capture_agent import MessageCaptureAgent
-from agents.components.datagen.state import (
-    NoteState,
-    QualityReviewDecision,
-    SupervisorDecision,
-)
+from agents.components.datagen.state import QualityReviewDecision, SupervisorDecision
 from langchain.agents import AgentExecutor
-from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
+from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.tools import tool
 from langchain_core.language_models.base import LanguageModelLike
@@ -128,6 +124,91 @@ If you do not need to use a tool, respond normally without any XML tags.
             (
                 "human",
                 """
+Hypothesis: {hypothesis} \n\n
+
+YOUR TASK:  
+{task}
+
+Based on your role and the task description, please proceed with your task.
+""",
+            ),
+        ]
+    )
+
+    logger.info("Manual agent created successfully")
+    return ManualAgent(llm=llm, tools=tools, prompt=prompt, name=name)
+
+
+def create_hypothesis_agent(
+    llm: LanguageModelLike,
+    tools: list,
+    system_message: str,
+    team_members: list[str],
+    directory_content: list[str],
+    name: str,
+) -> ManualAgent:
+    """
+    Create a manual agent with the given language model, tools, system message, and team members.
+    """
+    logger.info("Creating manual agent")
+
+    team_members_str = ", ".join(team_members)
+    tool_descriptions = _format_tools(tools)
+    directory_content_str = "\n".join(directory_content)
+
+    # This is a static prompt that is fully constructed once.
+    final_system_prompt = f"""You are a specialized AI assistant in a data analysis team.
+Your role is to complete specific tasks in the research process.
+Your specific role is: {system_message}
+
+Work autonomously according to your specialty, using the tools available to you. Do not ask for clarification.
+Your other team members (and other teams) will collaborate with you based on their specialties. You are one of the following team members: {team_members_str}.
+
+The initial contents of your working directory are:
+{directory_content_str}
+
+IMPORTANT: These files have been provided by the user for your analysis. You should prioritize using these user-provided files in your work. Make sure to:
+- Read and analyze the files the user has provided
+- Use the data and information from these files as your primary source
+- Base your analysis, research, and conclusions on the content of these user-provided files
+- Use the daytona_list_files tool to check for updates in the directory contents when needed
+
+TOOL USAGE INSTRUCTIONS:
+You have access to the following tools:
+{tool_descriptions}
+
+To use a tool, you MUST respond with a single XML block in the following format:
+<tool>tool_name</tool>
+<tool_input>
+<parameter_name1>value1</parameter_name1>
+<parameter_name2>value2</parameter_name2>
+</tool_input>
+
+For example, to use daytona_create_document:
+<tool>daytona_create_document</tool>
+<tool_input>
+<points>["Point 1", "Point 2", "Point 3"]</points>
+<filename>my_document.md</filename>
+</tool_input>
+
+Or for daytona_edit_document:
+<tool>daytona_edit_document</tool>
+<tool_input>
+<filename>document.md</filename>
+<inserts>dict([(1, "New first line"), (3, "New third line")])</inserts>
+</tool_input>
+
+You will then get back the results in an <observation> tag.
+If you do not need to use a tool, respond normally without any XML tags.
+"""
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", final_system_prompt),
+            MessagesPlaceholder(variable_name="internal_messages"),
+            (
+                "human",
+                """
 CURRENT STATE:
 - Hypothesis: {hypothesis} \n\n
 - Process Decision: {process_decision} \n\n
@@ -137,7 +218,7 @@ CURRENT STATE:
 - Report State: {report_state} \n\n
 - Quality Review: {quality_review} \n\n
 
-Based on your role and the current state, please proceed with your task.
+Based on your role and the task description, please proceed with your task.
 """,
             ),
         ]
@@ -269,28 +350,18 @@ def create_note_agent(
     """
     logger.info("Creating manual note agent")
 
-    # Get the JSON output format instructions
-    parser = PydanticOutputParser(pydantic_object=NoteState)
-    output_format = parser.get_format_instructions()
-
-    # Enhanced system prompt for JSON output with tool capabilities
-    # Escape curly braces in output_format to prevent f-string conflicts
-    escaped_output_format = output_format.replace("{", "{{").replace("}", "}}")
-
     enhanced_system_prompt = f"""{system_prompt}
 
-You are a research note-taker. Summarize all messages and information you receive into comprehensive notes. Capture every detail, preserve key insights, and maintain context between information pieces. Record all technical details, numbers, dates, facts, file names, and paths.
+You are a research note-taker. Summarize all messages in the following conversation into a single note. Capture every detail, preserve key insights, and maintain context between information pieces. Record all technical details, numbers, dates, facts, file names, and paths.
 
-Output your summary as a JSON object matching this structure:
-{escaped_output_format}
-
-Respond only with the JSON object - no additional text."""
+Here is the conversation history:
+{{internal_messages}}
+"""
 
     # Simple prompt structure for manual agent
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", enhanced_system_prompt),
-            MessagesPlaceholder(variable_name="internal_messages"),
         ]
     )
 
