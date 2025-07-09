@@ -125,6 +125,10 @@ def quality_review_router(state: State) -> NodeType:
     messages = state.get("internal_messages", [])
     message_before_revision = messages[-2] if len(messages) > 1 else None
 
+    if state.get("agent_quality_review_retries", 0) > 5:
+        logger.info("Quality review agent has retried 5 times. Routing to: NoteTaker")
+        return "NoteTaker"
+
     # Check if revision is needed
     if state.get("quality_review", {}).get("passed", True):
         return "NoteTaker"

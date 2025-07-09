@@ -126,6 +126,12 @@ If you do not need to use a tool, respond normally without any XML tags.
                 """
 Hypothesis: {hypothesis} \n\n
 
+Coder State: {code_state} \n\n
+Visualization State: {visualization_state} \n\n
+Search State: {searcher_state} \n\n
+Report State: {report_state} \n\n
+Quality Review State: {quality_review} \n\n
+
 YOUR TASK:  
 {task}
 
@@ -350,18 +356,10 @@ def create_note_agent(
     """
     logger.info("Creating manual note agent")
 
-    enhanced_system_prompt = f"""{system_prompt}
-
-You are a research note-taker. Summarize all messages in the following conversation into a single note. Capture every detail, preserve key insights, and maintain context between information pieces. Record all technical details, numbers, dates, facts, file names, and paths.
-
-Here is the conversation history:
-{{internal_messages}}
-"""
-
     # Simple prompt structure for manual agent
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", enhanced_system_prompt),
+            ("system", system_prompt),
         ]
     )
 

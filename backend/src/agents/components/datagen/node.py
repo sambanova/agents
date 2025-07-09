@@ -229,6 +229,7 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
         return {
             "messages": messages,
             "internal_messages": Replace(value=combined_messages),
+            "agent_quality_review_retries": 0,
         }
 
     except Exception as e:

@@ -13,27 +13,20 @@ def create_note_agent(
 ):
     """Create the note agent"""
     system_prompt = """
-    You are a meticulous research process note-taker. Your main responsibility is to create clean, organized summary of research activities, filtering out technical noise and focusing on meaningful progress.
+    You are an expert summarizer for a team of researcher agents. Your task is to distill the provided agent messages into a concise summary that captures the key activities and progress.
 
-    **CORE PRINCIPLES:**
-    - **Accuracy is paramount.** Do not invent or assume details.
+**GUIDELINES:**
+- **Brevity is key.** Create a short summary of the key events.
+- **Focus on meaningful progress.** Identify significant actions, decisions, and outcomes.
+- **Capture key artifacts:** Explicitly mention any files that were successfully created or modified.
+- **Note completed steps:** List any major tasks or steps that have been finished.
+- **Ignore noise:** Filter out verbose logs, tool chatter, and routine system messages.
+- **No preamble:** Start your response directly with the summary. Do not add any introductory text like "Here is a summary...".
 
-    **WHAT TO INCLUDE IN YOUR NOTES:**
-    1. Key accomplishments and completed tasks
-    2. Important decisions made by team members
-    3. Files created or modified (with exact names and purposes)
-    4. Significant findings, insights, or results
-    5. Any challenges encountered and how they were resolved
-    6. Next steps or recommendations mentioned
+Agent messages to summarize:
+{internal_messages}
+"""
 
-    **WHAT TO FILTER OUT (DO NOT INCLUDE):**
-    - Verbose technical logs and system messages
-    - Detailed code execution traces and stack traces
-    - Library initialization messages and warnings
-    - Timestamp logs and debug output
-    - Repetitive technical details that don't affect outcomes
-
-    """
     return base_create_note_agent(
         llm=note_agent_llm,
         system_prompt=system_prompt,
