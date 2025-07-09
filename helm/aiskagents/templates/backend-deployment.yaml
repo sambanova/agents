@@ -84,8 +84,10 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
+        {{- if .Values.orchestrator.enabled }}
         - name: MCP_ORCHESTRATOR_URL
           value: "http://{{ include "aiskagents.fullname" . }}-orchestrator:{{ .Values.orchestrator.service.port }}"
+        {{- end }}
         {{- range $key, $value := .Values.backend.secrets.data }}
         - name: {{ $key }}
           valueFrom:
