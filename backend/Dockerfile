@@ -74,4 +74,4 @@ ENV PATH="/app/.venv/bin:$PATH"
 ENV PORT=8000
 EXPOSE ${PORT}
 
-ENTRYPOINT ["sh", "-c", "uvicorn src.agents.api.main:app --host 0.0.0.0 --port $PORT --no-access-log --timeout-keep-alive 120 --graceful-timeout 120"]
+ENTRYPOINT ["sh", "-c", "uvicorn src.agents.api.main:app --host 0.0.0.0 --port $PORT --no-access-log --timeout-keep-alive 120 --timeout-graceful-shutdown 120"]
