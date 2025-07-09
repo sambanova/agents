@@ -11,7 +11,8 @@ from agents.components.datagen.message_capture_agent import MessageCaptureAgent
 from agents.components.datagen.state import Replace, State
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.storage.redis_storage import RedisStorage
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.types import interrupt
 
 # Set up logger
@@ -97,7 +98,7 @@ async def agent_node(
         }
 
 
-async def human_choice_node(state: State) -> State:
+async def human_choice_node(state: State, llm: BaseChatModel) -> State:
     """
     Handle human input to choose the next step in the process.
     If regenerating hypothesis, prompt for specific areas to modify.
@@ -105,20 +106,46 @@ async def human_choice_node(state: State) -> State:
     logger.info("Processing human choice node")
     current_hypothesis = state.get("hypothesis", "No hypothesis yet.")
     prompt = (
-        "Please <b>provide feedback</b> on the following plan or <b>type 'approve'.</b>\n\n"
+        "Please <b>provide feedback</b> on the following plan or approve it.\n\n"
         + current_hypothesis
     )
 
     feedback = interrupt(prompt)
     logger.debug(f"Received feedback: {feedback}")
 
+    prompt = f"""
+Your task is to classify user input about a plan. Respond with a single word:
+
+APPROVE: If the user explicitly agrees with the plan or gives a simple, neutral acknowledgement (e.g., "ok").
+REVISE: If the user suggests a change, asks a clarifying question, or expresses any doubt.
+
+User: "Looks great, let's do it."
+You: APPROVE
+
+User: "Can we change the deadline?"
+You: REVISE
+
+User: "I'm not sure about the first step."
+You: REVISE
+
+User: "ok"
+You: APPROVE
+
+User: "Let's add a new section for risks."
+You: REVISE
+"""
+
+    result = await llm.ainvoke(
+        [SystemMessage(content=prompt), HumanMessage(content=feedback)]
+    )
+
     update_state = {}
 
-    if isinstance(feedback, str) and feedback == True:
+    if "APPROVE" in result.content:
         content = "Continue the research process"
         update_state["modification_areas"] = ""
         logger.info("Human approved - continuing research process")
-    elif isinstance(feedback, str) and feedback.strip():
+    elif "REVISE" in result.content:
         modification_areas = feedback
         content = f"Regenerate hypothesis. Areas to modify: {modification_areas}"
         update_state["hypothesis"] = ""
@@ -137,6 +164,7 @@ async def human_choice_node(state: State) -> State:
     return {
         **update_state,
         "internal_messages": [human_message],
+        "messages": [result],
         "sender": "human",
     }
 
@@ -229,6 +257,7 @@ async def note_agent_node(state: State, agent: ManualAgent, name: str) -> State:
         return {
             "messages": messages,
             "internal_messages": Replace(value=combined_messages),
+            "agent_quality_review_retries": 0,
         }
 
     except Exception as e:

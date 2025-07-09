@@ -77,7 +77,6 @@ class WorkflowManager:
     def create_agents(self):
         """Create all system agents"""
         # Get language models
-        llm = self.language_models["llm"]
         report_agent_llm = self.language_models["report_agent_llm"]
         code_agent_llm = self.language_models["code_agent_llm"]
         note_agent_llm = self.language_models["note_agent_llm"]
@@ -85,6 +84,8 @@ class WorkflowManager:
         process_agent_llm = self.language_models["process_agent_llm"]
         quality_review_agent_llm = self.language_models["quality_review_agent_llm"]
         refiner_agent_llm = self.language_models["refiner_agent_llm"]
+        visualization_agent_llm = self.language_models["visualization_agent_llm"]
+        searcher_agent_llm = self.language_models["searcher_agent_llm"]
 
         # Create agents dictionary
         agents = {}
@@ -102,7 +103,7 @@ class WorkflowManager:
         )
 
         agents["visualization_agent"] = create_visualization_agent(
-            llm=llm,
+            llm=visualization_agent_llm,
             members=self.members,
             daytona_manager=self.daytona_manager,
             directory_content=self.directory_content,
@@ -116,7 +117,7 @@ class WorkflowManager:
         )
 
         agents["searcher_agent"] = create_search_agent(
-            llm=llm,
+            llm=searcher_agent_llm,
             members=self.members,
             daytona_manager=self.daytona_manager,
             directory_content=self.directory_content,
@@ -228,7 +229,10 @@ class WorkflowManager:
                     "internal_messages": [output_ai_message],
                     "messages": captured_messages,
                     "quality_review": output_message.model_dump(),
-                    "sender": name,
+                    "agent_quality_review_retries": state[
+                        "agent_quality_review_retries"
+                    ]
+                    + 1,
                 }
             except Exception as e:
                 logger.error(
@@ -242,6 +246,10 @@ class WorkflowManager:
                 )
                 return {
                     "internal_messages": state["internal_messages"] + [error_message],
+                    "agent_quality_review_retries": state[
+                        "agent_quality_review_retries"
+                    ]
+                    + 1,
                 }
 
         async def note_taker_node(state):
@@ -257,6 +265,11 @@ class WorkflowManager:
                 user_id=self.user_id,
             )
 
+        async def human_choice_node_async(state):
+            return await human_choice_node(
+                state, self.language_models["human_choice_llm"]
+            )
+
         # Add nodes
         self.workflow.add_node("Hypothesis", hypothesis_node)
         self.workflow.add_node("Process", process_node)
@@ -266,7 +279,7 @@ class WorkflowManager:
         self.workflow.add_node("Report", report_node)
         self.workflow.add_node("QualityReview", quality_review_node)
         self.workflow.add_node("NoteTaker", note_taker_node)
-        self.workflow.add_node("HumanChoice", human_choice_node)
+        self.workflow.add_node("HumanChoice", human_choice_node_async)
         self.workflow.add_node("Refiner", refiner_node_async)
         self.workflow.add_node("Cleanup", self.cleanup_node)
 

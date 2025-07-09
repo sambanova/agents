@@ -26,9 +26,7 @@ async def astream_state_websocket(
     if "resume" in input.additional_kwargs and input.additional_kwargs["resume"]:
         # Decide if it's feedback or a brand-new request
         if input.content.lower() == "approve" or input.content.lower() == "true":
-            graph_input = Command(resume=True)
-        elif input.content.lower() == "reject" or input.content.lower() == "false":
-            graph_input = Command(resume=False)
+            graph_input = Command(resume="APPROVE")
         elif input.content:
             # user typed some text, treat it as feedback
             graph_input = Command(resume=input.content)

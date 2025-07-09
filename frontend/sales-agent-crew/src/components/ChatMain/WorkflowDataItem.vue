@@ -28,6 +28,9 @@
         <template v-if="item.llm_name.toLowerCase().includes('maverick')">
           <img class="w-4 h-4" src="/Images/icons/meta.png" alt="Meta" />
         </template>
+        <template v-if="item.llm_name.toLowerCase().includes('qwen')">
+          <img class="w-4 h-4" src="/Images/icons/qwen.png" alt="Qwen" />
+        </template>
         <template v-else-if="item.llm_name.toLowerCase().includes('deepseek')">
           <img class="w-4 h-4" src="/Images/icons/deepseek.png" alt="Deepseek" />
         </template>

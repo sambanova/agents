@@ -331,7 +331,7 @@ async def human_feedback(
     )
     logger.info("Interrupting for human feedback", sections=sec_str)
     fb = interrupt(sec_str)
-    if isinstance(fb, bool):
+    if fb == "APPROVE":
         if state.get("document"):
             return Command(goto="summarize_documents")
         else:
@@ -345,12 +345,10 @@ async def human_feedback(
                     if s.research
                 ]
             )
-    elif isinstance(fb, str):
+    else:
         return Command(
             goto="generate_report_plan", update={"feedback_on_report_plan": fb}
         )
-    else:
-        raise ValueError("interrupt unknown")
 
 
 async def generate_queries(writer_model, state: SectionState, config: RunnableConfig):

@@ -31,16 +31,8 @@ def create_quality_review_agent(
     - Only fail if there are clear indicators of failure, errors, or incomplete work
     - When in doubt between borderline cases, err on the side of PASSING if the agent indicates completion
 
-    **LOOP PREVENTION SAFEGUARD:**
-    - If you see the same agent has been reviewed multiple times (look for repeated patterns in conversation history)
-    - If the conversation shows this is the 2nd+ attempt at the same task after previous failures
-    - If there are signs of workflow cycling or getting stuck on the same step
-    - In these cases, ALWAYS set "passed" to true to prevent infinite loops, even if the work isn't perfect
-    - Reason should mention "Passing to prevent workflow loop" when applying this safeguard
-
     **YOUR RESPONSE:**
     - Set "passed" to true if the step meets the PASS criteria
-    - Set "passed" to true if the LOOP PREVENTION SAFEGUARD applies
     - Set "passed" to false only if the step clearly meets the FAIL criteria AND it's the first attempt
     - Provide a clear, specific reason explaining your decision
     - Focus on objective completion indicators rather than subjective quality assessments

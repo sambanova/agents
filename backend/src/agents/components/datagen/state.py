@@ -112,3 +112,4 @@ class State(TypedDict):
     # The areas of the hypothesis that need to be modified
     modification_areas: Annotated[str, lambda left, right: right] = ""
 
+    agent_quality_review_retries: Annotated[int, lambda left, right: right] = 0

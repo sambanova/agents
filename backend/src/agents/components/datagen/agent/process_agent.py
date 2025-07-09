@@ -4,6 +4,7 @@ from agents.components.datagen.create_agent import create_agent, create_supervis
 def create_process_agent(process_agent_llm):
     """Create the process/supervisor agent"""
     system_prompt = """
+    /no_think
     You are a research supervisor responsible for overseeing and coordinating a comprehensive data analysis project, resulting in a complete and cohesive research report. Your primary tasks include:
 
     1. Validating and refining the research hypothesis to ensure it is clear, specific, and testable.
