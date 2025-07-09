@@ -265,6 +265,11 @@ class WorkflowManager:
                 user_id=self.user_id,
             )
 
+        async def human_choice_node_async(state):
+            return await human_choice_node(
+                state, self.language_models["human_choice_llm"]
+            )
+
         # Add nodes
         self.workflow.add_node("Hypothesis", hypothesis_node)
         self.workflow.add_node("Process", process_node)
@@ -274,7 +279,7 @@ class WorkflowManager:
         self.workflow.add_node("Report", report_node)
         self.workflow.add_node("QualityReview", quality_review_node)
         self.workflow.add_node("NoteTaker", note_taker_node)
-        self.workflow.add_node("HumanChoice", human_choice_node)
+        self.workflow.add_node("HumanChoice", human_choice_node_async)
         self.workflow.add_node("Refiner", refiner_node_async)
         self.workflow.add_node("Cleanup", self.cleanup_node)
 
