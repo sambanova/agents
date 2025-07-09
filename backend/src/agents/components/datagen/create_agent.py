@@ -279,28 +279,12 @@ def create_note_agent(
 
     enhanced_system_prompt = f"""{system_prompt}
 
-You are a meticulous research process note-taker with access to tools for reading documents and gathering information.
+You are a research note-taker. Summarize all messages and information you receive into comprehensive notes. Capture every detail, preserve key insights, and maintain context between information pieces. Record all technical details, numbers, dates, facts, file names, and paths.
 
-CRITICAL RESPONSIBILITY: Your primary task is to summarize ALL messages and information you receive. You must ensure that NO INFORMATION IS LOST during this process. This includes:
-- Capturing every detail from conversations and messages
-- Preserving all key data points, findings, and insights
-- Maintaining the context and relationships between different pieces of information
-- Recording all relevant technical details, numbers, dates, and specific facts
-- Documenting the source and context of each piece of information
-- Creating comprehensive summaries that retain full informational value
-
-SUMMARIZATION REQUIREMENTS:
-- Read and process ALL incoming messages thoroughly
-- Extract and preserve every piece of relevant information
-- Organize information logically while maintaining completeness
-- Ensure summaries are detailed enough that no critical information is omitted
-
-IMPORTANT: You must format your response as a JSON object with the following structure:
+Output your summary as a JSON object matching this structure:
 {escaped_output_format}
 
-RESPONSE FORMAT:
-Always end your response with a valid JSON object that matches the required structure above. Do not include any text after the JSON object.
-"""
+Respond only with the JSON object - no additional text."""
 
     # Simple prompt structure for manual agent
     prompt = ChatPromptTemplate.from_messages(

@@ -170,7 +170,7 @@ class PersistentDaytonaManager:
             result_str = str(response.result) if response.result is not None else ""
 
             # Cap the result length to prevent overwhelming output
-            MAX_RESULT_LENGTH = 10000  # 10KB limit
+            MAX_RESULT_LENGTH = 1000
             if len(result_str) > MAX_RESULT_LENGTH:
                 truncated_result = result_str[:MAX_RESULT_LENGTH]
                 result_str = f"{truncated_result}\n\n[OUTPUT TRUNCATED - Original length: {len(result_str)} characters, showing first {MAX_RESULT_LENGTH} characters]"
