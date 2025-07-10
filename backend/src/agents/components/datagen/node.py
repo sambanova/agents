@@ -10,6 +10,7 @@ from agents.components.datagen.manual_agent import ManualAgent
 from agents.components.datagen.message_capture_agent import MessageCaptureAgent
 from agents.components.datagen.state import Replace, State
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
+from agents.components.datagen.utills import drop_think_section
 from agents.storage.redis_storage import RedisStorage
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -133,6 +134,9 @@ You: APPROVE
 
 User: "Let's add a new section for risks."
 You: REVISE
+
+User: "can you only focus on visualizations?"
+You:
 """
 
     result = await llm.ainvoke(
@@ -440,9 +444,11 @@ async def refiner_node(
         # Note: this will be mapped as the last state, we don't need to send this through messages
         state["internal_messages"].append(
             AIMessage(
-                content=result.content,
+                content=drop_think_section(result.content),
                 id=result.id,
                 sender=name,
+                usage_metadata=result.usage_metadata,
+                response_metadata=result.response_metadata,
             )
         )
         state["sender"] = name

@@ -66,6 +66,5 @@ def create_refiner_agent(refiner_agent_llm):
     - Verify all claims are properly supported with evidence or citations
     - **Double-check that all chart references correspond to files explicitly listed as available**
 
-    **Final Deliverable**: Your response IS the final report. It must be immediately ready for publication with no further refinement needed. Think carefully, plan your structure, and deliver perfection in one response.
-    """
+    **Final Deliverable**: Your response MUST ONLY contain the refined research report content, ready for immediate publication. Do not include any overarching titles for the response (e.g., 'Refined Research Report'), introductory remarks, or concluding statements/signatures (e.g., 'Report Refined Using:'). The entirety of your output will be considered the report itself, with no additional framing.    """
     return create_simple_agent(refiner_agent_llm, system_prompt)
