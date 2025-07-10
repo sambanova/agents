@@ -1365,6 +1365,78 @@ class MCPServerManager:
                                     pass  # Leave as raw string if parsing fails
 
                     try:
+                        # ------------------------------------------------------------------
+                        # Auto-inject common parameters if possible (e.g., cloudId for Atlassian)
+                        # ------------------------------------------------------------------
+                        if isinstance(tool_input, dict):
+                            missing_params = []
+                            if self._requires_structured_input(real_tool):
+                                try:
+                                    schema = real_tool.args_schema.model_json_schema()
+                                except Exception:
+                                    schema = {}
+                                required = schema.get("required", []) if schema else []
+                                for req in required:
+                                    if req not in tool_input:
+                                        missing_params.append(req)
+
+                            # Attempt cloudId auto-fill
+                            if "cloudId" in missing_params and any(
+                                name.startswith("getAccessibleAtlassianResources") for name in self.server_manager.tool_cache.get(self.tool_info.server_id, [])
+                            ):
+                                try:
+                                    logger.info("Attempting automatic cloudId injection via getAccessibleAtlassianResources")
+                                    resources_tool = await self.server_manager._execute_mcp_tool(
+                                        self.tool_info.server_id,
+                                        "getAccessibleAtlassianResources",
+                                        {},
+                                    )
+                                    import json
+                                    resources = json.loads(resources_tool) if isinstance(resources_tool, str) else resources_tool
+                                    if isinstance(resources, list) and resources:
+                                        cloud_id_val = resources[0].get("id") or resources[0].get("cloudId")
+                                        if cloud_id_val:
+                                            tool_input["cloudId"] = cloud_id_val
+                                            missing_params.remove("cloudId")
+                                            logger.info(
+                                                "Injected cloudId parameter automatically", cloudId=cloud_id_val
+                                            )
+                                except Exception as inject_err:
+                                    logger.warning("Automatic cloudId injection failed", error=str(inject_err))
+
+                            # Alias mapping for parameter names (e.g., query -> jql)
+                            alias_map = {
+                                "jql": ["query", "q"],
+                                "cql": ["query", "q"],
+                            }
+                            for req in list(missing_params):
+                                if req in alias_map:
+                                    for alias in alias_map[req]:
+                                        if alias in tool_input:
+                                            tool_input[req] = tool_input.pop(alias)
+                                            logger.info(
+                                                "Mapped alias parameter to required name",
+                                                alias=alias,
+                                                required=req,
+                                                tool=self.name,
+                                            )
+                                            missing_params.remove(req)
+                                            break
+
+                            if missing_params:
+                                logger.debug(
+                                    "Still missing required params for tool",
+                                    tool_name=self.name,
+                                    missing_params=missing_params,
+                                    final_input=tool_input,
+                                )
+
+                        logger.debug(
+                            "Invoking MCP tool",
+                            tool_name=self.name,
+                            final_input=str(tool_input)[:300],
+                        )
+
                         return await real_tool.ainvoke(tool_input, **kwargs)
                     except Exception as e:
                         # Enhanced error handling with context
