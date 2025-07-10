@@ -215,8 +215,17 @@ class MCPServerConfig(BaseModel):
     # Connection details
     command: Optional[str] = Field(None, description="Command to run the server (for stdio)")
     args: Optional[List[str]] = Field(default_factory=list, description="Arguments for the command")
-    url: Optional[str] = Field(None, description="URL for HTTP-based MCP servers")
-    transport: str = Field(default="stdio", description="Transport type: 'stdio' or 'http'")
+    url: Optional[str] = Field(None, description="URL for HTTP/SSE MCP servers")
+    transport: str = Field(
+        default="stdio",
+        description="Transport type: 'stdio', 'http', 'sse', or 'streamable-http'",
+    )
+
+    # Optional static headers (e.g. for Authorization) to be sent with every request
+    headers: Optional[Dict[str, str]] = Field(
+        default_factory=dict,
+        description="Static HTTP headers to attach when calling remote MCP servers",
+    )
     
     # Environment variables and secrets
     env_vars: Optional[Dict[str, str]] = Field(default_factory=dict, description="Environment variables for the server")

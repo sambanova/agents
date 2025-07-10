@@ -1,0 +1,199 @@
+{
+  "github_api": {
+    "token_valid": true,
+    "scopes": [
+      "admin:enterprise",
+      "admin:gpg_key",
+      "admin:org",
+      "admin:org_hook",
+      "admin:public_key",
+      "admin:repo_hook",
+      "admin:ssh_signing_key",
+      "audit_log",
+      "codespace",
+      "copilot",
+      "delete:packages",
+      "delete_repo",
+      "gist",
+      "notifications",
+      "project",
+      "repo",
+      "user",
+      "workflow",
+      "write:discussion",
+      "write:network_configurations",
+      "write:packages"
+    ],
+    "required_scopes": [
+      "repo",
+      "read:packages",
+      "read:org",
+      "user"
+    ],
+    "missing_scopes": [
+      "read:packages",
+      "read:org"
+    ],
+    "user_info": {
+      "login": "kwasig",
+      "id": 62083099,
+      "node_id": "MDQ6VXNlcjYyMDgzMDk5",
+      "avatar_url": "https://avatars.githubusercontent.com/u/62083099?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/kwasig",
+      "html_url": "https://github.com/kwasig",
+      "followers_url": "https://api.github.com/users/kwasig/followers",
+      "following_url": "https://api.github.com/users/kwasig/following{/other_user}",
+      "gists_url": "https://api.github.com/users/kwasig/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/kwasig/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/kwasig/subscriptions",
+      "organizations_url": "https://api.github.com/users/kwasig/orgs",
+      "repos_url": "https://api.github.com/users/kwasig/repos",
+      "events_url": "https://api.github.com/users/kwasig/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/kwasig/received_events",
+      "type": "User",
+      "user_view_type": "private",
+      "site_admin": false,
+      "name": null,
+      "company": null,
+      "blog": "",
+      "location": null,
+      "email": null,
+      "hireable": null,
+      "bio": null,
+      "twitter_username": null,
+      "notification_email": null,
+      "public_repos": 8,
+      "public_gists": 0,
+      "followers": 0,
+      "following": 1,
+      "created_at": "2020-03-12T00:44:29Z",
+      "updated_at": "2025-05-18T06:40:05Z",
+      "private_gists": 0,
+      "total_private_repos": 42,
+      "owned_private_repos": 42,
+      "disk_usage": 1318243,
+      "collaborators": 0,
+      "two_factor_authentication": true,
+      "plan": {
+        "name": "free",
+        "space": 976562499,
+        "collaborators": 0,
+        "private_repos": 10000
+      }
+    },
+    "rate_limit": {
+      "resources": {
+        "core": {
+          "limit": 5000,
+          "used": 1,
+          "remaining": 4999,
+          "reset": 1752114612
+        },
+        "search": {
+          "limit": 30,
+          "used": 0,
+          "remaining": 30,
+          "reset": 1752111072
+        },
+        "graphql": {
+          "limit": 5000,
+          "used": 0,
+          "remaining": 5000,
+          "reset": 1752114612
+        },
+        "integration_manifest": {
+          "limit": 5000,
+          "used": 0,
+          "remaining": 5000,
+          "reset": 1752114612
+        },
+        "source_import": {
+          "limit": 100,
+          "used": 0,
+          "remaining": 100,
+          "reset": 1752111072
+        },
+        "code_scanning_upload": {
+          "limit": 5000,
+          "used": 1,
+          "remaining": 4999,
+          "reset": 1752114612
+        },
+        "code_scanning_autofix": {
+          "limit": 10,
+          "used": 0,
+          "remaining": 10,
+          "reset": 1752111072
+        },
+        "actions_runner_registration": {
+          "limit": 10000,
+          "used": 0,
+          "remaining": 10000,
+          "reset": 1752114612
+        },
+        "scim": {
+          "limit": 15000,
+          "used": 0,
+          "remaining": 15000,
+          "reset": 1752114612
+        },
+        "dependency_snapshots": {
+          "limit": 100,
+          "used": 0,
+          "remaining": 100,
+          "reset": 1752111072
+        },
+        "dependency_sbom": {
+          "limit": 100,
+          "used": 0,
+          "remaining": 100,
+          "reset": 1752111072
+        },
+        "audit_log": {
+          "limit": 1750,
+          "used": 0,
+          "remaining": 1750,
+          "reset": 1752114612
+        },
+        "audit_log_streaming": {
+          "limit": 15,
+          "used": 0,
+          "remaining": 15,
+          "reset": 1752114612
+        },
+        "code_search": {
+          "limit": 10,
+          "used": 0,
+          "remaining": 10,
+          "reset": 1752111072
+        }
+      },
+      "rate": {
+        "limit": 5000,
+        "used": 1,
+        "remaining": 4999,
+        "reset": 1752114612
+      }
+    },
+    "errors": []
+  },
+  "mcp_endpoint": {
+    "mcp_endpoint_accessible": false,
+    "response_status": 400,
+    "response_headers": {
+      "content-security-policy": "default-src 'none'; sandbox",
+      "content-type": "text/plain; charset=utf-8",
+      "strict-transport-security": "max-age=31536000",
+      "x-content-type-options": "nosniff",
+      "date": "Thu, 10 Jul 2025 01:30:12 GMT",
+      "content-length": "39",
+      "x-github-backend": "Kubernetes",
+      "x-github-request-id": "F4DD:3677DD:0E86:145C:686F17A4"
+    },
+    "errors": [
+      "Unexpected status: 400"
+    ]
+  },
+  "timestamp": "2024-01-01T00:00:00Z"
+}

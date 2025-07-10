@@ -37,6 +37,8 @@ class MCPServerConfig(BaseModel):
     name: str
     command: str
     args: List[str] = []
+    url: Optional[str] = None
+    transport: str = "stdio"
     env: Dict[str, str] = {}
     enabled: bool = False
     status: MCPServerStatus = MCPServerStatus.STOPPED
@@ -85,6 +87,8 @@ class SimpleRedisClient:
                 name=config_data.get("name", server_id),
                 command=config_data.get("command", ""),
                 args=config_data.get("args", []),
+                url=config_data.get("url"),
+                transport=config_data.get("transport", "stdio"),
                 env=config_data.get("env_vars", {}),
                 enabled=config_data.get("enabled", False),
                 status=MCPServerStatus.STOPPED  # Default to stopped, will be updated by process manager
@@ -216,7 +220,19 @@ class ProcessManager:
                 logger.info(f"Stopping existing process for {server_id}")
                 await self.stop_server(user_id, server_id)
             
-            # Validate command
+            # If this is a remote HTTP/SSE server, we don't spawn a subprocess –
+            # we simply mark it as running so health-checks work.
+            remote_transport = config.transport in ("http", "sse", "streamable-http") and config.url
+            if remote_transport:
+                logger.info(
+                    f"Registering remote MCP server {server_id} (transport={config.transport}) – no local process",
+                )
+                self.processes[process_key] = None  # Sentinel for remote
+                self.last_used[process_key] = time.time()
+                await redis_client.set_running(user_id, server_id)
+                return True
+
+            # Validate command for stdio servers
             if not config.command:
                 logger.error(f"No command specified for server {server_id}")
                 return False
@@ -263,16 +279,21 @@ class ProcessManager:
             process_key = f"{user_id}:{server_id}"
             
             if process_key in self.processes:
-                process = self.processes[process_key]
-                process.terminate()
-                
-                # Wait for graceful shutdown
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                
-                del self.processes[process_key]
+                proc = self.processes[process_key]
+
+                # Remote server sentinel – nothing to terminate locally
+                if proc is None:
+                    del self.processes[process_key]
+                else:
+                    proc.terminate()
+
+                    # Wait for graceful shutdown
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+
+                    del self.processes[process_key]
                 self.last_used.pop(process_key, None)
                 await redis_client.clear_running(user_id, server_id)
                 logger.info(f"Stopped MCP server {server_id} for user {user_id}")
@@ -287,9 +308,13 @@ class ProcessManager:
         process_key = f"{user_id}:{server_id}"
         if process_key not in self.processes:
             return False
-        
-        process = self.processes[process_key]
-        return process.poll() is None
+
+        proc = self.processes[process_key]
+        # Remote servers are stored as None sentinel and are considered always running
+        if proc is None:
+            return True
+
+        return proc.poll() is None
 
     def touch(self, user_id: str, server_id: str):
         self.last_used[f"{user_id}:{server_id}"] = time.time()

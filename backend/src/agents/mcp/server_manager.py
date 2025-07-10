@@ -64,22 +64,76 @@ class MCPServerManager:
                     "transport": "stdio",
                 }
             }
-        elif config.transport in ["http", "sse"]:
-            transport = "streamable_http" if config.transport == "sse" else "http"
+        elif config.transport in ["http", "sse", "streamable-http", "streamable_http"]:
+            # Map transport names accepted by langchain-mcp-adapters
+            # The library only supports: 'stdio', 'sse', 'websocket', 'streamable_http'
+            # Map all HTTP variants to 'streamable_http' since that's the supported HTTP transport
+            if config.transport in ("http", "sse", "streamable-http", "streamable_http"):
+                transport = "streamable_http"
+
             server_config = {
                 config.name: {
-                    "url": config.url,
+                    "url": config.url.rstrip("/"),
                     "transport": transport,
                 }
             }
+
+            # Attach static headers (Option A) or token passed via env (legacy)
+            _headers: Dict[str, str] = {}
+            # 1) New explicit headers field
+            if config.headers:
+                _headers.update(config.headers)
+
+            # 2) Legacy AUTH_TOKEN env → Authorization header (Option A shorthand)
+            if config.env_vars and "AUTH_TOKEN" in config.env_vars:
+                _headers.setdefault("Authorization", f"Bearer {config.env_vars['AUTH_TOKEN']}")
+
+            # 3) Direct Authorization env var support (case sensitive or upper-case)
+            if config.env_vars:
+                if "Authorization" in config.env_vars:
+                    _headers.setdefault("Authorization", config.env_vars["Authorization"])
+                elif "AUTHORIZATION" in config.env_vars:
+                    _headers.setdefault("Authorization", config.env_vars["AUTHORIZATION"])
+
+            # 4) Convenience mapping for GitHub personal-access tokens supplied as
+            #    GITHUB_PAT or GITHUB_TOKEN – widely used variable names.
+            if config.env_vars:
+                if "GITHUB_PAT" in config.env_vars and "Authorization" not in _headers:
+                    _headers["Authorization"] = f"Bearer {config.env_vars['GITHUB_PAT']}"
+                elif "GITHUB_TOKEN" in config.env_vars and "Authorization" not in _headers:
+                    _headers["Authorization"] = f"Bearer {config.env_vars['GITHUB_TOKEN']}"
+                # 5) Direct authorization_token in env_vars (from orchestrator storage)
+                elif "authorization_token" in config.env_vars and "Authorization" not in _headers:
+                    # The authorization_token might already include "Bearer " prefix
+                    auth_token = config.env_vars["authorization_token"]
+                    if not auth_token.startswith("Bearer "):
+                        auth_token = f"Bearer {auth_token}"
+                    _headers["Authorization"] = auth_token
+
+            if _headers:
+                server_config[config.name]["headers"] = _headers
+
+            # For HTTP transports, we only need headers, not authorization_token field
+            # The langchain-mcp-adapters library handles auth via headers
         else:
             raise ValueError(f"Unsupported transport: {config.transport}")
 
-        if config.env_vars:
+        # Only add env vars for stdio transport, not for HTTP transports
+        if config.transport == "stdio" and config.env_vars:
             server_config[config.name]["env"] = config.env_vars
 
         client = MultiServerMCPClient(server_config)
         self.mcp_clients[server_id] = client
+        
+        # Debug: log the final config being passed to the client
+        logger.info(
+            "Created MCP client",
+            server_id=server_id,
+            server_name=config.name,
+            transport=config.transport,
+            final_config=server_config,
+        )
+        
         return client
 
     async def start_server(self, user_id: str, server_id: str) -> bool:
@@ -100,7 +154,35 @@ class MCPServerManager:
                 logger.info("Server already running", server_id=server_id, user_id=user_id)
                 return True
 
-            # Start server based on transport type
+            # Debug: log the config values for remote server detection
+            logger.info(
+                "Checking server config for remote detection",
+                server_id=server_id,
+                transport=config.transport,
+                url=config.url,
+                has_url=bool(config.url),
+                is_remote_transport=config.transport in ("http", "sse", "streamable-http", "streamable_http"),
+                orchestrator_url=self.orchestrator_url,
+            )
+
+            # 1) Purely remote HTTP/SSE servers – no orchestrator, no local process
+            if config.url and config.transport in ("http", "sse", "streamable-http", "streamable_http"):
+                self.active_servers[server_id] = {
+                    "user_id": user_id,
+                    "config": config,
+                    "transport": config.transport,
+                    "remote": True,
+                    "started_at": time.time(),
+                }
+                # Start background health monitor
+                await self._start_health_monitoring(user_id, server_id)
+                await self.redis_storage.update_mcp_server_health(
+                    user_id, server_id, MCPServerStatus.STARTING.value
+                )
+                logger.info("Registered remote MCP server (no orchestrator)", server_id=server_id)
+                return True
+
+            # 2) Local stdio servers managed via external orchestrator
             if self.orchestrator_url:
                 try:
                     await self._delegate("POST", f"/servers/{server_id}/start", user_id)
@@ -336,8 +418,18 @@ class MCPServerManager:
                 return []
 
             if not self._is_server_running(server_id):
-                logger.warning("Server not running for tool discovery", server_id=server_id, user_id=user_id)
-                return []
+                logger.info("Server not running, attempting to start", server_id=server_id, user_id=user_id)
+                # Try to start the server if it's enabled
+                if config.enabled:
+                    started = await self.start_server(user_id, server_id)
+                    if not started:
+                        logger.warning("Failed to start server for tool discovery", server_id=server_id, user_id=user_id)
+                        return []
+                    # Give the server a moment to initialize
+                    await asyncio.sleep(1)
+                else:
+                    logger.warning("Server disabled, cannot discover tools", server_id=server_id, user_id=user_id)
+                    return []
 
             # Try to discover tools using real MCP connection
             try:
@@ -743,57 +835,132 @@ class MCPServerManager:
             )
 
     def _convert_mcp_tool_to_langchain(self, mcp_tool: MCPToolInfo, user_id: str) -> BaseTool:
-        """Convert an MCP tool to a LangChain tool with real MCP execution."""
-        async def tool_func(tool_input, **kwargs) -> str:
-            try:
-                # Handle both dict and string inputs
-                if isinstance(tool_input, str):
-                    # Try to parse as JSON if it's a string
-                    try:
-                        import json
-                        arguments = json.loads(tool_input)
-                    except:
-                        # If not JSON, treat as a simple query parameter
-                        arguments = {"query": tool_input}
-                elif isinstance(tool_input, dict):
-                    arguments = tool_input
-                else:
-                    arguments = {"input": str(tool_input)}
+        """Get the actual MCP tool from langchain-mcp-adapters directly - no wrapper needed."""
+        
+        try:
+            # Get server config
+            server_info = self.active_servers.get(mcp_tool.server_id)
+            if not server_info:
+                raise ValueError(f"Server {mcp_tool.server_id} not found or not running")
+            
+            config = server_info["config"]
+            client = self._get_or_create_mcp_client(mcp_tool.server_id, config)
+            
+            # Get the actual MCP tool from the client
+            # This is an async operation, but we need to return a tool synchronously
+            # So we'll create a cached version that can be called later
+            
+            # For now, create a simple wrapper that will get the real tool when called
+            class MCPToolWrapper(BaseTool):
+                # Pydantic configuration to allow arbitrary types on attributes
+                class Config:
+                    arbitrary_types_allowed = True
+
+                # Static fields required by BaseTool
+                name: str = mcp_tool.name
+                description: str = mcp_tool.description
+
+                # Extra fields for delegation logic
+                tool_info: MCPToolInfo
+                server_manager: Any
+                _cached_tool: Optional[Any] = None
+
+                def __init__(self, tool_info: MCPToolInfo, server_manager: Any):
+                    super().__init__(tool_info=tool_info, server_manager=server_manager)
+                    # _cached_tool initialized as None by default
                 
-                # Try to execute the tool using real MCP connection
-                result = await self._execute_mcp_tool(mcp_tool.server_id, mcp_tool.name, arguments)
-                return result
-            except Exception as e:
-                logger.error(
-                    "MCP tool execution failed, returning mock response",
-                    tool_name=mcp_tool.name,
-                    server_id=mcp_tool.server_id,
-                    error=str(e),
-                )
-                # Fallback to mock response
-                return f"Mock response from {mcp_tool.name} for input: {tool_input} (MCP execution failed: {str(e)})"
+                async def _get_real_tool(self):
+                    """Get the actual MCP tool from langchain-mcp-adapters."""
+                    if self._cached_tool is not None:
+                        return self._cached_tool
+                        
+                    try:
+                        server_info = self.server_manager.active_servers.get(self.tool_info.server_id)
+                        if not server_info:
+                            raise ValueError(f"Server {self.tool_info.server_id} not found")
+                        
+                        config = server_info["config"]
+                        client = self.server_manager._get_or_create_mcp_client(self.tool_info.server_id, config)
+                        
+                        # Get tools from the client
+                        tools = await client.get_tools()
+                        
+                        # Find our specific tool
+                        for tool in tools:
+                            if tool.name == self.tool_info.name:
+                                self._cached_tool = tool
+                                return tool
+                                
+                        raise ValueError(f"Tool {self.tool_info.name} not found on server")
+                        
+                    except Exception as e:
+                        logger.error(
+                            "Error getting real MCP tool",
+                            tool_name=self.tool_info.name,
+                            error=str(e),
+                            exc_info=True,
+                        )
+                        raise
+                
+                async def ainvoke(self, tool_input, **kwargs):
+                    """Delegate to the real MCP tool."""
+                    import json, re
 
-        def sync_tool_func(tool_input, **kwargs) -> str:
-            try:
-                # Use asyncio.run for sync execution
-                return asyncio.run(tool_func(tool_input, **kwargs))
-            except Exception as e:
-                logger.error(
-                    "Sync MCP tool execution failed",
-                    tool_name=mcp_tool.name,
-                    error=str(e),
-                )
-                return f"Mock sync response from {mcp_tool.name} for input: {tool_input} (execution failed)"
+                    # Clean possible XML tag remnants (e.g., trailing '</tool_input')
+                    if isinstance(tool_input, str):
+                        tool_input = re.sub(r"</?tool_input>?$", "", tool_input.strip())
+                        # Try to parse JSON if the string looks like JSON
+                        stripped = tool_input.strip()
+                        if stripped.startswith("{") and stripped.endswith("}"):
+                            try:
+                                tool_input = json.loads(stripped)
+                            except json.JSONDecodeError:
+                                pass  # Leave as raw string if parsing fails
 
-        return Tool(
-            name=mcp_tool.name,
-            description=mcp_tool.description,
-            func=sync_tool_func,
-            coroutine=tool_func,
-        )
+                    real_tool = await self._get_real_tool()
+                    return await real_tool.ainvoke(tool_input, **kwargs)
+                
+                def invoke(self, tool_input, **kwargs):
+                    """Delegate to the real MCP tool (synchronous)."""
+                    import asyncio, json, re
+                    # Clean like in async path
+                    if isinstance(tool_input, str):
+                        tool_input = re.sub(r"</?tool_input>?$", "", tool_input.strip())
+                        stripped = tool_input.strip()
+                        if stripped.startswith("{") and stripped.endswith("}"):
+                            try:
+                                tool_input = json.loads(stripped)
+                            except json.JSONDecodeError:
+                                pass
+                    return asyncio.run(self.ainvoke(tool_input, **kwargs))
+                
+                def _run(self, *args, **kwargs):
+                    """Legacy sync interface."""
+                    return self.invoke(*args, **kwargs)
+                
+                async def _arun(self, *args, **kwargs):
+                    """Legacy async interface."""
+                    return await self.ainvoke(*args, **kwargs)
+            
+            return MCPToolWrapper(mcp_tool, self)
+            
+        except Exception as e:
+            logger.error(
+                "Error creating MCP tool wrapper",
+                tool_name=mcp_tool.name,
+                error=str(e),
+                exc_info=True,
+            )
+            # Return a dummy tool that shows the error
+            return Tool(
+                name=mcp_tool.name,
+                description=f"Error: {str(e)}",
+                func=lambda x: f"Error: MCP tool {mcp_tool.name} is not available: {str(e)}",
+            )
 
     async def _discover_tools_from_mcp(self, server_id: str, config: MCPServerConfig) -> List[Dict[str, Any]]:
         """Discover tools from an MCP server using langchain-mcp-adapters."""
+        logger.info("Discovering tools via MCP", server_id=server_id, transport=config.transport, url=config.url)
         try:
             # Reuse or create persistent client
             client = self._get_or_create_mcp_client(server_id, config)
@@ -802,14 +969,56 @@ class MCPServerManager:
             # Convert tools to our format
             discovered_tools = []
             for tool in tools:
+                # Try to extract the input schema from different possible attributes
+                input_schema = {}
+                
+                # Check for args_schema (most common)
+                if hasattr(tool, 'args_schema') and tool.args_schema:
+                    if hasattr(tool.args_schema, 'model_json_schema'):
+                        # Pydantic v2 style
+                        input_schema = tool.args_schema.model_json_schema()
+                    elif hasattr(tool.args_schema, 'schema'):
+                        # Pydantic v1 style
+                        input_schema = tool.args_schema.schema()
+                    elif hasattr(tool.args_schema, '__annotations__'):
+                        # Simple class with annotations
+                        properties = {}
+                        for field_name, field_type in tool.args_schema.__annotations__.items():
+                            properties[field_name] = {
+                                "type": "string",  # Default to string
+                                "description": f"Parameter {field_name}"
+                            }
+                        input_schema = {
+                            "type": "object",
+                            "properties": properties,
+                            "required": list(properties.keys())
+                        }
+                
+                # Check for input_schema attribute directly
+                elif hasattr(tool, 'input_schema'):
+                    input_schema = tool.input_schema
+                
+                # Check for description of parameters in the tool description
+                elif hasattr(tool, 'description') and tool.description:
+                    # Try to extract parameter info from description
+                    # This is a fallback for tools that don't have proper schema
+                    pass
+                
                 tool_info = {
                     "name": tool.name,
                     "description": tool.description,
                     "server_id": server_id,
                     "server_name": config.name,
-                    "input_schema": getattr(tool, 'args_schema', {})
+                    "input_schema": input_schema
                 }
                 discovered_tools.append(tool_info)
+                
+                logger.debug(
+                    "Discovered tool",
+                    tool_name=tool.name,
+                    has_schema=bool(input_schema),
+                    schema_keys=list(input_schema.keys()) if input_schema else []
+                )
             
             logger.info(
                 "Successfully discovered tools from MCP server",
@@ -834,8 +1043,12 @@ class MCPServerManager:
     async def _execute_mcp_tool(self, server_id: str, tool_name: str, arguments: Dict[str, Any]) -> str:
         """Execute an MCP tool using langchain-mcp-adapters."""
         try:
-            # For now, we'll need to recreate the connection for each tool execution
-            # In the future, we could maintain persistent connections
+            logger.info(
+                "Starting MCP tool execution",
+                server_id=server_id,
+                tool_name=tool_name,
+                arguments=arguments,
+            )
             
             # Get server config
             server_info = self.active_servers.get(server_id)
@@ -859,6 +1072,14 @@ class MCPServerManager:
             if not target_tool:
                 raise ValueError(f"Tool {tool_name} not found on server {server_id}")
             
+            logger.info(
+                "Found target tool, executing",
+                tool_name=tool_name,
+                tool_description=target_tool.description,
+                tool_args_schema=getattr(target_tool, 'args_schema', None),
+                arguments_provided=arguments,
+            )
+            
             # Execute the tool
             if hasattr(target_tool, 'ainvoke'):
                 result = await target_tool.ainvoke(arguments)
@@ -872,6 +1093,7 @@ class MCPServerManager:
                 "Successfully executed MCP tool",
                 server_id=server_id,
                 tool_name=tool_name,
+                result_length=len(str(result)) if result else 0,
             )
             
             return str(result)
@@ -884,6 +1106,7 @@ class MCPServerManager:
                 "Error executing MCP tool",
                 server_id=server_id,
                 tool_name=tool_name,
+                arguments=arguments,
                 error=str(e),
                 exc_info=True,
             )
