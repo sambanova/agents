@@ -47,6 +47,48 @@ class MCPServerManager:
         # Lazily-created httpx client session for orchestrator calls
         self._orch_client: Optional["httpx.AsyncClient"] = None
 
+        # HTTP client for health checks and connection validation
+        self._http_client: Optional["httpx.AsyncClient"] = None
+
+    async def _get_http_client(self) -> "httpx.AsyncClient":
+        """Get or create HTTP client for health checks and validation."""
+        if self._http_client is None:
+            import httpx
+            self._http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(30.0, connect=10.0, read=20.0),
+                limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+                follow_redirects=True,
+            )
+        return self._http_client
+
+    def _get_transport_for_langchain(self, config: MCPServerConfig) -> str:
+        """
+        Map user-provided transport to langchain-mcp-adapters supported transport.
+        
+        The langchain-mcp-adapters library supports:
+        - 'stdio': Local process communication
+        - 'sse': Server-sent events
+        - 'streamable_http': HTTP with streaming support
+        - 'websocket': WebSocket (not used in this implementation)
+        
+        This function maps various HTTP transport names to the appropriate
+        langchain-mcp-adapters transport type.
+        """
+        transport = config.transport.lower()
+        
+        if transport == "stdio":
+            return "stdio"
+        elif transport == "sse":
+            return "sse"
+        elif transport in ("http", "streamable-http", "streamable_http"):
+            return "streamable_http"
+        else:
+            logger.warning(
+                "Unknown transport type, defaulting to streamable_http",
+                transport=transport,
+                server_id=config.server_id,
+            )
+            return "streamable_http"
 
     def _get_or_create_mcp_client(self, server_id: str, config: MCPServerConfig):
         """Return a cached MultiServerMCPClient for the given server, creating one if needed."""
@@ -65,11 +107,8 @@ class MCPServerManager:
                 }
             }
         elif config.transport in ["http", "sse", "streamable-http", "streamable_http"]:
-            # Map transport names accepted by langchain-mcp-adapters
-            # The library only supports: 'stdio', 'sse', 'websocket', 'streamable_http'
-            # Map all HTTP variants to 'streamable_http' since that's the supported HTTP transport
-            if config.transport in ("http", "sse", "streamable-http", "streamable_http"):
-                transport = "streamable_http"
+            # Use the improved transport mapping
+            transport = self._get_transport_for_langchain(config)
 
             server_config = {
                 config.name: {
@@ -131,10 +170,95 @@ class MCPServerManager:
             server_id=server_id,
             server_name=config.name,
             transport=config.transport,
+            mapped_transport=server_config[config.name].get("transport", "unknown"),
             final_config=server_config,
         )
         
         return client
+
+    async def _validate_http_connection(self, config: MCPServerConfig) -> Tuple[bool, Optional[str]]:
+        """
+        Validate HTTP connection to MCP server.
+        
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not config.url:
+            return False, "No URL specified"
+
+        try:
+            http_client = await self._get_http_client()
+            
+            # Prepare headers
+            headers = {}
+            if config.headers:
+                headers.update(config.headers)
+            
+            # Add auth headers from env_vars
+            if config.env_vars:
+                if "Authorization" in config.env_vars:
+                    headers["Authorization"] = config.env_vars["Authorization"]
+                elif "AUTHORIZATION" in config.env_vars:
+                    headers["Authorization"] = config.env_vars["AUTHORIZATION"]
+                elif "AUTH_TOKEN" in config.env_vars:
+                    headers["Authorization"] = f"Bearer {config.env_vars['AUTH_TOKEN']}"
+                elif "GITHUB_PAT" in config.env_vars:
+                    headers["Authorization"] = f"Bearer {config.env_vars['GITHUB_PAT']}"
+                elif "GITHUB_TOKEN" in config.env_vars:
+                    headers["Authorization"] = f"Bearer {config.env_vars['GITHUB_TOKEN']}"
+                elif "authorization_token" in config.env_vars:
+                    auth_token = config.env_vars["authorization_token"]
+                    if not auth_token.startswith("Bearer "):
+                        auth_token = f"Bearer {auth_token}"
+                    headers["Authorization"] = auth_token
+
+            # Try to connect to the server
+            url = config.url.rstrip("/")
+            
+            # For MCP servers, we can try a basic HTTP request to check connectivity
+            # Most MCP servers will respond with some form of error or info for basic HTTP requests
+            try:
+                response = await http_client.get(
+                    url,
+                    headers=headers,
+                    timeout=10.0,
+                )
+                
+                # Even if we get 4xx/5xx, the server is reachable
+                if response.status_code < 600:
+                    logger.debug(
+                        "HTTP connection validation successful",
+                        server_id=config.server_id,
+                        url=url,
+                        status_code=response.status_code,
+                    )
+                    return True, None
+                else:
+                    return False, f"HTTP error {response.status_code}"
+                    
+            except Exception as req_error:
+                # For MCP servers, connectivity errors are more important than HTTP errors
+                error_str = str(req_error).lower()
+                if "timeout" in error_str:
+                    return False, f"Connection timeout: {req_error}"
+                elif "connection refused" in error_str or "connection failed" in error_str:
+                    return False, f"Connection refused: {req_error}"
+                elif "name resolution" in error_str or "dns" in error_str:
+                    return False, f"DNS resolution failed: {req_error}"
+                elif "ssl" in error_str or "certificate" in error_str:
+                    return False, f"SSL/Certificate error: {req_error}"
+                else:
+                    return False, f"HTTP request failed: {req_error}"
+                    
+        except Exception as e:
+            logger.error(
+                "Error validating HTTP connection",
+                server_id=config.server_id,
+                url=config.url,
+                error=str(e),
+                exc_info=True,
+            )
+            return False, f"Connection validation failed: {str(e)}"
 
     async def start_server(self, user_id: str, server_id: str) -> bool:
         """Start an MCP server for a user."""
@@ -167,6 +291,20 @@ class MCPServerManager:
 
             # 1) Purely remote HTTP/SSE servers – no orchestrator, no local process
             if config.url and config.transport in ("http", "sse", "streamable-http", "streamable_http"):
+                # Validate HTTP connection first
+                is_valid, error_msg = await self._validate_http_connection(config)
+                if not is_valid:
+                    logger.error(
+                        "HTTP connection validation failed",
+                        server_id=server_id,
+                        url=config.url,
+                        error=error_msg,
+                    )
+                    await self.redis_storage.update_mcp_server_health(
+                        user_id, server_id, MCPServerStatus.ERROR.value, error_msg
+                    )
+                    return False
+
                 self.active_servers[server_id] = {
                     "user_id": user_id,
                     "config": config,
@@ -369,21 +507,48 @@ class MCPServerManager:
             if not self._is_server_running(server_id):
                 return MCPServerStatus.STOPPED, "Server process not running"
 
-            # TODO: Implement actual MCP health check using langchain-mcp-adapters
-            # For stdio transports we inspect the subprocess; for http/sse we
-            # currently assume the server is healthy (a more sophisticated ping
-            # can be added later).
-
-            if server_id in self.server_processes:
-                process = self.server_processes[server_id]
-                if process.returncode is None:  # Process still running
-                    return MCPServerStatus.HEALTHY, "Server process running"
+            # Perform transport-specific health checks
+            if config.transport == "stdio":
+                # For stdio, check if subprocess is still running
+                if server_id in self.server_processes:
+                    process = self.server_processes[server_id]
+                    if process.returncode is None:  # Process still running
+                        return MCPServerStatus.HEALTHY, "Server process running"
+                    else:
+                        return MCPServerStatus.ERROR, "Server process terminated"
                 else:
-                    return MCPServerStatus.ERROR, "Server process terminated"
-
-            # If there's no local subprocess then this is an HTTP/SSE server –
-            # treat as healthy for now.
-            return MCPServerStatus.HEALTHY, "Remote server assumed healthy"
+                    return MCPServerStatus.ERROR, "Server process not found"
+            
+            elif config.transport in ("http", "sse", "streamable-http", "streamable_http"):
+                # For HTTP/SSE servers, validate the connection
+                try:
+                    is_valid, error_msg = await self._validate_http_connection(config)
+                    if is_valid:
+                        # Additional check: try to create MCP client and test basic functionality
+                        try:
+                            client = self._get_or_create_mcp_client(server_id, config)
+                            # Test if we can at least initialize the client
+                            # Don't call get_tools() here as it might be expensive
+                            return MCPServerStatus.HEALTHY, "HTTP server reachable and MCP client initialized"
+                        except Exception as mcp_error:
+                            logger.warning(
+                                "HTTP server reachable but MCP client failed",
+                                server_id=server_id,
+                                error=str(mcp_error),
+                            )
+                            return MCPServerStatus.ERROR, f"MCP client error: {str(mcp_error)}"
+                    else:
+                        return MCPServerStatus.ERROR, error_msg or "HTTP connection failed"
+                except Exception as e:
+                    logger.error(
+                        "Error during HTTP health check",
+                        server_id=server_id,
+                        error=str(e),
+                    )
+                    return MCPServerStatus.ERROR, f"Health check failed: {str(e)}"
+            
+            else:
+                return MCPServerStatus.ERROR, f"Unsupported transport: {config.transport}"
 
         except Exception as e:
             logger.error(
@@ -450,45 +615,72 @@ class MCPServerManager:
                     )
 
                     return [MCPToolInfo.model_validate(tool) for tool in discovered_tools]
+                else:
+                    # No tools discovered but no error - server might be empty
+                    logger.warning(
+                        "No tools discovered from MCP server",
+                        server_id=server_id,
+                        user_id=user_id,
+                    )
+                    return []
             except Exception as mcp_error:
-                logger.warning(
-                    "Failed to discover tools from MCP server, falling back to mock",
+                error_str = str(mcp_error).lower()
+                
+                # Log detailed error information
+                logger.error(
+                    "MCP tool discovery failed",
                     server_id=server_id,
+                    user_id=user_id,
+                    transport=config.transport,
+                    url=config.url,
                     error=str(mcp_error),
+                    exc_info=True,
                 )
-
-            # Fallback to mock tools if MCP discovery fails
-            mock_tools = [
-                {
-                    "name": f"{config.name}_tool_1",
-                    "description": f"Mock tool from {config.name} (MCP connection failed)",
-                    "server_id": server_id,
-                    "server_name": config.name,
-                    "input_schema": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "Query parameter"}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            ]
-
-            # Cache the mock tools
-            self.tool_cache[server_id] = mock_tools
-            self.cache_expiry[server_id] = time.time() + self.cache_ttl
-
-            # Store in Redis
-            await self.redis_storage.store_mcp_server_tools(user_id, server_id, mock_tools)
-
-            logger.info(
-                "Using mock tools for MCP server",
-                server_id=server_id,
-                user_id=user_id,
-                num_tools=len(mock_tools),
-            )
-
-            return [MCPToolInfo.model_validate(tool) for tool in mock_tools]
+                
+                # For HTTP servers, check if it's a connection issue
+                if config.transport in ("http", "sse", "streamable-http", "streamable_http"):
+                    if any(keyword in error_str for keyword in ["connection", "timeout", "refused", "unreachable"]):
+                        logger.error(
+                            "HTTP MCP server connection failed during tool discovery",
+                            server_id=server_id,
+                            url=config.url,
+                            error=str(mcp_error),
+                        )
+                        # Update server status to ERROR
+                        await self.redis_storage.update_mcp_server_health(
+                            user_id, server_id, MCPServerStatus.ERROR.value, f"Connection failed: {str(mcp_error)}"
+                        )
+                        return []
+                    elif any(keyword in error_str for keyword in ["auth", "unauthorized", "forbidden", "token"]):
+                        logger.error(
+                            "HTTP MCP server authentication failed during tool discovery",
+                            server_id=server_id,
+                            url=config.url,
+                            error=str(mcp_error),
+                        )
+                        # Update server status to ERROR
+                        await self.redis_storage.update_mcp_server_health(
+                            user_id, server_id, MCPServerStatus.ERROR.value, f"Authentication failed: {str(mcp_error)}"
+                        )
+                        return []
+                
+                # For other errors, try to provide more specific information
+                if "langchain_mcp_adapters" in error_str:
+                    logger.error(
+                        "MCP adapter library error during tool discovery",
+                        server_id=server_id,
+                        error=str(mcp_error),
+                    )
+                elif "transport" in error_str:
+                    logger.error(
+                        "MCP transport error during tool discovery",
+                        server_id=server_id,
+                        transport=config.transport,
+                        error=str(mcp_error),
+                    )
+                
+                # Don't fallback to mock tools - return empty list to show real issue
+                return []
 
         except Exception as e:
             logger.error(
@@ -713,8 +905,36 @@ class MCPServerManager:
                 logger.error("No URL specified for HTTP server", server_id=config.server_id)
                 return False
 
-            # TODO: Implement HTTP MCP server connection using langchain-mcp-adapters
-            # For now, just mark as active
+            # Validate HTTP connection before marking as active
+            is_valid, error_msg = await self._validate_http_connection(config)
+            if not is_valid:
+                logger.error(
+                    "HTTP connection validation failed during startup",
+                    server_id=config.server_id,
+                    url=config.url,
+                    error=error_msg,
+                )
+                return False
+
+            # Try to create MCP client to test basic functionality
+            try:
+                client = self._get_or_create_mcp_client(config.server_id, config)
+                logger.info(
+                    "MCP client created successfully for HTTP server",
+                    server_id=config.server_id,
+                    url=config.url,
+                )
+            except Exception as client_error:
+                logger.error(
+                    "Failed to create MCP client for HTTP server",
+                    server_id=config.server_id,
+                    url=config.url,
+                    error=str(client_error),
+                    exc_info=True,
+                )
+                return False
+
+            # Mark as active
             self.active_servers[config.server_id] = {
                 "user_id": user_id,
                 "config": config,
@@ -746,8 +966,37 @@ class MCPServerManager:
                 logger.error("No URL specified for SSE server", server_id=config.server_id)
                 return False
 
-            # TODO: Implement SSE MCP server connection using langchain-mcp-adapters
-            # For now, just mark as active (similar to HTTP for now)
+            # Validate HTTP connection before marking as active
+            # SSE servers typically have HTTP endpoints too
+            is_valid, error_msg = await self._validate_http_connection(config)
+            if not is_valid:
+                logger.error(
+                    "HTTP connection validation failed during SSE startup",
+                    server_id=config.server_id,
+                    url=config.url,
+                    error=error_msg,
+                )
+                return False
+
+            # Try to create MCP client to test basic functionality
+            try:
+                client = self._get_or_create_mcp_client(config.server_id, config)
+                logger.info(
+                    "MCP client created successfully for SSE server",
+                    server_id=config.server_id,
+                    url=config.url,
+                )
+            except Exception as client_error:
+                logger.error(
+                    "Failed to create MCP client for SSE server",
+                    server_id=config.server_id,
+                    url=config.url,
+                    error=str(client_error),
+                    exc_info=True,
+                )
+                return False
+
+            # Mark as active
             self.active_servers[config.server_id] = {
                 "user_id": user_id,
                 "config": config,
@@ -901,37 +1150,249 @@ class MCPServerManager:
                             exc_info=True,
                         )
                         raise
+
+                def _requires_structured_input(self, tool) -> bool:
+                    """Check if tool requires structured JSON input based on schema."""
+                    return (
+                        hasattr(tool, 'args_schema') and 
+                        tool.args_schema is not None and
+                        hasattr(tool.args_schema, 'model_json_schema')
+                    )
+
+                def _get_schema_info(self, tool) -> str:
+                    """Get helpful schema information for error messages."""
+                    try:
+                        if hasattr(tool, 'args_schema') and tool.args_schema and hasattr(tool.args_schema, 'model_json_schema'):
+                            schema = tool.args_schema.model_json_schema()
+                            properties = schema.get('properties', {})
+                            required = schema.get('required', [])
+                            
+                            # Build a helpful format example
+                            example_params = {}
+                            for prop_name, prop_info in properties.items():
+                                prop_type = prop_info.get('type', 'string')
+                                if prop_type == 'string':
+                                    example_params[prop_name] = f"<{prop_name}_value>"
+                                elif prop_type == 'integer':
+                                    example_params[prop_name] = 10
+                                elif prop_type == 'boolean':
+                                    example_params[prop_name] = True
+                                else:
+                                    example_params[prop_name] = f"<{prop_name}_value>"
+                            
+                            import json
+                            example_json = json.dumps(example_params, indent=2)
+                            
+                            required_info = f" (required: {required})" if required else ""
+                            return f"{example_json}{required_info}"
+                        else:
+                            return "JSON object with appropriate parameters"
+                    except Exception:
+                        return "JSON object with appropriate parameters"
+
+                def _parse_structured_input(self, tool_input: str, tool) -> dict:
+                    """Intelligently parse string input into structured format for MCP tools."""
+                    import json
+                    import re
+                    from typing import Dict, Any
+                    
+                    # Clean the input
+                    cleaned_input = tool_input.strip()
+                    
+                    # Strategy 1: Direct JSON parsing
+                    if cleaned_input.startswith("{") and cleaned_input.endswith("}"):
+                        try:
+                            return json.loads(cleaned_input)
+                        except json.JSONDecodeError as e:
+                            logger.debug(f"Direct JSON parsing failed: {e}")
+                    
+                    # Strategy 2: Extract JSON from mixed content
+                    json_match = re.search(r'\{[^{}]*\}', cleaned_input)
+                    if json_match:
+                        try:
+                            return json.loads(json_match.group())
+                        except json.JSONDecodeError:
+                            pass
+                    
+                    # Strategy 3: Parse parameter-style input
+                    # Handle formats like: jql="project = 'Cloud'" maxResults=10
+                    params = {}
+                    
+                    # Get expected parameters from schema
+                    expected_params = set()
+                    if hasattr(tool, 'args_schema') and tool.args_schema and hasattr(tool.args_schema, 'model_json_schema'):
+                        schema = tool.args_schema.model_json_schema()
+                        expected_params = set(schema.get('properties', {}).keys())
+                    
+                    # Try to extract key=value pairs
+                    # Pattern matches: key="value" or key=value or key: value
+                    param_pattern = r'(\w+)\s*[:=]\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s,]+))'
+                    matches = re.findall(param_pattern, cleaned_input)
+                    
+                    for match in matches:
+                        key = match[0]
+                        # Take the first non-empty group (quoted or unquoted value)
+                        value = match[1] or match[2] or match[3]
+                        
+                        # Only include if it's an expected parameter or we don't have schema info
+                        if not expected_params or key in expected_params:
+                            # Try to convert to appropriate type
+                            if value.lower() in ('true', 'false'):
+                                params[key] = value.lower() == 'true'
+                            elif value.isdigit():
+                                params[key] = int(value)
+                            else:
+                                params[key] = value
+                    
+                    if params:
+                        return params
+                    
+                    # Strategy 4: Natural language pattern extraction
+                    # Look for common patterns like "search for X" or "find Y"
+                    if expected_params:
+                        # Try to map common patterns to parameters
+                        for param in expected_params:
+                            param_lower = param.lower()
+                            
+                            # Common parameter name patterns
+                            if param_lower in ['query', 'q', 'search', 'term']:
+                                # Extract quoted strings or the whole input as query
+                                quoted_match = re.search(r'["\']([^"\']+)["\']', cleaned_input)
+                                if quoted_match:
+                                    params[param] = quoted_match.group(1)
+                                else:
+                                    params[param] = cleaned_input
+                                break
+                            elif param_lower in ['jql']:
+                                # Special handling for JQL queries
+                                jql_match = re.search(r'(?:jql[:\s=]+)?["\']?([^"\']+)["\']?', cleaned_input)
+                                if jql_match:
+                                    params[param] = jql_match.group(1).strip()
+                                break
+                    
+                    # Strategy 4.5: Handle common missing required parameters with defaults
+                    if expected_params and hasattr(tool, 'args_schema') and tool.args_schema:
+                        schema = tool.args_schema.model_json_schema()
+                        required_params_from_schema = schema.get('required', [])
+                        properties = schema.get('properties', {})
+                        
+                        # Add default values for certain common required parameters if missing
+                        for required_param in required_params_from_schema:
+                            if required_param not in params:
+                                param_info = properties.get(required_param, {})
+                                param_type = param_info.get('type', 'string')
+                                
+                                # Handle common cases with sensible defaults
+                                if required_param.lower() in ['cloudid', 'cloud_id']:
+                                    # For Atlassian tools, cloudId is often needed but can be inferred from org
+                                    # This is a placeholder - ideally would be configured per-user
+                                    logger.warning(
+                                        f"Missing required parameter '{required_param}' for tool {tool.name}. "
+                                        f"This parameter needs to be configured for the user."
+                                    )
+                                    continue  # Don't add a default, let the tool error with proper message
+                                elif required_param.lower() in ['maxresults', 'max_results', 'limit']:
+                                    # Reasonable default for result limits
+                                    params[required_param] = 10
+                                elif required_param.lower() in ['offset', 'start', 'skip']:
+                                    # Default offset/pagination
+                                    params[required_param] = 0
+                                elif param_type == 'boolean':
+                                    # Default boolean to false
+                                    params[required_param] = False
+                    
+                    if params:
+                        return params
+                    
+                    # Strategy 5: Fallback - try to create a single parameter structure
+                    if expected_params and len(expected_params) == 1:
+                        # Single parameter tool - use the input as the parameter value
+                        param_name = next(iter(expected_params))
+                        return {param_name: cleaned_input}
+                    
+                    # If all strategies fail, raise an informative error
+                    raise ValueError(f"Unable to parse input into expected JSON structure. Input: '{cleaned_input}'")
                 
                 async def ainvoke(self, tool_input, **kwargs):
-                    """Delegate to the real MCP tool."""
+                    """Delegate to the real MCP tool with intelligent input conversion."""
                     import json, re
+                    from typing import Dict, Any
 
-                    # Clean possible XML tag remnants (e.g., trailing '</tool_input')
-                    if isinstance(tool_input, str):
-                        tool_input = re.sub(r"</?tool_input>?$", "", tool_input.strip())
-                        # Try to parse JSON if the string looks like JSON
-                        stripped = tool_input.strip()
-                        if stripped.startswith("{") and stripped.endswith("}"):
-                            try:
-                                tool_input = json.loads(stripped)
-                            except json.JSONDecodeError:
-                                pass  # Leave as raw string if parsing fails
-
+                    # Get the real tool first to check its schema
                     real_tool = await self._get_real_tool()
-                    return await real_tool.ainvoke(tool_input, **kwargs)
+                    
+                    # Check if this tool requires structured input
+                    requires_structured_input = self._requires_structured_input(real_tool)
+                    
+                    if isinstance(tool_input, str):
+                        # Clean possible XML tag remnants
+                        tool_input = re.sub(r"</?tool_input>?$", "", tool_input.strip())
+                        
+                        if requires_structured_input:
+                            # Tool has JSON schema - attempt intelligent parsing
+                            try:
+                                parsed_input = self._parse_structured_input(tool_input, real_tool)
+                                tool_input = parsed_input
+                                logger.debug(
+                                    "Successfully parsed structured input for MCP tool",
+                                    tool_name=self.name,
+                                    original_input=str(tool_input)[:100],
+                                    parsed_type=type(parsed_input).__name__,
+                                )
+                            except Exception as parse_error:
+                                # Provide helpful error message with schema info
+                                schema_info = self._get_schema_info(real_tool)
+                                error_msg = (
+                                    f"Tool '{self.name}' requires structured JSON input but failed to parse: {str(parse_error)}. "
+                                    f"Expected format: {schema_info}. "
+                                    f"Received: {tool_input[:200]}"
+                                )
+                                logger.error(
+                                    "Failed to parse structured input for MCP tool",
+                                    tool_name=self.name,
+                                    error=str(parse_error),
+                                    input_preview=str(tool_input)[:100],
+                                    schema_info=schema_info,
+                                )
+                                raise ValueError(error_msg)
+                        else:
+                            # Tool doesn't require structured input - try basic JSON parsing for backward compatibility
+                            stripped = tool_input.strip()
+                            if stripped.startswith("{") and stripped.endswith("}"):
+                                try:
+                                    tool_input = json.loads(stripped)
+                                except json.JSONDecodeError:
+                                    pass  # Leave as raw string if parsing fails
+
+                    try:
+                        return await real_tool.ainvoke(tool_input, **kwargs)
+                    except Exception as e:
+                        # Enhanced error handling with context
+                        error_str = str(e)
+                        if "String tool inputs are not allowed" in error_str:
+                            schema_info = self._get_schema_info(real_tool)
+                            enhanced_error = (
+                                f"Tool '{self.name}' requires JSON input but received string. "
+                                f"Expected format: {schema_info}. "
+                                f"Input: {str(tool_input)[:200]}"
+                            )
+                            raise ValueError(enhanced_error)
+                        elif "Invalid arguments" in error_str:
+                            schema_info = self._get_schema_info(real_tool)
+                            enhanced_error = (
+                                f"Tool '{self.name}' received invalid arguments. "
+                                f"Expected format: {schema_info}. "
+                                f"Error: {error_str}"
+                            )
+                            raise ValueError(enhanced_error)
+                        else:
+                            # Re-raise original error
+                            raise
                 
                 def invoke(self, tool_input, **kwargs):
                     """Delegate to the real MCP tool (synchronous)."""
-                    import asyncio, json, re
-                    # Clean like in async path
-                    if isinstance(tool_input, str):
-                        tool_input = re.sub(r"</?tool_input>?$", "", tool_input.strip())
-                        stripped = tool_input.strip()
-                        if stripped.startswith("{") and stripped.endswith("}"):
-                            try:
-                                tool_input = json.loads(stripped)
-                            except json.JSONDecodeError:
-                                pass
+                    import asyncio
+                    # Use the enhanced async logic for consistency
                     return asyncio.run(self.ainvoke(tool_input, **kwargs))
                 
                 def _run(self, *args, **kwargs):
@@ -961,84 +1422,135 @@ class MCPServerManager:
     async def _discover_tools_from_mcp(self, server_id: str, config: MCPServerConfig) -> List[Dict[str, Any]]:
         """Discover tools from an MCP server using langchain-mcp-adapters."""
         logger.info("Discovering tools via MCP", server_id=server_id, transport=config.transport, url=config.url)
-        try:
-            # Reuse or create persistent client
-            client = self._get_or_create_mcp_client(server_id, config)
-            tools = await client.get_tools()
-            
-            # Convert tools to our format
-            discovered_tools = []
-            for tool in tools:
-                # Try to extract the input schema from different possible attributes
-                input_schema = {}
+        
+        # Add retry logic for HTTP servers
+        max_retries = 3 if config.transport in ("http", "sse", "streamable-http", "streamable_http") else 1
+        retry_delay = 1  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                # Reuse or create persistent client
+                client = self._get_or_create_mcp_client(server_id, config)
                 
-                # Check for args_schema (most common)
-                if hasattr(tool, 'args_schema') and tool.args_schema:
-                    if hasattr(tool.args_schema, 'model_json_schema'):
-                        # Pydantic v2 style
-                        input_schema = tool.args_schema.model_json_schema()
-                    elif hasattr(tool.args_schema, 'schema'):
-                        # Pydantic v1 style
-                        input_schema = tool.args_schema.schema()
-                    elif hasattr(tool.args_schema, '__annotations__'):
-                        # Simple class with annotations
-                        properties = {}
-                        for field_name, field_type in tool.args_schema.__annotations__.items():
-                            properties[field_name] = {
-                                "type": "string",  # Default to string
-                                "description": f"Parameter {field_name}"
+                # Add timeout for tool discovery
+                try:
+                    tools = await asyncio.wait_for(client.get_tools(), timeout=30.0)
+                except asyncio.TimeoutError:
+                    raise Exception(f"Tool discovery timed out after 30 seconds (attempt {attempt + 1}/{max_retries})")
+                
+                # Convert tools to our format
+                discovered_tools = []
+                for tool in tools:
+                    # Try to extract the input schema from different possible attributes
+                    input_schema = {}
+                    
+                    # Check for args_schema (most common)
+                    if hasattr(tool, 'args_schema') and tool.args_schema:
+                        if hasattr(tool.args_schema, 'model_json_schema'):
+                            # Pydantic v2 style
+                            input_schema = tool.args_schema.model_json_schema()
+                        elif hasattr(tool.args_schema, 'schema'):
+                            # Pydantic v1 style
+                            input_schema = tool.args_schema.schema()
+                        elif hasattr(tool.args_schema, '__annotations__'):
+                            # Simple class with annotations
+                            properties = {}
+                            for field_name, field_type in tool.args_schema.__annotations__.items():
+                                properties[field_name] = {
+                                    "type": "string",  # Default to string
+                                    "description": f"Parameter {field_name}"
+                                }
+                            input_schema = {
+                                "type": "object",
+                                "properties": properties,
+                                "required": list(properties.keys())
                             }
-                        input_schema = {
-                            "type": "object",
-                            "properties": properties,
-                            "required": list(properties.keys())
-                        }
+                    
+                    # Check for input_schema attribute directly
+                    elif hasattr(tool, 'input_schema'):
+                        input_schema = tool.input_schema
+                    
+                    # Check for description of parameters in the tool description
+                    elif hasattr(tool, 'description') and tool.description:
+                        # Try to extract parameter info from description
+                        # This is a fallback for tools that don't have proper schema
+                        pass
+                    
+                    # Extract additional schema metadata for better error messages
+                    required_params = []
+                    param_types = {}
+                    if input_schema and isinstance(input_schema, dict):
+                        required_params = input_schema.get('required', [])
+                        properties = input_schema.get('properties', {})
+                        param_types = {name: prop.get('type', 'string') for name, prop in properties.items()}
+                    
+                    tool_info = {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "server_id": server_id,
+                        "server_name": config.name,
+                        "input_schema": input_schema,
+                        "required_params": required_params,
+                        "param_types": param_types,
+                    }
+                    discovered_tools.append(tool_info)
+                    
+                    logger.debug(
+                        "Discovered tool",
+                        tool_name=tool.name,
+                        has_schema=bool(input_schema),
+                        required_params=required_params,
+                        param_types=param_types,
+                    )
                 
-                # Check for input_schema attribute directly
-                elif hasattr(tool, 'input_schema'):
-                    input_schema = tool.input_schema
-                
-                # Check for description of parameters in the tool description
-                elif hasattr(tool, 'description') and tool.description:
-                    # Try to extract parameter info from description
-                    # This is a fallback for tools that don't have proper schema
-                    pass
-                
-                tool_info = {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "server_id": server_id,
-                    "server_name": config.name,
-                    "input_schema": input_schema
-                }
-                discovered_tools.append(tool_info)
-                
-                logger.debug(
-                    "Discovered tool",
-                    tool_name=tool.name,
-                    has_schema=bool(input_schema),
-                    schema_keys=list(input_schema.keys()) if input_schema else []
+                logger.info(
+                    "Successfully discovered tools from MCP server",
+                    server_id=server_id,
+                    num_tools=len(discovered_tools),
+                    attempt=attempt + 1,
                 )
-            
-            logger.info(
-                "Successfully discovered tools from MCP server",
-                server_id=server_id,
-                num_tools=len(discovered_tools),
-            )
-            
-            return discovered_tools
                 
-        except ImportError:
-            logger.warning("langchain-mcp-adapters not available, using mock tools")
-            raise
-        except Exception as e:
-            logger.error(
-                "Error discovering tools from MCP server",
-                server_id=server_id,
-                error=str(e),
-                exc_info=True,
-            )
-            raise
+                return discovered_tools
+                
+            except ImportError:
+                logger.error("langchain-mcp-adapters not available")
+                raise
+            except Exception as e:
+                error_str = str(e).lower()
+                
+                # Log the attempt failure
+                logger.warning(
+                    "Tool discovery attempt failed",
+                    server_id=server_id,
+                    attempt=attempt + 1,
+                    max_retries=max_retries,
+                    error=str(e),
+                )
+                
+                # Check if we should retry
+                if attempt < max_retries - 1:
+                    # Retry for certain types of errors
+                    if any(keyword in error_str for keyword in ["timeout", "connection", "temporary", "unavailable"]):
+                        logger.info(
+                            "Retrying tool discovery after recoverable error",
+                            server_id=server_id,
+                            attempt=attempt + 1,
+                            retry_delay=retry_delay,
+                        )
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                        continue
+                
+                # Final attempt failed or non-retryable error
+                logger.error(
+                    "Tool discovery failed after all retries",
+                    server_id=server_id,
+                    transport=config.transport,
+                    url=config.url,
+                    error=str(e),
+                    exc_info=True,
+                )
+                raise
 
     async def _execute_mcp_tool(self, server_id: str, tool_name: str, arguments: Dict[str, Any]) -> str:
         """Execute an MCP tool using langchain-mcp-adapters."""
@@ -1148,6 +1660,21 @@ class MCPServerManager:
                 except Exception:
                     pass
             self.mcp_clients.clear()
+            
+            # Close HTTP clients
+            if self._http_client:
+                try:
+                    await self._http_client.aclose()
+                except Exception:
+                    pass
+                self._http_client = None
+            
+            if self._orch_client:
+                try:
+                    await self._orch_client.aclose()
+                except Exception:
+                    pass
+                self._orch_client = None
             
             logger.info("MCP server manager cleanup completed")
             
