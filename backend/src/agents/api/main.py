@@ -1428,54 +1428,17 @@ async def create_default_mcp_servers(user_id: str):
         
         # Create default MCP servers (all disabled by default)
         default_servers = [
-            # Jira MCP server
+            # Jira MCP server (via mcp-remote)
             MCPServerConfig(
                 server_id=str(uuid4()),
                 name="Jira",
-                description="Connect to your Atlassian Jira and Confluence instances for project management and knowledge base access",
-                transport="stdio",
-                url=None,
-                command="uvx",
-                args=[
-                    "mcp-atlassian",
-                    "--jira-url", "https://your-company.atlassian.net",
-                    "--jira-username", "your.email@company.com", 
-                    "--jira-token", "your_api_token"
-                ],
-                env_vars={},
-                enabled=False,  # Disabled by default
-                created_at=datetime.now(timezone.utc),
-                last_updated=datetime.now(timezone.utc)
-            ),
-            # GitHub MCP server
-            MCPServerConfig(
-                server_id=str(uuid4()),
-                name="GitHub",
-                description="The GitHub MCP Server is a Model Context Protocol (MCP) server that provides seamless integration with GitHub APIs, enabling advanced automation and repository management capabilities for large language models",
+                description="Connect to your Atlassian Jira and Confluence instances for project management and knowledge base access via remote MCP",
                 transport="stdio",
                 url=None,
                 command="npx",
                 args=[
-                    "-y",
-                    "@modelcontextprotocol/server-github"
-                ],
-                env_vars={
-                    "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_YOUR_PERSONAL_ACCESS_TOKEN_HERE"
-                },
-                enabled=False,  # Disabled by default
-                created_at=datetime.now(timezone.utc),
-                last_updated=datetime.now(timezone.utc)
-            ),
-            # Fetch MCP server
-            MCPServerConfig(
-                server_id=str(uuid4()),
-                name="Fetch",
-                description="Web content fetching and scraping",
-                transport="stdio",
-                url=None,
-                command="uvx",
-                args=[
-                    "mcp-server-fetch"
+                    "mcp-remote",
+                    "@https://mcp.atlassian.com/v1/sse"
                 ],
                 env_vars={},
                 enabled=False,  # Disabled by default

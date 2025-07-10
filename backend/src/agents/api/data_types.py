@@ -262,6 +262,22 @@ class MCPServerCreateRequest(BaseModel):
     transport: str = Field(default="stdio", description="Transport type")
     env_vars: Optional[Dict[str, str]] = Field(default_factory=dict, description="Environment variables")
     enabled: bool = Field(default=True, description="Whether to enable the server")
+    
+    @model_validator(mode="after")
+    def validate_mcp_remote_format(self) -> "MCPServerCreateRequest":
+        """Validate that MCP servers use the required npx + mcp-remote format"""
+        # Only validate stdio transport servers with commands
+        if self.transport == "stdio" and self.command is not None:
+            if self.command != "npx":
+                raise ValueError("MCP servers must use 'npx' as the command")
+            
+            if not self.args or len(self.args) < 1 or self.args[0] != "mcp-remote":
+                raise ValueError("MCP servers must use 'mcp-remote' as the first argument")
+            
+            if len(self.args) < 2:
+                raise ValueError("MCP servers must provide a remote URL as the second argument")
+                
+        return self
 
 
 class MCPServerUpdateRequest(BaseModel):
@@ -274,6 +290,26 @@ class MCPServerUpdateRequest(BaseModel):
     transport: Optional[str] = Field(None, description="Updated transport")
     env_vars: Optional[Dict[str, str]] = Field(None, description="Updated environment variables")
     enabled: Optional[bool] = Field(None, description="Updated enabled status")
+    
+    @model_validator(mode="after")
+    def validate_mcp_remote_format(self) -> "MCPServerUpdateRequest":
+        """Validate that MCP servers use the required npx + mcp-remote format when updating"""
+        # Only validate if command and args are being updated
+        if self.command is not None or self.args is not None:
+            transport = self.transport or "stdio"  # Default to stdio if not specified
+            
+            if transport == "stdio":
+                if self.command is not None and self.command != "npx":
+                    raise ValueError("MCP servers must use 'npx' as the command")
+                
+                if self.args is not None:
+                    if len(self.args) < 1 or self.args[0] != "mcp-remote":
+                        raise ValueError("MCP servers must use 'mcp-remote' as the first argument")
+                    
+                    if len(self.args) < 2:
+                        raise ValueError("MCP servers must provide a remote URL as the second argument")
+                        
+        return self
 
 
 class MCPServerListResponse(BaseModel):
