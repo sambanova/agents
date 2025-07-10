@@ -168,7 +168,8 @@ class WebSocketConnectionManager(WebSocketInterface):
         # Start the cleanup task when the first connection is established
         await self.start_cleanup_task()
 
-        from agents.components.compound.agent import agent
+        # Import these locally to avoid circular imports
+        from agents.components.compound.agent import agent, enhanced_agent
 
         background_task = None
         session_key = f"{user_id}:{conversation_id}"
@@ -343,11 +344,6 @@ class WebSocketConnectionManager(WebSocketInterface):
                 ]
 
                 try:
-                    from agents.components.compound.agent import create_enhanced_agent
-
-                    enhanced_agent = create_enhanced_agent(
-                        tools=base_tools, user_id=user_id
-                    )
                     await enhanced_agent.astream_websocket(
                         input=input_,
                         config=config,
@@ -704,6 +700,7 @@ class WebSocketConnectionManager(WebSocketInterface):
 
         config = {
             "configurable": {
+                "type==default/user_id": user_id,
                 "type==default/tools": [
                     {
                         "type": "arxiv",

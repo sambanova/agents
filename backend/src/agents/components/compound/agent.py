@@ -7,7 +7,12 @@ import structlog
 from agents.api.stream import astream_state_websocket
 from agents.api.websocket_interface import WebSocketInterface
 from agents.components.compound.data_types import LLMType
+from agents.components.compound.enhanced_agent import (
+    EnhancedConfigurableAgent,
+    StaticToolConfig,
+)
 from agents.components.compound.xml_agent import get_xml_agent_executor
+from agents.tools.dynamic_tool_loader import load_tools_for_user
 from agents.tools.langgraph_tools import (
     TOOL_REGISTRY,
     ActionServer,
@@ -162,50 +167,30 @@ class ConfigurableAgent(RunnableBinding):
             raise e
 
 
-def create_enhanced_agent(
-    tools: Sequence[Tool],
-    llm_type: LLMType = LLMType.SN_DEEPSEEK_V3,
-    system_message: str = DEFAULT_SYSTEM_MESSAGE,
-    subgraphs: Optional[dict] = None,
-    user_id: Optional[str] = None,
-) -> "EnhancedConfigurableAgent":
-    """Create an enhanced agent with MCP support, avoiding circular imports."""
-    from agents.components.compound.enhanced_agent import EnhancedConfigurableAgent
-    
-    # If caller supplies no tool configs, load minimal safe default tool configs
-    if not tools:
-        base_tool_types = [
-            "arxiv",
-            "search_tavily",
-            "search_tavily_answer",
-            "wikipedia",
-        ]
-        tools = [{"type": name, "config": {}} for name in base_tool_types]
-
-    return (
-        EnhancedConfigurableAgent(
-            llm_type=llm_type,
-            tools=tools,
-            system_message=system_message,
-            subgraphs=subgraphs,
-            user_id=user_id,
-        )
-        .configurable_fields(
-            llm_type=ConfigurableField(id="llm_type", name="LLM Type"),
-            system_message=ConfigurableField(id="system_message", name="Instructions"),
-            subgraphs=ConfigurableField(id="subgraphs", name="Subgraphs"),
-            tools=ConfigurableField(id="tools", name="Tools"),
-        )
-        .configurable_alternatives(
-            ConfigurableField(id="type", name="Bot Type"),
-            default_key="default",
-            prefix_keys=True,
-        )
-        .with_types(
-            input_type=Messages,
-            output_type=Sequence[AnyMessage],
-        )
+enhanced_agent: Pregel = (
+    EnhancedConfigurableAgent(
+        llm_type=LLMType.SN_DEEPSEEK_V3,
+        tools=[],
+        system_message=DEFAULT_SYSTEM_MESSAGE,
+        user_id=None,
     )
+    .configurable_fields(
+        llm_type=ConfigurableField(id="llm_type", name="LLM Type"),
+        system_message=ConfigurableField(id="system_message", name="Instructions"),
+        subgraphs=ConfigurableField(id="subgraphs", name="Subgraphs"),
+        tools=ConfigurableField(id="tools", name="Tools"),
+        user_id=ConfigurableField(id="user_id", name="User ID"),
+    )
+    .configurable_alternatives(
+        ConfigurableField(id="type", name="Bot Type"),
+        default_key="default",
+        prefix_keys=True,
+    )
+    .with_types(
+        input_type=Messages,
+        output_type=Sequence[AnyMessage],
+    )
+)
 
 # Default agent using ConfigurableAgent to avoid circular imports
 agent: Pregel = (
