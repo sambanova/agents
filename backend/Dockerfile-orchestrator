@@ -1,0 +1,45 @@
+# Lightweight MCP Orchestrator Dockerfile
+FROM python:3.11-slim
+
+# Install system dependencies for MCP servers
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install minimal Python dependencies
+RUN pip install \
+    fastapi==0.115.12 \
+    uvicorn==0.34.3 \
+    "httpx>=0.28.0,<0.29.0" \
+    redis==5.2.1 \
+    python-dotenv \
+    pydantic==2.10.5 \
+    "structlog>=24.1.0" \
+    uv
+
+# Set working directory
+WORKDIR /app
+
+# Copy only the standalone orchestrator
+COPY src/orchestrator/standalone_main.py ./main.py
+
+# Set Python path for imports
+ENV PYTHONPATH=/app
+
+# Create non-root user for security
+RUN useradd -m -u 1000 orchestrator
+RUN chown -R orchestrator:orchestrator /app
+USER orchestrator
+
+# Expose port
+EXPOSE 8090
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8090/health || exit 1
+
+# Run standalone orchestrator
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8090"] 

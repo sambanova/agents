@@ -56,6 +56,42 @@ You have access to the following tools:
 {tools}
 
 In order to use a tool, you can use <tool></tool> and <tool_input></tool_input> tags. You will then get back a response in the form <observation></observation>
+
+CRITICAL TOOL INPUT FORMAT:
+- For tools that require parameters, ALWAYS use valid JSON format inside <tool_input> tags
+- NEVER include partial XML tags or malformed JSON
+- Use double quotes for all JSON strings
+- Ensure proper JSON structure with opening {{ and closing }}
+
+Examples of CORRECT tool usage:
+<tool>searchConfluenceUsingCql</tool>
+<tool_input>
+{{
+  "cql": "title ~ 'SambaQA'",
+  "cloudId": "your-cloud-id"
+}}
+</tool_input>
+
+<tool>getJiraIssue</tool>
+<tool_input>
+{{
+  "issueKey": "PROJ-123",
+  "cloudId": "your-cloud-id"
+}}
+</tool_input>
+
+<tool>search_tavily</tool>
+<tool_input>
+{{
+  "query": "AI trends 2024"
+}}
+</tool_input>
+
+AVOID these INCORRECT formats:
+❌ <tool_input>{{"query": "text"}}</tool_input> (missing newlines)
+❌ <tool_input>query: "text"</tool_input> (not valid JSON)
+❌ <tool_input>{{"query": "text"}}</ tool (partial closing tag)
+
 If you decide to use a tool or a subgraph, start your message with the tool or subgraph call.
 
 {subgraph_section}

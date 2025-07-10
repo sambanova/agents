@@ -8,12 +8,21 @@
           Manage your Model Context Protocol (MCP) servers to connect external tools and data sources
         </p>
       </div>
-      <button 
-        @click="showAddServer = true"
-        class="px-4 py-2 bg-primary-brandColor text-white rounded-md hover:bg-primary-brandColorHover focus:outline-none focus:ring-2 focus:ring-primary-brandColor"
-      >
-        Add Server
-      </button>
+      <div class="flex items-center space-x-3">
+        <button 
+          @click="refreshAllServerStatus"
+          :disabled="refreshing"
+          class="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50"
+        >
+          {{ refreshing ? 'Refreshing...' : 'Refresh Status' }}
+        </button>
+        <button 
+          @click="showAddServer = true"
+          class="px-4 py-2 bg-primary-brandColor text-white rounded-md hover:bg-primary-brandColorHover focus:outline-none focus:ring-2 focus:ring-primary-brandColor"
+        >
+          Add Server
+        </button>
+      </div>
     </div>
 
     <!-- Server List -->
@@ -55,13 +64,19 @@
                   v-if="server.health_status"
                   :class="[
                     'px-2 py-1 rounded-full text-xs font-medium',
-                    server.health_status === 'healthy' ? 'bg-green-100 text-green-800' : 
-                    server.health_status === 'unhealthy' ? 'bg-red-100 text-red-800' : 
-                    'bg-yellow-100 text-yellow-800'
+                    getHealthStatusColor(server.health_status)
                   ]"
                 >
-                  {{ server.health_status }}
+                  {{ formatHealthStatus(server.health_status) }}
                 </span>
+                <button
+                  v-if="server.health_status_loading"
+                  class="inline-flex items-center px-2 py-1 text-xs text-gray-500"
+                  disabled
+                >
+                  <div class="animate-spin rounded-full h-3 w-3 border-b border-gray-400 mr-1"></div>
+                  Checking...
+                </button>
               </div>
               <p class="text-sm text-primary-brandTextSecondary mt-1">{{ server.description }}</p>
               <div class="flex items-center space-x-4 mt-2 text-xs text-primary-brandTextSecondary">
@@ -73,6 +88,7 @@
               </div>
             </div>
             <div class="flex items-center space-x-2 ml-4">
+              <!-- Start/Stop removed: orchestrator auto-manages lifecycle -->
               <button 
                 @click="toggleServer(server)"
                 :class="[
@@ -85,8 +101,19 @@
                 {{ server.enabled ? 'Disable' : 'Enable' }}
               </button>
               <button 
+                @click="refreshServerHealth(server)"
+                :disabled="server.health_status_loading"
+                class="p-2 text-primary-brandTextSecondary hover:text-primary-brandTextPrimary transition-colors disabled:opacity-50"
+                title="Refresh server status"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+              </button>
+              <button 
                 @click="editServer(server)"
                 class="p-2 text-primary-brandTextSecondary hover:text-primary-brandTextPrimary transition-colors"
+                title="Edit server"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
@@ -95,6 +122,7 @@
               <button 
                 @click="deleteServer(server)"
                 class="p-2 text-red-600 hover:text-red-800 transition-colors"
+                title="Delete server"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -110,6 +138,7 @@
                 v-for="tool in server.tools" 
                 :key="tool.name"
                 class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs"
+                :title="tool.description"
               >
                 {{ tool.name }}
               </span>
@@ -156,9 +185,10 @@
                   required
                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-brandColor"
                 >
-                  <option value="stdio">stdio</option>
-                  <option value="http">http</option>
-                  <option value="sse">sse</option>
+                  <option value="stdio">stdio (local process)</option>
+                  <option value="http">http (remote server)</option>
+                  <option value="sse">sse (server-sent events)</option>
+                  <option value="streamable-http">streamable-http (streaming)</option>
                 </select>
               </div>
             </div>
@@ -174,7 +204,7 @@
             </div>
 
             <!-- Transport-specific fields -->
-            <div v-if="serverForm.transport === 'http' || serverForm.transport === 'sse'">
+            <div v-if="serverForm.transport === 'http' || serverForm.transport === 'sse' || serverForm.transport === 'streamable-http'">
               <label class="block text-sm font-medium text-gray-700 mb-1">URL *</label>
               <input 
                 v-model="serverForm.url"
@@ -240,14 +270,26 @@
                   />
                   <input 
                     v-model="envVar.value"
-                    type="text"
+                    :type="envVar.show ? 'text' : 'password'"
                     class="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-brandColor"
                     placeholder="variable_value"
                   />
                   <button 
                     type="button"
+                    @click="envVar.show = !envVar.show"
+                    class="px-2 text-gray-500 hover:text-gray-700"
+                  >
+                    <svg v-if="envVar.show" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-5.523 0-10-4.477-10-10 0-1.384.28-2.705.785-3.913m3.295-2.795A9.964 9.964 0 0112 3c5.523 0 10 4.477 10 10 0 1.648-.402 3.203-1.113 4.575M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18M9.88 9.88A3 3 0 0112 9c1.657 0 3 1.343 3 3 0 .46-.104.896-.288 1.288M6.26 6.26C4.091 7.82 2.427 10.266 2 13c2 5 7 9 10 9 1.797 0 3.487-.506 4.919-1.386M17.657 17.657C19.889 16.083 21.573 13.648 22 11c-2-5-7-9-10-9-1.52 0-2.963.354-4.248.987" />
+                    </svg>
+                  </button>
+                  <button 
+                    type="button"
                     @click="removeEnvVar(index)"
-                    class="px-3 py-2 text-red-600 hover:text-red-800"
+                    class="px-2 text-red-600 hover:text-red-800"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -320,6 +362,7 @@ const { userId } = useAuth()
 // State
 const servers = ref([])
 const loading = ref(false)
+const refreshing = ref(false)
 const error = ref('')
 const success = ref('')
 const showAddServer = ref(false)
@@ -343,7 +386,7 @@ onMounted(async () => {
   await loadServers()
 })
 
-// Load servers from API
+// Load servers from API - OPTIMIZED: Don't auto-load health status
 async function loadServers() {
   loading.value = true
   error.value = ''
@@ -355,8 +398,16 @@ async function loadServers() {
     })
     servers.value = response.data.servers
     
-    // Load health status and tools for each server
-    await loadServerDetails()
+    // Initialize additional properties for UI state
+    servers.value.forEach(server => {
+      server.health_status_loading = false
+    })
+    
+    // Only load health status for enabled servers on initial load
+    const enabledServers = servers.value.filter(s => s.enabled)
+    if (enabledServers.length > 0) {
+      await loadServerDetailsForServers(enabledServers)
+    }
   } catch (err) {
     error.value = 'Failed to load MCP servers'
     console.error('Error loading servers:', err)
@@ -365,24 +416,51 @@ async function loadServers() {
   }
 }
 
-// Load additional details for each server
-async function loadServerDetails() {
-  for (const server of servers.value) {
+// Load health status for specific servers - OPTIMIZED: Batch requests
+async function loadServerDetailsForServers(serverList) {
+  const promises = serverList.map(async (server) => {
+    server.health_status_loading = true
     try {
-      // Get health status
       const healthResponse = await axios.get(`${import.meta.env.VITE_API_URL}/mcp/servers/${server.server_id}/health`, {
         headers: {
           'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
         }
       })
       server.health_status = healthResponse.data.status
-      server.tools = healthResponse.data.tools || []
+      server.tools = healthResponse.data.available_tools || []
     } catch (err) {
+      console.warn(`Failed to get health status for server ${server.server_id}:`, err)
       server.health_status = 'unknown'
       server.tools = []
+    } finally {
+      server.health_status_loading = false
     }
+  })
+  
+  await Promise.allSettled(promises)
+}
+
+// Refresh all server status
+async function refreshAllServerStatus() {
+  refreshing.value = true
+  try {
+    await loadServerDetailsForServers(servers.value)
+    success.value = 'Server status refreshed'
+    clearMessages()
+  } catch (err) {
+    error.value = 'Failed to refresh server status'
+    console.error('Error refreshing status:', err)
+  } finally {
+    refreshing.value = false
   }
 }
+
+// Refresh single server health
+async function refreshServerHealth(server) {
+  await loadServerDetailsForServers([server])
+}
+
+// Start/stop functions removed – orchestrator handles lifecycle automatically
 
 // Toggle server enabled/disabled
 async function toggleServer(server) {
@@ -394,10 +472,55 @@ async function toggleServer(server) {
     })
     server.enabled = !server.enabled
     success.value = `Server ${server.enabled ? 'enabled' : 'disabled'} successfully`
+    
+    // Refresh health status after enabling
+    if (server.enabled) {
+      setTimeout(async () => {
+        await refreshServerHealth(server)
+      }, 1000)
+    }
+    
     clearMessages()
   } catch (err) {
     error.value = `Failed to ${server.enabled ? 'disable' : 'enable'} server`
     clearMessages()
+  }
+}
+
+// Helper functions for UI
+function getHealthStatusColor(status) {
+  switch (status) {
+    case 'healthy':
+    case 'running':
+      return 'bg-green-100 text-green-800'
+    case 'error':
+    case 'unhealthy':
+      return 'bg-red-100 text-red-800'
+    case 'stopped':
+      return 'bg-gray-100 text-gray-600'
+    case 'starting':
+      return 'bg-blue-100 text-blue-800'
+    default:
+      return 'bg-yellow-100 text-yellow-800'
+  }
+}
+
+function formatHealthStatus(status) {
+  switch (status) {
+    case 'healthy':
+      return 'Healthy'
+    case 'running':
+      return 'Running'
+    case 'error':
+      return 'Error'
+    case 'unhealthy':
+      return 'Unhealthy'
+    case 'stopped':
+      return 'Stopped'
+    case 'starting':
+      return 'Starting'
+    default:
+      return 'Unknown'
   }
 }
 
@@ -411,7 +534,7 @@ function editServer(server) {
     url: server.url || '',
     command: server.command || '',
     args: [...(server.args || [])],
-    envVars: Object.entries(server.env_vars || {}).map(([key, value]) => ({ key, value })),
+    envVars: Object.entries(server.env_vars || {}).map(([key, value]) => ({ key, value, show: false })),
     enabled: server.enabled
   }
   showAddServer.value = true
@@ -516,7 +639,7 @@ function removeArg(index) {
 
 // Add/remove environment variables
 function addEnvVar() {
-  serverForm.value.envVars.push({ key: '', value: '' })
+  serverForm.value.envVars.push({ key: '', value: '', show: false })
 }
 
 function removeEnvVar(index) {

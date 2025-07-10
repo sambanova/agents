@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
@@ -328,10 +329,84 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
             all_tools = await tool_executor.get_all_tools()
         else:
             all_tools = tools
-            
+
+        def _describe_tool(_tool: BaseTool) -> str:
+            """Return a rich, schema-aware description of a tool for the LLM prompt."""
+            import textwrap, json, inspect
+
+            # Start with name + description
+            lines: list[str] = [f"{_tool.name}: {_tool.description}"]
+
+            # ------------------------------------------------------------------
+            # Try to extract parameter definitions from various schema sources
+            # ------------------------------------------------------------------
+            schema = None
+            if hasattr(_tool, "args_schema") and _tool.args_schema is not None:
+                # Pydantic-style schema (preferred)
+                try:
+                    schema = _tool.args_schema.model_json_schema()
+                except Exception:
+                    # Fallback for Pydantic v1 or custom objects
+                    if hasattr(_tool.args_schema, "schema"):
+                        schema = _tool.args_schema.schema()
+            elif hasattr(_tool, "input_schema") and _tool.input_schema:
+                schema = _tool.input_schema  # Sometimes placed here directly
+            elif hasattr(_tool, "tool_info") and getattr(_tool, "tool_info", None):
+                # For MCPToolWrapper we stored input_schema earlier
+                schema = getattr(_tool.tool_info, "input_schema", None)
+
+            example_json: str | None = None
+            if schema and isinstance(schema, dict):
+                props = schema.get("properties", {})
+                required = set(schema.get("required", []))
+
+                if props:
+                    lines.append("Parameters:")
+                    for pname, pinfo in props.items():
+                        ptype = pinfo.get("type", "string")
+                        pdesc = pinfo.get("description", "")
+                        req_flag = " (required)" if pname in required else ""
+                        lines.append(f"  - {pname} ({ptype}){req_flag}: {pdesc}")
+
+                    # Build concise example JSON with placeholder values
+                    example_dict = {}
+                    for pname, pinfo in props.items():
+                        ptype = pinfo.get("type", "string")
+                        if ptype == "integer":
+                            example_dict[pname] = 1
+                        elif ptype == "boolean":
+                            example_dict[pname] = True
+                        else:
+                            example_dict[pname] = f"<{pname}>"
+                    example_json = json.dumps(example_dict, indent=2)
+
+            # Include example usage block with proper formatting
+            if example_json:
+                lines.append("Example:")
+                lines.append("<tool>" + _tool.name + "</tool>")
+                lines.append("<tool_input>")
+                # Format JSON with proper indentation for readability
+                import json
+                try:
+                    # Parse and reformat to ensure proper JSON structure
+                    parsed_example = json.loads(example_json) if isinstance(example_json, str) else example_json
+                    formatted_json = json.dumps(parsed_example, indent=2)
+                    lines.append(formatted_json)
+                except (json.JSONDecodeError, TypeError):
+                    # Fallback to original if parsing fails
+                    lines.append(example_json)
+                lines.append("</tool_input>")
+                
+                # Add a format reminder for this specific tool
+                lines.append("⚠️  CRITICAL: Use exact JSON format above with proper { } structure")
+
+            return textwrap.dedent("\n".join(lines)).strip()
+
+        detailed_tools_desc = "\n\n".join(_describe_tool(t) for t in all_tools)
+
         return xml_template.format(
             system_message=system_message,
-            tools=render_text_description(all_tools),
+            tools=detailed_tools_desc,
             tool_names=", ".join([t.name for t in all_tools]),
             subgraph_section=subgraph_section,
         )
@@ -551,7 +626,7 @@ Make sure to include both opening and closing tags for both tool and tool_input.
 
             _tool = tool_part.split("<tool>")[1].strip()
 
-            # Extract tool input
+            # Extract tool input with improved parsing
             if "<tool_input>" not in tool_input_part:
                 _tool_input = ""
             else:
@@ -560,8 +635,82 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                     _tool_input = tool_input_content.split("</tool_input>")[0]
                 else:
                     # Handle case where </tool_input> is missing (malformed/truncated)
+                    # Remove any partial closing tags
                     _tool_input = tool_input_content.strip()
+                    # Clean up partial XML tags that might be at the end
+                    _tool_input = re.sub(r'</?[^>]*$', '', _tool_input).strip()
                     # Note: This allows processing even with malformed input
+                
+                # Smart JSON extraction and conversion for structured tools
+                _tool_input = _tool_input.strip()
+                
+                def smart_json_extract(text):
+                    """Extract JSON from text using multiple strategies."""
+                    import json, re
+                    
+                    # Strategy 1: Clean JSON (starts and ends with braces)
+                    if text.startswith('{') and text.endswith('}'):
+                        try:
+                            return json.loads(text)
+                        except json.JSONDecodeError:
+                            pass
+                    
+                    # Strategy 2: Find JSON pattern in mixed content
+                    json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+                    json_matches = re.findall(json_pattern, text)
+                    for match in json_matches:
+                        try:
+                            return json.loads(match)
+                        except json.JSONDecodeError:
+                            continue
+                    
+                    # Strategy 3: Extract from partial/malformed JSON
+                    # Fix common issues like missing quotes, trailing commas
+                    if '{' in text and '}' in text:
+                        # Extract content between first { and last }
+                        start = text.find('{')
+                        end = text.rfind('}') + 1
+                        if start < end:
+                            json_candidate = text[start:end]
+                            try:
+                                return json.loads(json_candidate)
+                            except json.JSONDecodeError:
+                                # Try fixing common JSON issues
+                                fixed_json = json_candidate
+                                # Remove trailing commas
+                                fixed_json = re.sub(r',(\s*[}\]])', r'\1', fixed_json)
+                                # Add missing quotes to keys
+                                fixed_json = re.sub(r'(\w+):', r'"\1":', fixed_json)
+                                try:
+                                    return json.loads(fixed_json)
+                                except json.JSONDecodeError:
+                                    pass
+                    
+                    # Strategy 4: Key-value pair extraction
+                    # For formats like: query: "SambaQA", cloudId: "abc123"
+                    kv_pattern = r'(\w+):\s*["\']([^"\']*)["\']'
+                    matches = re.findall(kv_pattern, text)
+                    if matches:
+                        return {key: value for key, value in matches}
+                    
+                    return None
+                
+                if _tool_input:
+                    extracted_json = smart_json_extract(_tool_input)
+                    if extracted_json:
+                        _tool_input = extracted_json
+                        logger.debug(
+                            "Smart extracted JSON for tool",
+                            tool_name=_tool,
+                            original=str(_tool_input)[:100] if isinstance(_tool_input, str) else "dict",
+                            extracted_type=type(_tool_input).__name__,
+                        )
+                    else:
+                        logger.debug(
+                            "No JSON structure detected, keeping as string",
+                            tool_name=_tool,
+                            input_preview=str(_tool_input)[:100],
+                        )
 
             # Validate tool name
             if not _tool:
