@@ -98,105 +98,57 @@ def get_llm(llm_type: LLMType, api_key: str):
 
 
 class EnhancedConfigurableAgent(RunnableBinding):
-    """
-    Enhanced ConfigurableAgent that supports dynamic MCP tool loading per user.
-
-    This agent can load both static tools from the TOOL_REGISTRY and user-specific
-    MCP tools from their configured MCP servers.
-    """
-
-    tools: Sequence[StaticToolConfig]
+    tools: Sequence[BaseTool]
     llm_type: LLMType = LLMType.SN_DEEPSEEK_V3
     system_message: str = DEFAULT_SYSTEM_MESSAGE
     subgraphs: Optional[dict] = None
-    user_id: Optional[str] = None
-    _actual_agent_executor: Optional[Any] = None
 
     def __init__(
         self,
         *,
-        tools: Sequence[StaticToolConfig],
+        tools: Sequence[BaseTool] = [],
         llm_type: LLMType = LLMType.SN_DEEPSEEK_V3,
         system_message: str = DEFAULT_SYSTEM_MESSAGE,
         subgraphs: Optional[dict] = None,
-        user_id: Optional[str] = None,
         kwargs: Optional[Mapping[str, Any]] = None,
         config: Optional[Mapping[str, Any]] = None,
         **others: Any,
     ) -> None:
-        """
-        Synchronous initialization. Stores parameters for lazy async setup.
-        Sets self.bound to None for later initialization.
-        """
+        others.pop("bound", None)
+        llm = functools.partial(get_llm, llm_type)
 
+        _agent = get_xml_agent_executor(
+            tools=_tools,
+            llm=llm,
+            system_message=system_message,
+            subgraphs=subgraphs,
+            llm_type=llm_type,
+        )
+
+        agent_executor = _agent.with_config({"recursion_limit": 50})
         super().__init__(
             tools=tools,
             llm_type=llm_type,
             system_message=system_message,
             subgraphs=subgraphs,
-            user_id=user_id,
-            bound=RunnableLambda(lambda x: self._uninitialized_error(x)),
+            bound=agent_executor,
             kwargs=kwargs or {},
             config=config or {},
         )
-
-    def _uninitialized_error(self, *args, **kwargs):
-        raise RuntimeError(
-            "EnhancedConfigurableAgent has not been asynchronously initialized and its core "
-            "method was called directly on the uninitialized internal state. "
-            "Ensure you are calling ainvoke or astream_websocket, and that lazy "
-            "initialization is working correctly."
-        )
-
-    async def _ensure_agent_executor_initialized_async(self) -> None:
-        """
-        Asynchronously initializes the internal agent_executor if it hasn't been already.
-        This method is called lazily on the first async invocation.
-        """
-        if self.bound is None:  # Check if the agent_executor has been created
-            # Ensure we have valid values for user_id and static_tools_config
-
-            # Load tools for user (will use empty list if user_id is None)
-            all_tools = await load_tools_for_user(
-                self.user_id, self.static_tools_config, force_refresh=False
-            )
-
-            llm = functools.partial(get_llm, self._llm_type)
-            _agent = get_xml_agent_executor(
-                tools=all_tools,
-                llm=llm,
-                system_message=self._system_message,
-                subgraphs=self._subgraphs,
-                llm_type=self._llm_type,
-            )
-            agent_executor = _agent.with_config({"recursion_limit": 50})
-
-            self.bound = agent_executor
-            self.tools = all_tools
 
     async def astream_websocket(
         self,
         input: Union[list, Dict[str, Any]],
         config: RunnableConfig,
         websocket_manager: WebSocketInterface,
-        user_id: str,  # This might be dynamic per stream
+        user_id: str,
         conversation_id: str,
         message_id: str,
     ):
-        """Stream agent responses directly to WebSocket with dynamic tool loading."""
         try:
-            # Ensure the bound agent is ready before streaming
-            await self._ensure_agent_executor_initialized_async()
-
-            # Check if bound is still None after initialization attempt
-            if self.bound is None:
-                logger.error("Failed to initialize agent executor")
-                raise ValueError("Agent executor initialization failed")
-
-            # Use the bound agent directly, not through self
-            bound_agent = self.bound
+            """Stream agent responses directly to WebSocket"""
             await astream_state_websocket(
-                app=bound_agent,
+                app=self.bound,  # The compiled agent executor
                 input=input,
                 config=config,
                 websocket_manager=websocket_manager,

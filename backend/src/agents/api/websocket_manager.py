@@ -25,6 +25,7 @@ from agents.components.datagen.tools.persistent_daytona import PersistentDaytona
 from agents.components.open_deep_research.graph import create_deep_research_graph
 from agents.storage.redis_service import SecureRedisService
 from agents.storage.redis_storage import RedisStorage
+from agents.tools.dynamic_tool_loader import load_tools_for_user
 from agents.tools.langgraph_tools import RETRIEVAL_DESCRIPTION
 from fastapi import WebSocket, WebSocketDisconnect
 from langchain_core.messages import AIMessage, HumanMessage
@@ -333,15 +334,6 @@ class WebSocketConnectionManager(WebSocketInterface):
                     doc_ids=tuple(user_message_input["document_ids"]),
                     multimodal_input=multimodal_input,
                 )
-
-                # Always use enhanced agent with MCP support
-                # Pass the base tools that are normally configured
-                base_tools = [
-                    {"type": "arxiv", "config": {}},
-                    {"type": "search_tavily", "config": {}},
-                    {"type": "search_tavily_answer", "config": {}},
-                    {"type": "wikipedia", "config": {}},
-                ]
 
                 try:
                     await enhanced_agent.astream_websocket(
@@ -698,27 +690,28 @@ class WebSocketConnectionManager(WebSocketInterface):
             )
             self.daytona_managers[f"{user_id}:{thread_id}"] = daytona_manager
 
+        tools_config = [
+            {
+                "type": "arxiv",
+                "config": {},
+            },
+            {
+                "type": "search_tavily",
+                "config": {},
+            },
+            {
+                "type": "search_tavily_answer",
+                "config": {},
+            },
+            {
+                "type": "wikipedia",
+                "config": {},
+            },
+        ]
+
         config = {
             "configurable": {
                 "type==default/user_id": user_id,
-                "type==default/tools": [
-                    {
-                        "type": "arxiv",
-                        "config": {},
-                    },
-                    {
-                        "type": "search_tavily",
-                        "config": {},
-                    },
-                    {
-                        "type": "search_tavily_answer",
-                        "config": {},
-                    },
-                    {
-                        "type": "wikipedia",
-                        "config": {},
-                    },
-                ],
                 "type==default/llm_type": llm_type,
                 "thread_id": thread_id,
                 "user_id": user_id,
@@ -793,7 +786,7 @@ If the user includes any datasets you MUST use the data_science subgraph to anal
         }
 
         if indexed_doc_ids:
-            config["configurable"]["type==default/tools"].append(
+            tools_config.append(
                 {
                     "type": "retrieval",
                     "config": {
@@ -841,5 +834,10 @@ If the user includes any datasets you MUST use the data_science subgraph to anal
                     }
                 ),
             }
+
+        all_tools = await load_tools_for_user(
+            user_id, tools_config, force_refresh=False
+        )
+        config["configurable"]["type==default/tools"] = all_tools
 
         return config
