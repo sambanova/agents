@@ -102,6 +102,7 @@ class EnhancedConfigurableAgent(RunnableBinding):
     llm_type: LLMType = LLMType.SN_DEEPSEEK_V3
     system_message: str = DEFAULT_SYSTEM_MESSAGE
     subgraphs: Optional[dict] = None
+    user_id: Optional[str] = None
 
     def __init__(
         self,
@@ -110,6 +111,7 @@ class EnhancedConfigurableAgent(RunnableBinding):
         llm_type: LLMType = LLMType.SN_DEEPSEEK_V3,
         system_message: str = DEFAULT_SYSTEM_MESSAGE,
         subgraphs: Optional[dict] = None,
+        user_id: str = None,
         kwargs: Optional[Mapping[str, Any]] = None,
         config: Optional[Mapping[str, Any]] = None,
         **others: Any,
@@ -118,11 +120,12 @@ class EnhancedConfigurableAgent(RunnableBinding):
         llm = functools.partial(get_llm, llm_type)
 
         _agent = get_xml_agent_executor(
-            tools=_tools,
+            tools=tools,
             llm=llm,
             system_message=system_message,
             subgraphs=subgraphs,
             llm_type=llm_type,
+            user_id=user_id,
         )
 
         agent_executor = _agent.with_config({"recursion_limit": 50})
@@ -132,6 +135,7 @@ class EnhancedConfigurableAgent(RunnableBinding):
             system_message=system_message,
             subgraphs=subgraphs,
             bound=agent_executor,
+            user_id=user_id,
             kwargs=kwargs or {},
             config=config or {},
         )
