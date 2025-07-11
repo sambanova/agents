@@ -22,18 +22,14 @@ import sys
 from datetime import datetime
 from typing import Optional
 
-# Add src to Python path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
 import httpx
 import structlog
-from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import JSONResponse
+from agents.mcp.server_manager import MCPServerManager, MCPServerStatus
 
 # Re-use existing storage + manager classes
 from agents.storage.redis_storage import RedisStorage
-from agents.mcp.server_manager import MCPServerManager, MCPServerStatus
-
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import JSONResponse
 
 logger = structlog.get_logger(__name__)
 
@@ -48,14 +44,25 @@ app = FastAPI(title="MCP-Orchestrator", version="0.1.0")
 @app.on_event("startup")
 async def startup_event():
     """Initialise shared Redis connection and ServerManager."""
-    # Here we assume existing SecureRedisService is wired via env-vars
+    # Follow the same pattern as the main agents API
     from agents.storage.global_services import (
-        init_global_redis_storage,
-        get_global_redis_storage,
+        get_secure_redis_client,
+        initialize_mcp_services,
+        set_global_redis_storage_service,
     )
 
-    await init_global_redis_storage()
-    redis_storage: RedisStorage = get_global_redis_storage()
+    # Create Redis client and storage service
+    redis_client = get_secure_redis_client()
+    redis_storage = RedisStorage(redis_client=redis_client)
+
+    # Set global Redis storage service
+    set_global_redis_storage_service(redis_storage)
+
+    # Initialize MCP services
+    try:
+        initialize_mcp_services(redis_storage)
+    except Exception as e:
+        logger.warning(f"MCP services initialization failed: {e}")
 
     # Store on app.state for reuse
     app.state.server_manager = MCPServerManager(redis_storage)
@@ -133,4 +140,4 @@ async def refresh_tools(server_id: str, x_user_id: Optional[str] = Header(None))
     user_id = await _ensure_user_header(x_user_id)
     mgr: MCPServerManager = app.state.server_manager  # type: ignore[attr-defined]
     tools = await mgr.discover_tools(user_id, server_id, force_refresh=True)
-    return {"server_id": server_id, "total": len(tools)} 
+    return {"server_id": server_id, "total": len(tools)}

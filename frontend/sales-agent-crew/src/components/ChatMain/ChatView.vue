@@ -1847,7 +1847,11 @@ const addMessage = async () => {
       socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
       searchQuery.value = '';
-      // Don't clear selectedDocuments here - let them persist for next message
+      // Remove images from selectedDocuments but keep other files selected
+      selectedDocuments.value = selectedDocuments.value.filter(docId => {
+        const doc = uploadedDocuments.value.find(d => d.file_id === docId);
+        return doc && !isImageFile(doc.format, doc.filename);
+      });
 
       console.log('Message sent after connecting:', messagePayload);
     } catch (error) {
@@ -1861,7 +1865,11 @@ const addMessage = async () => {
       socket.value.send(JSON.stringify(messagePayload));
       messagesData.value.push(messagePayload);
       searchQuery.value = '';
-      // Don't clear selectedDocuments here - let them persist for next message
+      // Remove images from selectedDocuments but keep other files selected
+      selectedDocuments.value = selectedDocuments.value.filter(docId => {
+        const doc = uploadedDocuments.value.find(d => d.file_id === docId);
+        return doc && !isImageFile(doc.format, doc.filename);
+      });
     } catch (e) {
       console.error('ChatView error', e);
       isLoading.value = false;
@@ -2846,6 +2854,16 @@ function getFileIconColor(format, filename = '') {
   } else {
     return 'text-gray-600';
   }
+}
+
+function isImageFile(format, filename = '') {
+  if (!format && !filename) return false;
+  
+  const type = (format || '').toLowerCase();
+  const name = (filename || '').toLowerCase();
+  
+  return type.includes('image') || type.includes('jpeg') || type.includes('png') || type.includes('gif') || type.includes('webp') ||
+         name.includes('.jpg') || name.includes('.jpeg') || name.includes('.png') || name.includes('.gif') || name.includes('.webp');
 }
 
 async function viewGeneratedFile(doc) {
