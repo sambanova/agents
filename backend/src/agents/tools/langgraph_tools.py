@@ -277,10 +277,20 @@ def _get_retrieval_tool(
         filter_expr=filter_expr,
     )
 
-    return create_retriever_tool(
-        retriever=retriever,
+    def retrieval_search(query: str) -> str:
+        """Search uploaded documents for the given query."""
+        docs = retriever.get_relevant_documents(query)
+        if not docs:
+            return "No relevant information found in the uploaded documents."
+
+        # Return the documents directly
+        return docs
+
+    return Tool(
         name="Retriever",
+        func=retrieval_search,
         description=description,
+        args_schema=DDGInput,  # Reuse the same schema as DDG since it's just a query string
     )
 
 
@@ -295,18 +305,30 @@ def _get_retrieval_tool_mmr(
     doc_filter = Tag("document_id") == list(doc_ids)
     filter_expr = user_filter & doc_filter
 
-    return create_retriever_tool(
-        create_user_vector_store(api_key).as_retriever(
-            search_type="mmr",
-            search_kwargs={
-                "filter": filter_expr,
-                "k": 10,
-                "fetch_k": 50,
-                "lambda_mult": 0.3,
-            },
-        ),
-        "Retriever",
-        description,
+    retriever = create_user_vector_store(api_key).as_retriever(
+        search_type="mmr",
+        search_kwargs={
+            "filter": filter_expr,
+            "k": 10,
+            "fetch_k": 50,
+            "lambda_mult": 0.3,
+        },
+    )
+
+    def retrieval_search_mmr(query: str) -> str:
+        """Search uploaded documents for the given query using MMR."""
+        docs = retriever.get_relevant_documents(query)
+        if not docs:
+            return "No relevant information found in the uploaded documents."
+
+        # Return the documents directly
+        return docs
+
+    return Tool(
+        name="Retriever",
+        func=retrieval_search_mmr,
+        description=description,
+        args_schema=DDGInput,  # Reuse the same schema as DDG since it's just a query string
     )
 
 

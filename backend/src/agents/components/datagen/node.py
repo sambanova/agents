@@ -120,22 +120,25 @@ Your task is to classify user input about a plan. Respond with a single word:
 APPROVE: If the user explicitly agrees with the plan or gives a simple, neutral acknowledgement (e.g., "ok").
 REVISE: If the user suggests a change, asks a clarifying question, or expresses any doubt.
 
-User: "Looks great, let's do it."
+User: Looks great, let's do it.
 You: APPROVE
 
-User: "Can we change the deadline?"
+User: Can we change the deadline?
 You: REVISE
 
-User: "I'm not sure about the first step."
+User: I'm not sure about the first step.
 You: REVISE
 
-User: "ok"
+User: ok
 You: APPROVE
 
-User: "Let's add a new section for risks."
+User: Appoved
+You: APPROVE
+
+User: Let's add a new section for risks.
 You: REVISE
 
-User: "can you only focus on visualizations?"
+User: Can you only focus on visualizations?
 You:
 """
 
