@@ -132,7 +132,7 @@ You: REVISE
 User: ok
 You: APPROVE
 
-User: Appoved
+User: Approved
 You: APPROVE
 
 User: Let's add a new section for risks.
