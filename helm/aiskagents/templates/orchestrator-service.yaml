@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aiskagents.fullname" . }}-orchestrator
+  labels:
+    {{- include "aiskagents.labels" . | nindent 4 }}
+    app.kubernetes.io/component: orchestrator
+spec:
+  type: {{ .Values.orchestrator.service.type }}
+  ports:
+    - port: {{ .Values.orchestrator.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "aiskagents.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: orchestrator 

@@ -27,6 +27,35 @@ services:
       # The environment below so the backend can find Redis in Docker:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - MCP_ORCHESTRATOR_URL=http://orchestrator:8090
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  orchestrator:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile-orchestrator
+    ports:
+      - "8090:8090"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=your_redis_password
+      - REDIS_SSL=false
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   frontend:
     build:

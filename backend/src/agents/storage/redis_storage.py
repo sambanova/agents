@@ -545,17 +545,21 @@ class RedisStorage:
         """Store MCP server configuration in Redis."""
         try:
             from agents.api.data_types import MCPServerConfig
+            from datetime import datetime, timezone
             
             # Update timestamps
-            server_config.last_updated = time.time()
+            server_config.last_updated = datetime.now(timezone.utc)
             
-            # Store server configuration
+            # Store server configuration (encrypted)
             server_key = self._get_mcp_server_key(user_id, server_config.server_id)
             await self.redis_client.set(
                 server_key, 
                 json.dumps(server_config.model_dump(mode='json')), 
                 user_id
             )
+            
+            # Also store unencrypted copy for orchestrator
+            await self._store_orchestrator_server_config(user_id, server_config)
             
             # Add to user's server list
             user_servers_key = self._get_user_mcp_servers_key(user_id)
@@ -577,6 +581,41 @@ class RedisStorage:
                 exc_info=True,
             )
             raise
+
+    async def _store_orchestrator_server_config(self, user_id: str, server_config: "MCPServerConfig") -> None:
+        """Store unencrypted MCP server config for orchestrator access."""
+        try:
+            # Create simplified config for orchestrator
+            orch_config = {
+                "server_id": server_config.server_id,
+                "name": server_config.name,
+                "command": server_config.command,
+                "args": server_config.args or [],
+                "url": server_config.url,
+                "transport": server_config.transport,
+                "env_vars": server_config.env_vars or {},
+                "enabled": server_config.enabled,
+                "health_status": server_config.health_status,
+                "last_updated": server_config.last_updated.isoformat() if hasattr(server_config.last_updated, "isoformat") else server_config.last_updated,
+            }
+            
+            # Store without encryption for orchestrator - use the underlying Redis client directly
+            orch_key = f"orch_mcp_servers:{user_id}:{server_config.server_id}"
+            # Get the underlying Redis client and call set directly (bypassing encryption)
+            underlying_client = self.redis_client.__class__.__bases__[0](
+                connection_pool=self.redis_client.connection_pool
+            )
+            await underlying_client.set(orch_key, json.dumps(orch_config))
+            
+            # Also maintain user server list for orchestrator
+            orch_user_key = f"orch_user_mcp_servers:{user_id}"
+            await underlying_client.sadd(orch_user_key, server_config.server_id)
+            
+            logger.info(f"Stored unencrypted orchestrator config for server {server_config.server_id}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to store orchestrator config: {e}", exc_info=True)
+            # Don't fail the main operation if orchestrator storage fails
 
     async def get_mcp_server_config(
         self, user_id: str, server_id: str
@@ -621,19 +660,23 @@ class RedisStorage:
             # Apply updates
             config_dict = existing_config.model_dump()
             config_dict.update(updates)
-            config_dict["last_updated"] = time.time()
+            from datetime import datetime, timezone
+            config_dict["last_updated"] = datetime.now(timezone.utc)
             
             # Validate updated configuration
             from agents.api.data_types import MCPServerConfig
             updated_config = MCPServerConfig.model_validate(config_dict)
             
-            # Store updated configuration
+            # Store updated configuration (encrypted)
             server_key = self._get_mcp_server_key(user_id, server_id)
             await self.redis_client.set(
                 server_key, 
                 json.dumps(updated_config.model_dump(mode='json')), 
                 user_id
             )
+            
+            # Also update orchestrator copy
+            await self._store_orchestrator_server_config(user_id, updated_config)
             
             logger.info(
                 "MCP server configuration updated",
@@ -665,10 +708,21 @@ class RedisStorage:
             tools_key = self._get_mcp_server_tools_key(user_id, server_id)
             user_servers_key = self._get_user_mcp_servers_key(user_id)
             
+            # Delete orchestrator keys too
+            orch_server_key = f"orch_mcp_servers:{user_id}:{server_id}"
+            orch_user_key = f"orch_user_mcp_servers:{user_id}"
+            
             # Remove from all locations
             await self.redis_client.delete(server_key)
             await self.redis_client.delete(tools_key)
             await self.redis_client.srem(user_servers_key, server_id)
+            
+            # Remove from orchestrator locations using underlying client
+            underlying_client = self.redis_client.__class__.__bases__[0](
+                connection_pool=self.redis_client.connection_pool
+            )
+            await underlying_client.delete(orch_server_key)
+            await underlying_client.srem(orch_user_key, server_id)
             
             logger.info(
                 "MCP server configuration deleted",
@@ -837,3 +891,29 @@ class RedisStorage:
                 exc_info=True,
             )
             return []
+
+    async def resync_orchestrator_configs(self, user_id: str) -> int:
+        """Re-sync existing encrypted server configs to unencrypted orchestrator format."""
+        try:
+            synced_count = 0
+            all_servers = await self.list_user_mcp_servers(user_id)
+            
+            for server_config in all_servers:
+                await self._store_orchestrator_server_config(user_id, server_config)
+                synced_count += 1
+                
+            logger.info(
+                "Re-synced server configs to orchestrator format",
+                user_id=user_id,
+                synced_count=synced_count,
+            )
+            return synced_count
+            
+        except Exception as e:
+            logger.error(
+                "Error re-syncing orchestrator configs",
+                user_id=user_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return 0
