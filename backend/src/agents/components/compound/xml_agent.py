@@ -189,83 +189,23 @@ class ToolExecutor:
 
 
 class DynamicToolExecutor:
-    """Enhanced ToolExecutor that can load MCP tools dynamically."""
+    """Enhanced ToolExecutor that can load tools dynamically."""
 
     def __init__(self, static_tools, user_id: str = None):
         self.static_tools_by_name = {tool.name: tool for tool in static_tools}
         self.user_id = user_id
-        self.mcp_tools_cache = {}
-        self.cache_expiry = 0
-        self.cache_ttl = 300  # 5 minutes
 
     async def ainvoke(self, action: ToolInvocation):
-        # First check static tools
+        # Check static tools
         tool = self.static_tools_by_name.get(action.tool)
         if tool:
             return await tool.ainvoke(action.tool_input)
         
-        # If not found in static tools and we have a user_id, try MCP tools
-        if self.user_id:
-            mcp_tool = await self._get_mcp_tool(action.tool)
-            if mcp_tool:
-                return await mcp_tool.ainvoke(action.tool_input)
-        
         return f"Tool {action.tool} not found"
     
-    async def _get_mcp_tool(self, tool_name: str):
-        """Get MCP tool by name, with caching."""
-        import time
-        
-        # Check cache validity
-        if time.time() > self.cache_expiry:
-            await self._refresh_mcp_tools()
-        
-        return self.mcp_tools_cache.get(tool_name)
-    
     async def get_all_tools(self):
-        """Get all available tools (static + MCP) for prompt generation."""
-        import time
-        
-        # Refresh MCP tools if cache is expired
-        if time.time() > self.cache_expiry:
-            await self._refresh_mcp_tools()
-        
-        # Combine static and MCP tools
-        all_tools = list(self.static_tools_by_name.values()) + list(self.mcp_tools_cache.values())
-        return all_tools
-
-    async def _refresh_mcp_tools(self):
-        """Refresh MCP tools cache."""
-        import time
-        
-        try:
-            # Import at runtime to avoid circular imports
-            from agents.storage.global_services import get_global_mcp_server_manager
-            
-            mcp_manager = get_global_mcp_server_manager()
-            if mcp_manager:
-                mcp_tools = await mcp_manager.get_user_mcp_tools(self.user_id)
-                self.mcp_tools_cache = {tool.name: tool for tool in mcp_tools}
-                self.cache_expiry = time.time() + self.cache_ttl
-                
-                logger.debug(
-                    "Refreshed MCP tools cache",
-                    user_id=self.user_id,
-                    num_mcp_tools=len(mcp_tools),
-                )
-            else:
-                logger.debug("MCP manager not available, using empty MCP tools cache")
-                self.mcp_tools_cache = {}
-                self.cache_expiry = time.time() + self.cache_ttl
-                
-        except Exception as e:
-            logger.warning(
-                "Failed to refresh MCP tools cache, using empty cache",
-                user_id=self.user_id,
-                error=str(e),
-            )
-            self.mcp_tools_cache = {}
-            self.cache_expiry = time.time() + 60  # Shorter retry interval on error
+        """Get all available tools for prompt generation."""
+        return list(self.static_tools_by_name.values())
 
 
 def get_xml_agent_executor(
@@ -322,9 +262,9 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
     else:
         subgraph_section = ""
 
-    # Create a function to generate system message dynamically (includes MCP tools)
+    # Create a function to generate system message dynamically
     async def _get_system_message():
-        # Get all available tools (static + MCP if using DynamicToolExecutor)
+        # Get all available tools
         if isinstance(tool_executor, DynamicToolExecutor):
             all_tools = await tool_executor.get_all_tools()
         else:
@@ -352,7 +292,7 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
             elif hasattr(_tool, "input_schema") and _tool.input_schema:
                 schema = _tool.input_schema  # Sometimes placed here directly
             elif hasattr(_tool, "tool_info") and getattr(_tool, "tool_info", None):
-                # For MCPToolWrapper we stored input_schema earlier
+                # For tool wrappers we stored input_schema earlier
                 schema = getattr(_tool.tool_info, "input_schema", None)
 
             example_json: str | None = None
@@ -417,11 +357,11 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
             SystemMessage(content=dynamic_system_message)
         ] + await construct_chat_history(messages, llm_type)
 
-    # Use DynamicToolExecutor if user_id is provided for MCP tool support
+    # Use DynamicToolExecutor if user_id is provided for enhanced tool support
     if user_id:
         tool_executor = DynamicToolExecutor(tools, user_id)
         logger.info(
-            "Using DynamicToolExecutor for MCP tool support",
+            "Using DynamicToolExecutor for enhanced tool support",
             user_id=user_id,
             num_static_tools=len(tools),
         )
