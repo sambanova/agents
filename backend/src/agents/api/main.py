@@ -1,20 +1,14 @@
-import asyncio
 import json
 import os
 import time
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from io import BytesIO
 from typing import Optional
 
 import jwt
-import markdown
 import mlflow
 import structlog
-from agents.api.data_types import (
-    APIKeys,
-)
+from agents.api.data_types import APIKeys
 from agents.api.middleware import LoggingMiddleware
 from agents.api.websocket_manager import WebSocketConnectionManager
 from agents.components.compound.xml_agent import (
@@ -41,8 +35,6 @@ from fastapi_clerk_auth import (
     HTTPAuthorizationCredentials,
 )
 from langgraph.checkpoint.redis import AsyncRedisSaver
-from weasyprint import CSS, HTML
-from uuid import uuid4
 
 logger = structlog.get_logger(__name__)
 
@@ -92,8 +84,6 @@ async def lifespan(app: FastAPI):
 
     # Set global Redis storage service for tools
     set_global_redis_storage_service(app.state.redis_storage_service)
-
-
 
     logger.info("Using Redis with shared connection pool")
 
@@ -713,9 +703,6 @@ async def set_api_keys(
             )
 
         await app.state.redis_storage_service.set_user_api_key(user_id, keys)
-
-        # Create default MCP servers if this is a new user
-        await create_default_mcp_servers(user_id)
 
         return JSONResponse(
             status_code=200, content={"message": "API keys stored successfully"}

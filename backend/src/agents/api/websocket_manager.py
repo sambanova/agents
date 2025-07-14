@@ -25,8 +25,7 @@ from agents.components.datagen.tools.persistent_daytona import PersistentDaytona
 from agents.components.open_deep_research.graph import create_deep_research_graph
 from agents.storage.redis_service import SecureRedisService
 from agents.storage.redis_storage import RedisStorage
-from agents.tools.dynamic_tool_loader import load_tools_for_user
-from agents.tools.langgraph_tools import RETRIEVAL_DESCRIPTION
+from agents.tools.langgraph_tools import RETRIEVAL_DESCRIPTION, load_static_tools
 from fastapi import WebSocket, WebSocketDisconnect
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END
@@ -169,8 +168,7 @@ class WebSocketConnectionManager(WebSocketInterface):
         # Start the cleanup task when the first connection is established
         await self.start_cleanup_task()
 
-        # Import these locally to avoid circular imports
-        from agents.components.compound.agent import agent, enhanced_agent
+        from agents.components.compound.agent import enhanced_agent
 
         background_task = None
         session_key = f"{user_id}:{conversation_id}"
@@ -335,31 +333,14 @@ class WebSocketConnectionManager(WebSocketInterface):
                     multimodal_input=multimodal_input,
                 )
 
-                try:
-                    await enhanced_agent.astream_websocket(
-                        input=input_,
-                        config=config,
-                        websocket_manager=self,
-                        user_id=user_id,
-                        conversation_id=conversation_id,
-                        message_id=user_message_input["message_id"],
-                    )
-                except Exception as enhanced_error:
-                    logger.warning(
-                        "Enhanced agent failed, falling back to regular agent",
-                        error=str(enhanced_error),
-                        user_id=user_id,
-                        exc_info=True,
-                    )
-                    # Fall back to regular agent (this should be very rare now)
-                    await agent.astream_websocket(
-                        input=input_,
-                        config=config,
-                        websocket_manager=self,
-                        user_id=user_id,
-                        conversation_id=conversation_id,
-                        message_id=user_message_input["message_id"],
-                    )
+                await enhanced_agent.astream_websocket(
+                    input=input_,
+                    config=config,
+                    websocket_manager=self,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    message_id=user_message_input["message_id"],
+                )
 
         except WebSocketDisconnect:
             logger.info("WebSocket connection closed", conversation_id=conversation_id)
@@ -835,9 +816,7 @@ If the user includes any datasets you MUST use the data_science subgraph to anal
                 ),
             }
 
-        all_tools = await load_tools_for_user(
-            user_id, tools_config, force_refresh=False
-        )
+        all_tools = await load_static_tools(tools_config)
         config["configurable"]["type==default/tools"] = all_tools
 
         return config

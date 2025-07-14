@@ -1,13 +1,11 @@
 import asyncio
-import html
 import mimetypes
 import os
-import re
 import time
 import uuid
 from enum import Enum
 from functools import lru_cache
-from typing import Annotated, Literal, Tuple
+from typing import Annotated, List, Literal, Sequence, Tuple, Union
 
 import redis
 import structlog
@@ -246,6 +244,25 @@ class Daytona(BaseTool):
         "Executes Python code in a secure sandbox environment."
     )
     config: DaytonaConfig
+
+
+# Type alias for all static tool configurations
+StaticToolConfig = Union[
+    ActionServer,
+    Connery,
+    DDGSearch,
+    Arxiv,
+    YouSearch,
+    SecFilings,
+    PressReleases,
+    PubMed,
+    Wikipedia,
+    Tavily,
+    TavilyAnswer,
+    Retrieval,
+    DallE,
+    Daytona,
+]
 
 
 RETRIEVAL_DESCRIPTION = """Can be used to look up information that was uploaded to this assistant.
@@ -855,3 +872,62 @@ def validate_tool_config(tool_type: AvailableTools, config: dict) -> dict:
         raise ValueError(f"Unknown tool type: {tool_type}")
     except Exception as e:
         raise ValueError(f"Invalid config for {tool_type}: {e}")
+
+
+async def load_static_tools(
+    static_tools: Sequence[StaticToolConfig],
+) -> List[BaseTool]:
+    """Load static tools from the tool registry."""
+    try:
+        _tools = []
+        from langchain.tools import BaseTool as _BT
+        from pydantic import BaseModel
+
+        for _tool in static_tools:
+            # If caller already provided a ready-made BaseTool instance, keep it
+            if isinstance(_tool, _BT):
+                _tools.append(_tool)
+                continue
+
+            # Handle Pydantic model instances (like Arxiv, Tavily, etc.)
+            if (
+                isinstance(_tool, BaseModel)
+                and hasattr(_tool, "type")
+                and hasattr(_tool, "config")
+            ):
+                tool_type = _tool.type
+                tool_config = _tool.config
+            # Handle dictionary configs {"type": name, "config": {...}}
+            elif isinstance(_tool, dict):
+                try:
+                    tool_type = _tool["type"]
+                    tool_config = _tool.get("config", {})
+                except Exception:
+                    logger.error("Invalid static tool spec, skipping", tool=_tool)
+                    continue
+            else:
+                logger.error("Invalid static tool spec, skipping", tool=_tool)
+                continue
+
+            try:
+                validated_config = validate_tool_config(tool_type, tool_config)
+            except ValueError as e:
+                logger.error(f"Tool validation failed: {e}")
+                continue
+
+            _returned_tools = TOOL_REGISTRY[tool_type]["factory"](**validated_config)
+            if isinstance(_returned_tools, list):
+                _tools.extend(_returned_tools)
+            else:
+                _tools.append(_returned_tools)
+
+        logger.info("Loaded static tools", num_tools=len(_tools))
+        return _tools
+
+    except Exception as e:
+        logger.error(
+            "Error loading static tools",
+            error=str(e),
+            exc_info=True,
+        )
+        return []

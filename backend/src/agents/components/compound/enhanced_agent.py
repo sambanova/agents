@@ -5,69 +5,24 @@ This module provides an enhanced version of ConfigurableAgent that can load
 user-specific MCP tools in addition to static tools.
 """
 
-import asyncio
 import functools
-
-# Avoid circular import - redefine types locally
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
+from typing import Any, Dict, Mapping, Optional, Sequence, Union
 
 import structlog
 from agents.api.stream import astream_state_websocket
 from agents.api.websocket_interface import WebSocketInterface
 from agents.components.compound.data_types import LLMType
 from agents.components.compound.xml_agent import get_xml_agent_executor
-from agents.tools.dynamic_tool_loader import load_tools_for_user
-from agents.tools.langgraph_tools import (
-    TOOL_REGISTRY,
-    ActionServer,
-    Arxiv,
-    Connery,
-    DallE,
-    Daytona,
-    DDGSearch,
-    PressReleases,
-    PubMed,
-    Retrieval,
-    SecFilings,
-    Tavily,
-    TavilyAnswer,
-    Wikipedia,
-    YouSearch,
-    validate_tool_config,
-)
 
 # Import moved to runtime to avoid circular imports
 # from agents.tools.dynamic_tool_loader import get_dynamic_tool_loader, load_tools_for_user
 from langchain.tools import BaseTool
-from langchain_core.messages import AnyMessage
-from langchain_core.runnables import (
-    ConfigurableField,
-    RunnableBinding,
-    RunnableConfig,
-    RunnableLambda,
-)
-from langgraph.graph.message import Messages
-from langgraph.pregel import Pregel
+from langchain_core.runnables import RunnableBinding, RunnableConfig
 
 logger = structlog.get_logger(__name__)
 
-# Local type definitions to avoid circular imports
-StaticToolConfig = Union[
-    ActionServer,
-    Connery,
-    DDGSearch,
-    Arxiv,
-    YouSearch,
-    SecFilings,
-    PressReleases,
-    PubMed,
-    Wikipedia,
-    Tavily,
-    TavilyAnswer,
-    Retrieval,
-    DallE,
-    Daytona,
-]
+# Import StaticToolConfig from langgraph_tools to avoid circular imports
+# This import is done at runtime in the functions that need it
 
 DEFAULT_SYSTEM_MESSAGE = "You are a helpful assistant."
 
