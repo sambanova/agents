@@ -146,8 +146,8 @@ Follow the steps below to install the backend for the Agents application.
 1. Create a `.env` file with the following required variables.
    ```bash
    # Authentication
-   CLERK_SECRET_KEY=your_clerk_secret_key
-   CLERK_JWT_ISSUER=https://your-clerk-instance.clerk.accounts.dev/.well-known/jwks.json
+   AUTH0_DOMAIN=your-auth0-domain.auth0.com
+   AUTH0_AUDIENCE=your-auth0-api-audience
    
    # API Keys for Services
    SERPER_API_KEY=your_serper_api_key

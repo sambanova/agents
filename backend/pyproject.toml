@@ -34,7 +34,7 @@ dependencies = [
   "langchain-fireworks==0.3.0",
   "fireworks-ai==0.17.4",
   "tavily-python==0.5.1",
-  "fastapi-clerk-auth==0.0.3",
+  "python-jose[cryptography]==3.5.0",
   "requests-cache==1.2.1",
   "daytona_sdk==0.21.0",
   "arxiv==2.2.0",

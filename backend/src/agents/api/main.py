@@ -11,6 +11,11 @@ import structlog
 from agents.api.data_types import APIKeys
 from agents.api.middleware import LoggingMiddleware
 from agents.api.websocket_manager import WebSocketConnectionManager
+from agents.auth.auth0_config import (
+    extract_user_id,
+    get_current_user_id,
+    token_verifier,
+)
 from agents.components.compound.xml_agent import (
     create_checkpointer,
     set_global_checkpointer,
@@ -28,20 +33,14 @@ from agents.utils.logging_config import configure_logging
 from fastapi import Depends, FastAPI, File, Query, Response, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.websockets import WebSocketDisconnect, WebSocketState
-from fastapi_clerk_auth import (
-    ClerkConfig,
-    ClerkHTTPBearer,
-    HTTPAuthorizationCredentials,
-)
 from langgraph.checkpoint.redis import AsyncRedisSaver
 
 logger = structlog.get_logger(__name__)
 
 
-CLERK_JWT_ISSUER = os.environ.get("CLERK_JWT_ISSUER")
-clerk_config = ClerkConfig(jwks_url=CLERK_JWT_ISSUER)
-clerk_auth_guard = ClerkHTTPBearer(config=clerk_config)
+# Auth0 configuration is handled in auth0_config.py
 
 configure_logging(os.getenv("ENVIRONMENT", "dev"))
 
@@ -105,15 +104,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-def get_user_id_from_token(token: HTTPAuthorizationCredentials) -> str:
-    try:
-        decoded_token = jwt.decode(
-            token.credentials, options={"verify_signature": False}
-        )
-        return decoded_token.get("sub", "anonymous")
-    except Exception as e:
-        logger.error(f"Error decoding token: {str(e)}")
-        return "anonymous"
+# get_user_id_from_token is now imported from auth0_config.py
 
 
 app = FastAPI(
@@ -216,12 +207,16 @@ async def websocket_endpoint(
                     logger.error(f"Error closing WebSocket: {str(close_error)}")
                 return
 
-            token_data = HTTPAuthorizationCredentials(
-                scheme="Bearer", credentials=token.split(" ")[1]
-            )
-            user_id = get_user_id_from_token(token_data)
+            # Extract the JWT token (remove "Bearer " prefix)
+            jwt_token = token[7:]  # Remove "Bearer " prefix
 
-            if not user_id:
+            try:
+                # Verify the token and get the payload
+                token_payload = token_verifier.verify(jwt_token)
+                # Extract user ID from the payload
+                user_id = extract_user_id(token_payload)
+            except Exception as auth_error:
+                logger.error(f"Token verification failed: {str(auth_error)}")
                 try:
                     await websocket.close(
                         code=4001, reason="Invalid authentication token"
@@ -282,7 +277,7 @@ async def websocket_endpoint(
 @app.post("/chat/init")
 async def init_chat(
     chat_name: Optional[str] = None,
-    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     Initializes a new chat session and stores the provided API keys.
@@ -293,7 +288,6 @@ async def init_chat(
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
     # Get and verify authenticated user
-    user_id = get_user_id_from_token(token_data)
     if not user_id:
         return JSONResponse(
             status_code=401, content={"error": "Invalid authentication token"}
@@ -342,7 +336,7 @@ async def init_chat(
 @app.get("/chat/history/{conversation_id}")
 async def get_conversation_messages(
     conversation_id: str,
-    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     Retrieve all messages for a specific conversation.
@@ -352,7 +346,6 @@ async def get_conversation_messages(
         conversation_id (str): The ID of the conversation
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
-    user_id = get_user_id_from_token(token_data)
     if not user_id:
         return JSONResponse(
             status_code=401, content={"error": "Invalid authentication token"}
@@ -392,7 +385,7 @@ async def get_conversation_messages(
 
 @app.get("/chat/list")
 async def list_chats(
-    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     Get list of all chats for a user, sorted by most recent first.
@@ -402,7 +395,6 @@ async def list_chats(
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
     try:
-        user_id = get_user_id_from_token(token_data)
         if not user_id:
             return JSONResponse(
                 status_code=401,
@@ -440,7 +432,7 @@ async def list_chats(
 @app.delete("/chat/{conversation_id}")
 async def delete_chat(
     conversation_id: str,
-    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     Delete a chat conversation and all its associated data.
@@ -451,7 +443,6 @@ async def delete_chat(
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
     try:
-        user_id = get_user_id_from_token(token_data)
         if not user_id:
             return JSONResponse(
                 status_code=401,
@@ -493,12 +484,11 @@ async def delete_chat(
 @app.post("/upload")
 async def upload_document(
     file: UploadFile = File(...),
-    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+    user_id: str = Depends(get_current_user_id),
 ):
     """Upload and process a document or image file."""
     try:
         # Get and verify authenticated user
-        user_id = get_user_id_from_token(token_data)
         if not user_id:
             return JSONResponse(
                 status_code=401,
@@ -569,11 +559,10 @@ async def upload_document(
 
 @app.get("/files")
 async def get_user_files(
-    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+    user_id: str = Depends(get_current_user_id),
 ):
     """Retrieve all documents and uploaded files for a user."""
     try:
-        user_id = get_user_id_from_token(token_data)
         if not user_id:
             return JSONResponse(
                 status_code=401,
@@ -594,11 +583,10 @@ async def get_user_files(
 @app.get("/files/{file_id}")
 async def get_file(
     file_id: str,
-    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+    user_id: str = Depends(get_current_user_id),
 ):
     """Serve a file by its ID for authenticated users."""
     try:
-        user_id = get_user_id_from_token(token_data)
         if not user_id:
             return JSONResponse(
                 status_code=401,
@@ -631,11 +619,10 @@ async def get_file(
 @app.delete("/files/{file_id}")
 async def delete_file(
     file_id: str,
-    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+    user_id: str = Depends(get_current_user_id),
 ):
     """Delete a file (document or uploaded file) and its associated data."""
     try:
-        user_id = get_user_id_from_token(token_data)
         if not user_id:
             return JSONResponse(
                 status_code=401,
@@ -684,7 +671,7 @@ async def delete_file(
 @app.post("/set_api_keys")
 async def set_api_keys(
     keys: APIKeys,
-    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     Store API keys for a user in Redis.
@@ -695,7 +682,6 @@ async def set_api_keys(
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
     try:
-        user_id = get_user_id_from_token(token_data)
         if not user_id:
             return JSONResponse(
                 status_code=401,
@@ -718,7 +704,7 @@ async def set_api_keys(
 
 @app.get("/get_api_keys")
 async def get_api_keys(
-    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     Retrieve stored API keys for a user.
@@ -728,7 +714,6 @@ async def get_api_keys(
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
     try:
-        user_id = get_user_id_from_token(token_data)
         if not user_id:
             return JSONResponse(
                 status_code=401,
@@ -764,7 +749,7 @@ async def get_api_keys(
 
 @app.delete("/user/data")
 async def delete_user_data(
-    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     Delete all data associated with the authenticated user.
@@ -774,7 +759,6 @@ async def delete_user_data(
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
     try:
-        user_id = get_user_id_from_token(token_data)
         if not user_id:
             return JSONResponse(
                 status_code=401,
