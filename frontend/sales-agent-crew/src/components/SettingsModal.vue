@@ -30,17 +30,7 @@
               >
                 API Keys
               </button>
-              <button
-                @click="activeTab = 'mcp-tools'"
-                :class="[
-                  'py-2 px-1 border-b-2 font-medium text-sm',
-                  activeTab === 'mcp-tools'
-                    ? 'border-primary-brandColor text-primary-brandColor'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                ]"
-              >
-                MCP Tools
-              </button>
+
             </nav>
           </div>
         </div>
@@ -309,10 +299,7 @@
           </div>
           </div>
 
-          <!-- MCP Tools Tab -->
-          <div v-if="activeTab === 'mcp-tools'">
-            <MCPManagement />
-          </div>
+
 
         </div>
 
@@ -359,7 +346,7 @@ import { encryptKey, decryptKey } from '../utils/encryption'
 import axios from 'axios'
 import emitterMitt from '@/utils/eventBus.js';
 import SelectProvider from '@/components/ChatMain/SelectProvider.vue'
-import MCPManagement from './MCPManagement.vue'
+
 
 const selectedOption = inject('selectedOption')
 
