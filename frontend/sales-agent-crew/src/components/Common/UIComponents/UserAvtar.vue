@@ -17,10 +17,10 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useUser } from '@clerk/vue'
+import { useAuth0 } from '@auth0/auth0-vue'
 
 // Use the full reactive object without destructuring
-const clerk = useUser()
+const auth0 = useAuth0()
 
 const props = defineProps({
   // When type is "user", we'll use Clerk's user data.
@@ -70,18 +70,18 @@ function getInitials(firstName, lastName) {
 }
 
 // Compute the displayed initials.
-// If props.type is "user", then use Clerk's user data.
+// If props.type is "user", then use Auth0's user data.
 // Otherwise, treat props.type as the full name.
 const displayedInitials = computed(() => {
   if (props.type === 'user') {
-    // Check if the Clerk data is loaded and the user is signed in.
-    if (clerk.isLoaded.value && clerk.isSignedIn.value && clerk.user.value) {
-      // Attempt to read first and last name using both camelCase and snake_case.
-      const first = clerk.user.value.firstName || clerk.user.value.first_name || ''
-      const last = clerk.user.value.lastName || clerk.user.value.last_name || ''
+    // Check if the Auth0 data is loaded and the user is signed in.
+    if (auth0.isAuthenticated.value && auth0.user.value) {
+      // Attempt to read first and last name from Auth0 user data.
+      const first = auth0.user.value.given_name || auth0.user.value.name?.split(' ')[0] || ''
+      const last = auth0.user.value.family_name || auth0.user.value.name?.split(' ')[1] || ''
       return getInitials(first, last)
     }
-    // Fallback if Clerk data is not available.
+    // Fallback if Auth0 data is not available.
     return props.initials
   } else {
     return getInitials(props.type)

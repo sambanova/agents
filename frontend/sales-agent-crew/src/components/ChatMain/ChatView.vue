@@ -587,7 +587,7 @@ import ChatBubble from '@/components/ChatMain/ChatBubble.vue';
 import ChatLoaderBubble from '@/components/ChatMain/ChatLoaderBubble.vue';
 const router = useRouter();
 const route = useRoute();
-import { useAuth, useUser } from '@clerk/vue';
+import { useAuth0 } from '@auth0/auth0-vue';
 import { decryptKey } from '../../utils/encryption';
 import Tooltip from '@/components/Common/UIComponents/CustomTooltip.vue';
 
@@ -606,11 +606,11 @@ import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue';
 import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue';
 import { isFinalAgentType, shouldExcludeFromGrouping } from '@/utils/globalFunctions.js';
 
-// Access Clerk user for personalization
-const { user } = useUser();
+// Access Auth0 user for personalization
+const { user } = useAuth0();
 const userFirstName = computed(() => {
   if (user && user.value) {
-    return user.value.firstName || user.value.first_name || '';
+    return user.value.given_name || user.value.name?.split(' ')[0] || '';
   }
   return '';
 });
@@ -661,7 +661,7 @@ async function createNewChat() {
       {},
       {
         headers: {
-          Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+          Authorization: `Bearer ${await getAccessTokenSilently()}`,
         },
       }
     );
@@ -843,7 +843,7 @@ async function loadPreviousChat(convId) {
       `${import.meta.env.VITE_API_URL}/chat/history/${convId}`,
       {
         headers: {
-          Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+          Authorization: `Bearer ${await getAccessTokenSilently()}`,
         },
       }
     );
@@ -1408,8 +1408,9 @@ function toggleSelectAllUploaded() {
   }
 }
 
-// Clerk
-const { userId } = useAuth();
+// Auth0
+const { user: auth0User, getAccessTokenSilently } = useAuth0();
+const userId = computed(() => auth0User.value?.sub);
 
 async function loadKeys() {
   try {
@@ -1668,7 +1669,7 @@ async function handleFileUpload(event) {
         formData,
         {
           headers: {
-            Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+            Authorization: `Bearer ${await getAccessTokenSilently()}`,
           },
         }
       );
@@ -1711,7 +1712,7 @@ async function loadUserDocuments() {
       `${import.meta.env.VITE_API_URL}/files`,
       {
         headers: {
-          Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+          Authorization: `Bearer ${await getAccessTokenSilently()}`,
         },
       }
     );
@@ -1893,7 +1894,7 @@ async function connectWebSocket() {
       },
       {
         headers: {
-          Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+          Authorization: `Bearer ${await getAccessTokenSilently()}`,
         },
       }
     );
@@ -1905,7 +1906,7 @@ async function connectWebSocket() {
       : import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:8000';
 
     const WEBSOCKET_URL = `${baseUrl}/chat`;
-    const token = await window.Clerk.session.getToken();
+    const token = await getAccessTokenSilently();
     const fullUrl = `${WEBSOCKET_URL}?conversation_id=${currentId.value}`;
     socket.value = new WebSocket(fullUrl);
     socket.value.onopen = () => {
@@ -2187,7 +2188,7 @@ async function removeDocument(docId) {
   try {
     await axios.delete(`${import.meta.env.VITE_API_URL}/files/${docId}`, {
       headers: {
-        Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+        Authorization: `Bearer ${await getAccessTokenSilently()}`,
       },
     });
     const selectedIndex = selectedDocuments.value.indexOf(docId);
@@ -2897,7 +2898,7 @@ async function downloadFile(doc) {
       `${import.meta.env.VITE_API_URL}/files/${doc.file_id}`,
       {
         headers: {
-          Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+          Authorization: `Bearer ${await getAccessTokenSilently()}`,
         },
         responseType: 'blob'
       }

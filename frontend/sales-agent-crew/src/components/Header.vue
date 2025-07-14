@@ -47,16 +47,32 @@
           </svg>
         </button>
 
-        <SignedIn>
-          <UserButton
-            afterSignOutUrl="/login"
-            :appearance="{
-              elements: {
-                avatarBox: 'bg-primary-800 h-10 w-10',
-              },
-            }"
-          />
-        </SignedIn>
+        <div v-if="isAuthenticated" class="relative">
+          <button
+            @click="toggleUserMenu"
+            class="bg-primary-brandAvatarGray h-10 w-10 rounded-full flex items-center justify-center text-white font-medium hover:bg-primary-800 transition-colors"
+          >
+            {{ userInitials }}
+          </button>
+          
+          <!-- User Menu Dropdown -->
+          <div 
+            v-if="showUserMenu"
+            @click.stop
+            class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border"
+          >
+            <div class="px-4 py-2 text-sm text-gray-700 border-b">
+              <div class="font-medium">{{ user?.name || user?.email }}</div>
+              <div class="text-gray-500">{{ user?.email }}</div>
+            </div>
+            <button
+              @click="logout"
+              class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -70,7 +86,7 @@
 
 <script setup>
 import { ref, computed, watch, inject, onMounted } from 'vue';
-import { SignedIn, UserButton } from '@clerk/vue';
+import { useAuth0 } from '@auth0/auth0-vue';
 import SettingsModal from './SettingsModal.vue';
 import ToggleSwitch from '@/components/Common/UIComponents/ToggleSwitch.vue';
 import SelectProvider from '@/components/ChatMain/SelectProvider.vue';
@@ -83,6 +99,37 @@ const isWorkflowEnabled = computed(() => {
 // Inject the shared state provided in MainLayout.vue.
 const selectedOption = inject('selectedOption');
 
+// Auth0 composable
+const { isAuthenticated, user, logout: auth0Logout } = useAuth0();
+
+// User menu state
+const showUserMenu = ref(false);
+
+// Computed user initials
+const userInitials = computed(() => {
+  if (!user.value) return '';
+  const name = user.value.name || user.value.email || '';
+  const nameParts = name.split(' ');
+  if (nameParts.length >= 2) {
+    return (nameParts[0][0] + nameParts[1][0]).toUpperCase();
+  }
+  return name[0]?.toUpperCase() || '';
+});
+
+// User menu functions
+const toggleUserMenu = () => {
+  showUserMenu.value = !showUserMenu.value;
+};
+
+const logout = () => {
+  showUserMenu.value = false;
+  auth0Logout({ 
+    logoutParams: { 
+      returnTo: window.location.origin 
+    } 
+  });
+};
+
 const chatMode = ref(true);
 // We'll emit 'modeToggled' to the parent
 const emit = defineEmits(['keysUpdated', 'modeToggled']);
@@ -94,6 +141,13 @@ watch(chatMode, (val) => {
 onMounted(async () => {
   emit('modeToggled', true);
   settingsModalRef.value?.checkRequiredKeys();
+  
+  // Close user menu when clicking outside
+  document.addEventListener('click', (event) => {
+    if (showUserMenu.value && !event.target.closest('.relative')) {
+      showUserMenu.value = false;
+    }
+  });
 });
 
 const settingsModalRef = ref(null);

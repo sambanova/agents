@@ -130,13 +130,13 @@
       <!-- RIGHT SIDEBAR: Real-time Agent Logs for the current user + run ID -->
       <AgentSidebar
         v-if="!chatMode"
-        :userId="clerkUserId"
+        :userId="userId"
         :runId="currentRunId"
       />
 
       <ChatAgentSidebar
         v-if="chatMode"
-        :userId="clerkUserId"
+        :userId="userId"
         :runId="currentRunId"
         :agentData="agentData"
         :stream-completed="streamCompleted"
@@ -156,7 +156,7 @@ import {
   onBeforeUnmount,
   provide,
 } from 'vue';
-import { useUser } from '@clerk/vue';
+import { useAuth0 } from '@auth0/auth0-vue';
 import { v4 as uuidv4 } from 'uuid';
 
 /** We import both old + chat sidebars as local variables. */
@@ -225,9 +225,9 @@ const isDev = ref(import.meta.env.DEV);
 // Header ref
 const headerRef = ref(null);
 
-// Clerk user ID
-const { user } = useUser();
-const clerkUserId = computed(() => user.value?.id || 'anonymous_user');
+// Auth0 user ID
+const { user } = useAuth0();
+const userId = computed(() => user.value?.sub || 'anonymous_user');
 
 const agentData = ref([]);
 const chatSideBarRef = ref(null);

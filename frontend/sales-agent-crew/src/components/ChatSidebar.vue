@@ -41,7 +41,7 @@
 <script setup>
 import { ref, watch, onMounted, computed } from 'vue';
 
-import { useAuth } from '@clerk/vue';
+import { useAuth0 } from '@auth0/auth0-vue';
 import { decryptKey } from '@/utils/encryption'; // adapt path if needed
 import { useRoute, useRouter } from 'vue-router';
 import emitterMitt from '@/utils/eventBus.js';
@@ -55,8 +55,9 @@ const route = useRoute();
  */
 const emit = defineEmits(['selectConversation']);
 const preselectedChat = ref('');
-/** Clerk user */
-const { userId } = useAuth();
+/** Auth0 user */
+const { user, getAccessTokenSilently } = useAuth0();
+const userId = computed(() => user.value?.sub);
 
 const sambanovaKey = ref(null);
 const serperKey = ref(null);
@@ -88,10 +89,10 @@ async function deleteChat(conversationId) {
   const url = `${import.meta.env.VITE_API_URL}/chat/${conversationId}`;
   try {
     const response = await axios.delete(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
-      },
+              headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${await getAccessTokenSilently()}`,
+        },
     });
 
     loadChats();
@@ -139,7 +140,7 @@ async function loadChats() {
     const uid = userId.value || 'anonymous';
     const resp = await axios.get(`${import.meta.env.VITE_API_URL}/chat/list`, {
       headers: {
-        Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+        Authorization: `Bearer ${await getAccessTokenSilently()}`,
       },
     });
     conversations.value = resp.data?.chats;

@@ -63,9 +63,15 @@ import { marked } from 'marked'
 import { formattedText } from '@/utils/formatText'
 import { renderMarkdown } from '@/utils/markdownRenderer'
 import api from '@/services/api'
-import { getClerkToken } from '@/utils/globalFunctions'
+import { useAuth0 } from '@auth0/auth0-vue'
 
 export default {
+  setup() {
+    const { getAccessTokenSilently } = useAuth0();
+    return {
+      getAccessTokenSilently
+    };
+  },
   props: {
     // Expecting an object with the API response, e.g., { data: { response: "..." } }
     parsed: {
@@ -186,7 +192,7 @@ export default {
       this.loadingCharts.add(fileId);
       
       try {
-        const token = await getClerkToken();
+        const token = await this.getAccessTokenSilently();
         const response = await api.get(`/files/${fileId}`, {
           headers: {
             'Authorization': `Bearer ${token}`

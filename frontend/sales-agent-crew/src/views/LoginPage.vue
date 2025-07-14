@@ -30,25 +30,24 @@
           <p class="text-lg text-primary-brandTextSecondary">Agent Powered Intelligence</p>
         </div>
         
-        <!-- Sign Up component (default) -->
-        <div v-if="showSignUp">
-          <SignUp 
-            afterSignUpUrl="/"
-            :appearance="{ 
-              elements: {
-                formButtonPrimary: 'bg-primary-950 hover:bg-primary-800',
-                footerActionLink: 'text-primary-link hover:text-primary-800'
-              }
-            }"
-          />
-          <div class="text-center mt-4">
-            <p class="text-sm text-gray-600">
-              Already have an account? 
-              <button @click="showSignUp = false" class="text-primary-link font-medium hover:underline">
-                Sign in
-              </button>
-            </p>
+        <!-- Auth0 Login component -->
+        <div class="w-full max-w-sm">
+          <div class="bg-white p-6 rounded-lg shadow-md border">
+            <h2 class="text-xl font-semibold text-center mb-4">Sign In</h2>
+            <button 
+              @click="login"
+              :disabled="isLoading"
+              class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-950 hover:bg-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <svg v-if="isLoading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span v-if="isLoading">Signing in...</span>
+              <span v-else>Sign in with Email</span>
+            </button>
           </div>
+          
           <div class="text-center mt-4">
             <div class="mb-2">
               <a class="underline text-[12px]" href="/terms-of-service">Terms Of Service</a>
@@ -61,27 +60,6 @@
             </div>
           </div>
         </div>
-        
-        <!-- Sign In component -->
-        <div v-else>
-          <SignIn 
-            afterSignInUrl="/"
-            :appearance="{ 
-              elements: {
-                formButtonPrimary: 'bg-primary-950 hover:bg-primary-800',
-                footerActionLink: 'text-primary-link hover:text-primary-800'
-              }
-            }"
-          />
-          <div class="text-center mt-4">
-            <p class="text-sm text-gray-600">
-              Don't have an account? 
-              <button @click="showSignUp = true" class="text-primary-link font-medium hover:underline">
-                Sign up
-              </button>
-            </p>
-          </div>
-        </div>
       </div>
       </div>
 
@@ -90,15 +68,19 @@
 </template>
 
 <script setup>
-import { SignIn, SignUp } from '@clerk/vue'
-import { ref } from 'vue'
+import { useAuth0 } from '@auth0/auth0-vue'
 
-// State to toggle between sign-in and sign-up, defaulting to sign-up
-const showSignUp = ref(true)
+const { loginWithRedirect, isLoading } = useAuth0()
+
+const login = () => {
+  loginWithRedirect({
+    appState: {
+      target: '/'
+    }
+  })
+}
 </script>
 
 <style>
-.cl-footer {
-  display: none;
-}
+/* Remove any Auth0 specific styles if needed */
 </style>

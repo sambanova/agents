@@ -510,6 +510,10 @@
 
 <script setup>
 import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { useAuth0 } from '@auth0/auth0-vue'
+
+// Auth0 composable
+const { getAccessTokenSilently } = useAuth0()
 
 const props = defineProps({
   isOpen: {
@@ -1114,7 +1118,7 @@ async function loadCsvContent(artifact) {
     artifact.loading = true
     const response = await fetch(artifact.url, {
         headers: {
-            'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+            'Authorization': `Bearer ${await getAccessTokenSilently()}`
         }
     })
     if (response.ok) {
@@ -1214,7 +1218,7 @@ async function downloadArtifact(artifact) {
   try {
     const response = await fetch(artifact.url, {
       headers: {
-        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+        'Authorization': `Bearer ${await getAccessTokenSilently()}`
       }
     });
     if (!response.ok) throw new Error('Download failed');
@@ -1298,7 +1302,7 @@ async function fetchArtifactContent(artifact) {
   try {
     const response = await fetch(artifact.url, {
       headers: {
-        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+        'Authorization': `Bearer ${await getAccessTokenSilently()}`
       }
     });
 

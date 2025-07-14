@@ -42,11 +42,21 @@ export function formattedDuration(duration) {
   }
 
   /**
-   * Get the Clerk authentication token
+   * Get the Auth0 authentication token
+   * This should only be used from component context where useAuth0 is available
+   * @param {Function} getAccessTokenSilently - The Auth0 getAccessTokenSilently function
    * @returns {Promise<string>} - The authentication token
    */
-  export async function getClerkToken() {
-    return await window.Clerk.session.getToken();
+  export async function getAuth0Token(getAccessTokenSilently) {
+    if (!getAccessTokenSilently) {
+      throw new Error('getAccessTokenSilently function is required');
+    }
+    try {
+      return await getAccessTokenSilently();
+    } catch (error) {
+      console.error('Error getting Auth0 token:', error);
+      throw error;
+    }
   }
 
   

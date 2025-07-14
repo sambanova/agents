@@ -344,9 +344,10 @@
 </template>
   
   <script setup>
-  import { computed, defineProps, ref,watch,nextTick, provide, defineEmits } from 'vue'
-  
-  import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
+import { computed, defineProps, ref,watch,nextTick, provide, defineEmits } from 'vue'
+import { useAuth0 } from '@auth0/auth0-vue'
+
+import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
   import WorkflowDataItem from '@/components/ChatMain/WorkflowDataItem.vue'
   import { getComponentByAgentType } from '@/utils/componentUtils.js'
 
@@ -363,6 +364,9 @@ import {
 import jsPDF from "jspdf";
 import html2pdf from 'html2pdf.js'
 import { renderMarkdown } from '@/utils/markdownRenderer'
+
+// Auth0 composable
+const { getAccessTokenSilently } = useAuth0()
 import { isFinalAgentType } from '@/utils/globalFunctions.js'
 
 
@@ -1829,8 +1833,8 @@ const deepResearchPdfFilename = computed(() => {
 // Function to download PDF with authentication
 async function downloadPdf(fileId, filename) {
   try {
-    // Get the auth token from Clerk
-    const token = await window.Clerk.session.getToken();
+    // Get the auth token from Auth0
+    const token = await getAccessTokenSilently();
     
     if (!token) {
       console.error('No authentication token found');
