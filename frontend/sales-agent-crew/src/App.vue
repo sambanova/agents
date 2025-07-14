@@ -47,13 +47,6 @@ const route = useRoute()
 const router = useRouter()
 const isTermsOfServiceRoute = computed(() => route.path === '/terms-of-service')
 
-// Debug Auth0 state
-console.log('Auth0 State:', {
-  isAuthenticated: isAuthenticated.value,
-  isLoading: isLoading.value,
-  error: error.value
-})
-
 const handleRetry = () => {
   // Clear any error state and redirect to login
   router.push('/login')
