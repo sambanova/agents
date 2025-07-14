@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@auth0/auth0-spa-js": "^2.2.0",
     "@auth0/auth0-vue": "^2.3.3",
     "@headlessui/vue": "^1.7.23",
     "@heroicons/vue": "^2.2.0",

@@ -50,7 +50,7 @@
         <div v-if="isAuthenticated" class="relative">
           <button
             @click="toggleUserMenu"
-            class="bg-primary-brandAvatarGray h-10 w-10 rounded-full flex items-center justify-center text-white font-medium hover:bg-primary-800 transition-colors"
+            class="bg-gray-100 hover:bg-gray-200 h-10 w-10 rounded-full flex items-center justify-center text-gray-700 font-semibold transition-all duration-200 ring-2 ring-transparent hover:ring-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             {{ userInitials }}
           </button>
@@ -59,18 +59,39 @@
           <div 
             v-if="showUserMenu"
             @click.stop
-            class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border"
+            class="absolute right-0 mt-3 w-72 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden"
           >
-            <div class="px-4 py-2 text-sm text-gray-700 border-b">
-              <div class="font-medium">{{ user?.name || user?.email }}</div>
-              <div class="text-gray-500">{{ user?.email }}</div>
+            <!-- User Info Section -->
+            <div class="px-6 py-4 bg-gray-50 border-b border-gray-100">
+              <div class="flex items-center space-x-3">
+                <div class="bg-indigo-100 h-12 w-12 rounded-full flex items-center justify-center">
+                  <span class="text-indigo-600 font-semibold text-lg">{{ userInitials }}</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-gray-900 truncate">
+                    {{ user?.name || user?.email?.split('@')[0] || 'User' }}
+                  </div>
+                  <div class="text-sm text-gray-500 truncate">{{ user?.email }}</div>
+                </div>
+              </div>
             </div>
-            <button
-              @click="logout"
-              class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              Sign out
-            </button>
+
+            <!-- Menu Items -->
+            <div class="py-2">
+              <!-- Sign Out -->
+              <button
+                @click="logout"
+                class="w-full px-6 py-3 text-left flex items-center space-x-3 text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+              >
+                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                </svg>
+                <div>
+                  <div class="font-medium">Sign out</div>
+                  <div class="text-xs text-gray-500">Log out of your account</div>
+                </div>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -152,7 +173,7 @@ onMounted(async () => {
 
 const settingsModalRef = ref(null);
 function openSettings() {
-  // settingsModalRef.value.isOpen = true
+  showUserMenu.value = false; // Close user menu
   settingsModalRef.value?.openModal();
 }
 
