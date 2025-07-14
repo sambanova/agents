@@ -3,8 +3,6 @@
 </template>
 
 <script setup>
-import { defineProps } from 'vue'
-
 const props = defineProps({
   data:      { type: [String, Object], required: true },
   agent_type:{ type: String,          required: true },

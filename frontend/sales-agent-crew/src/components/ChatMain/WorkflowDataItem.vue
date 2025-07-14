@@ -49,7 +49,7 @@
 </template>
 
 <script setup>
-import { defineProps, watch, computed } from 'vue';
+import { watch, computed } from 'vue';
 import { formattedDuration } from '@/utils/globalFunctions';
 
 const props = defineProps({

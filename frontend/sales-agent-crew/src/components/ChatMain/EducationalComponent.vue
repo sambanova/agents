@@ -13,7 +13,7 @@
 </template>
 
 <script setup>
-import { computed, defineProps } from 'vue'
+import { computed } from 'vue'
 import { marked } from 'marked'
 
 // Configure a custom renderer for marked so that links are clickable and open in a new tab.

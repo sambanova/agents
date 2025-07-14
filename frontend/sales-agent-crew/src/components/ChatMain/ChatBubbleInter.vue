@@ -204,7 +204,7 @@
 </template>
 
 <script setup>
-import { computed, defineProps, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 
 import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
 import { getComponentByAgentType } from '@/utils/componentUtils.js'

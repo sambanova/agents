@@ -344,7 +344,7 @@
 </template>
   
   <script setup>
-  import { computed, defineProps, ref,watch,nextTick, provide, defineEmits } from 'vue'
+  import { computed, ref, watch, nextTick, provide } from 'vue'
   
   import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
   import WorkflowDataItem from '@/components/ChatMain/WorkflowDataItem.vue'
