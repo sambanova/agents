@@ -1,15 +1,16 @@
 ########## data_types.py (FULL, UNCHANGED EXCEPT NEW FIELDS) ##########
-from pydantic import BaseModel, model_validator, Field
-from enum import Enum
-from typing import Any, List, Optional, Union, Dict, Sequence
 from datetime import date, datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional, Sequence, Union
+
 from agents.components.financial_analysis.financial_analysis_crew import (
     FinancialAnalysisResult,
 )
+from agents.components.lead_generation_crew import OutreachList
 from agents.components.samba_research_flow.crews.edu_research.edu_research_crew import (
     Section,
 )
-from agents.components.lead_generation_crew import OutreachList
+from pydantic import BaseModel, Field, model_validator
 
 
 # Enum to Define Agent Types
@@ -65,6 +66,27 @@ class APIKeys(BaseModel):
     fireworks_key: str = ""
     serper_key: str
     exa_key: str
+
+
+class ShareResponse(BaseModel):
+    share_url: str
+    share_token: str
+    message: str
+
+
+class SharedConversationData(BaseModel):
+    share_token: str
+    title: str
+    messages: List[Dict[str, Any]]
+    created_at: str
+    conversation_id: str
+
+
+class ShareInfo(BaseModel):
+    share_token: str
+    title: str
+    created_at: str
+    conversation_id: str
 
 
 class FinancialAnalysis(BaseModel):

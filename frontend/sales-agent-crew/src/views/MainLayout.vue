@@ -156,6 +156,7 @@ import {
   onBeforeUnmount,
   provide,
 } from 'vue';
+import { useRoute } from 'vue-router';
 import { useUser } from '@clerk/vue';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -229,6 +230,9 @@ const headerRef = ref(null);
 const { user } = useUser();
 const clerkUserId = computed(() => user.value?.id || 'anonymous_user');
 
+// Route for checking shared conversations
+const route = useRoute();
+
 const agentData = ref([]);
 const chatSideBarRef = ref(null);
 const streamCompleted = ref(false);
@@ -240,6 +244,12 @@ const handleNewChat = () => {
 
 const agentThoughtsDataChanged = (agentThoughtsData) => {
   agentData.value = agentThoughtsData;
+
+  // Only load chats if user is authenticated
+  if (!window.Clerk || !window.Clerk.session) {
+    console.log('Skipping loadChats - user not authenticated in MainLayout');
+    return;
+  }
 
   if (
     chatSideBarRef.value &&

@@ -47,6 +47,14 @@ class RedisStorage:
         """Get the Redis key for cumulative usage data"""
         return f"cumulative_usage:{user_id}:{conversation_id}"
 
+    def _get_share_key(self, share_token: str) -> str:
+        """Get the Redis key for share token data"""
+        return f"share:{share_token}"
+
+    def _get_user_shares_key(self, user_id: str) -> str:
+        """Get the Redis key for user's created shares"""
+        return f"user_shares:{user_id}"
+
     async def is_message_new(
         self, user_id: str, conversation_id: str, message_id: str
     ) -> bool:
@@ -524,3 +532,68 @@ class RedisStorage:
             )
 
         return cumulative_usage
+
+    async def create_share(
+        self, user_id: str, conversation_id: str, title: Optional[str] = None
+    ) -> str:
+        """Create a new share token for a conversation"""
+        import uuid
+        from datetime import datetime
+
+        # Verify conversation exists and belongs to user
+        if not await self.verify_conversation_exists(user_id, conversation_id):
+            raise ValueError("Conversation not found or access denied")
+
+        # Generate UUID-style share token like ChatGPT
+        share_token = str(uuid.uuid4())
+
+        # Get conversation title from metadata if not provided
+        if not title:
+            meta_key = self._get_chat_metadata_key(user_id, conversation_id)
+            meta_data = await self.redis_client.get(meta_key, user_id)
+            if meta_data:
+                metadata = json.loads(meta_data)
+                title = metadata.get("name", "Shared Conversation")
+            else:
+                title = "Shared Conversation"
+
+        # Create simple mapping: share_token -> user_id:conversation_id
+        share_key = self._get_share_key(share_token)
+        share_data = {
+            "user_id": user_id,
+            "conversation_id": conversation_id,
+            "title": title,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+
+        # Store the mapping with dummy user ID for encryption
+        await self.redis_client.set(share_key, json.dumps(share_data), "public_shared")
+
+        # Add to user's shares list for management
+        user_shares_key = self._get_user_shares_key(user_id)
+        await self.redis_client.sadd(user_shares_key, share_token, user_id)
+
+        return share_token
+
+    async def get_shared_conversation(self, share_token: str) -> Optional[dict]:
+        """Get full shared conversation data by reading original user data"""
+        share_key = self._get_share_key(share_token)
+        share_data = await self.redis_client.get(share_key, "public_shared")
+
+        if not share_data:
+            return None
+
+        share_info = json.loads(share_data)
+        user_id = share_info["user_id"]
+        conversation_id = share_info["conversation_id"]
+
+        # Read the original conversation data directly
+        messages = await self.get_messages(user_id, conversation_id)
+
+        return {
+            "share_token": share_token,
+            "title": share_info["title"],
+            "messages": messages,
+            "created_at": share_info["created_at"],
+            "conversation_id": conversation_id,
+        }

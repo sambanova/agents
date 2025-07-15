@@ -75,6 +75,14 @@ function onSelectConversation(conversation) {
  * On mounted => load local conversation list + decrypt keys
  */
 onMounted(() => {
+  console.log('ChatSidebar mounted, authentication check');
+  
+  // Check if user is authenticated before loading data
+  if (!window.Clerk || !window.Clerk.session) {
+    console.log('Skipping user data loading - user not authenticated');
+    return;
+  }
+
   loadChats();
   loadKeys();
 
@@ -85,6 +93,12 @@ onMounted(() => {
 });
 
 async function deleteChat(conversationId) {
+  // Check if user is authenticated
+  if (!window.Clerk || !window.Clerk.session) {
+    console.log('Skipping deleteChat - user not authenticated');
+    return;
+  }
+
   const url = `${import.meta.env.VITE_API_URL}/chat/${conversationId}`;
   try {
     const response = await axios.delete(url, {
@@ -104,6 +118,12 @@ async function deleteChat(conversationId) {
 }
 
 async function loadKeys(missingKeysListData) {
+  // Check if user is authenticated
+  if (!window.Clerk || !window.Clerk.session) {
+    console.log('Skipping loadKeys - user not authenticated');
+    return;
+  }
+
   if (missingKeysListData) {
     console.log('missingKeysList', missingKeysListData);
 
@@ -135,6 +155,12 @@ const missingKeysArray = computed(() => {
   );
 });
 async function loadChats() {
+  // Check if user is authenticated
+  if (!window.Clerk || !window.Clerk.session) {
+    console.log('Skipping loadChats - user not authenticated');
+    return;
+  }
+
   try {
     const uid = userId.value || 'anonymous';
     const resp = await axios.get(`${import.meta.env.VITE_API_URL}/chat/list`, {
@@ -144,13 +170,22 @@ async function loadChats() {
     });
     conversations.value = resp.data?.chats;
   } catch (err) {
-    console.error('Error creating new chat:', err);
-    alert('Failed to create new conversation. Check keys or console.');
+    console.error('Error loading chats:', err);
+    // Don't show alert for shared conversations
+    if (!route.path.startsWith('/share/')) {
+      alert('Failed to load conversations. Check keys or console.');
+    }
   }
 }
 
 /** Start a new conversation => calls /chat/init with decrypted keys */
 async function createNewChat() {
+  // Check if user is authenticated
+  if (!window.Clerk || !window.Clerk.session) {
+    console.log('Skipping createNewChat - user not authenticated');
+    return;
+  }
+
   console.log('CREATE1');
   emitterMitt.emit('new-chat', { message: 'The new chat button was clicked!' });
 }
@@ -181,7 +216,11 @@ watch(
     } else {
       preselectedChat.value = null;
     }
-    loadChats();
+    
+    // Only load chats if user is authenticated
+    if (window.Clerk && window.Clerk.session) {
+      loadChats();
+    }
   }
 );
 </script>

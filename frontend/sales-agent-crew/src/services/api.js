@@ -100,4 +100,58 @@ export const uploadDocument = async (file, userId, sessionId) => {
   return response.data
 }
 
+export const sharing = {
+  // Create a share link for a conversation
+  createShare: async (conversationId) => {
+    const token = await window.Clerk.session.getToken();
+    const response = await axios.post(
+      `${API_URL}/chat/${conversationId}/share`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    return response.data;
+  },
+
+  // Get shared conversation data (public, no auth needed)
+  getSharedConversation: async (shareToken) => {
+    const response = await axios.get(`${API_URL}/share/${shareToken}`);
+    return response.data;
+  },
+
+  // List shares for a conversation
+  getConversationShares: async (conversationId) => {
+    const token = await window.Clerk.session.getToken();
+    const response = await axios.get(
+      `${API_URL}/chat/${conversationId}/shares`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    return response.data;
+  },
+
+  // Delete a share
+  deleteShare: async (shareToken) => {
+    const token = await window.Clerk.session.getToken();
+    const response = await axios.delete(
+      `${API_URL}/share/${shareToken}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    return response.data;
+  }
+};
+
 export default api

@@ -7,7 +7,7 @@
         <router-view />
       </SignedIn>
       <SignedOut>
-        <router-view v-if="isTermsOfServiceRoute" />
+        <router-view v-if="isPublicRoute" />
         <LoginPage v-else />
       </SignedOut>
     </main>
@@ -21,5 +21,5 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
-const isTermsOfServiceRoute = computed(() => route.path === '/terms-of-service')
+const isPublicRoute = computed(() => route.path === '/terms-of-service' || route.path.startsWith('/share/'))
 </script>

@@ -26,7 +26,7 @@ app.use(clerkPlugin, {
   signInUrl: '/login',
   signUpUrl: '/login',
   initialState: {
-    bypassAuth: ['/terms-of-service'] // Allow unauthenticated users to access this route
+    bypassAuth: ['/terms-of-service'] // Allow unauthenticated users to access these routes
   }
 })
 app.use(pinia) // Register Pinia

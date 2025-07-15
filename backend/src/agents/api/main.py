@@ -762,6 +762,124 @@ async def get_api_keys(
         )
 
 
+@app.post("/chat/{conversation_id}/share")
+async def create_conversation_share(
+    conversation_id: str,
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+):
+    """Create a new share link for a conversation (like ChatGPT)"""
+    try:
+        user_id = get_user_id_from_token(token_data)
+        if not user_id:
+            return JSONResponse(
+                status_code=401, content={"error": "Invalid authentication token"}
+            )
+
+        share_token = await app.state.redis_storage_service.create_share(
+            user_id, conversation_id
+        )
+
+        return JSONResponse(
+            status_code=201,
+            content={
+                "share_url": f"/share/{share_token}",
+                "share_token": share_token,
+                "message": "Share created successfully",
+            },
+        )
+
+    except ValueError as e:
+        return JSONResponse(status_code=404, content={"error": str(e)})
+    except Exception as e:
+        logger.error(f"Error creating share: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/share/{share_token}")
+async def get_shared_conversation(share_token: str):
+    """Get shared conversation (public access, no authentication required)"""
+    try:
+        shared_conversation = (
+            await app.state.redis_storage_service.get_shared_conversation(share_token)
+        )
+
+        if not shared_conversation:
+            return JSONResponse(
+                status_code=404, content={"error": "Shared conversation not found"}
+            )
+
+        return JSONResponse(status_code=200, content=shared_conversation)
+
+    except Exception as e:
+        logger.error(f"Error accessing shared conversation: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/chat/{conversation_id}/shares")
+async def list_conversation_shares(
+    conversation_id: str,
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+):
+    """List all shares for a conversation"""
+    try:
+        user_id = get_user_id_from_token(token_data)
+        if not user_id:
+            return JSONResponse(
+                status_code=401, content={"error": "Invalid authentication token"}
+            )
+
+        # Verify user owns the conversation
+        if not await app.state.redis_storage_service.verify_conversation_exists(
+            user_id, conversation_id
+        ):
+            return JSONResponse(
+                status_code=404, content={"error": "Conversation not found"}
+            )
+
+        # Get all user's shares and filter for this conversation
+        all_shares = await app.state.redis_storage_service.get_user_shares(user_id)
+        conversation_shares = [
+            share for share in all_shares if share["conversation_id"] == conversation_id
+        ]
+
+        return JSONResponse(status_code=200, content={"shares": conversation_shares})
+
+    except Exception as e:
+        logger.error(f"Error listing shares: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.delete("/share/{share_token}")
+async def delete_share(
+    share_token: str,
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+):
+    """Delete a share (owner only)"""
+    try:
+        user_id = get_user_id_from_token(token_data)
+        if not user_id:
+            return JSONResponse(
+                status_code=401, content={"error": "Invalid authentication token"}
+            )
+
+        success = await app.state.redis_storage_service.delete_share(
+            user_id, share_token
+        )
+
+        if not success:
+            return JSONResponse(
+                status_code=404, content={"error": "Share not found or access denied"}
+            )
+
+        return JSONResponse(
+            status_code=200, content={"message": "Share deleted successfully"}
+        )
+
+    except Exception as e:
+        logger.error(f"Error deleting share: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @app.delete("/user/data")
 async def delete_user_data(
     token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),

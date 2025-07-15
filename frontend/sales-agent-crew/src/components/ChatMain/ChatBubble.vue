@@ -345,6 +345,7 @@
   
   <script setup>
   import { computed, ref, watch, nextTick, provide } from 'vue'
+import { useRoute } from 'vue-router'
   
   import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
   import WorkflowDataItem from '@/components/ChatMain/WorkflowDataItem.vue'
@@ -1828,6 +1829,12 @@ const deepResearchPdfFilename = computed(() => {
 
 // Function to download PDF with authentication
 async function downloadPdf(fileId, filename) {
+  // Check if user is authenticated
+  if (!window.Clerk || !window.Clerk.session) {
+    console.log('Skipping downloadPdf - user not authenticated');
+    return;
+  }
+
   try {
     // Get the auth token from Clerk
     const token = await window.Clerk.session.getToken();

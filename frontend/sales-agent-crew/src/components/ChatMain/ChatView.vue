@@ -1,5 +1,22 @@
 <template>
   <div class="relative h-full w-full">
+    <!-- Share notification toast -->
+    <div 
+      v-if="shareNotification"
+      class="fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transition-all duration-300"
+      :class="shareNotification.type === 'success' ? 'bg-gray-600 text-white' : 'bg-red-500 text-white'"
+    >
+      <div class="flex items-center space-x-2">
+        <svg v-if="shareNotification.type === 'success'" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+        </svg>
+        <svg v-else class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+        </svg>
+        <span>{{ shareNotification.message }}</span>
+      </div>
+    </div>
+
     <!-- Content -->
     <div
       ref="container"
@@ -9,31 +26,59 @@
       <div
         class="sticky top-0 z-10 bg-white p-4 shadow"
       >
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-4 min-h-[2rem]">
-          <!-- Token Usage Display -->
-          <div v-if="cumulativeTokenUsage.total_tokens > 0" class="flex flex-wrap items-center gap-1 sm:gap-2 text-sm text-gray-600">
-            <span class="font-medium whitespace-nowrap">Chat Usage Tokens:</span>
-            <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs whitespace-nowrap">
-              {{ cumulativeTokenUsage.input_tokens.toLocaleString() }} input
-            </span>
-            <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs whitespace-nowrap">
-              {{ cumulativeTokenUsage.output_tokens.toLocaleString() }} output
-            </span>
-            <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs whitespace-nowrap">
-              {{ cumulativeTokenUsage.total_tokens.toLocaleString() }} total
-            </span>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 min-h-[2rem]">
+          <!-- Left side - Token Usage Display -->
+          <div class="flex-1 min-w-0">
+            <div v-if="cumulativeTokenUsage.total_tokens > 0" class="flex flex-wrap items-center gap-1 sm:gap-2 text-sm text-gray-600">
+              <span class="font-medium whitespace-nowrap">Chat Usage Tokens:</span>
+              <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs whitespace-nowrap">
+                {{ cumulativeTokenUsage.input_tokens.toLocaleString() }} input
+              </span>
+              <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs whitespace-nowrap">
+                {{ cumulativeTokenUsage.output_tokens.toLocaleString() }} output
+              </span>
+              <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs whitespace-nowrap">
+                {{ cumulativeTokenUsage.total_tokens.toLocaleString() }} total
+              </span>
+            </div>
           </div>
           
-          <!-- Right buttons -->
-          <div class="flex hidden space-x-2">
+          <!-- Right side - Buttons (fixed position) -->
+          <div class="flex space-x-2 flex-shrink-0">
+            <!-- Shared conversation indicator -->
+            <div v-if="isSharedConversation" class="flex items-center space-x-2 text-sm text-gray-600 bg-gray-100 px-2.5 py-1 rounded">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+              </svg>
+              <span class="font-medium">Shared conversation</span>
+            </div>
+            
+            <!-- Share button - only show if conversation has messages and is not a shared conversation -->
             <button
-              class="text-sm h-[30px] py-1 px-2.5 bg-[#EE7624] text-white rounded"
+              v-if="messagesData.length > 0 && conversationId && !isSharedConversation"
+              @click="shareConversation"
+              :disabled="isSharing"
+              class="text-sm h-[30px] py-1 px-2.5 bg-gray-500 hover:bg-gray-600 disabled:bg-gray-300 text-white rounded flex items-center space-x-1"
+              title="Share conversation"
+            >
+              <svg v-if="!isSharing" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+              </svg>
+              <svg v-else class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>{{ isSharing ? 'Sharing...' : 'Share' }}</span>
+            </button>
+            
+            <button
+              class="hidden text-sm h-[30px] py-1 px-2.5 bg-[#EE7624] text-white rounded"
             >
               View full report
             </button>
             <button
               @click="genPDF"
-              class="text-sm h-[30px] py-1 px-2.5 bg-[#EAECF0] text-[#344054] rounded"
+              class="hidden text-sm h-[30px] py-1 px-2.5 bg-[#EAECF0] text-[#344054] rounded"
             >
               Download PDF
             </button>
@@ -355,8 +400,8 @@
                 @keydown="handleKeyDown"
                 v-model="searchQuery"
                 type="search"
-                placeholder="Ask me about...companies to target, research topics, or company stocks and financials"
-                :disabled="isLoading"
+                :placeholder="isSharedConversation ? 'This is a shared conversation (read-only)' : 'Ask me about...companies to target, research topics, or company stocks and financials'"
+                :disabled="isLoading || isSharedConversation"
                 class="p-4 pb-12 block min-h-[106px] w-full bg-primary-brandFrame border-primary-brandFrame rounded-lg text-sm focus:outline-none active:outline-none border focus:border-primary-brandColor disabled:opacity-50 disabled:pointer-events-none resize-y"
               ></textarea>
 
@@ -521,7 +566,7 @@
                     <button
                       type="button"
                       @click="addMessage"
-                      :disabled="isLoading || !searchQuery.trim()"
+                      :disabled="isLoading || !searchQuery.trim() || isSharedConversation"
                       class="inline-flex shrink-0 justify-center items-center bg-transparent cursor-pointer"
                     >
                       <svg
@@ -605,6 +650,7 @@ import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.v
 import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue';
 import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue';
 import { isFinalAgentType, shouldExcludeFromGrouping } from '@/utils/globalFunctions.js';
+import { sharing } from '@/services/api.js';
 
 // Access Clerk user for personalization
 const { user } = useUser();
@@ -627,6 +673,12 @@ const iconComponents = {
   CodeBracketIcon
 };
 async function handleButtonClick(data) {
+  // Check if user is authenticated
+  if (!window.Clerk || !window.Clerk.session) {
+    console.log('Skipping handleButtonClick - user not authenticated');
+    return;
+  }
+
   chatName.value = '';
   
   // Create new chat instead of just going to home
@@ -655,6 +707,12 @@ async function genPDF() {
 }
 
 async function createNewChat() {
+  // Check if user is authenticated
+  if (!window.Clerk || !window.Clerk.session) {
+    console.log('Skipping createNewChat - user not authenticated');
+    return;
+  }
+
   try {
     const resp = await axios.post(
       `${import.meta.env.VITE_API_URL}/chat/init`,
@@ -673,6 +731,46 @@ async function createNewChat() {
       'Failed to create new conversation. Check keys or console.';
     isLoading.value = false;
   }
+}
+
+// Share conversation functionality
+async function shareConversation() {
+  if (!conversationId.value) {
+    console.error('No conversation ID available');
+    return;
+  }
+
+  isSharing.value = true;
+  
+  try {
+    const result = await sharing.createShare(conversationId.value);
+    const shareUrl = `${window.location.origin}/share/${result.share_token}`;
+    
+    // Copy to clipboard
+    await navigator.clipboard.writeText(shareUrl);
+    
+    // Show success notification
+    showNotification('success', 'Share link copied to clipboard!');
+    
+  } catch (error) {
+    console.error('Error creating share:', error);
+    
+    // Show error notification
+    showNotification('error', 'Failed to create share link');
+    
+  } finally {
+    isSharing.value = false;
+  }
+}
+
+// Notification helper
+function showNotification(type, message) {
+  shareNotification.value = { type, message };
+  
+  // Auto-hide after 3 seconds
+  setTimeout(() => {
+    shareNotification.value = null;
+  }, 3000);
 }
 
 // Watch for changes to the selection and load data accordingly.
@@ -827,6 +925,49 @@ const checkAndOpenSettings = () => {
   emitterMitt.emit('check-keys', { message: 'check keys!' });
 };
 
+async function loadSharedConversation() {
+  try {
+    initialLoading.value = true;
+    console.log('Loading shared conversation:', shareToken.value);
+    
+    const data = await sharing.getSharedConversation(shareToken.value);
+    
+    if (data && data.messages) {
+      // Set conversation ID for the shared conversation
+      conversationId.value = data.conversation_id;
+      currentId.value = data.conversation_id;
+      
+      // Format the data to match our existing structure
+      const formattedData = {
+        messages: data.messages,
+        is_owner: false,
+        is_public: true
+      };
+      
+      await filterChat(formattedData);
+      
+      // Set page title
+      if (data.title) {
+        document.title = `${data.title} - Shared Conversation`;
+      }
+      
+      AutoScrollToBottom(true);
+    } else {
+      console.warn('No messages found in shared conversation');
+      messagesData.value = [];
+      errorMessage.value = 'No messages found in this shared conversation.';
+    }
+  } catch (err) {
+    console.error('Error loading shared conversation:', err);
+    errorMessage.value = 'Failed to load shared conversation. It may have been removed or is no longer available.';
+    messagesData.value = [];
+  } finally {
+    initialLoading.value = false;
+    isLoading.value = false;
+    statusText.value = '';
+  }
+}
+
 async function loadPreviousChat(convId) {
   if (!convId) {
     initialLoading.value = false;
@@ -896,6 +1037,15 @@ const cumulativeTokenUsage = ref({
   output_tokens: 0,
   total_tokens: 0
 });
+
+// Sharing functionality
+const isSharing = ref(false);
+const shareNotification = ref(null);
+
+// Conversation ID for sharing
+const conversationId = ref(route.params.id || '');
+const isSharedConversation = ref(false);
+const shareToken = ref('');
 
 // Track metrics per run_id
 const runMetrics = ref(new Map());
@@ -1412,6 +1562,12 @@ function toggleSelectAllUploaded() {
 const { userId } = useAuth();
 
 async function loadKeys() {
+  // Check if user is authenticated
+  if (!window.Clerk || !window.Clerk.session) {
+    console.log('Skipping loadKeys - user not authenticated');
+    return;
+  }
+
   try {
     const encryptedSambanovaKey = localStorage.getItem(
       `sambanova_key_${userId.value}`
@@ -1456,18 +1612,30 @@ async function loadKeys() {
 }
 
 onMounted(async () => {
-  await loadKeys();
-  await loadUserDocuments();
-  
-  const conversationId = route.params.id;
-  currentId.value = conversationId || '';
-  
-  if (conversationId) {
-    console.log('Mounting with conversation ID:', conversationId);
-    await loadPreviousChat(conversationId);
+  // Check if this is a shared conversation first
+  const path = route.path;
+  if (path.startsWith('/share/')) {
+    isSharedConversation.value = true;
+    shareToken.value = route.params.shareToken;
+    await loadSharedConversation();
   } else {
-    console.log('Mounting without conversation ID');
-    initialLoading.value = false;
+    // Normal conversation - load keys and user data only if authenticated
+    if (window.Clerk && window.Clerk.session) {
+      await loadKeys();
+      await loadUserDocuments();
+    }
+    
+    const routeConversationId = route.params.id;
+    conversationId.value = routeConversationId || '';
+    currentId.value = routeConversationId || '';
+    
+    if (routeConversationId) {
+      console.log('Mounting with conversation ID:', routeConversationId);
+      await loadPreviousChat(routeConversationId);
+    } else {
+      console.log('Mounting without conversation ID');
+      initialLoading.value = false;
+    }
   }
 
   emitterMitt.on('new-chat', handleButtonClick);
@@ -1483,6 +1651,29 @@ watch(
     await loadKeys();
   },
   { immediate: true }
+);
+
+// Watch for route changes to update conversationId
+watch(
+  () => route.params.id,
+  (newId) => {
+    conversationId.value = newId || '';
+  }
+);
+
+// Watch for route changes to handle shared conversations
+watch(
+  () => route.path,
+  async (newPath) => {
+    if (newPath.startsWith('/share/')) {
+      isSharedConversation.value = true;
+      shareToken.value = route.params.shareToken;
+      await loadSharedConversation();
+    } else {
+      isSharedConversation.value = false;
+      shareToken.value = '';
+    }
+  }
 );
 
 
@@ -1706,6 +1897,12 @@ async function handleFileUpload(event) {
 }
 
 async function loadUserDocuments() {
+  // Check if user is authenticated
+  if (!window.Clerk || !window.Clerk.session) {
+    console.log('Skipping loadUserDocuments - user not authenticated');
+    return;
+  }
+
   try {
     const response = await axios.get(
       `${import.meta.env.VITE_API_URL}/files`,
@@ -1763,7 +1960,7 @@ const addMessage = async () => {
   workflowData.value = [];
 
   // If no conversation exists, create a new chat first.
-  if (!route.params.id) {
+  if (!route.params.id && !isSharedConversation.value) {
     try {
       await createNewChat();
       await nextTick();
@@ -1880,6 +2077,12 @@ const addMessage = async () => {
 
 
 async function connectWebSocket() {
+  // Check if user is authenticated
+  if (!window.Clerk || !window.Clerk.session) {
+    console.log('Skipping WebSocket connection - user not authenticated');
+    return;
+  }
+
   try {
     await loadKeys();
 
