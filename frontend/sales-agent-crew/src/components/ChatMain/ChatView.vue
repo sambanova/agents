@@ -411,7 +411,7 @@
 
               <!-- Toolbar -->
               <div
-                class="absolute bottom-px inset-x-px p-2 rounded-b-lg border-primary-brandFrame"
+                class="absolute bottom-px inset-x-px p-2 rounded-b-lg border-primary-brandFrame pointer-events-none"
               >
                 <div class="flex justify-between items-center">
                   <!-- Button Group -->
@@ -421,7 +421,7 @@
                       @click="$refs.fileInput.click()"
                       :disabled="isLoading || isUploading"
                       type="button"
-                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
+                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100 pointer-events-auto"
                     >
                       <input
                         type="file"
@@ -473,7 +473,7 @@
                         'text-gray-500': !isRecording,
                         'text-orange-500': isRecording,
                       }"
-                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
+                      class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100 pointer-events-auto"
                     >
                       <svg
                         v-if="!isRecording"
@@ -528,7 +528,7 @@
                           'text-gray-500': !isRecording,
                           'text-orange-500': isRecording,
                         }"
-                        class="inline-flex hidden shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100"
+                        class="inline-flex hidden shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100 pointer-events-auto"
                       >
                         <svg
                           v-if="!isRecording"
@@ -571,7 +571,7 @@
                       type="button"
                       @click="addMessage"
                       :disabled="isLoading || !searchQuery.trim() || isSharedConversation"
-                      class="inline-flex shrink-0 justify-center items-center bg-transparent cursor-pointer"
+                      class="inline-flex shrink-0 justify-center items-center bg-transparent cursor-pointer pointer-events-auto"
                     >
                       <svg
                         id="send-button"
