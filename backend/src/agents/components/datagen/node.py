@@ -137,9 +137,6 @@ You: APPROVE
 
 User: Let's add a new section for risks.
 You: REVISE
-
-User: Can you only focus on visualizations?
-You:
 """
 
     result = await llm.ainvoke(
@@ -150,11 +147,13 @@ You:
 
     update_state = {}
 
-    if "APPROVE" in result.content:
+    cleaned_feedback = drop_think_section(result.content)
+
+    if "APPROVE" in cleaned_feedback:
         content = "Continue the research process"
         update_state["modification_areas"] = ""
         logger.info("Human approved - continuing research process")
-    elif "REVISE" in result.content:
+    elif "REVISE" in cleaned_feedback:
         modification_areas = feedback
         content = f"Regenerate hypothesis. Areas to modify: {modification_areas}"
         update_state["hypothesis"] = ""
