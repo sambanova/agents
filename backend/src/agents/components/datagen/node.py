@@ -115,28 +115,25 @@ async def human_choice_node(state: State, llm: BaseChatModel) -> State:
     logger.debug(f"Received feedback: {feedback}")
 
     prompt = f"""
-Your task is to classify user input about a plan. Respond with a single word:
+TASK: Classify user feedback. Respond with a single label only.
+LABELS: APPROVE, REVISE
+RULE: Any question, doubt, or suggestion requires the REVISE label.
 
-APPROVE: If the user explicitly agrees with the plan or gives a simple, neutral acknowledgement (e.g., "ok").
-REVISE: If the user suggests a change, asks a clarifying question, or expresses any doubt.
+---
+Input: Looks great, let's do it.
+Output: APPROVE
 
-User: Looks great, let's do it.
-You: APPROVE
+Input: Can we change the deadline?
+Output: REVISE
 
-User: Can we change the deadline?
-You: REVISE
+Input: It's good, but can we review the budget?
+Output: REVISE
 
-User: I'm not sure about the first step.
-You: REVISE
-
-User: ok
-You: APPROVE
-
-User: Approved
-You: APPROVE
-
-User: Let's add a new section for risks.
-You: REVISE
+Input: ok
+Output: APPROVE
+---
+Input: [New User Input Goes Here]
+Output:
 """
 
     result = await llm.ainvoke(
