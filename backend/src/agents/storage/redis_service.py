@@ -49,33 +49,3 @@ class SecureRedisService(redis.Redis):
         """Set hash field only if it doesn't exist. Returns True if set, False if already existed."""
         encrypted_value = self.encryption.encrypt(value, user_id)
         return bool(await super().hsetnx(name, key, encrypted_value))
-
-    # Public access methods using dummy user ID for encryption
-    async def set_public(self, key: str, value: Any) -> bool:
-        """Store data with encryption using dummy user ID for public access"""
-        return await self.set(key, value, "public_shared")
-
-    async def get_public(self, key: str) -> Any:
-        """Get data with decryption using dummy user ID for public access"""
-        return await self.get(key, "public_shared")
-
-    async def sadd_public(self, name: str, value: Any) -> int:
-        """Add to set with encryption using dummy user ID for public access"""
-        encrypted_value = self.encryption.encrypt(value, "public_shared")
-        return await super().sadd(name, encrypted_value)
-
-    async def srem_public(self, name: str, value: Any) -> int:
-        """Remove from set with encryption using dummy user ID for public access"""
-        encrypted_value = self.encryption.encrypt(value, "public_shared")
-        return await super().srem(name, encrypted_value)
-
-    async def smembers_public(self, name: str) -> List[Any]:
-        """Get set members with decryption using dummy user ID for public access"""
-        encrypted_values = await super().smembers(name)
-        if not encrypted_values:
-            return []
-        return [self.encryption.decrypt(v, "public_shared") for v in encrypted_values]
-
-    async def delete_public(self, *names) -> int:
-        """Delete keys (no encryption needed for deletion)"""
-        return await super().delete(*names)
