@@ -1718,43 +1718,38 @@ const auditLogEvents = computed(() => {
           type = 'code_fixer'
         }
         else if (agentType === 'data_science_hypothesis_agent') {
-          title = `Hypothesis Generation`
-          details = 'Generating hypothesis for data science'
+          title = `Hypothesis Agent`
+          details = 'Generating hypothesis'
           dotClass = 'bg-gray-400'
           type = 'data_science_hypothesis_agent'
         } else if (agentType === 'data_science_process_agent') {
-          title = `Data Science Process`
-          details = 'Processing data for data science'
+          title = `Supervisor Agent`
+          details = 'Deciding what to do next'
           dotClass = 'bg-gray-400'
           type = 'data_science_process_agent'
         } else if (agentType === 'data_science_code_agent') {
-          title = `Code Generation`
-          details = 'Generating code for data science'
+          title = `Code Agent`
+          details = 'Generating code'
           dotClass = 'bg-gray-400'
           type = 'data_science_code_agent'
         } else if (agentType === 'data_science_quality_review_agent') {
-          title = `Quality Review`
-          details = 'Reviewing quality of data science'
+          title = `Quality Review Agent`
+          details = 'Reviewing quality'
           dotClass = 'bg-gray-400'
           type = 'data_science_quality_review_agent'
         } else if (agentType === 'data_science_note_agent') {
-          title = `Summarizing`
-          details = 'Summarizing data science'
+          title = `Note Taker Agent`
+          details = 'Summarizing previous steps'
           dotClass = 'bg-gray-400'
           type = 'data_science_note_agent'
-        } else if (agentType === 'data_science_process_agent') {
-          title = `Data Science Process`
-          details = 'Processing data for data science'
-          dotClass = 'bg-gray-400'
-          type = 'data_science_process_agent'
         } else if (agentType === 'data_science_report_agent') {
-          title = `Generating Report`
-          details = 'Generating report for data science'
+          title = `Report Agent`
+          details = 'Generating report'
           dotClass = 'bg-gray-400'
           type = 'data_science_report_agent'
         } else if (agentType === 'data_science_visualization_agent') {
-          title = `Visualizing Data`
-          details = 'Visualizing data for data science'
+          title = `Visualization Agent`
+          details = 'Visualizing data'
           dotClass = 'bg-gray-400'
           type = 'data_science_visualization_agent'
         }
