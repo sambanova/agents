@@ -1,9 +1,10 @@
+import asyncio
 import json
 import os
 import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import List, Optional
 
 import jwt
 import mlflow
@@ -812,6 +813,117 @@ async def get_shared_conversation(share_token: str):
 
     except Exception as e:
         logger.error(f"Error accessing shared conversation: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+def parse_file_references_from_content(content: str) -> List[str]:
+    """
+    Parse file references from text content.
+    Looks for patterns like:
+    - ![title](attachment:file_id)
+    - ![title](redis-chart:file_id:user_id)
+    - ![title](redis-file:file_id:user_id)
+    - ![title]([filename](redis-chart:file_id:user_id))  # Nested format from data science agent
+
+    Returns a list of file IDs found in the content.
+    """
+    import re
+
+    file_ids = set()
+
+    if not content or not isinstance(content, str):
+        return list(file_ids)
+
+    # Pattern for attachment references
+    attachment_pattern = r"!\[[^\]]*\]\(attachment:([^)]+)\)"
+    attachment_matches = re.findall(attachment_pattern, content)
+    file_ids.update(attachment_matches)
+
+    # Pattern for Redis chart/file references (direct format)
+    redis_pattern = r"!\[[^\]]*\]\(redis-(?:chart|file):([^:]+):[^)]+\)"
+    redis_matches = re.findall(redis_pattern, content)
+    file_ids.update(redis_matches)
+
+    # Pattern for nested Redis chart/file references (data science agent format)
+    nested_redis_pattern = (
+        r"!\[[^\]]*\]\(\[[^\]]*\]\(redis-(?:chart|file):([^:]+):[^)]+\)\)"
+    )
+    nested_redis_matches = re.findall(nested_redis_pattern, content)
+    file_ids.update(nested_redis_matches)
+
+    return list(file_ids)
+
+
+@app.get("/share/{share_token}/files/{file_id}")
+async def get_shared_file(share_token: str, file_id: str):
+    """Get file from shared conversation (public access, no authentication required)"""
+    try:
+        # First verify the share token is valid and get the original user/conversation
+        shared_conversation = (
+            await app.state.redis_storage_service.get_shared_conversation(share_token)
+        )
+
+        if not shared_conversation:
+            return JSONResponse(
+                status_code=404, content={"error": "Shared conversation not found"}
+            )
+
+        # Get the original user_id and conversation_id from the shared conversation
+        original_user_id = shared_conversation.get("user_id")
+        conversation_id = shared_conversation.get("conversation_id")
+
+        if not original_user_id or not conversation_id:
+            return JSONResponse(
+                status_code=404, content={"error": "Invalid shared conversation data"}
+            )
+
+        # Get the conversation messages to verify the file is actually part of this conversation
+        conversation_messages = await app.state.redis_storage_service.get_messages(
+            original_user_id, conversation_id
+        )
+
+        # Check if the file_id is referenced in any message in this conversation
+        file_referenced_in_conversation = False
+        for message in conversation_messages:
+            # Parse file references from the message content
+            content = message.get("content", "")
+            if content and message.get("type") != "HumanMessage":
+                file_references = parse_file_references_from_content(content)
+                if file_id in file_references:
+                    file_referenced_in_conversation = True
+                    break
+
+        if not file_referenced_in_conversation:
+            return JSONResponse(
+                status_code=403,
+                content={"error": "File not part of this shared conversation"},
+            )
+
+        # Get the file data using the original user's context
+        file_data, file_metadata = await app.state.redis_storage_service.get_file(
+            original_user_id, file_id
+        )
+
+        if not file_data:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "File not found in shared conversation"},
+            )
+
+        return Response(
+            content=file_data,
+            media_type=file_metadata["format"],
+            headers={
+                "Content-Disposition": f"inline; filename={file_metadata['filename']}"
+            },
+        )
+
+    except Exception as e:
+        logger.error(
+            f"Error serving shared file: {str(e)}",
+            share_token=share_token,
+            file_id=file_id,
+        )
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 

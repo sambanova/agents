@@ -72,6 +72,15 @@ export default {
       type: Object,
       required: true,
     },
+    // Add props for shared conversation context
+    isSharedConversation: {
+      type: Boolean,
+      default: false
+    },
+    shareToken: {
+      type: String,
+      default: ''
+    }
   },
   data() {
     return {
@@ -186,11 +195,24 @@ export default {
       this.loadingCharts.add(fileId);
       
       try {
-        const token = await getClerkToken();
-        const response = await api.get(`/files/${fileId}`, {
-          headers: {
+        let endpoint;
+        let headers = {};
+        
+        // Use different endpoint based on whether this is a shared conversation
+        if (this.isSharedConversation && this.shareToken) {
+          // Use the public shared file endpoint
+          endpoint = `/share/${this.shareToken}/files/${fileId}`;
+        } else {
+          // Use the authenticated endpoint
+          endpoint = `/files/${fileId}`;
+          const token = await getClerkToken();
+          headers = {
             'Authorization': `Bearer ${token}`
-          },
+          };
+        }
+        
+        const response = await api.get(endpoint, {
+          headers,
           responseType: 'blob'
         });
         

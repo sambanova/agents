@@ -199,7 +199,7 @@
           
           <!-- Final Response Component for specialized responses (financial_analysis_end, etc.) -->
           <div v-if="finalResponseComponent && finalResponseData">
-            <component :is="finalResponseComponent" :parsed="finalResponseData" />
+            <component :is="finalResponseComponent" :parsed="finalResponseData" :isSharedConversation="isSharedConversation" :shareToken="shareToken" />
           </div>
           
 
@@ -451,6 +451,17 @@ import { isFinalAgentType } from '@/utils/globalFunctions.js'
   isInDataScience: {
     type: Boolean,
     default: false
+  },
+  
+  // Add props for shared conversation context
+  isSharedConversation: {
+    type: Boolean,
+    default: false
+  },
+  
+  shareToken: {
+    type: String,
+    default: ''
   }
   
   })

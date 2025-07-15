@@ -519,6 +519,14 @@ const props = defineProps({
   streamingEvents: {
     type: Array,
     default: () => []
+  },
+  isSharedConversation: {
+    type: Boolean,
+    default: false
+  },
+  shareToken: {
+    type: String,
+    default: ''
   }
 })
 
@@ -772,8 +780,16 @@ function processStreamingEvents(events) {
                     
                     // Determine file type and create appropriate artifact
                     const fileType = getFileType(title, fileId)
-                    // Use authenticated endpoint, not public
-                    const fileUrl = `/api/files/${fileId}`
+                    
+                    // Use different endpoint based on whether this is a shared conversation
+                    let fileUrl;
+                    if (props.isSharedConversation && props.shareToken) {
+                      // Use the public shared file endpoint
+                      fileUrl = `${import.meta.env.VITE_API_URL}/share/${props.shareToken}/files/${fileId}`;
+                    } else {
+                      // Use the authenticated endpoint
+                      fileUrl = `/api/files/${fileId}`;
+                    }
                     
                     const newArtifact = {
                       id: fileId,
@@ -847,13 +863,22 @@ function processStreamingEvents(events) {
                     
                     // Determine file type and create appropriate artifact
                     const fileType = getFileType(title, fileId)
-                    const fileUrl = `/api/files/${fileId}`
+                    
+                    // Use different endpoint based on whether this is a shared conversation
+                    let fileUrl;
+                    if (props.isSharedConversation && props.shareToken) {
+                      // Use the public shared file endpoint
+                      fileUrl = `${import.meta.env.VITE_API_URL}/share/${props.shareToken}/files/${fileId}`;
+                    } else {
+                      // Use the authenticated endpoint
+                      fileUrl = `/api/files/${fileId}`;
+                    }
                     
                     const newArtifact = {
                       id: fileId,
                       title: title,
                       type: fileType,
-                      url: fileUrl, // Use authenticated endpoint
+                      url: fileUrl,
                       loading: true, // Set loading to true initially
                       downloadUrl: fileUrl,
                       preview: null
@@ -1112,11 +1137,20 @@ async function loadCsvContent(artifact) {
   
   try {
     artifact.loading = true
-    const response = await fetch(artifact.url, {
-        headers: {
-            'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
-        }
-    })
+    let headers = {};
+    
+    // Use different authentication based on whether this is a shared conversation
+    if (props.isSharedConversation && props.shareToken) {
+      // For shared conversations, we don't need authentication headers
+      // The backend will handle the authentication via the share token
+    } else {
+      // For normal conversations, use authentication
+      headers = {
+        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+      };
+    }
+    
+    const response = await fetch(artifact.url, { headers })
     if (response.ok) {
       const csvText = await response.text()
       artifact.csvData = csvText
@@ -1212,11 +1246,20 @@ async function downloadArtifact(artifact) {
 
   // For API URLs that haven't been converted to blobs yet, fetch with auth
   try {
-    const response = await fetch(artifact.url, {
-      headers: {
+    let headers = {};
+    
+    // Use different authentication based on whether this is a shared conversation
+    if (props.isSharedConversation && props.shareToken) {
+      // For shared conversations, we don't need authentication headers
+      // The backend will handle the authentication via the share token
+    } else {
+      // For normal conversations, use authentication
+      headers = {
         'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
-      }
-    });
+      };
+    }
+    
+    const response = await fetch(artifact.url, { headers });
     if (!response.ok) throw new Error('Download failed');
     
     const blob = await response.blob();
@@ -1296,11 +1339,20 @@ async function fetchArtifactContent(artifact) {
   }
 
   try {
-    const response = await fetch(artifact.url, {
-      headers: {
+    let headers = {};
+    
+    // Use different authentication based on whether this is a shared conversation
+    if (props.isSharedConversation && props.shareToken) {
+      // For shared conversations, we don't need authentication headers
+      // The backend will handle the authentication via the share token
+    } else {
+      // For normal conversations, use authentication
+      headers = {
         'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
-      }
-    });
+      };
+    }
+    
+    const response = await fetch(artifact.url, { headers });
 
     if (!response.ok) {
       throw new Error(`Failed to fetch artifact: ${response.statusText}`);

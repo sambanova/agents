@@ -124,6 +124,8 @@
               :sidebarOpen="showDaytonaSidebar"
               :isInDeepResearch="isInDeepResearch"
               :isInDataScience="isInDataScience"
+              :isSharedConversation="isSharedConversation"
+              :shareToken="shareToken"
               @open-daytona-sidebar="handleOpenDaytonaSidebar"
               @open-artifact-canvas="handleOpenArtifactCanvas"
             />
@@ -224,6 +226,8 @@
       <DaytonaSidebar 
         :isOpen="showDaytonaSidebar"
         :streamingEvents="currentDaytonaEvents"
+        :isSharedConversation="isSharedConversation"
+        :shareToken="shareToken"
         @close="closeDaytonaSidebar"
         @expand-chart="openArtifact"
         @sidebar-state-changed="emit('daytona-sidebar-state-changed', $event)"
@@ -3076,13 +3080,27 @@ async function viewGeneratedFile(doc) {
   
   if (previewableTypes.includes(fileType)) {
     // Create a preview artifact and emit to open in sidebar/modal
+    let fileUrl;
+    let downloadUrl;
+    
+    // Use different endpoint based on whether this is a shared conversation
+    if (isSharedConversation.value && shareToken.value) {
+      // Use the public shared file endpoint
+      fileUrl = `${import.meta.env.VITE_API_URL}/share/${shareToken.value}/files/${doc.file_id}`;
+      downloadUrl = fileUrl;
+    } else {
+      // Use the authenticated endpoint
+      fileUrl = `${import.meta.env.VITE_API_URL}/files/${doc.file_id}`;
+      downloadUrl = fileUrl;
+    }
+    
     const artifact = {
       id: doc.file_id,
       title: doc.filename,
       type: fileType,
-      url: `${import.meta.env.VITE_API_URL}/files/${doc.file_id}`,
+      url: fileUrl,
       loading: true,
-      downloadUrl: `${import.meta.env.VITE_API_URL}/files/${doc.file_id}`,
+      downloadUrl: downloadUrl,
       preview: null
     };
     
@@ -3096,15 +3114,25 @@ async function viewGeneratedFile(doc) {
 
 async function downloadFile(doc) {
   try {
-    const response = await axios.get(
-      `${import.meta.env.VITE_API_URL}/files/${doc.file_id}`,
-      {
-        headers: {
-          Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
-        },
-        responseType: 'blob'
-      }
-    );
+    let downloadUrl;
+    let headers = {};
+    
+    // Use different endpoint based on whether this is a shared conversation
+    if (isSharedConversation.value && shareToken.value) {
+      // Use the public shared file endpoint
+      downloadUrl = `${import.meta.env.VITE_API_URL}/share/${shareToken.value}/files/${doc.file_id}`;
+    } else {
+      // Use the authenticated endpoint
+      downloadUrl = `${import.meta.env.VITE_API_URL}/files/${doc.file_id}`;
+      headers = {
+        Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+      };
+    }
+    
+    const response = await axios.get(downloadUrl, {
+      headers,
+      responseType: 'blob'
+    });
     
     if (!response.data) {
       throw new Error('No file data received');
@@ -3112,9 +3140,9 @@ async function downloadFile(doc) {
     
     // Create download link using the same approach as DaytonaSidebar
     const blob = new Blob([response.data]);
-    const url = window.URL.createObjectURL(blob);
+    const blobUrl = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = url;
+    link.href = blobUrl;
     
     // Use original filename with proper extension
     const extension = getFileExtensionFromFormat(doc.format);
@@ -3124,7 +3152,7 @@ async function downloadFile(doc) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    window.URL.revokeObjectURL(blobUrl);
     
     uploadStatus.value = {
       type: 'success',

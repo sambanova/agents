@@ -596,4 +596,5 @@ class RedisStorage:
             "messages": messages,
             "created_at": share_info["created_at"],
             "conversation_id": conversation_id,
+            "user_id": user_id,
         }
