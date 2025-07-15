@@ -1840,27 +1840,37 @@ const deepResearchPdfFilename = computed(() => {
 
 // Function to download PDF with authentication
 async function downloadPdf(fileId, filename) {
-  // Check if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
-    console.log('Skipping downloadPdf - user not authenticated');
-    return;
-  }
-
   try {
-    // Get the auth token from Clerk
-    const token = await window.Clerk.session.getToken();
+    let endpoint;
+    let headers = {};
     
-    if (!token) {
-      console.error('No authentication token found');
-      return;
+    // Use different endpoint based on whether this is a shared conversation
+    if (props.isSharedConversation && props.shareToken) {
+      // Use the public shared file endpoint
+      endpoint = `/api/share/${props.shareToken}/files/${fileId}`;
+    } else {
+      // Check if user is authenticated for regular conversations
+      if (!window.Clerk || !window.Clerk.session) {
+        console.log('Skipping downloadPdf - user not authenticated');
+        return;
+      }
+      
+      // Use the authenticated endpoint
+      endpoint = `/api/files/${fileId}`;
+      const token = await window.Clerk.session.getToken();
+      
+      if (!token) {
+        console.error('No authentication token found');
+        return;
+      }
+      
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
-    // Make authenticated request to download the PDF
-    const response = await fetch(`/api/files/${fileId}`, {
+    // Make request to download the PDF
+    const response = await fetch(endpoint, {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+      headers
     });
 
     // Check if the response is ok
