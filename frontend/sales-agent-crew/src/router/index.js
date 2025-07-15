@@ -1,7 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import MainLayout from '../views/MainLayout.vue'
-import LoginPage from '../views/LoginPage.vue'
-import TermsOfService from '../views/TermsOfService.vue'
+
+// Lazy load components for better performance
+const MainLayout = () => import('../views/MainLayout.vue')
+const LoginPage = () => import('../views/LoginPage.vue')
+const TermsOfService = () => import('../views/TermsOfService.vue')
+
 const routes = [
   {
     path: '/terms-of-service',
