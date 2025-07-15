@@ -1752,6 +1752,11 @@ const auditLogEvents = computed(() => {
           details = 'Visualizing data'
           dotClass = 'bg-gray-400'
           type = 'data_science_visualization_agent'
+        } else if (agentType === 'data_science_human_choice') {
+          title = `Human Choice`
+          details = 'Detecting user intent'
+          dotClass = 'bg-gray-400'
+          type = 'data_science_human_choice'
         }
       }
       

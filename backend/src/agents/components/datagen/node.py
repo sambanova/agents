@@ -146,6 +146,8 @@ You:
         [SystemMessage(content=prompt), HumanMessage(content=feedback)]
     )
 
+    result.additional_kwargs["agent_type"] = "data_science_human_choice"
+
     update_state = {}
 
     if "APPROVE" in result.content:

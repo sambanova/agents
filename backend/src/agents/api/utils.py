@@ -368,6 +368,7 @@ def to_agent_thinking(payload: dict) -> Optional[dict]:
         "data_science_note_agent": "Note Taker Agent",
         "data_science_report_agent": "Report Agent",
         "data_science_visualization_agent": "Visualization Agent",
+        "data_science_human_choice": "Human Choice",
     }
 
     try:
@@ -388,6 +389,7 @@ def to_agent_thinking(payload: dict) -> Optional[dict]:
             "data_science_note_agent",
             "data_science_report_agent",
             "data_science_visualization_agent",
+            "data_science_human_choice",
         ]:
             return {
                 "event": "think",
