@@ -279,7 +279,7 @@
               </button>
 
               <!-- Refined collapsible content -->
-              <div v-if="isExpanded" class="space-y-4">
+              <div v-if="isExpanded" class="space-y-2">
                 <!-- Uploaded Documents Section -->
                 <div v-if="uploadedFiles.length > 0">
                   <div class="flex items-center justify-between mb-2">
@@ -295,7 +295,7 @@
                     </div>
                   </div>
                   <HorizontalScroll>
-                    <div class="flex space-x-2 pb-1">
+                    <div class="flex space-x-2">
                       <div
                         v-for="doc in uploadedFiles"
                         :key="doc.file_id"
@@ -338,7 +338,7 @@
                     <h4 class="text-xs font-medium text-gray-600">Generated</h4>
                   </div>
                   <HorizontalScroll>
-                    <div class="flex space-x-2 pb-1">
+                    <div class="flex space-x-2 pb-2">
                       <div
                         v-for="doc in generatedFiles"
                         :key="doc.file_id"
