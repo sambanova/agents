@@ -403,6 +403,7 @@ async def list_chats(
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
     try:
+        start_time = time.time()
         user_id = get_user_id_from_token(token_data)
         if not user_id:
             return JSONResponse(
@@ -417,16 +418,90 @@ async def list_chats(
         if not conversation_ids:
             return JSONResponse(status_code=200, content={"chats": []})
 
-        # Get metadata for each conversation
+        # Optimize: Use controlled concurrent Redis calls to avoid connection pool exhaustion
+        meta_keys = [
+            f"chat_metadata:{user_id}:{conv_id}" for conv_id in conversation_ids
+        ]
+
+        # Limit concurrent connections to prevent pool exhaustion
+        # Use environment variable or default to 5 for safety
+        max_concurrent_connections = int(
+            os.getenv("REDIS_MAX_CONCURRENT_CONNECTIONS", "5")
+        )
+        semaphore = asyncio.Semaphore(max_concurrent_connections)
+
+        logger.debug(
+            f"Using max {max_concurrent_connections} concurrent Redis connections for user {user_id}"
+        )
+
+        async def get_metadata_with_semaphore(meta_key):
+            async with semaphore:
+                return await app.state.redis_client.get(meta_key, user_id)
+
+        # Try concurrent approach first
+        try:
+            # Execute metadata retrieval calls with controlled concurrency
+            meta_data_tasks = [
+                get_metadata_with_semaphore(meta_key) for meta_key in meta_keys
+            ]
+            meta_data_results = await asyncio.gather(
+                *meta_data_tasks, return_exceptions=True
+            )
+
+            # Check if we got connection errors
+            connection_errors = [
+                r
+                for r in meta_data_results
+                if isinstance(r, Exception) and "Too many connections" in str(r)
+            ]
+            if connection_errors:
+                logger.warning(
+                    f"Connection pool exhausted, falling back to sequential calls for user {user_id}"
+                )
+                raise Exception("Connection pool exhausted")
+
+        except Exception as e:
+            # Fallback to sequential calls if concurrent approach fails
+            logger.info(f"Using sequential Redis calls for user {user_id}")
+            meta_data_results = []
+            for meta_key in meta_keys:
+                try:
+                    result = await app.state.redis_client.get(meta_key, user_id)
+                    meta_data_results.append(result)
+                except Exception as get_error:
+                    logger.error(
+                        f"Failed to get metadata for key {meta_key}: {get_error}"
+                    )
+                    meta_data_results.append(None)
+
+        # Process results
         chats = []
-        for conv_id in conversation_ids:
-            meta_key = f"chat_metadata:{user_id}:{conv_id}"
-            meta_data = await app.state.redis_client.get(meta_key, user_id)
+        for i, meta_data in enumerate(meta_data_results):
+            if isinstance(meta_data, Exception):
+                logger.error(
+                    f"Failed to get metadata for conversation {conversation_ids[i]}: {meta_data}"
+                )
+                continue
+
             if meta_data:
-                data = json.loads(meta_data)
-                if "name" not in data:
-                    data["name"] = ""
-                chats.append(data)
+                try:
+                    data = json.loads(meta_data)
+                    if "name" not in data:
+                        data["name"] = ""
+                    chats.append(data)
+                except json.JSONDecodeError:
+                    logger.error(
+                        f"Failed to parse metadata for conversation {conversation_ids[i]}"
+                    )
+                    continue
+
+        duration = time.time() - start_time
+        logger.info(
+            f"Retrieved {len(chats)} chats for user {user_id} in {duration:.3f}s",
+            user_id=user_id,
+            chat_count=len(chats),
+            duration_ms=round(duration * 1000, 2),
+        )
 
         return JSONResponse(status_code=200, content={"chats": chats})
 
@@ -574,6 +649,7 @@ async def get_user_files(
 ):
     """Retrieve all documents and uploaded files for a user."""
     try:
+        start_time = time.time()
         user_id = get_user_id_from_token(token_data)
         if not user_id:
             return JSONResponse(
@@ -584,6 +660,14 @@ async def get_user_files(
         files = await app.state.redis_storage_service.list_user_files(user_id)
 
         files.sort(key=lambda x: x.get("created_at", 0), reverse=True)
+
+        duration = time.time() - start_time
+        logger.info(
+            f"Retrieved {len(files)} files for user {user_id} in {duration:.3f}s",
+            user_id=user_id,
+            file_count=len(files),
+            duration_ms=round(duration * 1000, 2),
+        )
 
         return JSONResponse(status_code=200, content={"documents": files})
 

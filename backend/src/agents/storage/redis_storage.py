@@ -373,6 +373,8 @@ class RedisStorage:
     async def list_user_files(self, user_id: str) -> list:
         """List all files for a user."""
         try:
+            import asyncio
+            import os
 
             user_files_key = self._get_user_files_key(user_id)
             file_ids = await self.redis_client.smembers(user_files_key)
@@ -380,14 +382,70 @@ class RedisStorage:
             if not file_ids:
                 return []
 
-            # Get metadata for each file
+            # Optimize: Use controlled concurrent Redis calls to avoid connection pool exhaustion
+            # Limit concurrent connections to prevent pool exhaustion
+            max_concurrent_connections = int(
+                os.getenv("REDIS_MAX_CONCURRENT_CONNECTIONS", "5")
+            )
+            semaphore = asyncio.Semaphore(max_concurrent_connections)
+
+            async def get_metadata_with_semaphore(file_id):
+                async with semaphore:
+                    if isinstance(file_id, bytes):
+                        file_id = file_id.decode("utf-8")
+                    metadata = await self.get_file_metadata(user_id, file_id)
+                    if metadata:
+                        metadata["file_id"] = file_id
+                    return metadata
+
+            # Try concurrent approach first
+            try:
+                # Execute metadata retrieval calls with controlled concurrency
+                metadata_tasks = [
+                    get_metadata_with_semaphore(file_id) for file_id in file_ids
+                ]
+                metadata_results = await asyncio.gather(
+                    *metadata_tasks, return_exceptions=True
+                )
+
+                # Check if we got connection errors
+                connection_errors = [
+                    r
+                    for r in metadata_results
+                    if isinstance(r, Exception) and "Too many connections" in str(r)
+                ]
+                if connection_errors:
+                    logger.warning(
+                        f"Connection pool exhausted, falling back to sequential calls for user {user_id}"
+                    )
+                    raise Exception("Connection pool exhausted")
+
+            except Exception as e:
+                # Fallback to sequential calls if concurrent approach fails
+                logger.info(f"Using sequential Redis calls for user {user_id}")
+                metadata_results = []
+                for file_id in file_ids:
+                    try:
+                        if isinstance(file_id, bytes):
+                            file_id = file_id.decode("utf-8")
+                        metadata = await self.get_file_metadata(user_id, file_id)
+                        if metadata:
+                            metadata["file_id"] = file_id
+                        metadata_results.append(metadata)
+                    except Exception as get_error:
+                        logger.error(
+                            f"Failed to get metadata for file {file_id}: {get_error}"
+                        )
+                        metadata_results.append(None)
+
+            # Process results
             files = []
-            for file_id in file_ids:
-                if isinstance(file_id, bytes):
-                    file_id = file_id.decode("utf-8")
-                metadata = await self.get_file_metadata(user_id, file_id)
+            for metadata in metadata_results:
+                if isinstance(metadata, Exception):
+                    logger.error(f"Failed to get file metadata: {metadata}")
+                    continue
+
                 if metadata:
-                    metadata["file_id"] = file_id
                     files.append(metadata)
 
             return files
