@@ -966,16 +966,8 @@ async def get_shared_file(share_token: str, file_id: str):
         file_referenced_in_conversation = False
         for message in conversation_messages:
             # Parse file references from the message content
-            content = message.get("content", "")
-            if content and message.get("type") != "HumanMessage":
-                file_references = parse_file_references_from_content(content)
-                if file_id in file_references:
-                    file_referenced_in_conversation = True
-                    break
-
-            # Also check for deep research PDF file ID in additional_kwargs
-            additional_kwargs = message.get("additional_kwargs", {})
-            if additional_kwargs.get("deep_research_pdf_file_id") == file_id:
+            files = message.get("additional_kwargs", {}).get("files", [])
+            if file_id in files:
                 file_referenced_in_conversation = True
                 break
 

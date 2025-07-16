@@ -1,9 +1,8 @@
-import asyncio
 import os
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable
 
 import structlog
 from agents.components.compound.data_types import LiberalFunctionMessage, LLMType
@@ -11,7 +10,6 @@ from agents.components.compound.prompts import xml_template
 from agents.components.compound.util import extract_api_key
 from agents.utils.logging_utils import setup_logging_context
 from langchain.tools import BaseTool
-from langchain.tools.render import render_text_description
 from langchain_core.language_models.base import LanguageModelLike
 from langchain_core.messages import (
     AIMessage,
@@ -19,11 +17,8 @@ from langchain_core.messages import (
     HumanMessage,
     SystemMessage,
 )
-from langchain_core.runnables import Runnable, RunnableConfig
-from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.checkpoint.memory import InMemorySaver
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.redis import AsyncRedisSaver
-from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import END
 from langgraph.graph.message import MessageGraph
 
@@ -272,7 +267,9 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
 
         def _describe_tool(_tool: BaseTool) -> str:
             """Return a rich, schema-aware description of a tool for the LLM prompt."""
-            import textwrap, json, inspect
+            import inspect
+            import json
+            import textwrap
 
             # Start with name + description
             lines: list[str] = [f"{_tool.name}: {_tool.description}"]
@@ -586,8 +583,9 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 
                 def smart_json_extract(text):
                     """Extract JSON from text using multiple strategies."""
-                    import json, re
-                    
+                    import json
+                    import re
+
                     # Strategy 1: Clean JSON (starts and ends with braces)
                     if text.startswith('{') and text.endswith('}'):
                         try:

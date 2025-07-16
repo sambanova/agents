@@ -34,17 +34,6 @@ from starlette.websockets import WebSocketState
 logger = structlog.get_logger(__name__)
 
 
-def test_function(x):
-    return AIMessage(
-        content=x["final_report"],
-        name="DeepResearch",
-        additional_kwargs={
-            "agent_type": "deep_research_end",
-            "files": x["files"],
-        },
-    )
-
-
 class WebSocketConnectionManager(WebSocketInterface):
     """
     Manages WebSocket connections for user sessions.
@@ -686,14 +675,21 @@ If the user includes any datasets you MUST use the data_science subgraph to anal
                 "description": "This subgraph generates comprehensive research reports with multiple perspectives, sources, and analysis. Use when the user requests: detailed research, in-depth analysis, comprehensive reports, market research, academic research, or thorough investigation of any topic. IMPORTANT: Pass the user's specific research question or topic as a clear, focused query. Extract the core research intent from the user's message and formulate it as a specific research question or topic statement. Examples: 'AI impact on healthcare industry', 'sustainable energy solutions for developing countries', 'cryptocurrency market trends 2024'.",
                 "next_node": END,
                 "graph": create_deep_research_graph(
-                    api_keys.sambanova_key,
-                    "sambanova",
+                    api_key=api_keys.sambanova_key,
+                    provider="sambanova",
                     request_timeout=120,
                     redis_storage=self.message_storage,
                     user_id=user_id,
                 ),
                 "state_input_mapper": lambda x: {"topic": x},
-                "state_output_mapper": test_function,
+                "state_output_mapper": lambda x: AIMessage(
+                    content=x["final_report"],
+                    name="DeepResearch",
+                    additional_kwargs={
+                        "agent_type": "deep_research_end",
+                        "files": x["files"],
+                    },
+                ),
             },
             "DaytonaCodeSandbox": {
                 "description": "This subgraph executes Python code in a secure sandbox environment. Use for: data exploration, basic analysis, code debugging, file operations, simple calculations, data visualization, and any general programming tasks. Perfect for examining datasets, creating plots, or running straightforward code snippets.",

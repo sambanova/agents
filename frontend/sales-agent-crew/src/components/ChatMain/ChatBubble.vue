@@ -236,7 +236,7 @@
           <!-- PDF Download Button for Deep Research - Moved to bottom -->
           <div v-if="deepResearchPdfFileId" class="mt-4 flex justify-center">
             <button 
-              @click="downloadPdf(deepResearchPdfFileId, deepResearchPdfFilename)"
+              @click="downloadPdf(deepResearchPdfFileId, 'deep_research_report.pdf')"
               class="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg text-sm text-white font-medium transition-colors shadow-sm hover:shadow-md"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1781,61 +1781,16 @@ const deepResearchPdfFileId = computed(() => {
   if (props.streamingEvents) {
     const event = props.streamingEvents.find(e => 
       e.event === 'agent_completion' && 
-      e.additional_kwargs?.agent_type === 'deep_research_end' &&
-      e.additional_kwargs?.deep_research_pdf_file_id
+      e.data?.additional_kwargs?.agent_type === 'deep_research_end' &&
+      e.data?.additional_kwargs?.files
     );
     if (event) {
-      return event.additional_kwargs.deep_research_pdf_file_id;
+      return event.data.additional_kwargs.files[0];
     }
-    
-    // Also check if the data is nested differently
-    const eventWithData = props.streamingEvents.find(e => 
-      e.event === 'agent_completion' && 
-      e.data?.additional_kwargs?.agent_type === 'deep_research_end' &&
-      e.data?.additional_kwargs?.deep_research_pdf_file_id
-    );
-    if (eventWithData) {
-      return eventWithData.data.additional_kwargs.deep_research_pdf_file_id;
+    else {
+      return null;
     }
   }
-  
-  // Check parsed data for non-streaming messages
-  if (parsedData.value?.additional_kwargs?.deep_research_pdf_file_id) {
-    return parsedData.value.additional_kwargs.deep_research_pdf_file_id;
-  }
-  
-  return null;
-})
-
-const deepResearchPdfFilename = computed(() => {
-  // Check streaming events first
-  if (props.streamingEvents) {
-    const event = props.streamingEvents.find(e => 
-      e.event === 'agent_completion' && 
-      e.additional_kwargs?.agent_type === 'deep_research_end' &&
-      e.additional_kwargs?.deep_research_pdf_filename
-    );
-    if (event) {
-      return event.additional_kwargs.deep_research_pdf_filename;
-    }
-    
-    // Also check if the data is nested differently
-    const eventWithData = props.streamingEvents.find(e => 
-      e.event === 'agent_completion' && 
-      e.data?.additional_kwargs?.agent_type === 'deep_research_end' &&
-      e.data?.additional_kwargs?.deep_research_pdf_filename
-    );
-    if (eventWithData) {
-      return eventWithData.data.additional_kwargs.deep_research_pdf_filename;
-    }
-  }
-  
-  // Check parsed data for non-streaming messages
-  if (parsedData.value?.additional_kwargs?.deep_research_pdf_filename) {
-    return parsedData.value.additional_kwargs.deep_research_pdf_filename;
-  }
-  
-  return null;
 })
 
 // Function to download PDF with authentication

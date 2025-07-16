@@ -50,6 +50,7 @@ class ReportStateInput(TypedDict):
 
 class ReportStateOutput(TypedDict):
     final_report: str  # Final report
+    files: list[str]  # List of files from the agent
 
 
 class ReportState(TypedDict):
