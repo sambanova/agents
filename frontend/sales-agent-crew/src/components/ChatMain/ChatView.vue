@@ -3,7 +3,7 @@
     <!-- Share notification toast -->
     <div 
       v-if="shareNotification"
-      class="fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transition-all duration-300"
+      class="fixed top-4 right-4 z-[60] px-4 py-3 rounded-lg shadow-lg transition-all duration-300"
       :class="shareNotification.type === 'success' ? 'bg-gray-600 text-white' : 'bg-red-500 text-white'"
     >
       <div class="flex items-center space-x-2">
