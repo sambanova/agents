@@ -34,6 +34,17 @@ from starlette.websockets import WebSocketState
 logger = structlog.get_logger(__name__)
 
 
+def test_function(x):
+    return AIMessage(
+        content=x["final_report"],
+        name="DeepResearch",
+        additional_kwargs={
+            "agent_type": "deep_research_end",
+            "files": x["files"],
+        },
+    )
+
+
 class WebSocketConnectionManager(WebSocketInterface):
     """
     Manages WebSocket connections for user sessions.
@@ -550,58 +561,6 @@ class WebSocketConnectionManager(WebSocketInterface):
                 if cumulative_usage:
                     data["cumulative_usage_metadata"] = cumulative_usage
 
-                # Check if this is a deep_research_end message and generate PDF
-                if (
-                    data.get("event") == "agent_completion"
-                    and data.get("additional_kwargs", {}).get("agent_type")
-                    == "deep_research_end"
-                ):
-
-                    try:
-                        # Extract the final_report content from the message
-                        final_report_content = data.get("content", "")
-
-                        # Try to parse as JSON to get the structured data
-                        if final_report_content:
-                            pdf_result = await generate_deep_research_pdf(
-                                final_report_content
-                            )
-                            if pdf_result:
-                                file_id, filename, pdf_data = pdf_result
-
-                                # Store the PDF file in Redis
-                                await self.message_storage.put_file(
-                                    user_id=user_id,
-                                    file_id=file_id,
-                                    data=pdf_data,
-                                    filename=filename,
-                                    format="application/pdf",
-                                    upload_timestamp=time.time(),
-                                    indexed=False,
-                                    source="deep_research_pdf",
-                                    vector_ids=[],
-                                )
-
-                                data["additional_kwargs"][
-                                    "deep_research_pdf_file_id"
-                                ] = file_id
-                                data["additional_kwargs"][
-                                    "deep_research_pdf_filename"
-                                ] = filename
-
-                                logger.info(
-                                    "PDF generated and attached to deep research message",
-                                    file_id=file_id,
-                                    filename=filename,
-                                )
-
-                    except Exception as e:
-                        logger.error(
-                            "Failed to generate PDF for deep research report",
-                            error=str(e),
-                        )
-                        # Continue without PDF - don't fail the message sending
-
                 content = to_agent_thinking(data)
                 if content:
                     # Map to old format persist it and send it
@@ -727,15 +686,14 @@ If the user includes any datasets you MUST use the data_science subgraph to anal
                 "description": "This subgraph generates comprehensive research reports with multiple perspectives, sources, and analysis. Use when the user requests: detailed research, in-depth analysis, comprehensive reports, market research, academic research, or thorough investigation of any topic. IMPORTANT: Pass the user's specific research question or topic as a clear, focused query. Extract the core research intent from the user's message and formulate it as a specific research question or topic statement. Examples: 'AI impact on healthcare industry', 'sustainable energy solutions for developing countries', 'cryptocurrency market trends 2024'.",
                 "next_node": END,
                 "graph": create_deep_research_graph(
-                    api_keys.sambanova_key, "sambanova", request_timeout=120
+                    api_keys.sambanova_key,
+                    "sambanova",
+                    request_timeout=120,
+                    redis_storage=self.message_storage,
+                    user_id=user_id,
                 ),
                 "state_input_mapper": lambda x: {"topic": x},
-                "state_output_mapper": lambda x: AIMessage(
-                    content=x["final_report"],
-                    additional_kwargs={
-                        "agent_type": "deep_research_end",
-                    },
-                ),
+                "state_output_mapper": test_function,
             },
             "DaytonaCodeSandbox": {
                 "description": "This subgraph executes Python code in a secure sandbox environment. Use for: data exploration, basic analysis, code debugging, file operations, simple calculations, data visualization, and any general programming tasks. Perfect for examining datasets, creating plots, or running straightforward code snippets.",
@@ -752,6 +710,7 @@ If the user includes any datasets you MUST use the data_science subgraph to anal
                     "error_log": "",
                     "final_result": "",
                     "corrections_proposed": [],
+                    "files": [],
                 },
                 "state_output_mapper": lambda x: LiberalFunctionMessage(
                     name="DaytonaCodeSandbox",
@@ -759,6 +718,7 @@ If the user includes any datasets you MUST use the data_science subgraph to anal
                     additional_kwargs={
                         "agent_type": "tool_response",
                         "timestamp": datetime.now().isoformat(),
+                        "files": x["files"],
                     },
                     # TODO: Mesure latency for code execution
                     result={"useage": {"total_latency": 0.0}},

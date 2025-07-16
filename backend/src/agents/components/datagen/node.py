@@ -357,6 +357,7 @@ async def refiner_node(
     If token limit is exceeded, use only MD file names instead of full content.
     """
     logger.info(f"Processing refiner node: {name} for user {user_id}")
+    files = []
     try:
         # Get storage path
         storage_path = await daytona_manager.list_files()
@@ -407,8 +408,10 @@ async def refiner_node(
             refiner_state["internal_messages"] = [
                 AIMessage(
                     content=simplified_report_content,
+                    name=name,
                     id=str(uuid.uuid4()),
                     sender=name,
+                    additional_kwargs={"files": files},
                 )
             ]
             result = await agent.ainvoke(refiner_state)
@@ -429,6 +432,7 @@ async def refiner_node(
                     logger.error(f"Failed to read file for storage: {file_name}")
                     continue
                 mime_type = mimetypes.guess_type(file_name)[0]
+                files.append(file_id)
                 await redis_storage.put_file(
                     user_id,
                     file_id,
@@ -450,6 +454,7 @@ async def refiner_node(
                 sender=name,
                 usage_metadata=result.usage_metadata,
                 response_metadata=result.response_metadata,
+                additional_kwargs={"files": files},
             )
         )
         state["sender"] = name
@@ -464,6 +469,7 @@ async def refiner_node(
                 name=name,
                 id=str(uuid.uuid4()),
                 sender=name,
+                additional_kwargs={"files": files},
             )
         )
         return state

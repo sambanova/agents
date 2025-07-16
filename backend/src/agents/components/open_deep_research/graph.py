@@ -8,7 +8,8 @@ import requests
 import structlog
 
 # We import our data models
-from agents.api.data_types import DeepCitation, DeepResearchReport, DeepResearchSection
+from agents.api.data_types import DeepCitation, DeepResearchSection
+from agents.api.utils import generate_deep_research_pdf
 from agents.components.open_deep_research.configuration import Configuration, SearchAPI
 from agents.components.open_deep_research.prompts import (
     final_section_writer_instructions,
@@ -24,7 +25,6 @@ from agents.components.open_deep_research.state import (
     ReportState,
     ReportStateInput,
     ReportStateOutput,
-    Section,
     SectionOutputState,
     Sections,
     SectionState,
@@ -36,11 +36,12 @@ from agents.components.open_deep_research.utils import (
     tavily_search_async,
 )
 from agents.registry.model_registry import model_registry
+from agents.storage.redis_storage import RedisStorage
 from agents.utils.custom_sambanova import CustomChatSambaNovaCloud
 from agents.utils.logging_utils import setup_logging_context
 from agents.utils.message_interceptor import MessageInterceptor
 from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig, RunnableLambda
 from langchain_fireworks import ChatFireworks
 from langgraph.constants import Send
@@ -694,7 +695,12 @@ async def initiate_final_section_writing(state: ReportState, config: RunnableCon
     ]
 
 
-async def compile_final_report(state: ReportState, config: RunnableConfig):
+async def compile_final_report(
+    state: ReportState,
+    config: RunnableConfig,
+    redis_storage: RedisStorage,
+    user_id: str,
+):
     configurable = Configuration.from_runnable_config(config)
     session_id = get_session_id_from_config(configurable)
     setup_logging_context(config, node="compile_final_report", session_id=session_id)
@@ -751,10 +757,41 @@ async def compile_final_report(state: ReportState, config: RunnableConfig):
         num_sections=len(deep_sections),
         num_citations=len(all_citations),
     )
-    report = DeepResearchReport(
-        sections=deep_sections, final_report=final_text, citations=all_citations
-    )
-    return {"final_report": final_text, "deep_research_report": report}
+    files = []
+    try:
+        # Generate PDF
+        if final_text:
+            pdf_result = await generate_deep_research_pdf(final_text)
+            if pdf_result:
+                file_id, filename, pdf_data = pdf_result
+
+                files.append(file_id)
+                # Store the PDF file in Redis
+                await redis_storage.put_file(
+                    user_id=user_id,
+                    file_id=file_id,
+                    data=pdf_data,
+                    filename=filename,
+                    format="application/pdf",
+                    upload_timestamp=time.time(),
+                    indexed=False,
+                    source="deep_research_pdf",
+                    vector_ids=[],
+                )
+
+                logger.info(
+                    "PDF generated and attached to deep research message",
+                    file_id=file_id,
+                    filename=filename,
+                )
+
+    except Exception as e:
+        logger.error(
+            "Failed to generate PDF for deep research report",
+            error=str(e),
+        )
+        # Continue without PDF - don't fail the message sending
+    return {"final_report": final_text, "files": files}
 
 
 async def summarize_documents(
@@ -812,7 +849,13 @@ async def summarize_documents(
     )
 
 
-def create_deep_research_graph(api_key: str, provider: str, request_timeout: int = 120):
+def create_deep_research_graph(
+    api_key: str,
+    provider: str,
+    redis_storage: RedisStorage,
+    user_id: str,
+    request_timeout: int = 120,
+):
     """
     Create and configure the graph for deep research.
 
@@ -919,7 +962,12 @@ def create_deep_research_graph(api_key: str, provider: str, request_timeout: int
     builder.add_node(
         "write_final_sections", functools.partial(write_final_sections, writer_model)
     )
-    builder.add_node("compile_final_report", compile_final_report)
+    builder.add_node(
+        "compile_final_report",
+        functools.partial(
+            compile_final_report, redis_storage=redis_storage, user_id=user_id
+        ),
+    )
 
     builder.add_edge(START, "generate_report_plan")
     builder.add_edge("generate_report_plan", "human_feedback")

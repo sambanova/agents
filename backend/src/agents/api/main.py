@@ -16,8 +16,6 @@ from agents.components.compound.xml_agent import (
     create_checkpointer,
     set_global_checkpointer,
 )
-from agents.components.routing.route import SemanticRouterAgent
-from agents.components.routing.user_proxy import UserProxyAgent
 from agents.rag.upload import convert_ingestion_input_to_blob, ingest_runnable
 from agents.storage.global_services import (
     get_secure_redis_client,
@@ -92,8 +90,6 @@ async def lifespan(app: FastAPI):
         redis_client=app.state.redis_client,
         sync_redis_client=app.state.sync_redis_client,
     )
-    UserProxyAgent.connection_manager = app.state.manager
-    SemanticRouterAgent.connection_manager = app.state.manager
 
     # Create checkpointer using the existing Redis client
     app.state.checkpointer = create_checkpointer(app.state.redis_client)

@@ -1,5 +1,4 @@
 import json
-import os
 import re
 import uuid
 from datetime import datetime
@@ -8,18 +7,8 @@ from typing import List, Optional
 
 import markdown
 import structlog
-from agents.api.data_types import APIKeys
 from agents.api.session_state import SessionStateManager
-from agents.api.websocket_interface import WebSocketInterface
-from agents.components.routing.assistant import AssistantAgentWrapper
-from agents.components.routing.deep_research_agent import DeepResearchAgent
-from agents.components.routing.educational_content import EducationalContentAgent
-from agents.components.routing.financial_analysis import FinancialAnalysisAgent
-from agents.components.routing.route import SemanticRouterAgent
-from agents.components.routing.sales_leads import SalesLeadsAgent
-from agents.components.routing.user_proxy import UserProxyAgent
 from agents.storage.redis_service import SecureRedisService
-from autogen_core import DefaultSubscription, SingleThreadedAgentRuntime
 from weasyprint import HTML
 
 logger = structlog.get_logger(__name__)
@@ -36,99 +25,6 @@ class DocumentContextLengthError(Exception):
         super().__init__(
             f"Combined documents exceed maximum context window size of {max_tokens} tokens (got {total_tokens} tokens). Please reduce the number or size of documents."
         )
-
-
-async def initialize_agent_runtime(
-    redis_client: SecureRedisService,
-    api_keys: APIKeys,
-    user_id: str,
-    conversation_id: str,
-    websocket_manager: WebSocketInterface,
-) -> SingleThreadedAgentRuntime:
-    """
-    Initializes the agent runtime with the required agents and tools.
-
-    Returns:
-        SingleThreadedAgentRuntime: The initialized runtime for managing agents.
-    """
-    global session_state_manager, aoai_model_client
-
-    # load back session state
-    session_state_manager.init_conversation(redis_client, user_id, conversation_id)
-
-    agent_runtime = SingleThreadedAgentRuntime(tracer_provider=tracer)
-
-    # Add subscriptions
-    logger.info("Adding user proxy subscription")
-    await agent_runtime.add_subscription(
-        DefaultSubscription(topic_type="user_proxy", agent_type="user_proxy")
-    )
-
-    # Register Semantic Router Agent
-    await SemanticRouterAgent.register(
-        agent_runtime,
-        "router",
-        lambda: SemanticRouterAgent(
-            name="SemanticRouterAgent",
-            session_manager=session_state_manager,
-            websocket_manager=websocket_manager,
-            redis_client=redis_client,
-            api_keys=api_keys,
-        ),
-    )
-
-    await FinancialAnalysisAgent.register(
-        agent_runtime,
-        "financial_analysis",
-        lambda: FinancialAnalysisAgent(api_keys=api_keys, redis_client=redis_client),
-    )
-
-    # Keep old educational content agent for "basic" usage
-    await EducationalContentAgent.register(
-        agent_runtime,
-        "educational_content",
-        lambda: EducationalContentAgent(api_keys=api_keys),
-    )
-
-    await SalesLeadsAgent.register(
-        agent_runtime,
-        "sales_leads",
-        lambda: SalesLeadsAgent(api_keys=api_keys, redis_client=redis_client),
-    )
-
-    await AssistantAgentWrapper.register(
-        agent_runtime,
-        "assistant",
-        lambda: AssistantAgentWrapper(api_keys=api_keys, redis_client=redis_client),
-    )
-
-    # Register the new deep research agent:
-    await DeepResearchAgent.register(
-        agent_runtime,
-        "deep_research",
-        lambda: DeepResearchAgent(
-            api_keys=api_keys,
-            redis_client=redis_client,
-        ),
-    )
-
-    # Register the UserProxyAgent instance with the AgentRuntime
-    await UserProxyAgent.register(
-        agent_runtime,
-        "user_proxy",
-        lambda: UserProxyAgent(
-            session_manager=session_state_manager,
-            websocket_manager=websocket_manager,
-            redis_client=redis_client,
-        ),
-    )
-
-    # Start the runtime
-    agent_runtime.start()
-
-    logger.info("Agent runtime initialized successfully.")
-
-    return agent_runtime
 
 
 def estimate_tokens_regex(text: str) -> int:

@@ -1,10 +1,11 @@
 import html
 import mimetypes
+from operator import add
 import os
 import re
 import time
 import uuid
-from typing import Dict, List, Optional, TypedDict
+from typing import Annotated, Dict, List, Optional, TypedDict
 
 import structlog
 from agents.components.open_deep_research.utils import APIKeyRotator
@@ -124,6 +125,7 @@ class CorrectingExecutorState(TypedDict):
     search_context: Optional[str]
     needs_research: bool
     correction_feedback: Optional[str]
+    files: Annotated[list[str], add]
 
 
 def create_code_execution_graph(
@@ -231,19 +233,17 @@ def create_code_execution_graph(
         result: Dict = {}
         sandbox = None
         daytona = None
+        files = []
         try:
-            # 1. Setup clients
             config = DaytonaSDKConfig(api_key=api_key)
             daytona = DaytonaClient(config)
 
-            # 2. Create sandbox
             params = CreateSandboxFromSnapshotParams(
                 snapshot=daytona_snapshot,
             )
             sandbox = await daytona.create(params=params)
             list_of_files = [f.name for f in await sandbox.fs.list_files(".")]
 
-            # 3. Run code and handle errors without returning
             response = None
             execution_successful = False
             try:
@@ -274,7 +274,6 @@ def create_code_execution_graph(
                     "current_retry": state["current_retry"] + 1,
                 }
 
-            # 4. If execution was successful, process artifacts
             if execution_successful and response:
                 result_str = f"Code executed successfully, result from the sandbox:\n\n {str(response.result) if response.result is not None else ''}"
 
@@ -348,6 +347,7 @@ def create_code_execution_graph(
                                 )
 
                             if redis_storage:
+                                files.append(file_id)
                                 await redis_storage.put_file(
                                     user_id,
                                     file_id,
@@ -376,6 +376,7 @@ def create_code_execution_graph(
 
                                 chart_data = base64.b64decode(chart.png)
                                 if redis_storage:
+                                    files.append(image_id)
                                     await redis_storage.put_file(
                                         user_id,
                                         image_id,
@@ -412,6 +413,7 @@ def create_code_execution_graph(
                     "final_result": result_str,
                     "current_retry": state["current_retry"] + 1,
                     "error_log": "",
+                    "files": files,
                 }
 
         except Exception as e:
