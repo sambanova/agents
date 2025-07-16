@@ -3,9 +3,9 @@
        :class="{ 'w-1/2': !isCollapsed, 'w-16': isCollapsed }">
     
     <!-- Header -->
-    <div class="flex items-center justify-between p-4 border-b bg-gradient-to-r from-blue-50 to-purple-50">
+    <div class="flex items-center justify-between p-4 border-b bg-white">
       <div v-if="!isCollapsed" class="flex items-center space-x-3">
-        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+        <div class="w-8 h-8 bg-primary-brandColor rounded-lg flex items-center justify-center">
           <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
           </svg>
@@ -18,7 +18,7 @@
       
       <!-- Collapsed header -->
       <div v-else class="flex flex-col items-center space-y-2 w-full">
-        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+        <div class="w-8 h-8 bg-primary-brandColor rounded-lg flex items-center justify-center">
           <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
           </svg>
@@ -58,12 +58,12 @@
       <!-- Status Section -->
       <div class="p-4 border-b bg-gray-50">
         <div class="flex items-center space-x-3">
-          <div :class="statusDotClass" class="w-3 h-3 rounded-full flex-shrink-0"></div>
+          
           <div class="flex-1">
             <div class="flex items-center space-x-2">
               <span class="text-sm font-medium text-gray-900">{{ currentStatus }}</span>
               <div v-if="isProcessing" class="animate-spin">
-                <svg class="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <svg class="w-4 h-4 text-primary-brandColor" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                 </svg>
@@ -81,7 +81,7 @@
           <div class="flex items-center justify-between mb-3">
             <button
               @click="toggleCodeSection"
-              class="flex items-center space-x-2 text-left hover:text-blue-600 transition-colors"
+              class="flex items-center space-x-2 text-left hover:text-primary-brandColor transition-colors"
             >
               <svg :class="{ 'rotate-90': codeExpanded }" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -130,7 +130,7 @@
           <div class="flex items-center justify-between mb-3">
             <button
               @click="toggleArtifactsSection"
-              class="flex items-center space-x-2 text-left hover:text-blue-600 transition-colors"
+              class="flex items-center space-x-2 text-left hover:text-primary-brandColor transition-colors"
             >
               <svg :class="{ 'rotate-90': artifactsExpanded }" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -152,23 +152,23 @@
                   <div class="flex items-center space-x-2">
                     <!-- File Type Icon -->
                     <div class="w-6 h-6 flex items-center justify-center">
-                      <svg v-if="artifact.type === 'image'" class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg v-if="artifact.type === 'image'" class="w-4 h-4 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                       </svg>
-                      <svg v-else-if="artifact.type === 'pdf'" class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg v-else-if="artifact.type === 'pdf'" class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                       </svg>
-                      <svg v-else-if="artifact.type === 'markdown'" class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg v-else-if="artifact.type === 'markdown'" class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
                       </svg>
-                      <svg v-else-if="artifact.type === 'html'" class="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg v-else-if="artifact.type === 'html'" class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
                       </svg>
-                      <svg v-else-if="artifact.type === 'powerpoint'" class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg v-else-if="artifact.type === 'powerpoint'" class="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 8h8M8 12h8M8 16h4"></path>
                       </svg>
-                      <svg v-else-if="artifact.type === 'csv'" class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg v-else-if="artifact.type === 'csv'" class="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9h6M9 12h6M9 15h6"></path>
                       </svg>
@@ -204,7 +204,7 @@
               
               <div class="p-4">
                 <div v-if="artifact.loading" class="flex items-center justify-center h-40">
-                  <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                  <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-brandColor"></div>
                 </div>
                 
                 <!-- Image Preview -->
@@ -229,7 +229,7 @@
                       </div>
                       <button 
                         @click.stop="downloadArtifact(artifact)"
-                        class="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 transition-colors"
+                        class="text-xs bg-primary-brandColor text-white px-2 py-1 rounded hover:bg-primary-700 transition-colors"
                       >
                         Download
                       </button>
@@ -247,7 +247,7 @@
                 <!-- PowerPoint Download Interface -->
                 <div v-else-if="artifact.type === 'powerpoint'" class="bg-gray-100 rounded-lg p-4 text-center hover:bg-gray-200 transition-colors cursor-pointer"
                      @click="downloadArtifact(artifact)">
-                  <svg class="w-12 h-12 mx-auto mb-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg class="w-12 h-12 mx-auto mb-3 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 8h8M8 12h8M8 16h4"></path>
                   </svg>
@@ -255,7 +255,7 @@
                   <p class="text-xs text-gray-600 mb-3">{{ artifact.title }}</p>
                   <button 
                     @click.stop="downloadArtifact(artifact)"
-                    class="inline-flex items-center space-x-2 bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition-colors"
+                    class="inline-flex items-center space-x-2 bg-primary-brandColor text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
@@ -412,23 +412,23 @@
               @click="expandArtifact(artifact)"
             >
               <div class="flex items-center justify-center mb-1">
-                <svg v-if="artifact.type === 'image'" class="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg v-if="artifact.type === 'image'" class="w-3 h-3 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                 </svg>
-                <svg v-else-if="artifact.type === 'pdf'" class="w-3 h-3 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg v-else-if="artifact.type === 'pdf'" class="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
-                <svg v-else-if="artifact.type === 'markdown'" class="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg v-else-if="artifact.type === 'markdown'" class="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
                 </svg>
-                <svg v-else-if="artifact.type === 'html'" class="w-3 h-3 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg v-else-if="artifact.type === 'html'" class="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
                 </svg>
-                                 <svg v-else-if="artifact.type === 'powerpoint'" class="w-3 h-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                 <svg v-else-if="artifact.type === 'powerpoint'" class="w-3 h-3 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 8h8M8 12h8M8 16h4"></path>
                  </svg>
-                <svg v-else-if="artifact.type === 'csv'" class="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg v-else-if="artifact.type === 'csv'" class="w-3 h-3 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
                 <svg v-else class="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -449,7 +449,7 @@
         <div class="flex items-center justify-between mb-3">
           <button
             @click="toggleLogSection"
-            class="flex items-center space-x-2 text-left hover:text-blue-600 transition-colors"
+            class="flex items-center space-x-2 text-left hover:text-primary-brandColor transition-colors"
           >
             <svg :class="{ 'rotate-90': logExpanded }" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -476,9 +476,9 @@
     <div v-else class="flex flex-col items-center justify-center h-full space-y-4 p-2">
       <!-- Status Indicator -->
       <div class="flex flex-col items-center space-y-2">
-        <div :class="statusDotClass" class="w-4 h-4 rounded-full"></div>
+        
         <div v-if="isProcessing" class="animate-spin">
-          <svg class="w-5 h-5 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <svg class="w-5 h-5 text-primary-brandColor" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
           </svg>
@@ -488,16 +488,16 @@
       <!-- Section Indicators -->
       <div class="flex flex-col space-y-3">
         <!-- Code Indicator -->
-        <div v-if="codeContent" class="flex items-center justify-center w-8 h-8 bg-green-100 rounded-lg" title="Code Available">
-          <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div v-if="codeContent" class="flex items-center justify-center w-8 h-8 bg-primary-50 rounded-lg" title="Code Available">
+          <svg class="w-4 h-4 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
           </svg>
         </div>
         
         <!-- Artifacts Indicator -->
         <div v-if="artifacts.length > 0" class="flex flex-col items-center">
-          <div class="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-lg" title="Files Available">
-            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="flex items-center justify-center w-8 h-8 bg-primary-50 rounded-lg" title="Files Available">
+            <svg class="w-4 h-4 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
           </div>
@@ -561,8 +561,8 @@ const codeContainer = ref(null)
 
 // Computed properties
 const statusDotClass = computed(() => {
-  if (isProcessing.value) return 'bg-blue-500 animate-pulse'
-  if (artifacts.value.length > 0) return 'bg-green-500'
+  if (isProcessing.value) return 'bg-primary-brandColor animate-pulse'
+  if (artifacts.value.length > 0) return 'bg-primary-brandColor'
   return 'bg-yellow-500'
 })
 
@@ -906,14 +906,14 @@ function processStreamingEvents(events) {
       updateStatus('⏳ Ready for analysis', 'Waiting for code execution')
     } else if (codeDetected || artifactCount > 0) {
       // Update status to show loaded state
-      updateStatus('✅ Historical analysis loaded', `Code and ${artifactCount} files from conversation`)
+      updateStatus('Historical analysis loaded', `Code and ${artifactCount} files from conversation`)
     }
 
     // Update processed length so we can detect resets next time
     lastEventsLength.value = events.length
   } catch (error) {
     console.error('Error processing streaming events in DaytonaSidebar:', error);
-    updateStatus('❌ Error', 'Failed to process conversation history.')
+    updateStatus('Error', 'Failed to process conversation history.')
     addToLog('Error processing streaming events: ' + error.message, 'error', new Date().toISOString())
   }
 }
@@ -1475,8 +1475,8 @@ watch(isCollapsed, (newCollapsed) => {
 }
 
 .viewer-header {
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #f8fafc 0%, #f9fafb 100%);
+  border-bottom: 1px solid #f3f4f6;
 }
 
 .csv-table {
@@ -1496,5 +1496,6 @@ watch(isCollapsed, (newCollapsed) => {
   padding: 0.125rem 0.25rem;
   border-radius: 0.25rem;
   font-size: 0.875em;
+  color: #4E226B;
 }
 </style> 
