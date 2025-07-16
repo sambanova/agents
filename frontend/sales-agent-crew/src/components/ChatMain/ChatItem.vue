@@ -5,10 +5,22 @@
     :class="{
       'bg-primary-brandDarkGray rounded-md border border-primary-brandFrame':
         isActive,
+      'bg-blue-50 border-blue-200': isMultiSelectMode && isSelected,
     }"
   >
-    <!-- Menu button: visible on hover -->
+    <!-- Checkbox for multi-select mode -->
+    <div v-if="isMultiSelectMode" class="absolute left-2 top-1/2 transform -translate-y-1/2 z-30">
+      <input
+        type="checkbox"
+        :checked="isSelected"
+        @click.stop="onToggleSelection"
+        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+      />
+    </div>
+
+    <!-- Menu button: visible on hover (only in normal mode) -->
     <button
+      v-if="!isMultiSelectMode"
       type="button"
       class="absolute right-1 top-1 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
       @click.stop="toggleMenu"
@@ -38,7 +50,7 @@
     />
 
     <!-- Conversation details -->
-    <div class="w-full relative h-full">
+    <div class="w-full relative h-full" :class="{ 'ml-6': isMultiSelectMode }">
       <div class="text-sm capitalize color-primary-brandGray truncate">
         {{ conversation.name ? conversation.name : 'New Chat' }}
       </div>
@@ -61,6 +73,14 @@ const props = defineProps({
     type: [String, Number],
     default: null,
   },
+  isMultiSelectMode: {
+    type: Boolean,
+    default: false,
+  },
+  isSelected: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 // Emit events for selection and menu actions.
@@ -69,6 +89,7 @@ const emit = defineEmits([
   'delete-chat',
   'share-chat',
   'download-chat',
+  'toggle-selection',
 ]);
 
 const activeMenu = ref(false);
@@ -80,8 +101,19 @@ const isActive = computed(
 
 // Function to handle chat selection.
 function onSelectConversation() {
-  emit('select-conversation', props.conversation);
-  activeMenu.value = false;
+  if (props.isMultiSelectMode) {
+    // In multi-select mode, toggle selection
+    onToggleSelection();
+  } else {
+    // Normal mode - emit selection event
+    emit('select-conversation', props.conversation);
+    activeMenu.value = false;
+  }
+}
+
+// Function to handle selection toggle in multi-select mode
+function onToggleSelection() {
+  emit('toggle-selection', props.conversation.conversation_id);
 }
 
 // Toggle menu visibility.

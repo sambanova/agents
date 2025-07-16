@@ -1020,7 +1020,15 @@ async function loadPreviousChat(convId) {
     console.error('Error loading previous chat:', err);
     // Don't show error message for specific DaytonaSidebar errors
     if (!err.message?.includes('content.match is not a function')) {
-      errorMessage.value = 'Failed to load conversation history. Please try again.';
+      // Check if it's a 404 error (conversation not found)
+      if (err.response?.status === 404) {
+        console.log('Conversation not found, creating new chat...');
+        // Clear the current route and create a new chat
+        router.push('/');
+        await createNewChat();
+      } else {
+        errorMessage.value = 'Failed to load conversation history. Please try again.';
+      }
     }
     messagesData.value = [];
   } finally {

@@ -29,11 +29,90 @@
       <ChatList
         :conversations="conversations"
         :preselectedChat="preselectedChat"
+        :isMultiSelectMode="isMultiSelectMode"
+        :selectedChats="selectedChats"
         @select-conversation="onSelectConversation"
         @delete-chat="onDeleteChat"
         @share-chat="onShareChat"
         @download-chat="onDownloadChat"
+        @toggle-chat-selection="onToggleChatSelection"
       />
+    </div>
+
+    <!-- Bottom controls -->
+    <div class="px-4 py-2 border-t border-gray-200">
+      <!-- Multi-select controls -->
+      <div v-if="isMultiSelectMode" class="space-y-2">
+        <div class="flex items-center justify-between">
+          <button
+            @click="selectAllChats"
+            class="text-xs text-primary-brandColor hover:text-primary-brandTextPrimary underline"
+          >
+            {{ allChatsSelected ? 'Deselect All' : 'Select All' }}
+          </button>
+          <span class="text-xs text-primary-brandTextSecondary">
+            {{ selectedChats.length }} selected
+          </span>
+        </div>
+        <div class="flex space-x-2">
+          <button
+            @click="exitMultiSelectMode"
+            class="px-3 py-2 text-xs bg-white text-primary-brandColor border border-primary-brandBorder rounded hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            @click="bulkDeleteChats"
+            :disabled="selectedChats.length === 0"
+            class="flex-1 px-3 py-2 text-xs bg-primary-brandColor text-white rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Delete Selected
+          </button>
+        </div>
+      </div>
+
+      <!-- Delete Chats button -->
+      <div v-else>
+        <button
+          @click="enterMultiSelectMode"
+          class="w-full px-3 py-2 text-xs bg-purple-50 text-purple-700 rounded hover:bg-purple-100 flex items-center justify-center space-x-2"
+        >
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 6h18" />
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+            <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          </svg>
+          <span>Delete Chats</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Dialog -->
+    <div v-if="showDeleteConfirmation" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg p-6 max-w-sm mx-4">
+        <div class="text-center">
+          <h3 class="text-lg font-semibold text-primary-brandTextPrimary mb-4">
+            Confirm Data Deletion
+          </h3>
+          <p class="text-sm text-primary-brandTextSecondary mb-6">
+            Are you sure you want to delete {{ selectedChats.length }} chat(s)? This will permanently delete the selected conversations. This action cannot be undone.
+          </p>
+          <div class="flex space-x-3">
+            <button
+              @click="cancelBulkDelete"
+              class="flex-1 px-4 py-2 text-sm bg-white text-primary-brandColor border border-primary-brandBorder rounded hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              @click="confirmBulkDelete"
+              class="flex-1 px-4 py-2 text-sm bg-primary-brandColor text-white rounded hover:opacity-90"
+            >
+              Delete Data
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -65,11 +144,81 @@ const missingKeysList = ref({});
 const conversations = ref([]);
 const chatsLoaded = ref(false); // Track if chats have been loaded
 
+// Multi-select state
+const isMultiSelectMode = ref(false);
+const selectedChats = ref([]);
+const showDeleteConfirmation = ref(false);
+
+// Computed properties for multi-select
+const allChatsSelected = computed(() => {
+  return conversations.value.length > 0 && selectedChats.value.length === conversations.value.length;
+});
+
 // Event handler functions for events emitted from ChatList/ChatItem.
 function onSelectConversation(conversation) {
-  console.log('Parent: Selected conversation', conversation);
-  preselectedChat.value = conversation.conversation_id;
-  router.push(`/${conversation.conversation_id}`);
+  if (isMultiSelectMode.value) {
+    // In multi-select mode, toggle selection instead of navigating
+    onToggleChatSelection(conversation.conversation_id);
+  } else {
+    // Normal mode - navigate to chat
+    console.log('Parent: Selected conversation', conversation);
+    preselectedChat.value = conversation.conversation_id;
+    router.push(`/${conversation.conversation_id}`);
+  }
+}
+
+// Multi-select mode functions
+function enterMultiSelectMode() {
+  isMultiSelectMode.value = true;
+  selectedChats.value = [];
+}
+
+function exitMultiSelectMode() {
+  isMultiSelectMode.value = false;
+  selectedChats.value = [];
+}
+
+function onToggleChatSelection(conversationId) {
+  const index = selectedChats.value.indexOf(conversationId);
+  if (index > -1) {
+    selectedChats.value.splice(index, 1);
+  } else {
+    selectedChats.value.push(conversationId);
+  }
+}
+
+function selectAllChats() {
+  if (allChatsSelected.value) {
+    selectedChats.value = [];
+  } else {
+    selectedChats.value = conversations.value.map(chat => chat.conversation_id);
+  }
+}
+
+async function bulkDeleteChats() {
+  if (selectedChats.value.length === 0) return;
+  
+  showDeleteConfirmation.value = true;
+}
+
+async function confirmBulkDelete() {
+  try {
+    // Delete chats one by one
+    for (const conversationId of selectedChats.value) {
+      await deleteChat(conversationId);
+    }
+    
+    // Exit multi-select mode after successful deletion
+    exitMultiSelectMode();
+    showDeleteConfirmation.value = false;
+  } catch (error) {
+    console.error('Bulk delete failed:', error);
+    alert('Some chats could not be deleted. Please try again.');
+  }
+}
+
+function cancelBulkDelete() {
+  showDeleteConfirmation.value = false;
 }
 
 /**
