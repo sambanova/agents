@@ -94,7 +94,7 @@
     overflow-x: auto;
     white-space: nowrap;
     scroll-behavior: smooth;
-    padding: 8px 2px; /* Minimal horizontal padding to eliminate differences */
+    padding: 8px 50px;
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
