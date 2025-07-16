@@ -1,10 +1,10 @@
 import html
 import mimetypes
-from operator import add
 import os
 import re
 import time
 import uuid
+from operator import add
 from typing import Annotated, Dict, List, Optional, TypedDict
 
 import structlog
@@ -285,8 +285,45 @@ def create_code_execution_graph(
                 )
 
                 generation_timestamp = time.time()
-                list_of_files_after_execution = await sandbox.fs.list_files(".")
-                for file in list_of_files_after_execution:
+
+                # Recursively get all files from all directories
+                async def get_all_files_recursive(directory: str = "."):
+                    all_files = []
+                    try:
+                        files = await sandbox.fs.list_files(directory)
+                        for file in files:
+                            if file.name.startswith("."):
+                                continue
+                            if file.is_dir:
+                                # Build the full path for the subdirectory
+                                subdir_path = (
+                                    file.name
+                                    if directory == "."
+                                    else f"{directory}/{file.name}"
+                                )
+                                subdir_files = await get_all_files_recursive(
+                                    subdir_path
+                                )
+                                all_files.extend(subdir_files)
+                            else:
+                                all_files.append(
+                                    {
+                                        "file": file,
+                                        "path": (
+                                            file.name
+                                            if directory == "."
+                                            else f"{directory}/{file.name}"
+                                        ),
+                                    }
+                                )
+                    except Exception as e:
+                        logger.warning(f"Error listing files in {directory}: {e}")
+                    return all_files
+
+                list_of_files_after_execution = await get_all_files_recursive()
+                for file_info in list_of_files_after_execution:
+                    file = file_info["file"]
+                    file_path = file_info["path"]
                     mime_type, _ = mimetypes.guess_type(file.name)
 
                     if mime_type is None:
@@ -309,7 +346,7 @@ def create_code_execution_graph(
                     ):
                         file_id = str(uuid.uuid4())
                         try:
-                            content = await sandbox.fs.download_file(file.name)
+                            content = await sandbox.fs.download_file(file_path)
                             if mime_type == "text/html":
                                 try:
                                     content_str = (
@@ -403,7 +440,7 @@ def create_code_execution_graph(
                     [
                         f
                         for f in list_of_files_after_execution
-                        if f.name not in list_of_files
+                        if f["file"].name not in list_of_files
                     ]
                 )
                 if files_created > 0:

@@ -539,6 +539,44 @@ async def delete_chat(
                 content={"error": "Chat not found or access denied"},
             )
 
+        # Get all messages in the conversation to find file references
+        conversation_messages = await app.state.redis_storage_service.get_messages(
+            user_id, conversation_id
+        )
+
+        # Collect all file IDs referenced in the conversation
+        file_ids_to_delete = set()
+
+        for message in conversation_messages:
+            # Check files in additional_kwargs
+            files = message.get("additional_kwargs", {}).get("files", [])
+            file_ids_to_delete.update(files)
+
+        # Delete all referenced files
+        deleted_files = []
+        failed_files = []
+
+        for file_id in file_ids_to_delete:
+            try:
+                # Delete the file directly
+                result = await app.state.redis_storage_service.delete_file(
+                    user_id, file_id
+                )
+                if result:
+                    deleted_files.append(file_id)
+                    logger.info(f"Deleted file {file_id} as part of chat deletion")
+                else:
+                    failed_files.append(file_id)
+                    logger.warning(
+                        f"Failed to delete file {file_id} as part of chat deletion"
+                    )
+
+            except Exception as e:
+                failed_files.append(file_id)
+                logger.error(
+                    f"Error deleting file {file_id} as part of chat deletion: {str(e)}"
+                )
+
         # Close any active WebSocket connections for this chat
         connection = app.state.manager.get_connection(user_id, conversation_id)
         if connection:
@@ -550,8 +588,22 @@ async def delete_chat(
             user_id, conversation_id
         )
 
+        # Log deletion summary
+        logger.info(
+            f"Chat deletion completed for {conversation_id}. "
+            f"Deleted {len(deleted_files)} files, {len(failed_files)} files failed to delete",
+            conversation_id=conversation_id,
+            deleted_files_count=len(deleted_files),
+            failed_files_count=len(failed_files),
+        )
+
         return JSONResponse(
-            status_code=200, content={"message": "Chat deleted successfully"}
+            status_code=200,
+            content={
+                "message": "Chat deleted successfully",
+                "deleted_files_count": len(deleted_files),
+                "failed_files_count": len(failed_files),
+            },
         )
 
     except Exception as e:
@@ -894,44 +946,6 @@ async def get_shared_conversation(share_token: str):
     except Exception as e:
         logger.error(f"Error accessing shared conversation: {str(e)}")
         return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-def parse_file_references_from_content(content: str) -> List[str]:
-    """
-    Parse file references from text content.
-    Looks for patterns like:
-    - ![title](attachment:file_id)
-    - ![title](redis-chart:file_id:user_id)
-    - ![title](redis-file:file_id:user_id)
-    - ![title]([filename](redis-chart:file_id:user_id))  # Nested format from data science agent
-
-    Returns a list of file IDs found in the content.
-    """
-    import re
-
-    file_ids = set()
-
-    if not content or not isinstance(content, str):
-        return list(file_ids)
-
-    # Pattern for attachment references
-    attachment_pattern = r"!\[[^\]]*\]\(attachment:([^)]+)\)"
-    attachment_matches = re.findall(attachment_pattern, content)
-    file_ids.update(attachment_matches)
-
-    # Pattern for Redis chart/file references (direct format)
-    redis_pattern = r"!\[[^\]]*\]\(redis-(?:chart|file):([^:]+):[^)]+\)"
-    redis_matches = re.findall(redis_pattern, content)
-    file_ids.update(redis_matches)
-
-    # Pattern for nested Redis chart/file references (data science agent format)
-    nested_redis_pattern = (
-        r"!\[[^\]]*\]\(\[[^\]]*\]\(redis-(?:chart|file):([^:]+):[^)]+\)\)"
-    )
-    nested_redis_matches = re.findall(nested_redis_pattern, content)
-    file_ids.update(nested_redis_matches)
-
-    return list(file_ids)
 
 
 @app.get("/share/{share_token}/files/{file_id}")
