@@ -23,6 +23,9 @@
         @selectConversation="handleSelectConversation"
         @new-chat="handleNewChat"
         @reload-user-documents="handleReloadUserDocuments"
+        :is-collapsed="isSidebarCollapsed"
+        @toggle-collapse="toggleSidebarCollapse"
+        :is-mobile="isMobile"
         ref="chatSideBarRef"
       />
 
@@ -180,6 +183,20 @@ import ChatAgentSidebar from '@/components/ChatMain/ChatAgentSidebar.vue';
 import { useReportStore } from '@/stores/reportStore';
 import emitterMitt from '@/utils/eventBus.js';
 
+const isSidebarCollapsed = ref(false);
+const isMobile = ref(false);
+
+function toggleSidebarCollapse() {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value;
+}
+
+const handleResize = () => {
+  isMobile.value = window.innerWidth < 768;
+  if (isMobile.value) {
+    isSidebarCollapsed.value = true;
+  }
+};
+
 // Create a reactive property for the selected option.
 const selectedOption = ref({ label: 'SambaNova', value: 'sambanova' });
 
@@ -264,11 +281,14 @@ onMounted(() => {
 
   // Listen for new chat events
   emitterMitt.on('new-chat', handleNewChat);
+  window.addEventListener('resize', handleResize);
+  handleResize(); // Initial check
 });
 
 onUnmounted(() => {
   // Remove the listener
   emitterMitt.off('new-chat', handleNewChat);
+  window.removeEventListener('resize', handleResize);
 });
 
 // Called by Header => user updated keys

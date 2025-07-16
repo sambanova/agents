@@ -1,89 +1,128 @@
 <template>
   <div
-    class="w-64 h-full border border-primary-brandFrame bg-white rounded-l flex flex-col"
+    class="relative h-full border border-primary-brandFrame bg-white rounded-l flex flex-col transition-all duration-300"
+    :class="isCollapsed ? 'w-0' : 'w-64'"
   >
-    <!-- Header -->
-    <div class="px-4 py-2 flex items-center justify-between">
-      <button
-        class="p-2 w-full border border-primary-brandBorder text-primary-brandColor text-sm rounded"
-        @click="createNewChat"
-        :disabled="missingKeysArray.length > 0"
-      >
-        + New Chat
-      </button>
-    </div>
-
-    <!-- If missing any key, show a small alert -->
-    <div
-      v-if="missingKeysArray.length > 0"
-      class="bg-yellow-50 text-yellow-700 text-sm p-2"
+    <!-- Collapse Button -->
+    <button
+      v-if="isMobile || isCollapsed"
+      @click="toggleCollapse"
+      class="absolute top-1/2 -right-4 z-10 p-1 bg-white border border-primary-brandFrame rounded-full"
     >
-      <span class="capitalize" v-for="(keyItem, index) in missingKeysArray">
-        {{ index > 0 ? ',' : '' }}{{ keyItem ? keyItem : '' }}
-      </span>
-      key(s) are missing. Please set them in settings.
-    </div>
+      <svg
+        class="w-5 h-5 text-gray-500"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          v-if="!isCollapsed"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M15 19l-7-7 7-7"
+        ></path>
+        <path
+          v-else
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M9 5l7 7-7 7"
+        ></path>
+      </svg>
+    </button>
 
-    <!-- Conversation list -->
-    <div class="flex-1 overflow-x-hidden">
-      <ChatList
-        :conversations="conversations"
-        :preselectedChat="preselectedChat"
-        :isMultiSelectMode="isMultiSelectMode"
-        :selectedChats="selectedChats"
-        @select-conversation="onSelectConversation"
-        @delete-chat="onDeleteChat"
-        @share-chat="onShareChat"
-        @download-chat="onDownloadChat"
-        @toggle-chat-selection="onToggleChatSelection"
-      />
-    </div>
-
-    <!-- Bottom controls -->
-    <div class="px-4 py-2 border-t border-gray-200">
-      <!-- Multi-select controls -->
-      <div v-if="isMultiSelectMode" class="space-y-2">
-        <div class="flex items-center justify-between">
-          <button
-            @click="selectAllChats"
-            class="text-xs text-primary-brandColor hover:text-primary-brandTextPrimary underline"
-          >
-            {{ allChatsSelected ? 'Deselect All' : 'Select All' }}
-          </button>
-          <span class="text-xs text-primary-brandTextSecondary">
-            {{ selectedChats.length }} selected
-          </span>
-        </div>
-        <div class="flex space-x-2">
-          <button
-            @click="exitMultiSelectMode"
-            class="px-3 py-2 text-xs bg-white text-primary-brandColor border border-primary-brandBorder rounded hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-          <button
-            @click="bulkDeleteChats"
-            :disabled="selectedChats.length === 0"
-            class="flex-1 px-3 py-2 text-xs bg-primary-brandColor text-white rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Delete Selected
-          </button>
-        </div>
+    <div class="flex-1 flex flex-col overflow-hidden">
+      <!-- Header -->
+      <div class="px-4 py-2 flex items-center justify-between">
+        <button
+          class="p-2 w-full border border-primary-brandBorder text-primary-brandColor text-sm rounded"
+          @click="createNewChat"
+          :disabled="missingKeysArray.length > 0"
+        >
+          + New Chat
+        </button>
       </div>
 
-      <!-- Delete Chats button -->
-      <div v-else>
-        <button
-          @click="enterMultiSelectMode"
-          class="w-full px-3 py-2 text-xs bg-purple-50 text-purple-700 rounded hover:bg-purple-100 flex items-center justify-center space-x-2"
-        >
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 6h18" />
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-            <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-          </svg>
-          <span>Delete Chats</span>
-        </button>
+      <!-- If missing any key, show a small alert -->
+      <div
+        v-if="missingKeysArray.length > 0"
+        class="bg-yellow-50 text-yellow-700 text-sm p-2"
+      >
+        <span class="capitalize" v-for="(keyItem, index) in missingKeysArray">
+          {{ index > 0 ? ',' : '' }}{{ keyItem ? keyItem : '' }}
+        </span>
+        key(s) are missing. Please set them in settings.
+      </div>
+
+      <!-- Conversation list -->
+      <div class="flex-1 overflow-x-hidden">
+        <ChatList
+          :conversations="conversations"
+          :preselectedChat="preselectedChat"
+          :isMultiSelectMode="isMultiSelectMode"
+          :selectedChats="selectedChats"
+          @select-conversation="onSelectConversation"
+          @delete-chat="onDeleteChat"
+          @share-chat="onShareChat"
+          @download-chat="onDownloadChat"
+          @toggle-chat-selection="onToggleChatSelection"
+        />
+      </div>
+
+      <!-- Bottom controls -->
+      <div class="px-4 py-2 border-t border-gray-200">
+        <!-- Multi-select controls -->
+        <div v-if="isMultiSelectMode" class="space-y-2">
+          <div class="flex items-center justify-between">
+            <button
+              @click="selectAllChats"
+              class="text-xs text-primary-brandColor hover:text-primary-brandTextPrimary underline"
+            >
+              {{ allChatsSelected ? 'Deselect All' : 'Select All' }}
+            </button>
+            <span class="text-xs text-primary-brandTextSecondary">
+              {{ selectedChats.length }} selected
+            </span>
+          </div>
+          <div class="flex space-x-2">
+            <button
+              @click="exitMultiSelectMode"
+              class="px-3 py-2 text-xs bg-white text-primary-brandColor border border-primary-brandBorder rounded hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              @click="bulkDeleteChats"
+              :disabled="selectedChats.length === 0"
+              class="flex-1 px-3 py-2 text-xs bg-primary-brandColor text-white rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Delete Selected
+            </button>
+          </div>
+        </div>
+
+        <!-- Delete Chats button -->
+        <div v-else>
+          <button
+            @click="enterMultiSelectMode"
+            class="w-full px-3 py-2 text-xs bg-purple-50 text-purple-700 rounded hover:bg-purple-100 flex items-center justify-center space-x-2"
+          >
+            <svg
+              class="w-4 h-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M3 6h18" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+            <span>Delete Chats</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -132,8 +171,28 @@ const route = useRoute();
  * We'll store in localStorage under key "my_conversations_<userId>"
  * an array of { conversation_id, title, created_at }
  */
-const emit = defineEmits(['selectConversation', 'reload-user-documents']);
+const emit = defineEmits([
+  'selectConversation',
+  'reload-user-documents',
+  'toggle-collapse',
+]);
 const preselectedChat = ref('');
+
+const props = defineProps({
+  isCollapsed: {
+    type: Boolean,
+    default: false,
+  },
+  isMobile: {
+    type: Boolean,
+    default: false,
+  },
+});
+
+function toggleCollapse() {
+  emit('toggle-collapse');
+}
+
 /** Clerk user */
 const { userId } = useAuth();
 
