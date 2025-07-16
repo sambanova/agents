@@ -295,7 +295,7 @@
                     </div>
                   </div>
                   <HorizontalScroll>
-                    <div class="flex space-x-2">
+                    <div class="flex space-x-2 pb-2">
                       <div
                         v-for="doc in uploadedFiles"
                         :key="doc.file_id"
