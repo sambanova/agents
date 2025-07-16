@@ -206,7 +206,7 @@
 
           <!-- Daytona Status Indicator and Controls -->
           <div v-if="isDaytonaActive" class="mt-4">
-            <div class="inline-flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+            <div class="inline-flex items-center gap-2 px-3 py-2 bg-white border border-primary-brandColor rounded-lg text-sm text-primary-brandColor">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
               </svg>
@@ -216,7 +216,7 @@
               <button
                 v-if="!showDaytonaSidebar"
                 @click="reopenDaytonaSidebar"
-                class="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 hover:bg-blue-200 rounded text-xs font-medium transition-colors"
+                class="inline-flex items-center gap-1 px-2 py-1 bg-primary-50 hover:bg-primary-100 rounded text-xs font-medium transition-colors"
                 title="Open Daytona Sandbox"
               >
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

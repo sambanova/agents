@@ -230,6 +230,7 @@
         :shareToken="shareToken"
         @close="closeDaytonaSidebar"
         @expand-chart="openArtifact"
+        @expand-artifact="openArtifact"
         @sidebar-state-changed="emit('daytona-sidebar-state-changed', $event)"
       />
       

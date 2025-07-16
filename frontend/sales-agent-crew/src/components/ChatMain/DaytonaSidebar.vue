@@ -26,20 +26,6 @@
       </div>
       
       <div class="flex items-center space-x-2">
-        <!-- Collapse/Expand Button -->
-        <button 
-          @click="toggleCollapse"
-          class="p-2 hover:bg-gray-100 rounded-full transition-colors"
-          :aria-label="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
-        >
-          <svg v-if="isCollapsed" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-          </svg>
-          <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-          </svg>
-        </button>
-        
         <!-- Close Button -->
         <button 
           @click="handleClose"
@@ -63,7 +49,7 @@
             <div class="flex items-center space-x-2">
               <span class="text-sm font-medium text-gray-900">{{ currentStatus }}</span>
               <div v-if="isProcessing" class="animate-spin">
-                <svg class="w-4 h-4 text-primary-brandColor" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <svg class="w-4 h-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                 </svg>
@@ -204,7 +190,7 @@
               
               <div class="p-4">
                 <div v-if="artifact.loading" class="flex items-center justify-center h-40">
-                  <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-brandColor"></div>
+                  <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400"></div>
                 </div>
                 
                 <!-- Image Preview -->
@@ -229,7 +215,7 @@
                       </div>
                       <button 
                         @click.stop="downloadArtifact(artifact)"
-                        class="text-xs bg-primary-brandColor text-white px-2 py-1 rounded hover:bg-primary-700 transition-colors"
+                        class="text-xs bg-white text-gray-500 px-2 py-1 rounded hover:bg-gray-100 transition-colors border border-gray-200"
                       >
                         Download
                       </button>
@@ -255,12 +241,9 @@
                   <p class="text-xs text-gray-600 mb-3">{{ artifact.title }}</p>
                   <button 
                     @click.stop="downloadArtifact(artifact)"
-                    class="inline-flex items-center space-x-2 bg-primary-brandColor text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors"
+                    class="text-xs bg-white text-gray-500 px-2 py-1 rounded hover:bg-gray-100 transition-colors border border-gray-200"
                   >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
-                    <span class="text-sm font-medium">Download Presentation</span>
+                    Download
                   </button>
                 </div>
                 
@@ -277,13 +260,13 @@
                       <div class="flex space-x-1">
                         <button 
                           @click.stop="openInNewTab(artifact.url)"
-                          class="text-xs bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600 transition-colors"
+                          class="text-xs bg-white text-gray-500 px-2 py-1 rounded hover:bg-gray-100 transition-colors border border-gray-200"
                         >
                           Open
                         </button>
                         <button 
                           @click.stop="downloadArtifact(artifact)"
-                          class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600 transition-colors"
+                          class="text-xs bg-white text-gray-500 px-2 py-1 rounded hover:bg-gray-100 transition-colors border border-gray-200"
                         >
                           Download
                         </button>
@@ -312,7 +295,7 @@
                       </div>
                       <button 
                         @click.stop="downloadArtifact(artifact)"
-                        class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600 transition-colors"
+                        class="text-xs bg-white text-gray-500 px-2 py-1 rounded hover:bg-gray-100 transition-colors border border-gray-200"
                       >
                         Download
                       </button>
@@ -346,7 +329,7 @@
                       </div>
                       <button 
                         @click.stop="downloadArtifact(artifact)"
-                        class="text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600 transition-colors"
+                        class="text-xs bg-white text-gray-500 px-2 py-1 rounded hover:bg-gray-100 transition-colors border border-gray-200"
                       >
                         Download
                       </button>
@@ -370,7 +353,7 @@
                     <div v-else class="flex items-center justify-center h-full text-gray-500">
                       <div class="text-center">
                         <div v-if="artifact.loading" class="flex flex-col items-center">
-                          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mb-2"></div>
+                          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400 mb-2"></div>
                           <p class="text-sm">Loading CSV data...</p>
                         </div>
                         <div v-else>
@@ -380,7 +363,7 @@
                           <p class="text-sm mb-2">Click here to load CSV data</p>
                           <button 
                             @click.stop="loadCsvContent(artifact)"
-                            class="text-xs bg-green-500 text-white px-3 py-2 rounded hover:bg-green-600 transition-colors"
+                            class="text-xs bg-white text-gray-500 px-3 py-2 rounded hover:bg-gray-100 transition-colors border border-gray-200"
                           >
                             Load Data
                           </button>
@@ -445,7 +428,7 @@
       </div>
 
       <!-- Execution Log -->
-      <div v-if="executionLog.length > 0" class="p-4 border-t bg-gray-50">
+      <div v-if="executionLogs.length > 0" class="p-4 border-t bg-gray-50">
         <div class="flex items-center justify-between mb-3">
           <button
             @click="toggleLogSection"
@@ -455,13 +438,13 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
             </svg>
             <h4 class="font-medium text-gray-900 text-sm">Execution Log</h4>
-            <span class="text-xs text-gray-500">({{ executionLog.length }} entries)</span>
+            <span class="text-xs text-gray-500">({{ executionLogs.length }} entries)</span>
           </button>
         </div>
         
         <div v-if="logExpanded" class="space-y-2 max-h-40 overflow-y-auto">
           <div 
-            v-for="log in executionLog" 
+            v-for="log in executionLogs" 
             :key="log.id"
             class="text-xs text-gray-600 flex items-start space-x-2"
           >
@@ -510,6 +493,8 @@
 
 <script setup>
 import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 const props = defineProps({
   isOpen: {
@@ -539,7 +524,7 @@ const statusDetails = ref('')
 const isProcessing = ref(false)
 
 const codeContent = ref('')
-const executionLog = ref([])
+const executionLogs = ref([])
 const artifacts = ref([])
 
 // Section expansion states
@@ -578,10 +563,16 @@ const codePreview = computed(() => {
 
 // Watch for streaming events changes - ENHANCED FOR LOADED CONVERSATIONS
 watch(() => props.streamingEvents, (newEvents) => {
+  // **THE FIX**: Clear all local state before processing new events
+  // This ensures that when switching conversations, old data is wiped.
+  codeContent.value = '';
+  artifacts.value = [];
+  executionLogs.value = [];
+  
   if (newEvents && newEvents.length > 0) {
-    processStreamingEvents(newEvents)
+    processStreamingEvents(newEvents);
   }
-}, { deep: true, immediate: true })
+}, { deep: true, immediate: true });
 
 // Watch for code content changes and auto-scroll
 watch(codeContent, (newCode, oldCode) => {
@@ -638,7 +629,7 @@ function processStreamingEvents(events) {
     // Detect a brand-new conversation (events length has shrunk)
     if (events.length < lastEventsLength.value) {
       artifacts.value = []
-      executionLog.value = []
+      executionLogs.value = []
       cleanupCodeUpdates()
       lastCodeUpdate.value = ''
       lastEventsLength.value = 0 // full reset
@@ -1047,15 +1038,15 @@ function updateStatus(status, details = '') {
 }
 
 function addToLog(message, type = 'info', timestamp) {
-  executionLog.value.push({
+  executionLogs.value.push({
     id: Date.now() + Math.random(),
     message,
     type,
     timestamp
   })
   
-  if (executionLog.value.length > 50) {
-    executionLog.value = executionLog.value.slice(-50)
+  if (executionLogs.value.length > 50) {
+    executionLogs.value = executionLogs.value.slice(-50)
   }
 }
 
@@ -1193,10 +1184,10 @@ function formatLogTime(timestamp) {
 
 function getLogClass(type) {
   const classes = {
-    'info': 'text-blue-600',
-    'success': 'text-green-600', 
-    'warning': 'text-yellow-600',
-    'error': 'text-red-600'
+    'info': 'text-gray-600',
+    'success': 'text-gray-700', 
+    'warning': 'text-gray-600',
+    'error': 'text-gray-800'
   }
   return classes[type] || 'text-gray-600'
 }
@@ -1294,31 +1285,31 @@ function getFileExtension(type) {
 function expandArtifact(artifact) {
   console.log('Expanding artifact:', artifact)
   
-  // All file types now have inline viewers in the sidebar
-  // Still support the expand-artifact event for full-screen modals if needed
-  
-  // For backward compatibility, emit both events with proper data structure
-  if (artifact.type === 'image') {
-    // Ensure the artifact has all properties the modal expects
-    // ArtifactCanvas expects type 'chart' for images, so we need to adapt the data
-    const chartData = {
-      ...artifact,
-      type: 'chart', // Change type to 'chart' for ArtifactCanvas compatibility
-      id: artifact.id,
-      title: artifact.title,
-      url: artifact.url,
-      downloadUrl: artifact.downloadUrl || artifact.url
-    }
-    console.log('Emitting expand-chart with data:', chartData)
-    emit('expand-chart', chartData)  // Keep old event for images
+  // Ensure the artifact has the correct structure for ArtifactCanvas
+  const enhancedArtifact = {
+    ...artifact,
+    id: artifact.id,
+    title: artifact.title,
+    type: artifact.type === 'image' ? 'chart' : artifact.type, // ArtifactCanvas expects 'chart' for images
+    url: artifact.url || artifact.downloadUrl,
+    content: artifact.content || artifact.csvData || artifact.preview,
+    downloadUrl: artifact.downloadUrl || artifact.url
   }
+  
+  console.log('Enhanced artifact for ArtifactCanvas:', enhancedArtifact)
   
   // For CSV files, ensure data is loaded
   if (artifact.type === 'csv' && !artifact.csvData && !artifact.content) {
     loadCsvContent(artifact)
   }
   
-  emit('expand-artifact', artifact)
+  // Emit the enhanced artifact
+  emit('expand-artifact', enhancedArtifact)
+  
+  // Also emit expand-chart for backward compatibility with images
+  if (artifact.type === 'image') {
+    emit('expand-chart', enhancedArtifact)
+  }
 }
 
 function handleArtifactError(artifact) {
