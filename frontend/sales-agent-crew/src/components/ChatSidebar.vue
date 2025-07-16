@@ -132,7 +132,7 @@ const route = useRoute();
  * We'll store in localStorage under key "my_conversations_<userId>"
  * an array of { conversation_id, title, created_at }
  */
-const emit = defineEmits(['selectConversation']);
+const emit = defineEmits(['selectConversation', 'reload-user-documents']);
 const preselectedChat = ref('');
 /** Clerk user */
 const { userId } = useAuth();
@@ -267,6 +267,11 @@ async function deleteChat(conversationId) {
 
     chatsLoaded.value = false; // Reset flag to force reload
     loadChats();
+    
+    // Emit event to parent to reload user documents (artifacts)
+    console.log('Emitting reload-user-documents event after chat deletion');
+    emit('reload-user-documents');
+    
     return response.data;
   } catch (error) {
     console.error('Error deleting chat:', error);

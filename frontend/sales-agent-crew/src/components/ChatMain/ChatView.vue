@@ -1651,10 +1651,12 @@ onMounted(async () => {
   }
 
   emitterMitt.on('new-chat', handleButtonClick);
+  emitterMitt.on('reload-user-documents', loadUserDocuments);
 });
 
 onUnmounted(() => {
   emitterMitt.off('new-chat', handleButtonClick);
+  emitterMitt.off('reload-user-documents', loadUserDocuments);
 });
 
 watch(
@@ -2148,7 +2150,7 @@ async function connectWebSocket() {
         }
       }, 30000); // Send a ping every 30 seconds
     };
-    socket.value.onmessage = (event) => {
+    socket.value.onmessage = async (event) => {
       try {
         const receivedData = JSON.parse(event.data);
         
@@ -2309,6 +2311,12 @@ async function connectWebSocket() {
             console.error('Error adding stream complete message:', error);
           }
           isLoading.value = false;
+          
+          // Reload user documents (artifacts) after chat completion
+          if (!isSharedConversation.value && window.Clerk && window.Clerk.session) {
+            console.log('Reloading user documents after chat completion');
+            await loadUserDocuments();
+          }
         } else if (receivedData.event === 'planner_chunk') {
           addOrUpdatePlannerText({
             message_id: currentMsgId.value,

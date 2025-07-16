@@ -22,6 +22,7 @@
         @selectReport="handleSavedReportSelect"
         @selectConversation="handleSelectConversation"
         @new-chat="handleNewChat"
+        @reload-user-documents="handleReloadUserDocuments"
         ref="chatSideBarRef"
       />
 
@@ -288,6 +289,18 @@ function onModeToggled(val) {
 function handleSelectConversation(conv) {
   selectedConversationId.value = conv.conversation_id;
   streamCompleted.value = false;
+}
+
+/**
+ * When ChatSidebar requests to reload user documents (artifacts)
+ */
+function handleReloadUserDocuments() {
+  console.log('Reloading user documents from MainLayout');
+  // Emit event to ChatView to reload user documents
+  if (chatSideBarRef.value) {
+    // This will trigger a reload in ChatView
+    emitterMitt.emit('reload-user-documents');
+  }
 }
 
 /**
