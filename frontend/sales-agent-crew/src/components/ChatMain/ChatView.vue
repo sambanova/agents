@@ -249,85 +249,82 @@
               <ErrorComponent :parsed="{ data: { error: errorMessage } }" />
             </div>
 
-            <div v-if="uploadedDocuments.length > 0" class="mt-4">
-              <!-- Collapsible header -->
+            <div v-if="uploadedDocuments.length > 0" class="mt-4 border-t border-gray-200 pt-4">
+              <!-- Refined collapsible header -->
               <button
                 @click="toggleExpand"
-                class="flex items-center justify-between focus:outline-none mb-2"
+                class="flex items-center justify-between w-full focus:outline-none mb-3"
               >
-                <h3 class="text-sm font-medium text-gray-700">
-                  User Artifacts ({{ uploadedDocuments.length }})
+                <h3 class="text-sm font-semibold text-gray-800">
+                  User Artifacts
                 </h3>
-                <svg
-                  :class="{ 'transform rotate-180': isExpanded }"
-                  class="w-5 h-5 text-gray-500 transition-transform duration-200"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
+                <div class="flex items-center space-x-2">
+                  <span class="text-xs text-gray-500">{{ uploadedDocuments.length }} files</span>
+                  <svg
+                    :class="{ 'transform rotate-180': isExpanded }"
+                    class="w-4 h-4 text-gray-500 transition-transform duration-200"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </div>
               </button>
 
-              <!-- Collapsible content -->
-              <div v-if="isExpanded" class="bg-gray-50 border border-gray-200 rounded-lg p-1 space-y-1">
-                <!-- Uploaded Documents Section (for RAG) -->
+              <!-- Refined collapsible content -->
+              <div v-if="isExpanded" class="space-y-4">
+                <!-- Uploaded Documents Section -->
                 <div>
-                  <div class="flex items-center justify-between mb-0.5">
-                    <h4 class="text-sm font-medium text-gray-700">Uploaded Documents</h4>
+                  <div class="flex items-center justify-between mb-2">
+                    <h4 class="text-xs font-medium text-gray-600">Uploaded</h4>
                     <div class="flex items-center space-x-2">
-                      <span class="text-xs text-gray-500">{{ selectedDocuments.length }} selected of {{ uploadedFiles.length }} files</span>
                       <button
                         v-if="uploadedFiles.length > 1"
                         @click="toggleSelectAllUploaded"
-                        class="text-xs text-blue-600 hover:underline focus:outline-none"
+                        class="text-xs text-primary-brandColor hover:underline focus:outline-none font-medium"
                       >
-                        {{ allUploadedSelected ? 'Deselect all' : 'Select all' }}
+                        {{ allUploadedSelected ? 'Deselect All' : 'Select All' }}
                       </button>
                     </div>
                   </div>
                   <HorizontalScroll v-if="uploadedFiles.length > 0">
-                    <div class="flex space-x-1">
+                    <div class="flex space-x-2 pb-1">
                       <div
                         v-for="doc in uploadedFiles"
                         :key="doc.file_id"
-                        class="w-28 flex-shrink-0 p-1 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 relative group"
+                        class="w-32 flex-shrink-0 p-2 bg-white rounded-lg border border-gray-200 hover:border-primary-brandColor hover:shadow-sm relative group transition-all duration-200"
                       >
-                        <div class="flex flex-col items-center space-y-0.5">
-                          <!-- Checkbox positioned at top -->
+                        <div class="flex items-start space-x-2">
                           <input
                             type="checkbox"
                             :checked="selectedDocuments.includes(doc.file_id)"
                             @change="toggleDocumentSelection(doc.file_id)"
-                            class="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                            class="h-3.5 w-3.5 text-primary-brandColor focus:ring-primary-brandColor/50 border-gray-300 rounded mt-0.5"
                           />
-                          <!-- File Type Icon -->
-                          <div class="w-6 h-6 flex items-center justify-center rounded file-icon-container" :class="getFileIconBackground(doc.format, doc.filename)">
-                            <component :is="getFileIcon(doc.format, doc.filename)" class="w-3 h-3" :class="getFileIconColor(doc.format, doc.filename)" />
+                          <div class="w-3.5 h-3.5 flex-shrink-0 flex items-center justify-center rounded-sm bg-gray-100 mt-0.5">
+                            <component :is="getFileIcon(doc.format, doc.filename)" class="w-2.5 h-2.5 text-gray-500" />
                           </div>
-                          
-                          <!-- File Info -->
-                          <div class="text-center w-full">
-                            <p class="text-xs font-medium text-gray-900 truncate" :title="doc.filename">
+                          <div class="flex-1 min-w-0">
+                            <p class="text-xs font-medium text-gray-800 truncate" :title="doc.filename">
                               {{ doc.filename }}
                             </p>
                             <p class="text-2xs text-gray-500">
                               {{ formatFileSize(doc.file_size) }}
-                              <span v-if="doc.num_chunks"> • {{ doc.num_chunks }} chunks</span>
                             </p>
                           </div>
                         </div>
                         <button
                           @click="removeDocument(doc.file_id)"
-                          class="absolute top-0.5 right-0.5 bg-red-500 text-white rounded-full p-0.5 transition-opacity opacity-0 group-hover:opacity-100"
+                          class="absolute top-1 right-1 bg-white text-gray-500 rounded-full p-0.5 transition-all opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white shadow"
                           title="Remove document"
                         >
-                          <XMarkIcon class="w-2 h-2" />
+                          <XMarkIcon class="w-3 h-3" />
                         </button>
                       </div>
                     </div>
@@ -335,28 +332,24 @@
                 </div>
 
                 <!-- Generated Files Section -->
-                <div class="border-t border-gray-300 pt-1">
-                  <div class="flex items-center justify-between mb-0.5">
-                    <h4 class="text-sm font-medium text-gray-700">Generated Files</h4>
-                    <span class="text-xs text-gray-500">{{ generatedFiles.length }} files • From sandbox</span>
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <h4 class="text-xs font-medium text-gray-600">Generated</h4>
                   </div>
                   <HorizontalScroll v-if="generatedFiles.length > 0">
-                    <div class="flex space-x-1">
+                    <div class="flex space-x-2 pb-1">
                       <div
                         v-for="doc in generatedFiles"
                         :key="doc.file_id"
-                        class="w-28 flex-shrink-0 p-1 bg-blue-50 rounded-lg border border-blue-200 hover:bg-blue-100 relative group cursor-pointer transition-all duration-200"
+                        class="w-32 flex-shrink-0 p-2 bg-primary-50/50 rounded-lg border border-primary-brandBorder/30 hover:border-primary-brandColor hover:shadow-sm relative group cursor-pointer transition-all duration-200"
                         @click="viewGeneratedFile(doc)"
                       >
-                        <div class="flex flex-col items-center space-y-0.5">
-                          <!-- File Type Icon -->
-                          <div class="w-6 h-6 flex items-center justify-center rounded file-icon-container" :class="getFileIconBackground(doc.format, doc.filename)">
-                            <component :is="getFileIcon(doc.format, doc.filename)" class="w-3 h-3" :class="getFileIconColor(doc.format, doc.filename)" />
-                          </div>
-                          
-                          <!-- File Info -->
-                          <div class="text-center w-full">
-                            <p class="text-xs font-medium text-gray-900 truncate" :title="doc.filename">
+                        <div class="flex items-start space-x-2">
+                           <div class="w-3.5 h-3.5 flex-shrink-0 flex items-center justify-center rounded-sm bg-primary-100 mt-0.5">
+                              <component :is="getFileIcon(doc.format, doc.filename)" class="w-2.5 h-2.5 text-primary-brandColor" />
+                           </div>
+                           <div class="flex-1 min-w-0">
+                            <p class="text-xs font-medium text-gray-800 truncate" :title="doc.filename">
                               {{ doc.filename }}
                             </p>
                             <p class="text-2xs text-gray-500">
@@ -364,16 +357,14 @@
                             </p>
                           </div>
                         </div>
-                        
-                        <!-- Action Buttons -->
-                        <div class="absolute top-0.5 right-0.5 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div class="absolute top-1 right-1 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             @click.stop="downloadFile(doc)"
-                            class="bg-blue-500 text-white rounded-full p-0.5 hover:bg-blue-600"
+                            class="bg-white text-gray-500 rounded-full p-0.5 hover:bg-primary-brandColor hover:text-white shadow"
                             title="Download file"
                           >
-                            <svg class="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
                           </button>
                         </div>
