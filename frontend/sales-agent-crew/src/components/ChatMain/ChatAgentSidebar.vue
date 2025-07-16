@@ -243,8 +243,22 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  isMobile: {
+    type: Boolean,
+    default: false,
+  },
 });
 const agentThoughtsData = ref([]);
+
+watch(
+  () => props.isMobile,
+  (isMobile) => {
+    if (isMobile) {
+      collapsed.value = true;
+    }
+  },
+  { immediate: true }
+);
 
 watch(
   () => props.streamCompleted,

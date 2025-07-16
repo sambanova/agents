@@ -136,6 +136,7 @@
         v-if="!chatMode"
         :userId="clerkUserId"
         :runId="currentRunId"
+        :is-mobile="isMobile"
       />
 
       <ChatAgentSidebar
@@ -144,6 +145,7 @@
         :runId="currentRunId"
         :agentData="agentData"
         :stream-completed="streamCompleted"
+        :is-mobile="isMobile"
         ref="chatAgentSidebarRef"
       />
     </div>
