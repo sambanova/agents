@@ -5,7 +5,7 @@
   >
     <!-- Collapse Button -->
     <button
-      v-if="isMobile || isCollapsed"
+      v-if="localIsMobile || props.isMobile || isCollapsed"
       @click="toggleCollapse"
       class="absolute top-1/2 -right-4 z-10 p-1 bg-white border border-primary-brandFrame rounded-full"
     >
@@ -187,6 +187,23 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+});
+
+// Local mobile detection to ensure button is always visible when needed
+const localIsMobile = ref(false);
+
+// Check mobile state on mount and resize
+const checkMobile = () => {
+  localIsMobile.value = window.innerWidth < 768;
+};
+
+onMounted(() => {
+  checkMobile();
+  window.addEventListener('resize', checkMobile);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile);
 });
 
 function toggleCollapse() {
