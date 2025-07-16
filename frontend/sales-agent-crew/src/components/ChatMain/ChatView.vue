@@ -280,7 +280,7 @@
               <!-- Refined collapsible content -->
               <div v-if="isExpanded" class="space-y-4">
                 <!-- Uploaded Documents Section -->
-                <div>
+                <div v-if="uploadedFiles.length > 0">
                   <div class="flex items-center justify-between mb-2">
                     <h4 class="text-xs font-medium text-gray-600">Uploaded</h4>
                     <div class="flex items-center space-x-2">
@@ -293,7 +293,7 @@
                       </button>
                     </div>
                   </div>
-                  <HorizontalScroll v-if="uploadedFiles.length > 0">
+                  <HorizontalScroll>
                     <div class="flex space-x-2 pb-1">
                       <div
                         v-for="doc in uploadedFiles"
@@ -332,11 +332,11 @@
                 </div>
 
                 <!-- Generated Files Section -->
-                <div>
+                <div v-if="generatedFiles.length > 0">
                   <div class="flex items-center justify-between mb-2">
                     <h4 class="text-xs font-medium text-gray-600">Generated</h4>
                   </div>
-                  <HorizontalScroll v-if="generatedFiles.length > 0">
+                  <HorizontalScroll>
                     <div class="flex space-x-2 pb-1">
                       <div
                         v-for="doc in generatedFiles"
