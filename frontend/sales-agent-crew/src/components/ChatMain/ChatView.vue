@@ -2062,6 +2062,11 @@ const addMessage = async () => {
         return doc && !isImageFile(doc.format, doc.filename);
       });
 
+      // Refresh chat list after first message is sent
+      if (messagesData.value.length === 1) {
+        emitterMitt.emit('refresh-chat-list');
+      }
+
       console.log('Message sent after connecting:', messagePayload);
     } catch (error) {
       errorMessage.value = 'WebSocket connection error occurred.';
@@ -2079,6 +2084,11 @@ const addMessage = async () => {
         const doc = uploadedDocuments.value.find(d => d.file_id === docId);
         return doc && !isImageFile(doc.format, doc.filename);
       });
+
+      // Refresh chat list after first message is sent
+      if (messagesData.value.length === 1) {
+        emitterMitt.emit('refresh-chat-list');
+      }
     } catch (e) {
       console.error('ChatView error', e);
       isLoading.value = false;

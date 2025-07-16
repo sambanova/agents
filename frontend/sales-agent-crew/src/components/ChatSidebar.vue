@@ -118,7 +118,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, computed } from 'vue';
+import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
 
 import { useAuth } from '@clerk/vue';
 import { decryptKey } from '@/utils/encryption'; // adapt path if needed
@@ -237,9 +237,16 @@ onMounted(() => {
   loadKeys();
 
   emitterMitt.on('keys-updated', loadKeys);
+  emitterMitt.on('refresh-chat-list', loadChats);
 
   let cId = route.params.id;
   if (cId) preselectedChat.value = cId;
+});
+
+onUnmounted(() => {
+  // Clean up event listeners
+  emitterMitt.off('keys-updated', loadKeys);
+  emitterMitt.off('refresh-chat-list', loadChats);
 });
 
 async function deleteChat(conversationId) {
