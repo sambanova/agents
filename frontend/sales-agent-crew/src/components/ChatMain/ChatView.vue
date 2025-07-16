@@ -368,6 +368,13 @@
                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
                           </button>
+                          <button
+                            @click.stop="removeDocument(doc.file_id)"
+                            class="bg-white text-gray-500 rounded-full p-0.5 hover:bg-red-500 hover:text-white shadow"
+                            title="Delete file"
+                          >
+                            <XMarkIcon class="w-3 h-3" />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1877,16 +1884,7 @@ async function handleFileUpload(event) {
       }
     }
 
-    uploadStatus.value = {
-      type: 'success',
-      message: `Uploaded ${files.length} file${files.length > 1 ? 's' : ''}`,
-    };
-
     await loadUserDocuments();
-
-    setTimeout(() => {
-      uploadStatus.value = null;
-    }, 3000);
   } catch (error) {
     console.error('[ChatView] Upload error:', error);
     uploadStatus.value = {
@@ -2410,6 +2408,15 @@ function addOrUpdatePlannerText(newEntry) {
 
 async function removeDocument(docId) {
   try {
+    // Check if this is a shared conversation
+    if (isSharedConversation.value) {
+      uploadStatus.value = {
+        type: 'error',
+        message: 'Cannot delete files in shared conversations',
+      };
+      return;
+    }
+
     await axios.delete(`${import.meta.env.VITE_API_URL}/files/${docId}`, {
       headers: {
         Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
@@ -2422,12 +2429,18 @@ async function removeDocument(docId) {
     uploadedDocuments.value = uploadedDocuments.value.filter(
       (doc) => doc.file_id !== docId
     );
+    
   } catch (error) {
     console.error('[ChatView] Error removing document:', error);
     uploadStatus.value = {
       type: 'error',
       message: error.response?.data?.error || 'Failed to remove document',
     };
+    
+    // Clear error message after 5 seconds
+    setTimeout(() => {
+      uploadStatus.value = null;
+    }, 5000);
   }
 }
 
