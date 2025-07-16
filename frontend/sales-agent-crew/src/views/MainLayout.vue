@@ -250,13 +250,6 @@ const agentThoughtsDataChanged = (agentThoughtsData) => {
     console.log('Skipping loadChats - user not authenticated in MainLayout');
     return;
   }
-
-  if (
-    chatSideBarRef.value &&
-    typeof chatSideBarRef.value.loadChats === 'function'
-  ) {
-    chatSideBarRef.value.loadChats();
-  }
 };
 // The runId for SSE etc.
 const currentRunId = ref('');

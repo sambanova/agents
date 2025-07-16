@@ -63,6 +63,7 @@ const serperKey = ref(null);
 const exaKey = ref(null);
 const missingKeysList = ref({});
 const conversations = ref([]);
+const chatsLoaded = ref(false); // Track if chats have been loaded
 
 // Event handler functions for events emitted from ChatList/ChatItem.
 function onSelectConversation(conversation) {
@@ -108,6 +109,7 @@ async function deleteChat(conversationId) {
       },
     });
 
+    chatsLoaded.value = false; // Reset flag to force reload
     loadChats();
     return response.data;
   } catch (error) {
@@ -146,7 +148,7 @@ async function loadKeys(missingKeysListData) {
   }
 }
 
-defineExpose({ loadChats });
+defineExpose({ loadChats, refreshChats });
 const missingKeysArray = computed(() => {
   if (!missingKeysList.value || typeof missingKeysList.value !== 'object')
     return [];
@@ -169,6 +171,7 @@ async function loadChats() {
       },
     });
     conversations.value = resp.data?.chats;
+    chatsLoaded.value = true; // Mark as loaded
   } catch (err) {
     console.error('Error loading chats:', err);
     // Don't show alert for shared conversations
@@ -217,10 +220,15 @@ watch(
       preselectedChat.value = null;
     }
     
-    // Only load chats if user is authenticated
-    if (window.Clerk && window.Clerk.session) {
+    // Only load chats if user is authenticated and chats haven't been loaded yet
+    if (window.Clerk && window.Clerk.session && !chatsLoaded.value) {
       loadChats();
     }
   }
 );
+
+async function refreshChats() {
+  chatsLoaded.value = false;
+  await loadChats();
+}
 </script>
