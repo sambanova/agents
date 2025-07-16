@@ -3184,16 +3184,7 @@ async function downloadFile(doc) {
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(blobUrl);
-    
-    uploadStatus.value = {
-      type: 'success',
-      message: `Downloaded ${doc.filename}`
-    };
-    
-    // Clear status after 3 seconds
-    setTimeout(() => {
-      uploadStatus.value = null;
-    }, 3000);
+   
     
   } catch (error) {
     console.error('Error downloading file:', error);
