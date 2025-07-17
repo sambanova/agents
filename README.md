@@ -64,7 +64,9 @@ Get the following API keys to setup the Agents application.
    - [Serper API key](https://serper.dev/) for web search (required)
    - [Exa API key](https://exa.co/) for company data (required)
    - [Tavily API key](https://tavily.com/) for deep research capabilities (required)
+   - [Daytona API key](https://www.daytona.io/) for secure code execution sandbox (required)
    - [Clerk](https://clerk.com/) for authentication (you'll need both publishable and secret keys)
+   - [LangSmith API key](https://langsmith.com/) for optional usage tracking and monitoring (optional)
 
 >**Note**: The system supports multiple LLM providers including SambaNova's DeepSeek V3, Llama 3.3 70B, Llama Maverick, and DeepSeek R1 models.
 
@@ -164,11 +166,15 @@ Follow the steps below to install the backend for the Agents application.
    TAVILY_API_KEY_1=your_second_tavily_key  # Optional: Additional keys for rotation
    TAVILY_API_KEY_2=your_third_tavily_key   # Optional: Additional keys for rotation
    
-
+   # Code Execution
+   DAYTONA_API_KEY=your_daytona_api_key  # Required for secure code execution sandbox
    
    # System Configuration
    ENABLE_USER_KEYS=true  # Set to "false" to use only environment API keys
    REDIS_MASTER_SALT=your_redis_encryption_salt  # For encrypting user data
+   
+   # Optional: Tracking and Monitoring
+   LANGSMITH_API_KEY=your_langsmith_api_key  # Optional for usage tracking and monitoring
    
    # Optional: MLflow Integration
    MLFLOW_TRACKING_ENABLED=false  # Set to "true" to enable MLflow tracking
@@ -439,7 +445,7 @@ Additional features of the application are listed below.
 1. **Configure API keys**
 
    - Open settings
-   - Enter your API keys (SambaNova)
+   - Enter your API keys (SambaNova, Serper, Exa, Tavily, Daytona)
    - Keys are securely encrypted and stored per user
 
 1. **Start using the system**
