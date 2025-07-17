@@ -698,6 +698,7 @@ If the user includes any datasets you MUST use the data_science subgraph to anal
                     user_id=user_id,
                     sambanova_api_key=api_keys.sambanova_key,
                     redis_storage=self.message_storage,
+                    daytona_manager=daytona_manager,
                 ),
                 "state_input_mapper": lambda x: {
                     "code": x,

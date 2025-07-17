@@ -8,6 +8,7 @@ from operator import add
 from typing import Annotated, Dict, List, Optional, TypedDict
 
 import structlog
+from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.components.open_deep_research.utils import APIKeyRotator
 from agents.storage.redis_storage import RedisStorage
 from agents.tools.langgraph_tools import TOOL_REGISTRY
@@ -129,7 +130,10 @@ class CorrectingExecutorState(TypedDict):
 
 
 def create_code_execution_graph(
-    user_id: str, sambanova_api_key: str, redis_storage: RedisStorage
+    user_id: str,
+    sambanova_api_key: str,
+    redis_storage: RedisStorage,
+    daytona_manager: PersistentDaytonaManager,
 ):
     logger.info("Creating code execution subgraph")
     api_key = os.getenv("DAYTONA_API_KEY")
@@ -235,19 +239,11 @@ def create_code_execution_graph(
         daytona = None
         files = []
         try:
-            config = DaytonaSDKConfig(api_key=api_key)
-            daytona = DaytonaClient(config)
-
-            params = CreateSandboxFromSnapshotParams(
-                snapshot=daytona_snapshot,
-            )
-            sandbox = await daytona.create(params=params)
-            list_of_files = [f.name for f in await sandbox.fs.list_files(".")]
-
             response = None
             execution_successful = False
             try:
-                response = await sandbox.process.code_run(state["code"])
+                list_of_files = [f.name for f in await daytona_manager.list_files(".")]
+                response = await daytona_manager.execute_code(state["code"])
                 if response.exit_code == 0:
                     execution_successful = True
                 else:
@@ -285,42 +281,9 @@ def create_code_execution_graph(
                 )
 
                 generation_timestamp = time.time()
-
-                # Recursively get all files from all directories
-                async def get_all_files_recursive(directory: str = "."):
-                    all_files = []
-                    try:
-                        files = await sandbox.fs.list_files(directory)
-                        for file in files:
-                            if file.name.startswith("."):
-                                continue
-                            if file.is_dir:
-                                # Build the full path for the subdirectory
-                                subdir_path = (
-                                    file.name
-                                    if directory == "."
-                                    else f"{directory}/{file.name}"
-                                )
-                                subdir_files = await get_all_files_recursive(
-                                    subdir_path
-                                )
-                                all_files.extend(subdir_files)
-                            else:
-                                all_files.append(
-                                    {
-                                        "file": file,
-                                        "path": (
-                                            file.name
-                                            if directory == "."
-                                            else f"{directory}/{file.name}"
-                                        ),
-                                    }
-                                )
-                    except Exception as e:
-                        logger.warning(f"Error listing files in {directory}: {e}")
-                    return all_files
-
-                list_of_files_after_execution = await get_all_files_recursive()
+                list_of_files_after_execution = (
+                    await daytona_manager.get_all_files_recursive()
+                )
                 for file_info in list_of_files_after_execution:
                     file = file_info["file"]
                     file_path = file_info["path"]

@@ -126,6 +126,42 @@ class PersistentDaytonaManager:
             logger.error("Error uploading file", file_id=file_id, error=str(e))
             raise
 
+    # Recursively get all files from all directories
+    async def get_all_files_recursive(self, directory: str = "."):
+        sandbox = await self._get_sandbox()
+        if not sandbox:
+            logger.error("Daytona sandbox not initialized. Call initialize() first.")
+            raise RuntimeError(
+                "Daytona sandbox not initialized. Call initialize() first."
+            )
+        all_files = []
+        try:
+            files = await sandbox.fs.list_files(directory)
+            for file in files:
+                if file.name.startswith("."):
+                    continue
+                if file.is_dir:
+                    # Build the full path for the subdirectory
+                    subdir_path = (
+                        file.name if directory == "." else f"{directory}/{file.name}"
+                    )
+                    subdir_files = await self.get_all_files_recursive(subdir_path)
+                    all_files.extend(subdir_files)
+                else:
+                    all_files.append(
+                        {
+                            "file": file,
+                            "path": (
+                                file.name
+                                if directory == "."
+                                else f"{directory}/{file.name}"
+                            ),
+                        }
+                    )
+        except Exception as e:
+            logger.warning(f"Error listing files in {directory}: {e}")
+            return all_files
+
     async def execute_code(self, code: str) -> str:
         """Execute code in the persistent sandbox."""
         sandbox = await self._get_sandbox()
