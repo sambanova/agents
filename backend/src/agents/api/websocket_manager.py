@@ -598,6 +598,10 @@ class WebSocketConnectionManager(WebSocketInterface):
                 data_analysis_doc_ids.append(doc_id["id"])
                 directory_content.append(doc_id["filename"])
 
+        enable_data_science = False
+        if data_analysis_doc_ids:
+            enable_data_science = True
+
         retrieval_prompt = ""
         if indexed_doc_ids:
             retrieval_prompt = (
@@ -605,9 +609,12 @@ class WebSocketConnectionManager(WebSocketInterface):
             )
 
         data_analysis_prompt = ""
-        if data_analysis_doc_ids:
+        if enable_data_science:
             data_analysis_prompt = f"The following datasets are available to use in data science subgraph:\n\n"
             data_analysis_prompt += "\n".join(directory_content)
+            data_analysis_prompt += (
+                "Use the data_science subgraph to analyze the data.\n\n"
+            )
 
         daytona_manager = self.daytona_managers.get(f"{user_id}:{thread_id}")
         if not daytona_manager:
@@ -654,8 +661,7 @@ class WebSocketConnectionManager(WebSocketInterface):
             "type==default/system_message"
         ] = f"""
 You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {retrieval_prompt} {data_analysis_prompt} 
-CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph or data_science subgraph only.
-If the user includes any datasets you MUST use the data_science subgraph to analyze the data.
+CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph.
 """
 
         if multimodal_input:
@@ -738,7 +744,7 @@ If the user includes any datasets you MUST use the data_science subgraph to anal
                 }
             )
 
-        if data_analysis_doc_ids:
+        if enable_data_science:
             config["configurable"]["type==default/subgraphs"]["data_science"] = {
                 "description": "This subgraph performs comprehensive end-to-end data science workflows with multiple specialized agents. Use ONLY for complex projects requiring: machine learning model development, predictive analytics, statistical modeling, hypothesis testing, or multi-step data science pipelines. IMPORTANT: Pass the user's natural language request (e.g., 'build a machine learning model to predict customer churn', 'perform statistical analysis on sales trends'), NOT code. Do NOT use for simple data exploration - use DaytonaCodeSandbox instead.",
                 "next_node": END,

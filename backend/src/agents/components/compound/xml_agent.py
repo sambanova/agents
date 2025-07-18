@@ -479,10 +479,21 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 subgraph_name = (
                     content.split("<subgraph>")[1].split("</subgraph>")[0].strip()
                 )
-                if subgraph_name:
+                if subgraph_name and subgraph_name in subgraphs:
                     additional_kwargs["agent_type"] = "react_subgraph_" + subgraph_name
                     last_message.additional_kwargs = additional_kwargs
                     return f"subgraph_{subgraph_name}"
+                else:
+                    logger.warning(
+                        "Attempted to route to non-existent subgraph",
+                        requested_subgraph=subgraph_name,
+                        available_subgraphs=list(subgraphs.keys()),
+                    )
+                    additional_kwargs["agent_type"] = "react_end"
+                    additional_kwargs["error_type"] = "non_existent_subgraph"
+                    last_message.additional_kwargs = additional_kwargs
+                    last_message.content = f"I am not able to route to the {subgraph_name} subgraph as it is not available"
+                    return "end"
             except (IndexError, ValueError):
                 pass
 
