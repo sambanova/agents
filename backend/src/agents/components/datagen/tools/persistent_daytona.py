@@ -220,8 +220,12 @@ class PersistentDaytonaManager:
             # Cap the result length to prevent overwhelming output
             MAX_RESULT_LENGTH = 1000
             if len(result_str) > MAX_RESULT_LENGTH:
-                truncated_result = result_str[:MAX_RESULT_LENGTH]
-                result_str = f"{truncated_result}\n\n[OUTPUT TRUNCATED - Original length: {len(result_str)} characters, showing first {MAX_RESULT_LENGTH} characters]"
+                # Show first and last parts of the output
+                first_part_length = MAX_RESULT_LENGTH // 2
+                last_part_length = MAX_RESULT_LENGTH - first_part_length
+                first_part = result_str[:first_part_length]
+                last_part = result_str[-last_part_length:]
+                result_str = f"{first_part}\n\n{last_part}\n\n[OUTPUT TRUNCATED - Original length: {len(result_str)} characters, showing first {first_part_length} and last {last_part_length} characters]"
 
             if response.exit_code != 0:
                 error_detail = result_str

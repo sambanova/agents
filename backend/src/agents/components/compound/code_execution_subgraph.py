@@ -49,9 +49,9 @@ class CodeCorrections(BaseModel):
         description="List of code corrections. This can be empty if you decide that research is needed.",
         default_factory=list,
     )
-    needs_research: bool = Field(
-        description="Set to true if you are not confident about the fix and believe a web search for the error message would provide better context. If you set this to true, you MUST provide an empty list for `corrections`.",
-        default=False,
+    search_query: Optional[str] = Field(
+        default=None,
+        description="If you are not confident and need more information, provide a concise and effective search query here. If you provide a query, `corrections` and `additional_packages` MUST be empty.",
     )
     additional_packages: List[str] = Field(
         description="List of additional packages to install. This can be empty if you decide that research is needed.",
@@ -59,33 +59,35 @@ class CodeCorrections(BaseModel):
     )
 
 
-system_prompt = """You are an expert Python developer and debugger. Your primary goal is to be accurate. When in doubt, you MUST request more information by using the web search tool.
+system_prompt = """You are an expert Python developer and debugger. Your primary goal is to be accurate. When in doubt, you MUST request more information by generating a targeted search query.
 
-    INSTRUCTIONS:
-    1.  First, analyze the provided code, error message, and any search context.
-    2.  Next, categorize the error. Is it:
-        a) A simple syntax error, typo, or undefined variable?
-        b) A complex error involving an external library's API (e.g., `AttributeError`, `TypeError`, `ValueError` from a library call)?
-        c) An error you don't recognize?
-    3.  **Based on the category, DECIDE YOUR NEXT ACTION:**
-        *   **If `search_context` is EMPTY:**
-            *   If the error is category (a) (simple syntax/typo), you can propose a fix directly. Set `needs_research` to `false`.
-            *   If the error is category (b) or (c) (library error or unknown), you MUST assume you don't have enough information. Set `needs_research` to `true` and provide an EMPTY list for `corrections`. This is the safest action. **DO NOT GUESS THE FIX FOR LIBRARY ERRORS.**
-        *   **If `search_context` is NOT EMPTY:**
-            *   You MUST use the provided search context to formulate a definitive fix. Provide the code corrections based on your analysis and set `needs_research` to `false`.
-    4.  **FORMATTING THE FIX:**
-        *   The "remove" value must be the **exact** string from the original code.
-        *   The "add" value is the new text that will replace it.
-        *   To ensure uniqueness, expand the `remove` and `add` strings with surrounding lines if necessary.
-        *   It is critical that the "remove" string is EXACTLY as it appears in the code, including all whitespace, newlines, and special characters.
-        *   If you receive `CORRECTION FEEDBACK`, your previous attempt failed. Carefully read the feedback and adjust your proposed `corrections` to address the issue. For example, if the feedback says your 'remove' string was not unique, you MUST add more surrounding lines to both the 'remove' and 'add' fields.
-    5.  **INSTALLING ADDITIONAL PACKAGES:**
-        *   If the error indicates missing modules/packages (e.g., `ModuleNotFoundError`, `ImportError`), include the required package names in the `additional_packages` list.
-        *   Use exact package names as they appear on PyPI (e.g., "matplotlib", "pandas", "scikit-learn").
-        *   Only suggest packages you are confident about. If uncertain about the correct package name, set `needs_research` to `true` instead.
-        *   If no additional packages are needed, leave the list empty.
-    
-    You must respond with valid JSON that matches this exact schema:
+INSTRUCTIONS:
+1.  First, analyze the provided code, error message, and any search context.
+2.  Next, categorize the error. Is it:
+    a) A simple syntax error, typo, or undefined variable?
+    b) A complex error involving an external library's API (e.g., `AttributeError`, `TypeError`, `ValueError` from a library call)?
+    c) An error you don't recognize?
+3.  **Based on the category, DECIDE YOUR NEXT ACTION:**
+    * **If `search_context` is EMPTY:**
+        * If the error is category (a) (simple syntax/typo), you can propose a fix directly. Provide the `corrections` and leave `search_query` as `null`.
+        * If the error is category (b) or (c) (library error or unknown), you MUST request a search. Provide a specific `search_query` and an EMPTY list for `corrections`. **DO NOT GUESS THE FIX FOR LIBRARY ERRORS.**
+    * **If `search_context` is NOT EMPTY:**
+        * You MUST use the provided search context to formulate a definitive fix. Provide the code `corrections` based on your analysis and leave `search_query` as `null`.
+4.  **FORMULATING A SEARCH QUERY:**
+    * If you decide to search, create a high-quality, concise query.
+    * Include the library name, function name, error type, and key parts of the error message.
+    * Example Query: "pandas DataFrame.apply TypeError: 'str' object is not callable"
+5.  **FORMATTING THE FIX:**
+    * The `remove` value must be the **exact** string from the original code.
+    * The `add` value is the new text that will replace it.
+    * To ensure uniqueness, expand the `remove` and `add` strings with surrounding lines if necessary.
+    * It is critical that the `remove` string is EXACTLY as it appears in the code, including all whitespace and special characters.
+    * If you receive `CORRECTION FEEDBACK`, your previous attempt failed. Carefully read the feedback and adjust your proposed `corrections` to address the issue.
+6.  **INSTALLING ADDITIONAL PACKAGES:**
+    * If the error is `ModuleNotFoundError` or `ImportError`, include the required package names in the `additional_packages` list.
+    * If uncertain about the correct package name, generate a `search_query` instead (e.g., "pypi package for module XYZ").
+
+You must respond with valid JSON that matches this exact schema:
 {code_replacement_schema}
 """
 
@@ -126,7 +128,7 @@ class CorrectingExecutorState(TypedDict):
         max_retries: The maximum number of correction attempts allowed.
         messages: List[BaseMessage]  # List of messages from the agent
         search_context: Optional[str]
-        needs_research: bool
+        search_query: Optional[str]
         correction_feedback: Optional[str]
     """
 
@@ -138,9 +140,9 @@ class CorrectingExecutorState(TypedDict):
     max_retries: int
     messages: list[BaseMessage]
     search_context: Optional[str]
-    needs_research: bool
     additional_packages: Annotated[list[str], lambda left, right: right]
     installation_successful: bool
+    search_query: Optional[str]
     correction_feedback: Optional[str]
     files: Annotated[list[str], add]
 
@@ -354,16 +356,13 @@ def create_code_execution_graph(
 
                 result = {
                     "current_retry": state["current_retry"] + 1,
-                    "steps_taken": [
-                        "Code executed successfully",
-                        "Result: " + response,
-                    ],
+                    "steps_taken": [result_str],
                     "files": files,
                 }
 
             elif not execution_successful:
                 result = {
-                    "steps_taken": ["Code execution failed: " + response],
+                    "steps_taken": [f"Code execution failed. {response}"],
                     "current_retry": state["current_retry"] + 1,
                     "error_detected": True,
                 }
@@ -429,11 +428,11 @@ def create_code_execution_graph(
             # Clear the search context after it's been used
             return {
                 "steps_taken": [
-                    f"Analyzed error and decided on next step, Corrections proposed: {str(response.model_dump()['corrections'])},Needs research: {str(response.needs_research)}, Install additional packages: {str(response.additional_packages)}"
+                    f"Analyzed error and decided on next step, Corrections proposed: {str(response.model_dump()['corrections'])},Search query: {str(response.search_query)}, Install additional packages: {str(response.additional_packages)}"
                 ],
                 "error_detected": False,
                 "corrections_proposed": response.model_dump()["corrections"],
-                "needs_research": response.needs_research,
+                "search_query": response.search_query,
                 "additional_packages": response.additional_packages,
                 "messages": captured_messages,
                 "search_context": None,  # Reset context
@@ -443,8 +442,10 @@ def create_code_execution_graph(
             logger.error(f"Error calling LLM for code fix: {e}", exc_info=True)
             # If the analysis fails, escalate to research as a fallback
             return {
-                "needs_research": True,
                 "error_detected": False,
+                "corrections_proposed": [],
+                "search_query": None,
+                "additional_packages": [],
             }
 
     async def research_for_fix(state: CorrectingExecutorState) -> Dict:
@@ -452,12 +453,7 @@ def create_code_execution_graph(
         Node: Performs a web search using the error message to find solutions.
         """
         logger.info("Performing web search for error context...")
-        error_log = state["error_log"]
-
-        # Extract the most meaningful line from the error log for a better query
-        error_lines = error_log.strip().split("\n")
-        concise_error = error_lines[-1] if error_lines else error_log
-        query = f"python {concise_error}"
+        query = state["search_query"]
         logger.info(f"Tavily search query: {query}")
 
         try:
@@ -591,7 +587,7 @@ def create_code_execution_graph(
         """
         Determines whether to perform a web search based on the LLM's decision.
         """
-        if state.get("needs_research"):
+        if state.get("search_query"):
             logger.info(
                 "LLM is not confident and has requested research. Proceeding to web search."
             )
@@ -601,9 +597,12 @@ def create_code_execution_graph(
                 "LLM has suggested additional packages. Proceeding to install them."
             )
             return "install_packages"
-        else:
+        elif state.get("corrections_proposed"):
             logger.info("LLM is confident or has used context. Applying proposed fix.")
             return "override_code"
+        else:
+            logger.info("No further action needed. Proceeding to cleanup.")
+            return "cleanup"
 
     def did_override_succeed(state: CorrectingExecutorState) -> str:
         """
@@ -639,6 +638,12 @@ def create_code_execution_graph(
             "additional_packages": [],
             "installation_successful": installation_successful,
             "steps_taken": [aggregated_result],
+            "current_retry": (
+                state["current_retry"]
+                if installation_successful
+                else state["current_retry"] + 1
+            ),
+            "error_detected": not installation_successful,
             "messages": [
                 ToolMessage(
                     id=str(uuid.uuid4()),
@@ -700,6 +705,7 @@ def create_code_execution_graph(
             "research_for_fix": "research_for_fix",
             "override_code": "override_code",
             "install_packages": "install_packages",
+            "cleanup": "cleanup",
         },
     )
     workflow.add_conditional_edges(
