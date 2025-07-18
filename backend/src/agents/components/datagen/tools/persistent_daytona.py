@@ -126,6 +126,13 @@ class PersistentDaytonaManager:
             logger.error("Error uploading file", file_id=file_id, error=str(e))
             raise
 
+    async def download_file(self, file_path: str) -> bytes:
+        """Download a file from the sandbox."""
+        sandbox = await self._get_sandbox()
+        if not sandbox:
+            raise RuntimeError("Daytona sandbox not initialized.")
+        return await sandbox.fs.download_file(file_path)
+
     # Recursively get all files from all directories
     async def get_all_files_recursive(self, directory: str = "."):
         sandbox = await self._get_sandbox()
@@ -162,7 +169,9 @@ class PersistentDaytonaManager:
             logger.warning(f"Error listing files in {directory}: {e}")
             return all_files
 
-    async def execute_code(self, code: str) -> str:
+        return all_files
+
+    async def execute_code(self, code: str) -> tuple[str, bool]:
         """Execute code in the persistent sandbox."""
         sandbox = await self._get_sandbox()
         if not sandbox:
@@ -179,7 +188,10 @@ class PersistentDaytonaManager:
 
             # Validate the cleaned code
             if not clean_code or len(clean_code.strip()) < 3:
-                return "Error: No valid code found after processing input. Please provide valid Python code."
+                return (
+                    "Error: No valid code found after processing input. Please provide valid Python code.",
+                    False,
+                )
 
             # Enhanced logging for debugging
             logger.info(
@@ -200,7 +212,7 @@ class PersistentDaytonaManager:
                     error=str(exec_error),
                     exc_info=True,
                 )
-                return f"Error during code execution: {str(exec_error)}"
+                return f"Error during code execution: {str(exec_error)}", False
 
             # Ensure result is a string, even if None or other types
             result_str = str(response.result) if response.result is not None else ""
@@ -219,12 +231,12 @@ class PersistentDaytonaManager:
                     error_detail=error_detail,
                     original_code_preview=code[:200],
                 )
-                return f"Error (Exit Code {response.exit_code}): {error_detail}"
+                return f"Error (Exit Code {response.exit_code}): {error_detail}", False
             logger.info(
                 "Code executed successfully",
                 result_str=result_str[:1000],
             )
-            return result_str
+            return result_str, True
 
         except Exception as e:
             logger.error(
@@ -232,7 +244,7 @@ class PersistentDaytonaManager:
                 error=str(e),
                 exc_info=True,
             )
-            return f"Error during code execution: {str(e)}"
+            return f"Error during code execution: {str(e)}", False
 
     async def execute(self, command: str, timeout: int = 60) -> str:
         """Execute a shell command in the persistent sandbox."""
@@ -391,7 +403,8 @@ def get_daytona_execute_code(manager: PersistentDaytonaManager):
         Execute Python code in a persistent Daytona sandbox.
         The sandbox stays alive between calls, preserving variables and files.
         """
-        return await manager.execute_code(code)
+        result, _ = await manager.execute_code(code)
+        return result
 
     return user_daytona_execute_code
 
@@ -697,7 +710,7 @@ print(result)
 '''
 
             # Execute the analysis code in the sandbox
-            result = await manager.execute_code(analysis_code)
+            result, _ = await manager.execute_code(analysis_code)
             return result
 
         except Exception as e:

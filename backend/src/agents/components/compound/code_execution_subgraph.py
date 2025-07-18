@@ -4,6 +4,7 @@ import os
 import re
 import time
 import uuid
+from datetime import datetime
 from operator import add
 from typing import Annotated, Dict, List, Optional, TypedDict
 
@@ -23,7 +24,13 @@ from daytona_sdk import AsyncDaytona as DaytonaClient
 from daytona_sdk import CreateSandboxFromSnapshotParams
 from daytona_sdk import DaytonaConfig as DaytonaSDKConfig
 from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.runnables import RunnableLambda
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
@@ -46,30 +53,39 @@ class CodeCorrections(BaseModel):
         description="Set to true if you are not confident about the fix and believe a web search for the error message would provide better context. If you set this to true, you MUST provide an empty list for `corrections`.",
         default=False,
     )
+    additional_packages: List[str] = Field(
+        description="List of additional packages to install. This can be empty if you decide that research is needed.",
+        default_factory=list,
+    )
 
 
 system_prompt = """You are an expert Python developer and debugger. Your primary goal is to be accurate. When in doubt, you MUST request more information by using the web search tool.
 
-INSTRUCTIONS:
-1.  First, analyze the provided code, error message, and any search context.
-2.  Next, categorize the error. Is it:
-    a) A simple syntax error, typo, or undefined variable?
-    b) A complex error involving an external library's API (e.g., `AttributeError`, `TypeError`, `ValueError` from a library call)?
-    c) An error you don't recognize?
-3.  **Based on the category, DECIDE YOUR NEXT ACTION:**
-    *   **If `search_context` is EMPTY:**
-        *   If the error is category (a) (simple syntax/typo), you can propose a fix directly. Set `needs_research` to `false`.
-        *   If the error is category (b) or (c) (library error or unknown), you MUST assume you don't have enough information. Set `needs_research` to `true` and provide an EMPTY list for `corrections`. This is the safest action. **DO NOT GUESS THE FIX FOR LIBRARY ERRORS.**
-    *   **If `search_context` is NOT EMPTY:**
-        *   You MUST use the provided search context to formulate a definitive fix. Provide the code corrections based on your analysis and set `needs_research` to `false`.
-4.  **FORMATTING THE FIX:**
-    *   The "remove" value must be the **exact** string from the original code.
-    *   The "add" value is the new text that will replace it.
-    *   To ensure uniqueness, expand the `remove` and `add` strings with surrounding lines if necessary.
-    *   It is critical that the "remove" string is EXACTLY as it appears in the code, including all whitespace, newlines, and special characters.
-    *   If you receive `CORRECTION FEEDBACK`, your previous attempt failed. Carefully read the feedback and adjust your proposed `corrections` to address the issue. For example, if the feedback says your 'remove' string was not unique, you MUST add more surrounding lines to both the 'remove' and 'add' fields.
-
-You must respond with valid JSON that matches this exact schema:
+    INSTRUCTIONS:
+    1.  First, analyze the provided code, error message, and any search context.
+    2.  Next, categorize the error. Is it:
+        a) A simple syntax error, typo, or undefined variable?
+        b) A complex error involving an external library's API (e.g., `AttributeError`, `TypeError`, `ValueError` from a library call)?
+        c) An error you don't recognize?
+    3.  **Based on the category, DECIDE YOUR NEXT ACTION:**
+        *   **If `search_context` is EMPTY:**
+            *   If the error is category (a) (simple syntax/typo), you can propose a fix directly. Set `needs_research` to `false`.
+            *   If the error is category (b) or (c) (library error or unknown), you MUST assume you don't have enough information. Set `needs_research` to `true` and provide an EMPTY list for `corrections`. This is the safest action. **DO NOT GUESS THE FIX FOR LIBRARY ERRORS.**
+        *   **If `search_context` is NOT EMPTY:**
+            *   You MUST use the provided search context to formulate a definitive fix. Provide the code corrections based on your analysis and set `needs_research` to `false`.
+    4.  **FORMATTING THE FIX:**
+        *   The "remove" value must be the **exact** string from the original code.
+        *   The "add" value is the new text that will replace it.
+        *   To ensure uniqueness, expand the `remove` and `add` strings with surrounding lines if necessary.
+        *   It is critical that the "remove" string is EXACTLY as it appears in the code, including all whitespace, newlines, and special characters.
+        *   If you receive `CORRECTION FEEDBACK`, your previous attempt failed. Carefully read the feedback and adjust your proposed `corrections` to address the issue. For example, if the feedback says your 'remove' string was not unique, you MUST add more surrounding lines to both the 'remove' and 'add' fields.
+    5.  **INSTALLING ADDITIONAL PACKAGES:**
+        *   If the error indicates missing modules/packages (e.g., `ModuleNotFoundError`, `ImportError`), include the required package names in the `additional_packages` list.
+        *   Use exact package names as they appear on PyPI (e.g., "matplotlib", "pandas", "scikit-learn").
+        *   Only suggest packages you are confident about. If uncertain about the correct package name, set `needs_research` to `true` instead.
+        *   If no additional packages are needed, leave the list empty.
+    
+    You must respond with valid JSON that matches this exact schema:
 {code_replacement_schema}
 """
 
@@ -81,9 +97,9 @@ CODE:
 {code}
 ```
 
-ERROR:
+STEPS TAKEN:
 ```
-{error}
+{steps_taken}
 ```
 
 SEARCH CONTEXT:
@@ -104,12 +120,10 @@ class CorrectingExecutorState(TypedDict):
 
     Attributes:
         code: The Python code to execute. This is modified by the correction loop.
-        error_log: The error message from the last failed attempt.
         corrections_proposed: A list of dictionaries, each with "remove" and "add" keys,
                               representing the text changes to apply.
         current_retry: The current attempt number.
         max_retries: The maximum number of correction attempts allowed.
-        final_result: The successful output of the code.
         messages: List[BaseMessage]  # List of messages from the agent
         search_context: Optional[str]
         needs_research: bool
@@ -117,14 +131,16 @@ class CorrectingExecutorState(TypedDict):
     """
 
     code: str
-    error_log: str
-    corrections_proposed: List[Dict[str, str]]
+    steps_taken: Annotated[list[str], add]
+    error_detected: bool
+    corrections_proposed: list[Dict[str, str]]
     current_retry: int
     max_retries: int
-    final_result: str
-    messages: List[BaseMessage]
+    messages: list[BaseMessage]
     search_context: Optional[str]
     needs_research: bool
+    additional_packages: Annotated[list[str], lambda left, right: right]
+    installation_successful: bool
     correction_feedback: Optional[str]
     files: Annotated[list[str], add]
 
@@ -136,8 +152,6 @@ def create_code_execution_graph(
     daytona_manager: PersistentDaytonaManager,
 ):
     logger.info("Creating code execution subgraph")
-    api_key = os.getenv("DAYTONA_API_KEY")
-    daytona_snapshot = os.getenv("DAYTONA_SNAPSHOT")
 
     supported_extensions = [
         "image/png",
@@ -196,13 +210,15 @@ def create_code_execution_graph(
         except Exception as e:
             logger.info("Error cleaning code", error=str(e), exc_info=True)
             return {
-                "error_log": "Error patching code: " + str(e),
+                "steps_taken": ["Error cleaning code: " + str(e)],
             }
 
         # Validate the cleaned code
         if not clean_code or len(clean_code.strip()) < 3:
             return {
-                "error_log": "Error: No valid code found after processing input. Please provide valid Python code."
+                "steps_taken": [
+                    "Error: No valid code found after processing input. Please provide valid Python code."
+                ],
             }
 
         # Enhanced logging for debugging
@@ -225,59 +241,29 @@ def create_code_execution_graph(
             logger.info("Error patching code", error=str(e), exc_info=True)
             return {
                 "code": clean_code,
-                "error_log": "Error patching code: " + str(e),
+                "steps_taken": ["Error patching code: " + str(e)],
             }
 
         return {
             "code": patched_code,
-            "error_log": "",
+            "steps_taken": ["Code patched successfully"],
         }
 
     async def execute_code(state: CorrectingExecutorState) -> Dict:
         result: Dict = {}
-        sandbox = None
-        daytona = None
         files = []
         try:
             response = None
-            execution_successful = False
-            try:
-                list_of_files = [f.name for f in await daytona_manager.list_files(".")]
-                response = await daytona_manager.execute_code(state["code"])
-                if response.exit_code == 0:
-                    execution_successful = True
-                else:
-                    error_detail = (
-                        str(response.result) if response.result is not None else ""
-                    )
-                    logger.info(
-                        "Daytona code execution failed with non-zero exit code",
-                        exit_code=response.exit_code,
-                        error_detail=error_detail,
-                    )
-                    result = {
-                        "error_log": f"Error (Exit Code {response.exit_code}): {error_detail}",
-                        "current_retry": state["current_retry"] + 1,
-                    }
-            except Exception as exec_error:
-                logger.error(
-                    "Code execution failed in sandbox",
-                    error=str(exec_error),
-                    exc_info=True,
-                )
-                result = {
-                    "error_log": "Error during code execution: " + str(exec_error),
-                    "current_retry": state["current_retry"] + 1,
-                }
-
-            if execution_successful and response:
-                result_str = f"Code executed successfully, result from the sandbox:\n\n {str(response.result) if response.result is not None else ''}"
+            list_of_files = await daytona_manager.list_files(".")
+            response, execution_successful = await daytona_manager.execute_code(
+                state["code"]
+            )
+            if execution_successful:
+                result_str = f"Code executed successfully, result from the sandbox:\n\n {response}"
 
                 logger.info(
                     "Daytona response",
-                    exit_code=response.exit_code,
-                    result_preview=str(response.result)[:500],
-                    artifacts=response.artifacts,
+                    result_preview=response[:500],
                 )
 
                 generation_timestamp = time.time()
@@ -309,7 +295,7 @@ def create_code_execution_graph(
                     ):
                         file_id = str(uuid.uuid4())
                         try:
-                            content = await sandbox.fs.download_file(file_path)
+                            content = await daytona_manager.download_file(file_path)
                             if mime_type == "text/html":
                                 try:
                                     content_str = (
@@ -366,54 +352,20 @@ def create_code_execution_graph(
                                 exc_info=True,
                             )
 
-                if hasattr(response.artifacts, "charts") and response.artifacts.charts:
-                    for i, chart in enumerate(response.artifacts.charts):
-                        image_id = str(uuid.uuid4())
-                        title = chart.title or f"Chart {i+1}"
-                        try:
-                            if chart.png:
-                                import base64
-
-                                chart_data = base64.b64decode(chart.png)
-                                if redis_storage:
-                                    files.append(image_id)
-                                    await redis_storage.put_file(
-                                        user_id,
-                                        image_id,
-                                        data=chart_data,
-                                        filename=title,
-                                        format="png",
-                                        upload_timestamp=generation_timestamp,
-                                        indexed=False,
-                                        source="daytona",
-                                    )
-                                result_str += (
-                                    f"\n\n![{title}](redis-chart:{image_id}:{user_id})"
-                                )
-                        except Exception as e:
-                            logger.error(
-                                "Error storing chart",
-                                chart_index=i,
-                                error=str(e),
-                                exc_info=True,
-                            )
-                            result_str += f"\n\n**Chart Generated:** {title}"
-
-                files_created = len(
-                    [
-                        f
-                        for f in list_of_files_after_execution
-                        if f["file"].name not in list_of_files
-                    ]
-                )
-                if files_created > 0:
-                    result_str += f"\n\n**Execution Summary**: {files_created} file(s) created successfully."
-
                 result = {
-                    "final_result": result_str,
                     "current_retry": state["current_retry"] + 1,
-                    "error_log": "",
+                    "steps_taken": [
+                        "Code executed successfully",
+                        "Result: " + response,
+                    ],
                     "files": files,
+                }
+
+            elif not execution_successful:
+                result = {
+                    "steps_taken": ["Code execution failed: " + response],
+                    "current_retry": state["current_retry"] + 1,
+                    "error_detected": True,
                 }
 
         except Exception as e:
@@ -421,14 +373,9 @@ def create_code_execution_graph(
                 "Daytona setup or critical error failed", error=str(e), exc_info=True
             )
             result = {
-                "error_log": "Error during Daytona setup: " + str(e),
+                "steps_taken": ["Error during Daytona setup: " + str(e)],
                 "current_retry": state["current_retry"] + 1,
             }
-        finally:
-            if sandbox:
-                await sandbox.delete()
-            if daytona:
-                await daytona.close()
 
         return result
 
@@ -457,7 +404,7 @@ def create_code_execution_graph(
                 HumanMessage(
                     content=user_prompt.format(
                         code=state["code"],
-                        error=state["error_log"],
+                        steps_taken="\n".join(state["steps_taken"]),
                         context=context or "No search context provided.",
                         feedback=feedback or "No feedback on previous attempt.",
                     )
@@ -481,8 +428,13 @@ def create_code_execution_graph(
 
             # Clear the search context after it's been used
             return {
+                "steps_taken": [
+                    f"Analyzed error and decided on next step, Corrections proposed: {str(response.model_dump()['corrections'])},Needs research: {str(response.needs_research)}, Install additional packages: {str(response.additional_packages)}"
+                ],
+                "error_detected": False,
                 "corrections_proposed": response.model_dump()["corrections"],
                 "needs_research": response.needs_research,
+                "additional_packages": response.additional_packages,
                 "messages": captured_messages,
                 "search_context": None,  # Reset context
                 "correction_feedback": None,  # Reset feedback
@@ -490,7 +442,10 @@ def create_code_execution_graph(
         except Exception as e:
             logger.error(f"Error calling LLM for code fix: {e}", exc_info=True)
             # If the analysis fails, escalate to research as a fallback
-            return {"needs_research": True}
+            return {
+                "needs_research": True,
+                "error_detected": False,
+            }
 
     async def research_for_fix(state: CorrectingExecutorState) -> Dict:
         """
@@ -517,11 +472,17 @@ def create_code_execution_graph(
             # The tool returns a list of strings, so we format it.
             formatted_context = "\n\n".join([s["content"] for s in search_results])
 
-            return {"search_context": formatted_context}
+            return {
+                "search_context": formatted_context,
+                "steps_taken": ["Web search for fix was successful."],
+            }
         except Exception as e:
             logger.error(f"Error during Tavily search: {e}", exc_info=True)
             # If search fails, return empty context to proceed without it
-            return {"search_context": "Web search failed."}
+            return {
+                "search_context": "Web search failed.",
+                "steps_taken": ["Web search failed."],
+            }
 
     async def override_code(state: CorrectingExecutorState) -> Dict:
         """
@@ -532,7 +493,13 @@ def create_code_execution_graph(
             logger.info(
                 "No corrections proposed and no feedback. Assuming successful pass-through."
             )
-            return {"corrections_proposed": []}  # Ensure corrections are cleared
+            return {
+                "corrections_proposed": [],
+                "steps_taken": [
+                    "No corrections proposed and no feedback. Assuming successful pass-through."
+                ],
+                "error_detected": False,
+            }  # Ensure corrections are cleared
 
         updated_code = state["code"]
 
@@ -557,6 +524,8 @@ def create_code_execution_graph(
                 return {
                     "correction_feedback": feedback_msg,
                     "corrections_proposed": [],  # Clear the failed proposal
+                    "steps_taken": ["Unsuccessful code patch"],
+                    "error_detected": True,
                 }
 
             if to_remove and to_remove not in updated_code:
@@ -568,6 +537,8 @@ def create_code_execution_graph(
                 return {
                     "correction_feedback": feedback_msg,
                     "corrections_proposed": [],  # Clear the failed proposal
+                    "steps_taken": ["Unsuccessful code patch"],
+                    "error_detected": True,
                 }
 
             logger.info(
@@ -577,20 +548,25 @@ def create_code_execution_graph(
             )
             updated_code = updated_code.replace(to_remove, to_add, 1)
 
-        return {"code": updated_code, "corrections_proposed": []}  # Clear corrections
+        return {
+            "code": updated_code,
+            "corrections_proposed": [],  # Clear corrections
+            "steps_taken": ["Code patched successfully"],
+            "error_detected": False,
+        }
 
     async def should_continue_patch_code(state: CorrectingExecutorState) -> str:
         """
         Determines the next step after code execution.
         """
-        if state["error_log"]:
+        if state["error_detected"]:
             if state["current_retry"] < state["max_retries"]:
                 # If there's an error and we have retries left, enter the correction loop.
                 return "analyze_and_decide"
             else:
                 # If retries are exhausted, end the process.
                 logger.info("Max Retries Reached")
-                return END
+                return "cleanup"
         else:
             # If there's no error, the process is successful.
             return "execute_code"
@@ -599,17 +575,17 @@ def create_code_execution_graph(
         """
         Determines the next step after code execution.
         """
-        if state["error_log"]:
+        if state["error_detected"]:
             if state["current_retry"] < state["max_retries"]:
                 # If there's an error and we have retries left, enter the correction loop.
                 return "analyze_and_decide"
             else:
                 # If retries are exhausted, end the process.
                 logger.info("Max Retries Reached")
-                return END
+                return "cleanup"
         else:
             # If there's no error, the process is successful.
-            return END
+            return "cleanup"
 
     async def should_research(state: CorrectingExecutorState) -> str:
         """
@@ -620,6 +596,11 @@ def create_code_execution_graph(
                 "LLM is not confident and has requested research. Proceeding to web search."
             )
             return "research_for_fix"
+        elif state.get("additional_packages"):
+            logger.info(
+                "LLM has suggested additional packages. Proceeding to install them."
+            )
+            return "install_packages"
         else:
             logger.info("LLM is confident or has used context. Applying proposed fix.")
             return "override_code"
@@ -635,6 +616,53 @@ def create_code_execution_graph(
             logger.info("Correction applied successfully. Proceeding to execution.")
             return "execute_code"
 
+    async def cleanup_node(state: CorrectingExecutorState) -> dict:
+        """Clean up the persistent Daytona manager."""
+        await daytona_manager.cleanup()
+        return {}
+
+    async def install_packages(state: CorrectingExecutorState) -> Dict:
+        """Install the additional packages."""
+        logger.info("Installing additional packages.")
+        aggregated_result = ""
+        installation_successful = True
+        for package in state["additional_packages"]:
+            pip_command = f"pip install {package}"
+            result = await daytona_manager.execute(pip_command, timeout=300)
+            if not result.startswith("Error"):
+                aggregated_result += f"Successfully installed {package}: {result[:100] + '...' + result[-100:]}\n\n"
+            else:
+                aggregated_result += f"Error installing {package}: {result[:100] + '...' + result[-100:]}\n\n"
+                installation_successful = False
+
+        return {
+            "additional_packages": [],
+            "installation_successful": installation_successful,
+            "steps_taken": [aggregated_result],
+            "messages": [
+                ToolMessage(
+                    id=str(uuid.uuid4()),
+                    content=result,
+                    name="install_packages",
+                    tool_call_id=str(uuid.uuid4()),
+                    status="success" if installation_successful else "error",
+                    additional_kwargs={
+                        "agent_type": "tool_response",
+                        "timestamp": datetime.now().isoformat(),
+                    },
+                )
+            ],
+        }
+
+    async def should_continue_install_packages(state: CorrectingExecutorState) -> str:
+        """Determine if the installation process should continue."""
+        if state["installation_successful"]:
+            logger.info("Installation successful. Proceeding to execution.")
+            return "execute_code"
+        else:
+            logger.info("Installation failed. Proceeding to analysis.")
+            return "analyze_and_decide"
+
     workflow = StateGraph(CorrectingExecutorState)
 
     workflow.add_node("patch_code", patch_code)
@@ -642,7 +670,8 @@ def create_code_execution_graph(
     workflow.add_node("analyze_and_decide", analyze_error_and_decide)
     workflow.add_node("research_for_fix", research_for_fix)
     workflow.add_node("override_code", override_code)
-
+    workflow.add_node("cleanup", cleanup_node)
+    workflow.add_node("install_packages", install_packages)
     workflow.set_entry_point("patch_code")
 
     workflow.add_conditional_edges(
@@ -651,7 +680,7 @@ def create_code_execution_graph(
         {
             "analyze_and_decide": "analyze_and_decide",
             "execute_code": "execute_code",
-            END: END,
+            "cleanup": "cleanup",
         },
     )
 
@@ -660,14 +689,23 @@ def create_code_execution_graph(
         should_continue_execute_code,
         {
             "analyze_and_decide": "analyze_and_decide",
-            END: END,
+            "cleanup": "cleanup",
         },
     )
 
     workflow.add_conditional_edges(
         "analyze_and_decide",
         should_research,
-        {"research_for_fix": "research_for_fix", "override_code": "override_code"},
+        {
+            "research_for_fix": "research_for_fix",
+            "override_code": "override_code",
+            "install_packages": "install_packages",
+        },
+    )
+    workflow.add_conditional_edges(
+        "install_packages",
+        should_continue_install_packages,
+        {"execute_code": "execute_code", "analyze_and_decide": "analyze_and_decide"},
     )
 
     workflow.add_conditional_edges(
@@ -677,6 +715,7 @@ def create_code_execution_graph(
     )
 
     workflow.add_edge("research_for_fix", "analyze_and_decide")  # Loop back
+    workflow.add_edge("cleanup", END)
 
     # Compile and return
     return workflow.compile()

@@ -704,14 +704,15 @@ If the user includes any datasets you MUST use the data_science subgraph to anal
                     "code": x,
                     "current_retry": 0,
                     "max_retries": 5,
-                    "error_log": "",
+                    "steps_taken": [],
+                    "error_detected": False,
                     "final_result": "",
                     "corrections_proposed": [],
                     "files": [],
                 },
                 "state_output_mapper": lambda x: LiberalFunctionMessage(
                     name="DaytonaCodeSandbox",
-                    content=x["final_result"] if x["final_result"] else x["error_log"],
+                    content="\n".join(x["steps_taken"]),
                     additional_kwargs={
                         "agent_type": "tool_response",
                         "timestamp": datetime.now().isoformat(),
