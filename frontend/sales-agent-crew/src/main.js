@@ -11,7 +11,7 @@ import router from './router/index.js'
 
 const AUTH0_DOMAIN = import.meta.env.VITE_AUTH0_DOMAIN
 const AUTH0_CLIENT_ID = import.meta.env.VITE_AUTH0_CLIENT_ID
-const AUTH0_AUDIENCE = import.meta.env.VITE_AUTH0_AUDIENCE
+const AUTH0_SCOPES = import.meta.env.VITE_AUTH0_SCOPES || 'openid profile email'
 
 if (!AUTH0_DOMAIN || !AUTH0_CLIENT_ID) {
   throw new Error('Missing Auth0 configuration')
@@ -28,11 +28,11 @@ app.use(createAuth0({
   clientId: AUTH0_CLIENT_ID,
   authorizationParams: {
     redirect_uri: window.location.origin,
-    audience: AUTH0_AUDIENCE,
-    scope: 'openid profile email'
+    scope: AUTH0_SCOPES
   },
   cacheLocation: 'localstorage',
-  useRefreshTokens: true
+  useRefreshTokens: true,
+  useRefreshTokensFallback: true
 }))
 app.use(pinia) // Register Pinia
 app.use(router)

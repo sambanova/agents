@@ -70,14 +70,11 @@ class VerifyToken:
                 token,
                 signing_key.key,
                 algorithms=self.config.algorithms,
-                audience=self.config.audience,
                 issuer=f"https://{self.config.domain}/",
             )
             return payload
         except ExpiredSignatureError:
             raise UnauthenticatedException()
-        except InvalidAudienceError:
-            raise UnauthorizedException("Invalid audience")
         except InvalidIssuerError:
             raise UnauthorizedException("Invalid issuer")
         except InvalidTokenError as e:
