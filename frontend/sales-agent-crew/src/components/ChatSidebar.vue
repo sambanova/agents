@@ -210,8 +210,6 @@ function toggleCollapse() {
   emit('toggle-collapse');
 }
 
-/** Clerk user */
-const { userId } = useAuth();
 /** Auth0 user */
 const { user, getAccessTokenSilently } = useAuth0();
 const userId = computed(() => user.value?.sub);

@@ -6,7 +6,6 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-import jwt
 import mlflow
 import structlog
 from agents.api.data_types import APIKeys
@@ -883,16 +882,10 @@ async def get_api_keys(
 @app.post("/chat/{conversation_id}/share")
 async def create_conversation_share(
     conversation_id: str,
-    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+    user_id: str = Depends(get_current_user_id),
 ):
     """Create a new share link for a conversation (like ChatGPT)"""
     try:
-        user_id = get_user_id_from_token(token_data)
-        if not user_id:
-            return JSONResponse(
-                status_code=401, content={"error": "Invalid authentication token"}
-            )
-
         share_token = await app.state.redis_storage_service.create_share(
             user_id, conversation_id
         )
@@ -1007,16 +1000,10 @@ async def get_shared_file(share_token: str, file_id: str):
 @app.get("/chat/{conversation_id}/shares")
 async def list_conversation_shares(
     conversation_id: str,
-    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+    user_id: str = Depends(get_current_user_id),
 ):
     """List all shares for a conversation"""
     try:
-        user_id = get_user_id_from_token(token_data)
-        if not user_id:
-            return JSONResponse(
-                status_code=401, content={"error": "Invalid authentication token"}
-            )
-
         # Verify user owns the conversation
         if not await app.state.redis_storage_service.verify_conversation_exists(
             user_id, conversation_id
@@ -1041,16 +1028,10 @@ async def list_conversation_shares(
 @app.delete("/share/{share_token}")
 async def delete_share(
     share_token: str,
-    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+    user_id: str = Depends(get_current_user_id),
 ):
     """Delete a share (owner only)"""
     try:
-        user_id = get_user_id_from_token(token_data)
-        if not user_id:
-            return JSONResponse(
-                status_code=401, content={"error": "Invalid authentication token"}
-            )
-
         success = await app.state.redis_storage_service.delete_share(
             user_id, share_token
         )

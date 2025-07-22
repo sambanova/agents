@@ -205,11 +205,7 @@ export default {
         const response = await api.get(`/files/${fileId}`, {
           headers: {
             'Authorization': `Bearer ${token}`
-          };
-        }
-        
-        const response = await api.get(endpoint, {
-          headers,
+          },
           responseType: 'blob'
         });
         
