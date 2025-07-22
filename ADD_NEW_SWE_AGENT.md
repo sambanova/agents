@@ -1501,9 +1501,363 @@ This developer agent provides comprehensive code implementation capabilities int
 
 ---
 
+### Step 4: Create the SWE Subgraph Orchestrator
+
+This is the central nervous system of our SWE agent. The `swe_subgraph` is a LangGraph `StateGraph` that orchestrates the entire workflow. It manages the high-level state (`SWEMainState`) and invokes the specialized agents (Architect, Developer) as subgraphs.
+
+This modular approach allows us to separate high-level orchestration logic from the specific implementation details of each agent.
+
+**File:** `backend/src/agents/components/swe/swe_subgraph.py`
+
+```python
+import asyncio
+from typing import Dict, List, Optional
+import structlog
+from langchain_core.messages import BaseMessage
+from langchain_core.language_models import BaseChatModel
+
+from agents.components.swe.state import (
+    SWEMainState,
+    SWEArchitectState,
+    SWEDeveloperState,
+    ImplementationPlan,
+    CodebaseAnalysis
+)
+from agents.components.swe.architect_agent import SWEArchitectAgent, architect_router, should_require_human_approval
+from agents.components.swe.developer_agent import SWEDeveloperAgent, developer_router
+from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
+from langgraph.graph import END, StateGraph
+
+logger = structlog.get_logger(__name__)
+
+
+class SWESubgraph:
+    """
+    Main orchestrator for the SWE agent workflow.
+    It wires together the architect and developer agents into a single graph.
+    """
+
+    def __init__(self, llm: BaseChatModel, daytona_manager: PersistentDaytonaManager, tools: List[any]):
+        self.llm = llm
+        self.daytona_manager = daytona_manager
+        self.tools = tools
+        self.architect_agent = SWEArchitectAgent(llm=llm, tools=tools)
+        self.developer_agent = SWEDeveloperAgent(llm=llm, daytona_manager=daytona_manager, tools=tools)
+
+    def create_graph(self) -> StateGraph:
+        """
+        Creates the main LangGraph StateGraph for the SWE workflow.
+        """
+        workflow = StateGraph(SWEMainState)
+
+        # Add nodes for each major step
+        workflow.add_node("run_architect", self.run_architect)
+        workflow.add_node("run_developer", self.run_developer)
+        workflow.add_node("request_human_approval", self.request_human_approval)
+
+        # Define the entry and exit points
+        workflow.set_entry_point("run_architect")
+        workflow.add_edge("request_human_approval", END) # For now, we end after requesting approval
+
+        # Conditional routing from architect
+        workflow.add_conditional_edges(
+            "run_architect",
+            self.route_from_architect,
+            {
+                "plan_complete": "run_developer",
+                "human_input_required": "request_human_approval",
+                "refine_plan": "run_architect" # Loop back to refine the plan
+            }
+        )
+        
+        # Conditional routing from developer
+        workflow.add_conditional_edges(
+            "run_developer",
+            self.route_from_developer,
+            {
+                "implementation_complete": END,
+                "human_help_required": "request_human_approval", # Escalate to human
+                "continue_implementation": "run_developer" # Loop for next step
+            }
+        )
+
+        return workflow.compile()
+
+    # ============================================================================
+    # Node Implementations
+    # ============================================================================
+
+    async def run_architect(self, state: SWEMainState) -> SWEMainState:
+        """
+        Node to run the architect agent subgraph.
+        """
+        logger.info("Main graph: Running architect agent")
+        architect_state = self._map_to_architect_state(state)
+        
+        # Invoke the architect agent's process
+        result_state = await self.architect_agent.process(architect_state)
+        
+        # Update the main state with the results
+        return self._update_from_architect_state(state, result_state)
+
+    async def run_developer(self, state: SWEMainState) -> SWEMainState:
+        """
+        Node to run the developer agent subgraph.
+        """
+        logger.info("Main graph: Running developer agent")
+        developer_state = self._map_to_developer_state(state)
+        
+        # Invoke the developer agent's process
+        result_state = await self.developer_agent.process(developer_state)
+        
+        # Update the main state with the results
+        return self._update_from_developer_state(state, result_state)
+
+    async def request_human_approval(self, state: SWEMainState) -> SWEMainState:
+        """
+        Node to flag that human approval is required.
+        """
+        logger.info("Main graph: Human approval required")
+        state["requires_approval"] = True
+        state["approval_prompt"] = (
+            "The implementation plan is complex or has high uncertainty. "
+            "Please review the generated plan before proceeding."
+        )
+        # In a real system, this would trigger a WebSocket message to the frontend
+        return state
+
+    # ============================================================================
+    # Routing Logic
+    # ============================================================================
+
+    def route_from_architect(self, state: SWEMainState) -> str:
+        """
+        Determines the next step after the architect agent has run.
+        """
+        if should_require_human_approval(self._map_to_architect_state(state)):
+            return "human_input_required"
+        
+        # Use the architect's internal router to decide next step
+        architect_decision = architect_router(self._map_to_architect_state(state))
+        
+        logger.info(f"Architect decision: {architect_decision}")
+        
+        if architect_decision == "plan_complete":
+            return "plan_complete"
+        elif architect_decision == "refine_plan":
+            return "refine_plan"
+        else:
+            # Continue research or other intermediate steps
+            return "refine_plan" # Default to another architect loop
+
+    def route_from_developer(self, state: SWEMainState) -> str:
+        """
+        Determines the next step after the developer agent has run.
+        """
+        developer_decision = developer_router(self._map_to_developer_state(state))
+        
+        logger.info(f"Developer decision: {developer_decision}")
+        
+        if developer_decision == "implementation_complete":
+            return "implementation_complete"
+        else:
+            return "continue_implementation"
+
+    # ============================================================================
+    # State Mapping Helpers
+    # ============================================================================
+
+    def _map_to_architect_state(self, main_state: SWEMainState) -> SWEArchitectState:
+        """Maps the main graph state to the architect subgraph's state."""
+        return {
+            "implementation_plan": main_state.get("implementation_plan"),
+            "codebase_analysis": main_state.get("codebase_analysis"),
+            "research_scratchpad": main_state.get("internal_messages", []),
+            "research_next_step": main_state.get("current_phase_details", {}).get("next_step"),
+            "research_hypothesis": main_state.get("current_phase_details", {}).get("hypothesis"),
+            "is_valid_research_step": main_state.get("current_phase_details", {}).get("is_valid"),
+            "research_completed": main_state.get("current_phase") == "planning",
+            "user_request": main_state["user_request"],
+            "target_files": main_state.get("target_files", []),
+            "plan_confidence": None,
+            "identified_risks": []
+        }
+
+    def _update_from_architect_state(self, main_state: SWEMainState, architect_result: Dict) -> SWEMainState:
+        """Merges results from the architect back into the main state."""
+        main_state.update({
+            "implementation_plan": architect_result.get("implementation_plan"),
+            "codebase_analysis": architect_result.get("codebase_analysis"),
+            "internal_messages": architect_result.get("research_scratchpad", []),
+            "target_files": architect_result.get("target_files", main_state.get("target_files", []))
+        })
+        return main_state
+
+    def _map_to_developer_state(self, main_state: SWEMainState) -> SWEDeveloperState:
+        """Maps the main graph state to the developer subgraph's state."""
+        return {
+            "implementation_plan": main_state["implementation_plan"],
+            "current_task_idx": main_state.get("current_task_index", 0),
+            "current_atomic_task_idx": main_state.get("current_atomic_task_index", 0),
+            "current_file_content": None,
+            "current_file_path": None,
+            "pending_diffs": [],
+            "atomic_implementation_research": [],
+            "codebase_structure": None,
+            "daytona_manager_ready": True, # Assume ready by this stage
+            "execution_results": [],
+            "implementation_errors": [],
+            "retry_count": 0,
+            "max_retries": 3
+        }
+    
+    def _update_from_developer_state(self, main_state: SWEMainState, developer_result: Dict) -> SWEMainState:
+        """Merges results from the developer back into the main state."""
+        main_state.update({
+            "current_task_index": developer_result.get("current_task_idx", 0),
+            "current_atomic_task_index": developer_result.get("current_atomic_task_idx", 0),
+            "completed_tasks": main_state.get("completed_tasks", []) + developer_result.get("execution_results", []),
+            "generated_files": main_state.get("generated_files", []),
+            "internal_messages": main_state.get("internal_messages", []) + developer_result.get("atomic_implementation_research", [])
+        })
+        return main_state
+
+```
+
+#### Integration with WebSocket Manager
+
+The SWE agent integrates with the system by being registered as a subgraph in the `websocket_manager.py` file's `create_config` method. Following the same pattern as existing subgraphs like `financial_analysis`, `deep_research`, and `data_science`, the SWE agent would be added to the `config["configurable"]["type==default/subgraphs"]` dictionary.
+
+**Integration in `websocket_manager.py`:**
+
+```python
+# In the create_config method of WebSocketConnectionManager
+config["configurable"]["type==default/subgraphs"]["swe_agent"] = {
+    "description": "Software Engineering Agent that analyzes codebases, creates implementation plans, and executes code changes with human oversight. Use for: implementing new features, refactoring code, adding APIs, fixing bugs, or any code modification tasks. Pass a clear description of what needs to be implemented.",
+    "next_node": END,  # Complete workflow, return to main agent
+    "graph": create_swe_graph(
+        user_id=user_id,
+        sambanova_api_key=api_keys.sambanova_key,
+        redis_storage=self.message_storage,
+        daytona_manager=daytona_manager,
+    ),
+    "state_input_mapper": lambda x: {
+        "messages": [],
+        "internal_messages": [],
+        "user_request": x,
+        "sender": "xml_agent",
+        "current_phase": "analysis",
+        "implementation_plan": None,
+        "codebase_analysis": None,
+        "completed_tasks": [],
+        "current_task_index": 0,
+        "total_estimated_time": 0,
+        "requires_approval": False,
+        "approval_prompt": None,
+        "user_feedback": None,
+        "target_files": [],
+        "generated_files": []
+    },
+    "state_output_mapper": lambda x: AIMessage(
+        content=_format_swe_response(x),
+        additional_kwargs={
+            "agent_type": "swe_implementation_end",
+            "files": x.get("generated_files", [])
+        }
+    )
+}
+```
+
+**Helper Function for Response Formatting:**
+
+```python
+def _format_swe_response(swe_result: dict) -> str:
+    """Format SWE agent results for display."""
+    completed_tasks = swe_result.get("completed_tasks", [])
+    generated_files = swe_result.get("generated_files", [])
+    
+    if completed_tasks:
+        response = f"""SWE Implementation Complete
+
+**Completed Tasks:** {len(completed_tasks)}
+{chr(10).join(f"  • {task}" for task in completed_tasks[:5])}
+{f"{chr(10)}  ... and {len(completed_tasks) - 5} more" if len(completed_tasks) > 5 else ""}
+
+**Modified Files:** {len(generated_files)}
+{chr(10).join(f"  • {file}" for file in generated_files[:10])}
+{f"{chr(10)}  ... and {len(generated_files) - 10} more" if len(generated_files) > 10 else ""}
+
+**Implementation Time:** {swe_result.get('total_estimated_time', 0)} minutes
+
+All changes have been successfully implemented in the development environment."""
+    else:
+        response = f"""SWE Implementation Status
+
+**Current Phase:** {swe_result.get('current_phase', 'In Progress')}
+
+{swe_result.get('approval_prompt', 'Implementation workflow is running...')}"""
+    
+    return response
+```
+
+**Graph Creation Function:**
+
+```python
+def create_swe_graph(
+    user_id: str,
+    sambanova_api_key: str,
+    redis_storage: RedisStorage,
+    daytona_manager: PersistentDaytonaManager
+) -> StateGraph:
+    """
+    Creates the SWE agent graph with all necessary dependencies.
+    """
+    from agents.components.swe.swe_subgraph import SWESubgraph
+    from agents.utils.llms import get_llm
+    from agents.components.swe.tools.code_analysis_tools import (
+        analyze_codebase_structure,
+        search_code_patterns,
+        find_relevant_files
+    )
+    
+    # Initialize LLM
+    llm = get_llm(
+        api_key=sambanova_api_key,
+        provider="sambanova",
+        model="Meta-Llama-3.1-70B-Instruct"
+    )
+    
+    # Initialize tools
+    tools = []  # Add any additional tools the SWE agent needs
+    
+    # Create SWE subgraph
+    swe_subgraph = SWESubgraph(
+        llm=llm,
+        daytona_manager=daytona_manager,
+        tools=tools
+    )
+    
+    return swe_subgraph.create_graph()
+```
+
+This integration follows the exact same pattern as other subgraphs in the system:
+- **Description**: Clear explanation of when to use the SWE agent
+- **Next Node**: `END` to complete the workflow and return control
+- **Graph**: Compiled SWE StateGraph created by the factory function
+- **State Mappers**: Lambda functions that transform input/output between formats
+- **Dependencies**: Integration with existing `daytona_manager` and `redis_storage`
+
+The XML agent can then invoke the SWE agent using:
+```xml
+<subgraph>swe_agent</subgraph>
+<subgraph_input>Implement user authentication with JWT tokens in the API</subgraph_input>
+```
+
+---
+
 ## Tool Creation
 
-### Step 4: Create SWE Code Analysis Tools
+### Step 5: Create SWE Code Analysis Tools
 
 These tools provide the codebase analysis capabilities our SWE agents need to understand and navigate code.
 
