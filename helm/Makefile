@@ -26,7 +26,9 @@ FRONTEND_REPO = $(shell grep -A3 "frontend:" $(VALUES_FILE) | grep "repository:"
 
 # Extract frontend environment variables from values file
 VITE_API_URL = $(shell grep -A20 "frontend:" $(VALUES_FILE) | grep "VITE_API_URL:" | sed 's/.*VITE_API_URL: *//;s/"//g')
-VITE_CLERK_PUBLISHABLE_KEY = $(shell grep -A20 "frontend:" $(VALUES_FILE) | grep "VITE_CLERK_PUBLISHABLE_KEY:" | sed 's/.*VITE_CLERK_PUBLISHABLE_KEY: *//;s/"//g')
+VITE_AUTH0_DOMAIN = $(shell grep -A20 "frontend:" $(VALUES_FILE) | grep "VITE_AUTH0_DOMAIN:" | sed 's/.*VITE_AUTH0_DOMAIN: *//;s/"//g')
+VITE_AUTH0_CLIENT_ID = $(shell grep -A20 "frontend:" $(VALUES_FILE) | grep "VITE_AUTH0_CLIENT_ID:" | sed 's/.*VITE_AUTH0_CLIENT_ID: *//;s/"//g')
+VITE_AUTH0_SCOPES = $(shell grep -A20 "frontend:" $(VALUES_FILE) | grep "VITE_AUTH0_SCOPES:" | sed 's/.*VITE_AUTH0_SCOPES: *//;s/"//g')
 
 # Common variables
 BACKEND_DOCKER_IMAGE = $(BACKEND_REPO)
@@ -66,12 +68,16 @@ build-backend:
 # Build the frontend Docker image
 build-frontend:
 	@echo "Building frontend Docker image $(FRONTEND_DOCKER_IMAGE):$(TAG) ($(ENV) environment)..."
-	@echo "Using VITE_API_URL: $(VITE_API_URL)"
-	@echo "Using VITE_CLERK_PUBLISHABLE_KEY: $(VITE_CLERK_PUBLISHABLE_KEY)"
+	@echo "Using VITE_API_URL: '$(VITE_API_URL)'"
+	@echo "Using VITE_AUTH0_DOMAIN: '$(VITE_AUTH0_DOMAIN)'"
+	@echo "Using VITE_AUTH0_CLIENT_ID: '$(VITE_AUTH0_CLIENT_ID)'"
+	@echo "Using VITE_AUTH0_SCOPES: '$(VITE_AUTH0_SCOPES)'"
 	cd ../frontend/sales-agent-crew && docker build \
 		--platform=linux/amd64 \
-		--build-arg VITE_API_URL=$(VITE_API_URL) \
-		--build-arg VITE_CLERK_PUBLISHABLE_KEY=$(VITE_CLERK_PUBLISHABLE_KEY) \
+		--build-arg VITE_API_URL="$(VITE_API_URL)" \
+		--build-arg VITE_AUTH0_DOMAIN="$(VITE_AUTH0_DOMAIN)" \
+		--build-arg VITE_AUTH0_CLIENT_ID="$(VITE_AUTH0_CLIENT_ID)" \
+		--build-arg VITE_AUTH0_SCOPES="$(VITE_AUTH0_SCOPES)" \
 		-t $(FRONTEND_DOCKER_IMAGE):$(TAG) .
 
 # Push the backend Docker image
@@ -186,7 +192,9 @@ help:
 	@echo "Backend repository: $(BACKEND_REPO)"
 	@echo "Frontend repository: $(FRONTEND_REPO)"
 	@echo "VITE_API_URL: $(VITE_API_URL)"
-	@echo "VITE_CLERK_PUBLISHABLE_KEY: $(VITE_CLERK_PUBLISHABLE_KEY)"
+	@echo "VITE_AUTH0_DOMAIN: $(VITE_AUTH0_DOMAIN)"
+	@echo "VITE_AUTH0_CLIENT_ID: $(VITE_AUTH0_CLIENT_ID)"
+	@echo "VITE_AUTH0_SCOPES: $(VITE_AUTH0_SCOPES)"
 	@echo ""
 	@echo "Targets:"
 	@echo "  build-backend   Build the backend Docker image"

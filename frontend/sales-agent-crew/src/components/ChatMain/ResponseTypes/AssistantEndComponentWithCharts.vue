@@ -63,9 +63,15 @@ import { marked } from 'marked'
 import { formattedText } from '@/utils/formatText'
 import { renderMarkdown } from '@/utils/markdownRenderer'
 import api from '@/services/api'
-import { getClerkToken } from '@/utils/globalFunctions'
+import { useAuth0 } from '@auth0/auth0-vue'
 
 export default {
+  setup() {
+    const { getAccessTokenSilently } = useAuth0();
+    return {
+      getAccessTokenSilently
+    };
+  },
   props: {
     // Expecting an object with the API response, e.g., { data: { response: "..." } }
     parsed: {
@@ -195,24 +201,11 @@ export default {
       this.loadingCharts.add(fileId);
       
       try {
-        let endpoint;
-        let headers = {};
-        
-        // Use different endpoint based on whether this is a shared conversation
-        if (this.isSharedConversation && this.shareToken) {
-          // Use the public shared file endpoint
-          endpoint = `/share/${this.shareToken}/files/${fileId}`;
-        } else {
-          // Use the authenticated endpoint
-          endpoint = `/files/${fileId}`;
-          const token = await getClerkToken();
-          headers = {
+        const token = await this.getAccessTokenSilently();
+        const response = await api.get(`/files/${fileId}`, {
+          headers: {
             'Authorization': `Bearer ${token}`
-          };
-        }
-        
-        const response = await api.get(endpoint, {
-          headers,
+          },
           responseType: 'blob'
         });
         

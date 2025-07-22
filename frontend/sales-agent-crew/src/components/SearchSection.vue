@@ -294,7 +294,7 @@
 
 <script setup>
 import { ref, onMounted, computed, watch, nextTick } from 'vue';
-import { useAuth } from '@clerk/vue';
+import { useAuth0 } from '@auth0/auth0-vue';
 import { decryptKey } from '../utils/encryption';
 import ErrorModal from './ErrorModal.vue';
 import axios from 'axios';
@@ -338,8 +338,9 @@ const serperKey = ref(null);
 const errorMessage = ref('');
 const showErrorModal = ref(false);
 
-// Clerk
-const { userId } = useAuth();
+// Auth0
+const { user } = useAuth0();
+const userId = computed(() => user.value?.sub);
 
 async function loadKeys() {
   try {

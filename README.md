@@ -144,7 +144,9 @@ Follow the steps below to install the backend for the Agents application.
    ```bash
    VITE_API_URL=/api
    VITE_WEBSOCKET_URL=ws://localhost:8000
-   VITE_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+   VITE_AUTH0_DOMAIN=your_auth0_domain
+   VITE_AUTH0_CLIENT_ID=your_auth0_client_id
+   VITE_AUTH0_AUDIENCE=your_auth0_audience
    ```
 
 #### Backend environment variables
@@ -154,8 +156,8 @@ Follow the steps below to install the backend for the Agents application.
 1. Create a `.env` file with the following required variables.
    ```bash
    # Authentication
-   CLERK_SECRET_KEY=your_clerk_secret_key
-   CLERK_JWT_ISSUER=https://your-clerk-instance.clerk.accounts.dev/.well-known/jwks.json
+   AUTH0_DOMAIN=your-auth0-domain.auth0.com
+   AUTH0_AUDIENCE=your-auth0-api-audience
    
    # Core API Keys (can be user-provided or environment-based)
    SERPER_KEY=your_serper_api_key

@@ -340,8 +340,8 @@
   </div>
 </template>
 <script setup>
-import { ref, watch, onMounted, computed, inject } from 'vue'
-import { useAuth } from '@clerk/vue'
+import { ref, watch, defineProps, defineExpose, defineEmits, onMounted, computed,inject } from 'vue'
+import { useAuth0 } from '@auth0/auth0-vue'
 import { encryptKey, decryptKey } from '../utils/encryption'
 import axios from 'axios'
 import emitterMitt from '@/utils/eventBus.js';
@@ -363,7 +363,8 @@ const props = defineProps({
 
 const emit = defineEmits(['keysUpdated'])
 
-const { userId } = useAuth()
+const { user, getAccessTokenSilently, logout } = useAuth0()
+const userId = computed(() => user.value?.sub)
 
 const isOpen = ref(false)
 const activeTab = ref('api-keys')
@@ -611,7 +612,7 @@ const updateBackendKeys = async () => {
 
     const response = await axios.post(url, postParams, {
       headers: {
-        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+        'Authorization': `Bearer ${await getAccessTokenSilently()}`
 
       }
     })
@@ -714,7 +715,7 @@ const executeDeleteAccount = async () => {
     // Call the delete user data endpoint
     const response = await axios.delete(`${import.meta.env.VITE_API_URL}/user/data`, {
       headers: {
-        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+        'Authorization': `Bearer ${await getAccessTokenSilently()}`
       }
     })
     
@@ -737,9 +738,7 @@ const executeDeleteAccount = async () => {
       
       // Log out the user after a short delay
       setTimeout(async () => {
-        await window.Clerk.signOut()
-        // Redirect to login page
-        window.location.href = '/login'
+        logout({ logoutParams: { returnTo: window.location.origin } })
       }, 2000)
     }
   } catch (error) {

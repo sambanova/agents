@@ -41,7 +41,7 @@
               <!-- ChatView for conversation -->
               <ChatView
                 :conversationId="selectedConversationId"
-                :userId="clerkUserId"
+                :userId="userId"
                 class="flex-1"
                 @agentThoughtsDataChanged="agentThoughtsDataChanged"
                 @daytona-sidebar-state-changed="handleDaytonaSidebarStateChange"
@@ -134,14 +134,14 @@
       <!-- RIGHT SIDEBAR: Real-time Agent Logs for the current user + run ID -->
       <AgentSidebar
         v-if="!chatMode"
-        :userId="clerkUserId"
+        :userId="userId"
         :runId="currentRunId"
         :is-mobile="isMobile"
       />
 
       <ChatAgentSidebar
         v-if="chatMode"
-        :userId="clerkUserId"
+        :userId="userId"
         :runId="currentRunId"
         :agentData="agentData"
         :stream-completed="streamCompleted"
@@ -162,8 +162,7 @@ import {
   onBeforeUnmount,
   provide,
 } from 'vue';
-import { useRoute } from 'vue-router';
-import { useUser } from '@clerk/vue';
+import { useAuth0 } from '@auth0/auth0-vue';
 import { v4 as uuidv4 } from 'uuid';
 
 /** We import both old + chat sidebars as local variables. */
@@ -246,12 +245,9 @@ const isDev = ref(import.meta.env.DEV);
 // Header ref
 const headerRef = ref(null);
 
-// Clerk user ID
-const { user } = useUser();
-const clerkUserId = computed(() => user.value?.id || 'anonymous_user');
-
-// Route for checking shared conversations
-const route = useRoute();
+// Auth0 user ID
+const { user, isAuthenticated } = useAuth0();
+const userId = computed(() => user.value?.sub || 'anonymous_user');
 
 const agentData = ref([]);
 const chatSideBarRef = ref(null);
@@ -266,7 +262,7 @@ const agentThoughtsDataChanged = (agentThoughtsData) => {
   agentData.value = agentThoughtsData;
 
   // Only load chats if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping loadChats - user not authenticated in MainLayout');
     return;
   }

@@ -497,6 +497,10 @@
 import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { useAuth0 } from '@auth0/auth0-vue'
+
+// Auth0 composable
+const { getAccessTokenSilently } = useAuth0()
 
 const props = defineProps({
   isOpen: {
@@ -1130,20 +1134,11 @@ async function loadCsvContent(artifact) {
   
   try {
     artifact.loading = true
-    let headers = {};
-    
-    // Use different authentication based on whether this is a shared conversation
-    if (props.isSharedConversation && props.shareToken) {
-      // For shared conversations, we don't need authentication headers
-      // The backend will handle the authentication via the share token
-    } else {
-      // For normal conversations, use authentication
-      headers = {
-        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
-      };
-    }
-    
-    const response = await fetch(artifact.url, { headers })
+    const response = await fetch(artifact.url, {
+        headers: {
+            'Authorization': `Bearer ${await getAccessTokenSilently()}`
+        }
+    })
     if (response.ok) {
       const csvText = await response.text()
       artifact.csvData = csvText
@@ -1239,20 +1234,11 @@ async function downloadArtifact(artifact) {
 
   // For API URLs that haven't been converted to blobs yet, fetch with auth
   try {
-    let headers = {};
-    
-    // Use different authentication based on whether this is a shared conversation
-    if (props.isSharedConversation && props.shareToken) {
-      // For shared conversations, we don't need authentication headers
-      // The backend will handle the authentication via the share token
-    } else {
-      // For normal conversations, use authentication
-      headers = {
-        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
-      };
-    }
-    
-    const response = await fetch(artifact.url, { headers });
+    const response = await fetch(artifact.url, {
+      headers: {
+        'Authorization': `Bearer ${await getAccessTokenSilently()}`
+      }
+    });
     if (!response.ok) throw new Error('Download failed');
     
     const blob = await response.blob();
@@ -1332,20 +1318,11 @@ async function fetchArtifactContent(artifact) {
   }
 
   try {
-    let headers = {};
-    
-    // Use different authentication based on whether this is a shared conversation
-    if (props.isSharedConversation && props.shareToken) {
-      // For shared conversations, we don't need authentication headers
-      // The backend will handle the authentication via the share token
-    } else {
-      // For normal conversations, use authentication
-      headers = {
-        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
-      };
-    }
-    
-    const response = await fetch(artifact.url, { headers });
+    const response = await fetch(artifact.url, {
+      headers: {
+        'Authorization': `Bearer ${await getAccessTokenSilently()}`
+      }
+    });
 
     if (!response.ok) {
       throw new Error(`Failed to fetch artifact: ${response.statusText}`);
