@@ -28,7 +28,6 @@
         <TimelineCollapsibleContent
           :value="value"
           :heading="key"
-          :data="value"
         />
       </div>
       <div v-if="!collapsed" class="p-1 text text-right rounded text-xs">
@@ -257,6 +256,15 @@ function parseResponseText(text) {
   const shouldUseJsonParsing = jsonStructuredAgents.includes(props.data.agent_name);
   console.log('shouldUseJsonParsing', shouldUseJsonParsing);
 
+  // Check if this is a data science tool call (user_daytona_execute_code)
+  const isDataScienceToolCall = text.includes('<tool>user_daytona_execute_code</tool>') ||
+                                text.includes('user_daytona_execute_code');
+
+  // For data science tool calls, return raw text without markdown processing
+  if (isDataScienceToolCall) {
+    return { code: text };
+  }
+
   // Handle JSON structured agents
   if (shouldUseJsonParsing) {
     try {
@@ -271,7 +279,22 @@ function parseResponseText(text) {
         cleanedText = cleanedText.replace(/\n?\s*```\s*$/i, '');
       }
       
-      const jsonData = JSON.parse(cleanedText.trim());
+      // Try to extract JSON from the text if it's not pure JSON
+      let jsonStart = cleanedText.indexOf('{');
+      let jsonEnd = cleanedText.lastIndexOf('}');
+      
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        cleanedText = cleanedText.substring(jsonStart, jsonEnd + 1);
+      }
+      
+      // Additional cleaning for common issues
+      cleanedText = cleanedText
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+        .replace(/\n/g, ' ') // Replace newlines with spaces
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .trim();
+      
+      const jsonData = JSON.parse(cleanedText);
       const result = {};
       
       if (props.data.agent_name === 'Supervisor Agent') {
@@ -288,7 +311,8 @@ function parseResponseText(text) {
       return result;
     } catch (error) {
       // If JSON parsing fails, fall back to markdown
-      console.warn('Failed to parse JSON for structured agent:', error);
+      console.warn('Failed to parse JSON for structured agent:', error.message);
+      console.warn('Text that failed to parse:', text.substring(0, 200) + '...');
       return { markdown: marked(text) };
     }
   }

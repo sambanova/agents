@@ -1,11 +1,10 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Sequence, Union
+from typing import Optional
 
-from agents.api.data_types import AgentEnum, AgentStructuredResponse
 from agents.api.websocket_interface import WebSocketInterface
-from langchain.schema.messages import AIMessage, HumanMessage
-from langchain_core.messages import AnyMessage, BaseMessage
+from langchain.schema.messages import HumanMessage
+from langchain_core.messages import BaseMessage
 from langchain_core.runnables import Runnable, RunnableConfig
 from langgraph.types import Command, Interrupt
 
@@ -173,7 +172,6 @@ async def astream_state_websocket(
             {
                 "event": "stream_complete",
                 "run_id": root_run_id,
-                "data": {},
                 "user_id": user_id,
                 "conversation_id": conversation_id,
                 "message_id": message_id,
@@ -188,13 +186,6 @@ async def astream_state_websocket(
             {
                 "event": "stream_complete",
                 "run_id": root_run_id,
-                "data": {
-                    "output": convert_messages_to_dict(
-                        event["data"]["output"]
-                        if isinstance(event["data"]["output"], list)
-                        else [event["data"]["output"]]
-                    ),
-                },
                 "user_id": user_id,
                 "conversation_id": conversation_id,
                 "message_id": message_id,

@@ -22,6 +22,10 @@
         @selectReport="handleSavedReportSelect"
         @selectConversation="handleSelectConversation"
         @new-chat="handleNewChat"
+        @reload-user-documents="handleReloadUserDocuments"
+        :is-collapsed="isSidebarCollapsed"
+        @toggle-collapse="toggleSidebarCollapse"
+        :is-mobile="isMobile"
         ref="chatSideBarRef"
       />
 
@@ -132,6 +136,7 @@
         v-if="!chatMode"
         :userId="userId"
         :runId="currentRunId"
+        :is-mobile="isMobile"
       />
 
       <ChatAgentSidebar
@@ -140,6 +145,7 @@
         :runId="currentRunId"
         :agentData="agentData"
         :stream-completed="streamCompleted"
+        :is-mobile="isMobile"
         ref="chatAgentSidebarRef"
       />
     </div>
@@ -177,6 +183,20 @@ import FullReportModal from '@/components/FullReportModal.vue';
 import ChatAgentSidebar from '@/components/ChatMain/ChatAgentSidebar.vue';
 import { useReportStore } from '@/stores/reportStore';
 import emitterMitt from '@/utils/eventBus.js';
+
+const isSidebarCollapsed = ref(false);
+const isMobile = ref(false);
+
+function toggleSidebarCollapse() {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value;
+}
+
+const handleResize = () => {
+  isMobile.value = window.innerWidth < 768;
+  if (isMobile.value) {
+    isSidebarCollapsed.value = true;
+  }
+};
 
 // Create a reactive property for the selected option.
 const selectedOption = ref({ label: 'SambaNova', value: 'sambanova' });
@@ -241,11 +261,10 @@ const handleNewChat = () => {
 const agentThoughtsDataChanged = (agentThoughtsData) => {
   agentData.value = agentThoughtsData;
 
-  if (
-    chatSideBarRef.value &&
-    typeof chatSideBarRef.value.loadChats === 'function'
-  ) {
-    chatSideBarRef.value.loadChats();
+  // Only load chats if user is authenticated
+  if (!window.Clerk || !window.Clerk.session) {
+    console.log('Skipping loadChats - user not authenticated in MainLayout');
+    return;
   }
 };
 // The runId for SSE etc.
@@ -260,11 +279,14 @@ onMounted(() => {
 
   // Listen for new chat events
   emitterMitt.on('new-chat', handleNewChat);
+  window.addEventListener('resize', handleResize);
+  handleResize(); // Initial check
 });
 
 onUnmounted(() => {
   // Remove the listener
   emitterMitt.off('new-chat', handleNewChat);
+  window.removeEventListener('resize', handleResize);
 });
 
 // Called by Header => user updated keys
@@ -285,6 +307,18 @@ function onModeToggled(val) {
 function handleSelectConversation(conv) {
   selectedConversationId.value = conv.conversation_id;
   streamCompleted.value = false;
+}
+
+/**
+ * When ChatSidebar requests to reload user documents (artifacts)
+ */
+function handleReloadUserDocuments() {
+  console.log('Reloading user documents from MainLayout');
+  // Emit event to ChatView to reload user documents
+  if (chatSideBarRef.value) {
+    // This will trigger a reload in ChatView
+    emitterMitt.emit('reload-user-documents');
+  }
 }
 
 /**

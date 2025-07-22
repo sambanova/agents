@@ -168,7 +168,7 @@
 </template>
 
 <script setup>
-import { defineProps, computed, ref, onMounted } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { marked } from 'marked';
 
 // ---- PROPS ----

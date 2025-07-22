@@ -3,67 +3,55 @@
        :class="{ 'w-1/2': !isCollapsed, 'w-16': isCollapsed }">
     
     <!-- Header -->
-    <div class="flex items-center justify-between p-4 border-b bg-gradient-to-r from-blue-50 to-purple-50">
-      <div v-if="!isCollapsed" class="flex items-center space-x-3">
-        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
-          </svg>
+    <div class="sticky top-0 z-10 bg-white p-4 border-b">
+      <div class="flex items-center justify-between min-h-[2rem]">
+        <!-- Left Side -->
+        <div v-if="!isCollapsed" class="flex items-center space-x-3">
+          <div class="w-8 h-8 bg-primary-brandColor rounded-lg flex items-center justify-center flex-shrink-0">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-gray-800">Data Analysis & Artifact Generation</h3>
+          </div>
         </div>
-        <div>
-          <h3 class="text-lg font-semibold text-gray-900">Canvas</h3>
-          <p class="text-sm text-gray-600">Data Analysis & Artifact Generation</p>
+
+        <!-- Collapsed header -->
+        <div v-if="isCollapsed" class="flex flex-col items-center space-y-2 w-full">
+          <div class="w-8 h-8 bg-primary-brandColor rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+            </svg>
+          </div>
         </div>
-      </div>
-      
-      <!-- Collapsed header -->
-      <div v-else class="flex flex-col items-center space-y-2 w-full">
-        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
-          </svg>
+
+        <!-- Right Side - Close Button -->
+        <div v-if="!isCollapsed">
+          <button 
+            @click="handleClose"
+            class="p-1.5 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
+            aria-label="Close sidebar"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
         </div>
-      </div>
-      
-      <div class="flex items-center space-x-2">
-        <!-- Collapse/Expand Button -->
-        <button 
-          @click="toggleCollapse"
-          class="p-2 hover:bg-gray-100 rounded-full transition-colors"
-          :aria-label="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
-        >
-          <svg v-if="isCollapsed" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-          </svg>
-          <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-          </svg>
-        </button>
-        
-        <!-- Close Button -->
-        <button 
-          @click="handleClose"
-          class="p-2 hover:bg-gray-100 rounded-full transition-colors"
-          aria-label="Close sidebar"
-        >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-          </svg>
-        </button>
       </div>
     </div>
-
+    
     <!-- Content Area -->
     <div v-if="!isCollapsed" class="flex-1 overflow-y-auto h-full">
       <!-- Status Section -->
       <div class="p-4 border-b bg-gray-50">
         <div class="flex items-center space-x-3">
-          <div :class="statusDotClass" class="w-3 h-3 rounded-full flex-shrink-0"></div>
+          
           <div class="flex-1">
             <div class="flex items-center space-x-2">
               <span class="text-sm font-medium text-gray-900">{{ currentStatus }}</span>
               <div v-if="isProcessing" class="animate-spin">
-                <svg class="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <svg class="w-4 h-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                 </svg>
@@ -81,7 +69,7 @@
           <div class="flex items-center justify-between mb-3">
             <button
               @click="toggleCodeSection"
-              class="flex items-center space-x-2 text-left hover:text-blue-600 transition-colors"
+              class="flex items-center space-x-2 text-left hover:text-primary-brandColor transition-colors"
             >
               <svg :class="{ 'rotate-90': codeExpanded }" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -130,7 +118,7 @@
           <div class="flex items-center justify-between mb-3">
             <button
               @click="toggleArtifactsSection"
-              class="flex items-center space-x-2 text-left hover:text-blue-600 transition-colors"
+              class="flex items-center space-x-2 text-left hover:text-primary-brandColor transition-colors"
             >
               <svg :class="{ 'rotate-90': artifactsExpanded }" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -152,23 +140,23 @@
                   <div class="flex items-center space-x-2">
                     <!-- File Type Icon -->
                     <div class="w-6 h-6 flex items-center justify-center">
-                      <svg v-if="artifact.type === 'image'" class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg v-if="artifact.type === 'image'" class="w-4 h-4 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                       </svg>
-                      <svg v-else-if="artifact.type === 'pdf'" class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg v-else-if="artifact.type === 'pdf'" class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                       </svg>
-                      <svg v-else-if="artifact.type === 'markdown'" class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg v-else-if="artifact.type === 'markdown'" class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
                       </svg>
-                      <svg v-else-if="artifact.type === 'html'" class="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg v-else-if="artifact.type === 'html'" class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
                       </svg>
-                      <svg v-else-if="artifact.type === 'powerpoint'" class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg v-else-if="artifact.type === 'powerpoint'" class="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 8h8M8 12h8M8 16h4"></path>
                       </svg>
-                      <svg v-else-if="artifact.type === 'csv'" class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg v-else-if="artifact.type === 'csv'" class="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9h6M9 12h6M9 15h6"></path>
                       </svg>
@@ -204,7 +192,7 @@
               
               <div class="p-4">
                 <div v-if="artifact.loading" class="flex items-center justify-center h-40">
-                  <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                  <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400"></div>
                 </div>
                 
                 <!-- Image Preview -->
@@ -222,14 +210,14 @@
                   <div class="viewer-header rounded-lg p-2 mb-2">
                     <div class="flex items-center justify-between">
                       <div class="flex items-center space-x-2">
-                        <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         </svg>
                         <span class="text-sm font-medium">PDF Viewer</span>
                       </div>
                       <button 
                         @click.stop="downloadArtifact(artifact)"
-                        class="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 transition-colors"
+                        class="text-xs bg-white text-gray-500 px-2 py-1 rounded hover:bg-gray-100 transition-colors border border-gray-200"
                       >
                         Download
                       </button>
@@ -247,7 +235,7 @@
                 <!-- PowerPoint Download Interface -->
                 <div v-else-if="artifact.type === 'powerpoint'" class="bg-gray-100 rounded-lg p-4 text-center hover:bg-gray-200 transition-colors cursor-pointer"
                      @click="downloadArtifact(artifact)">
-                  <svg class="w-12 h-12 mx-auto mb-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg class="w-12 h-12 mx-auto mb-3 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 8h8M8 12h8M8 16h4"></path>
                   </svg>
@@ -255,12 +243,9 @@
                   <p class="text-xs text-gray-600 mb-3">{{ artifact.title }}</p>
                   <button 
                     @click.stop="downloadArtifact(artifact)"
-                    class="inline-flex items-center space-x-2 bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition-colors"
+                    class="text-xs bg-white text-gray-500 px-2 py-1 rounded hover:bg-gray-100 transition-colors border border-gray-200"
                   >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
-                    <span class="text-sm font-medium">Download Presentation</span>
+                    Download
                   </button>
                 </div>
                 
@@ -277,13 +262,13 @@
                       <div class="flex space-x-1">
                         <button 
                           @click.stop="openInNewTab(artifact.url)"
-                          class="text-xs bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600 transition-colors"
+                          class="text-xs bg-white text-gray-500 px-2 py-1 rounded hover:bg-gray-100 transition-colors border border-gray-200"
                         >
                           Open
                         </button>
                         <button 
                           @click.stop="downloadArtifact(artifact)"
-                          class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600 transition-colors"
+                          class="text-xs bg-white text-gray-500 px-2 py-1 rounded hover:bg-gray-100 transition-colors border border-gray-200"
                         >
                           Download
                         </button>
@@ -312,7 +297,7 @@
                       </div>
                       <button 
                         @click.stop="downloadArtifact(artifact)"
-                        class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600 transition-colors"
+                        class="text-xs bg-white text-gray-500 px-2 py-1 rounded hover:bg-gray-100 transition-colors border border-gray-200"
                       >
                         Download
                       </button>
@@ -346,7 +331,7 @@
                       </div>
                       <button 
                         @click.stop="downloadArtifact(artifact)"
-                        class="text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600 transition-colors"
+                        class="text-xs bg-white text-gray-500 px-2 py-1 rounded hover:bg-gray-100 transition-colors border border-gray-200"
                       >
                         Download
                       </button>
@@ -370,7 +355,7 @@
                     <div v-else class="flex items-center justify-center h-full text-gray-500">
                       <div class="text-center">
                         <div v-if="artifact.loading" class="flex flex-col items-center">
-                          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mb-2"></div>
+                          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400 mb-2"></div>
                           <p class="text-sm">Loading CSV data...</p>
                         </div>
                         <div v-else>
@@ -380,7 +365,7 @@
                           <p class="text-sm mb-2">Click here to load CSV data</p>
                           <button 
                             @click.stop="loadCsvContent(artifact)"
-                            class="text-xs bg-green-500 text-white px-3 py-2 rounded hover:bg-green-600 transition-colors"
+                            class="text-xs bg-white text-gray-500 px-3 py-2 rounded hover:bg-gray-100 transition-colors border border-gray-200"
                           >
                             Load Data
                           </button>
@@ -412,23 +397,23 @@
               @click="expandArtifact(artifact)"
             >
               <div class="flex items-center justify-center mb-1">
-                <svg v-if="artifact.type === 'image'" class="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg v-if="artifact.type === 'image'" class="w-3 h-3 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                 </svg>
-                <svg v-else-if="artifact.type === 'pdf'" class="w-3 h-3 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg v-else-if="artifact.type === 'pdf'" class="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
-                <svg v-else-if="artifact.type === 'markdown'" class="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg v-else-if="artifact.type === 'markdown'" class="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
                 </svg>
-                <svg v-else-if="artifact.type === 'html'" class="w-3 h-3 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg v-else-if="artifact.type === 'html'" class="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
                 </svg>
-                                 <svg v-else-if="artifact.type === 'powerpoint'" class="w-3 h-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                 <svg v-else-if="artifact.type === 'powerpoint'" class="w-3 h-3 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 8h8M8 12h8M8 16h4"></path>
                  </svg>
-                <svg v-else-if="artifact.type === 'csv'" class="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg v-else-if="artifact.type === 'csv'" class="w-3 h-3 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
                 <svg v-else class="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -445,23 +430,23 @@
       </div>
 
       <!-- Execution Log -->
-      <div v-if="executionLog.length > 0" class="p-4 border-t bg-gray-50">
+      <div v-if="executionLogs.length > 0" class="p-4 border-t bg-gray-50">
         <div class="flex items-center justify-between mb-3">
           <button
             @click="toggleLogSection"
-            class="flex items-center space-x-2 text-left hover:text-blue-600 transition-colors"
+            class="flex items-center space-x-2 text-left hover:text-primary-brandColor transition-colors"
           >
             <svg :class="{ 'rotate-90': logExpanded }" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
             </svg>
             <h4 class="font-medium text-gray-900 text-sm">Execution Log</h4>
-            <span class="text-xs text-gray-500">({{ executionLog.length }} entries)</span>
+            <span class="text-xs text-gray-500">({{ executionLogs.length }} entries)</span>
           </button>
         </div>
         
         <div v-if="logExpanded" class="space-y-2 max-h-40 overflow-y-auto">
           <div 
-            v-for="log in executionLog" 
+            v-for="log in executionLogs" 
             :key="log.id"
             class="text-xs text-gray-600 flex items-start space-x-2"
           >
@@ -476,9 +461,9 @@
     <div v-else class="flex flex-col items-center justify-center h-full space-y-4 p-2">
       <!-- Status Indicator -->
       <div class="flex flex-col items-center space-y-2">
-        <div :class="statusDotClass" class="w-4 h-4 rounded-full"></div>
+        
         <div v-if="isProcessing" class="animate-spin">
-          <svg class="w-5 h-5 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <svg class="w-5 h-5 text-primary-brandColor" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
           </svg>
@@ -488,16 +473,16 @@
       <!-- Section Indicators -->
       <div class="flex flex-col space-y-3">
         <!-- Code Indicator -->
-        <div v-if="codeContent" class="flex items-center justify-center w-8 h-8 bg-green-100 rounded-lg" title="Code Available">
-          <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div v-if="codeContent" class="flex items-center justify-center w-8 h-8 bg-primary-50 rounded-lg" title="Code Available">
+          <svg class="w-4 h-4 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
           </svg>
         </div>
         
         <!-- Artifacts Indicator -->
         <div v-if="artifacts.length > 0" class="flex flex-col items-center">
-          <div class="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-lg" title="Files Available">
-            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="flex items-center justify-center w-8 h-8 bg-primary-50 rounded-lg" title="Files Available">
+            <svg class="w-4 h-4 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
           </div>
@@ -510,6 +495,8 @@
 
 <script setup>
 import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { useAuth0 } from '@auth0/auth0-vue'
 
 // Auth0 composable
@@ -523,6 +510,14 @@ const props = defineProps({
   streamingEvents: {
     type: Array,
     default: () => []
+  },
+  isSharedConversation: {
+    type: Boolean,
+    default: false
+  },
+  shareToken: {
+    type: String,
+    default: ''
   }
 })
 
@@ -535,7 +530,7 @@ const statusDetails = ref('')
 const isProcessing = ref(false)
 
 const codeContent = ref('')
-const executionLog = ref([])
+const executionLogs = ref([])
 const artifacts = ref([])
 
 // Section expansion states
@@ -557,8 +552,8 @@ const codeContainer = ref(null)
 
 // Computed properties
 const statusDotClass = computed(() => {
-  if (isProcessing.value) return 'bg-blue-500 animate-pulse'
-  if (artifacts.value.length > 0) return 'bg-green-500'
+  if (isProcessing.value) return 'bg-primary-brandColor animate-pulse'
+  if (artifacts.value.length > 0) return 'bg-primary-brandColor'
   return 'bg-yellow-500'
 })
 
@@ -574,10 +569,16 @@ const codePreview = computed(() => {
 
 // Watch for streaming events changes - ENHANCED FOR LOADED CONVERSATIONS
 watch(() => props.streamingEvents, (newEvents) => {
+  // **THE FIX**: Clear all local state before processing new events
+  // This ensures that when switching conversations, old data is wiped.
+  codeContent.value = '';
+  artifacts.value = [];
+  executionLogs.value = [];
+  
   if (newEvents && newEvents.length > 0) {
-    processStreamingEvents(newEvents)
+    processStreamingEvents(newEvents);
   }
-}, { deep: true, immediate: true })
+}, { deep: true, immediate: true });
 
 // Watch for code content changes and auto-scroll
 watch(codeContent, (newCode, oldCode) => {
@@ -634,7 +635,7 @@ function processStreamingEvents(events) {
     // Detect a brand-new conversation (events length has shrunk)
     if (events.length < lastEventsLength.value) {
       artifacts.value = []
-      executionLog.value = []
+      executionLogs.value = []
       cleanupCodeUpdates()
       lastCodeUpdate.value = ''
       lastEventsLength.value = 0 // full reset
@@ -776,8 +777,16 @@ function processStreamingEvents(events) {
                     
                     // Determine file type and create appropriate artifact
                     const fileType = getFileType(title, fileId)
-                    // Use authenticated endpoint, not public
-                    const fileUrl = `/api/files/${fileId}`
+                    
+                    // Use different endpoint based on whether this is a shared conversation
+                    let fileUrl;
+                    if (props.isSharedConversation && props.shareToken) {
+                      // Use the public shared file endpoint
+                      fileUrl = `${import.meta.env.VITE_API_URL}/share/${props.shareToken}/files/${fileId}`;
+                    } else {
+                      // Use the authenticated endpoint
+                      fileUrl = `/api/files/${fileId}`;
+                    }
                     
                     const newArtifact = {
                       id: fileId,
@@ -851,13 +860,22 @@ function processStreamingEvents(events) {
                     
                     // Determine file type and create appropriate artifact
                     const fileType = getFileType(title, fileId)
-                    const fileUrl = `/api/files/${fileId}`
+                    
+                    // Use different endpoint based on whether this is a shared conversation
+                    let fileUrl;
+                    if (props.isSharedConversation && props.shareToken) {
+                      // Use the public shared file endpoint
+                      fileUrl = `${import.meta.env.VITE_API_URL}/share/${props.shareToken}/files/${fileId}`;
+                    } else {
+                      // Use the authenticated endpoint
+                      fileUrl = `/api/files/${fileId}`;
+                    }
                     
                     const newArtifact = {
                       id: fileId,
                       title: title,
                       type: fileType,
-                      url: fileUrl, // Use authenticated endpoint
+                      url: fileUrl,
                       loading: true, // Set loading to true initially
                       downloadUrl: fileUrl,
                       preview: null
@@ -885,14 +903,14 @@ function processStreamingEvents(events) {
       updateStatus('⏳ Ready for analysis', 'Waiting for code execution')
     } else if (codeDetected || artifactCount > 0) {
       // Update status to show loaded state
-      updateStatus('✅ Historical analysis loaded', `Code and ${artifactCount} files from conversation`)
+      updateStatus('Historical analysis loaded', `Code and ${artifactCount} files from conversation`)
     }
 
     // Update processed length so we can detect resets next time
     lastEventsLength.value = events.length
   } catch (error) {
     console.error('Error processing streaming events in DaytonaSidebar:', error);
-    updateStatus('❌ Error', 'Failed to process conversation history.')
+    updateStatus('Error', 'Failed to process conversation history.')
     addToLog('Error processing streaming events: ' + error.message, 'error', new Date().toISOString())
   }
 }
@@ -1026,15 +1044,15 @@ function updateStatus(status, details = '') {
 }
 
 function addToLog(message, type = 'info', timestamp) {
-  executionLog.value.push({
+  executionLogs.value.push({
     id: Date.now() + Math.random(),
     message,
     type,
     timestamp
   })
   
-  if (executionLog.value.length > 50) {
-    executionLog.value = executionLog.value.slice(-50)
+  if (executionLogs.value.length > 50) {
+    executionLogs.value = executionLogs.value.slice(-50)
   }
 }
 
@@ -1163,10 +1181,10 @@ function formatLogTime(timestamp) {
 
 function getLogClass(type) {
   const classes = {
-    'info': 'text-blue-600',
-    'success': 'text-green-600', 
-    'warning': 'text-yellow-600',
-    'error': 'text-red-600'
+    'info': 'text-gray-600',
+    'success': 'text-gray-700', 
+    'warning': 'text-gray-600',
+    'error': 'text-gray-800'
   }
   return classes[type] || 'text-gray-600'
 }
@@ -1255,31 +1273,31 @@ function getFileExtension(type) {
 function expandArtifact(artifact) {
   console.log('Expanding artifact:', artifact)
   
-  // All file types now have inline viewers in the sidebar
-  // Still support the expand-artifact event for full-screen modals if needed
-  
-  // For backward compatibility, emit both events with proper data structure
-  if (artifact.type === 'image') {
-    // Ensure the artifact has all properties the modal expects
-    // ArtifactCanvas expects type 'chart' for images, so we need to adapt the data
-    const chartData = {
-      ...artifact,
-      type: 'chart', // Change type to 'chart' for ArtifactCanvas compatibility
-      id: artifact.id,
-      title: artifact.title,
-      url: artifact.url,
-      downloadUrl: artifact.downloadUrl || artifact.url
-    }
-    console.log('Emitting expand-chart with data:', chartData)
-    emit('expand-chart', chartData)  // Keep old event for images
+  // Ensure the artifact has the correct structure for ArtifactCanvas
+  const enhancedArtifact = {
+    ...artifact,
+    id: artifact.id,
+    title: artifact.title,
+    type: artifact.type === 'image' ? 'chart' : artifact.type, // ArtifactCanvas expects 'chart' for images
+    url: artifact.url || artifact.downloadUrl,
+    content: artifact.content || artifact.csvData || artifact.preview,
+    downloadUrl: artifact.downloadUrl || artifact.url
   }
+  
+  console.log('Enhanced artifact for ArtifactCanvas:', enhancedArtifact)
   
   // For CSV files, ensure data is loaded
   if (artifact.type === 'csv' && !artifact.csvData && !artifact.content) {
     loadCsvContent(artifact)
   }
   
-  emit('expand-artifact', artifact)
+  // Emit the enhanced artifact
+  emit('expand-artifact', enhancedArtifact)
+  
+  // Also emit expand-chart for backward compatibility with images
+  if (artifact.type === 'image') {
+    emit('expand-chart', enhancedArtifact)
+  }
 }
 
 function handleArtifactError(artifact) {
@@ -1427,8 +1445,8 @@ watch(isCollapsed, (newCollapsed) => {
 }
 
 .viewer-header {
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #f8fafc 0%, #f9fafb 100%);
+  border-bottom: 1px solid #f3f4f6;
 }
 
 .csv-table {
@@ -1448,5 +1466,6 @@ watch(isCollapsed, (newCollapsed) => {
   padding: 0.125rem 0.25rem;
   border-radius: 0.25rem;
   font-size: 0.875em;
+  color: #4E226B;
 }
 </style> 

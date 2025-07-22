@@ -199,14 +199,14 @@
           
           <!-- Final Response Component for specialized responses (financial_analysis_end, etc.) -->
           <div v-if="finalResponseComponent && finalResponseData">
-            <component :is="finalResponseComponent" :parsed="finalResponseData" />
+            <component :is="finalResponseComponent" :parsed="finalResponseData" :isSharedConversation="isSharedConversation" :shareToken="shareToken" />
           </div>
           
 
 
           <!-- Daytona Status Indicator and Controls -->
           <div v-if="isDaytonaActive" class="mt-4">
-            <div class="inline-flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+            <div class="inline-flex items-center gap-2 px-3 py-2 bg-white border border-primary-brandColor rounded-lg text-sm text-primary-brandColor">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
               </svg>
@@ -216,7 +216,7 @@
               <button
                 v-if="!showDaytonaSidebar"
                 @click="reopenDaytonaSidebar"
-                class="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 hover:bg-blue-200 rounded text-xs font-medium transition-colors"
+                class="inline-flex items-center gap-1 px-2 py-1 bg-primary-50 hover:bg-primary-100 rounded text-xs font-medium transition-colors"
                 title="Open Daytona Sandbox"
               >
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -236,7 +236,7 @@
           <!-- PDF Download Button for Deep Research - Moved to bottom -->
           <div v-if="deepResearchPdfFileId" class="mt-4 flex justify-center">
             <button 
-              @click="downloadPdf(deepResearchPdfFileId, deepResearchPdfFilename)"
+              @click="downloadPdf(deepResearchPdfFileId, 'deep_research_report.pdf')"
               class="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg text-sm text-white font-medium transition-colors shadow-sm hover:shadow-md"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -454,6 +454,17 @@ import { isFinalAgentType } from '@/utils/globalFunctions.js'
   isInDataScience: {
     type: Boolean,
     default: false
+  },
+  
+  // Add props for shared conversation context
+  isSharedConversation: {
+    type: Boolean,
+    default: false
+  },
+  
+  shareToken: {
+    type: String,
+    default: ''
   }
   
   })
@@ -1710,45 +1721,45 @@ const auditLogEvents = computed(() => {
           type = 'code_fixer'
         }
         else if (agentType === 'data_science_hypothesis_agent') {
-          title = `Hypothesis Generation`
-          details = 'Generating hypothesis for data science'
+          title = `Hypothesis Agent`
+          details = 'Generating hypothesis'
           dotClass = 'bg-gray-400'
           type = 'data_science_hypothesis_agent'
         } else if (agentType === 'data_science_process_agent') {
-          title = `Data Science Process`
-          details = 'Processing data for data science'
+          title = `Supervisor Agent`
+          details = 'Deciding what to do next'
           dotClass = 'bg-gray-400'
           type = 'data_science_process_agent'
         } else if (agentType === 'data_science_code_agent') {
-          title = `Code Generation`
-          details = 'Generating code for data science'
+          title = `Code Agent`
+          details = 'Generating code'
           dotClass = 'bg-gray-400'
           type = 'data_science_code_agent'
         } else if (agentType === 'data_science_quality_review_agent') {
-          title = `Quality Review`
-          details = 'Reviewing quality of data science'
+          title = `Quality Review Agent`
+          details = 'Reviewing quality'
           dotClass = 'bg-gray-400'
           type = 'data_science_quality_review_agent'
         } else if (agentType === 'data_science_note_agent') {
-          title = `Summarizing`
-          details = 'Summarizing data science'
+          title = `Note Taker Agent`
+          details = 'Summarizing previous steps'
           dotClass = 'bg-gray-400'
           type = 'data_science_note_agent'
-        } else if (agentType === 'data_science_process_agent') {
-          title = `Data Science Process`
-          details = 'Processing data for data science'
-          dotClass = 'bg-gray-400'
-          type = 'data_science_process_agent'
         } else if (agentType === 'data_science_report_agent') {
-          title = `Generating Report`
-          details = 'Generating report for data science'
+          title = `Report Agent`
+          details = 'Generating report'
           dotClass = 'bg-gray-400'
           type = 'data_science_report_agent'
         } else if (agentType === 'data_science_visualization_agent') {
-          title = `Visualizing Data`
-          details = 'Visualizing data for data science'
+          title = `Visualization Agent`
+          details = 'Visualizing data'
           dotClass = 'bg-gray-400'
           type = 'data_science_visualization_agent'
+        } else if (agentType === 'data_science_human_choice') {
+          title = `Human Choice`
+          details = 'Detecting user intent'
+          dotClass = 'bg-gray-400'
+          type = 'data_science_human_choice'
         }
       }
       
@@ -1773,61 +1784,16 @@ const deepResearchPdfFileId = computed(() => {
   if (props.streamingEvents) {
     const event = props.streamingEvents.find(e => 
       e.event === 'agent_completion' && 
-      e.additional_kwargs?.agent_type === 'deep_research_end' &&
-      e.additional_kwargs?.deep_research_pdf_file_id
+      e.data?.additional_kwargs?.agent_type === 'deep_research_end' &&
+      e.data?.additional_kwargs?.files
     );
     if (event) {
-      return event.additional_kwargs.deep_research_pdf_file_id;
+      return event.data.additional_kwargs.files[0];
     }
-    
-    // Also check if the data is nested differently
-    const eventWithData = props.streamingEvents.find(e => 
-      e.event === 'agent_completion' && 
-      e.data?.additional_kwargs?.agent_type === 'deep_research_end' &&
-      e.data?.additional_kwargs?.deep_research_pdf_file_id
-    );
-    if (eventWithData) {
-      return eventWithData.data.additional_kwargs.deep_research_pdf_file_id;
+    else {
+      return null;
     }
   }
-  
-  // Check parsed data for non-streaming messages
-  if (parsedData.value?.additional_kwargs?.deep_research_pdf_file_id) {
-    return parsedData.value.additional_kwargs.deep_research_pdf_file_id;
-  }
-  
-  return null;
-})
-
-const deepResearchPdfFilename = computed(() => {
-  // Check streaming events first
-  if (props.streamingEvents) {
-    const event = props.streamingEvents.find(e => 
-      e.event === 'agent_completion' && 
-      e.additional_kwargs?.agent_type === 'deep_research_end' &&
-      e.additional_kwargs?.deep_research_pdf_filename
-    );
-    if (event) {
-      return event.additional_kwargs.deep_research_pdf_filename;
-    }
-    
-    // Also check if the data is nested differently
-    const eventWithData = props.streamingEvents.find(e => 
-      e.event === 'agent_completion' && 
-      e.data?.additional_kwargs?.agent_type === 'deep_research_end' &&
-      e.data?.additional_kwargs?.deep_research_pdf_filename
-    );
-    if (eventWithData) {
-      return eventWithData.data.additional_kwargs.deep_research_pdf_filename;
-    }
-  }
-  
-  // Check parsed data for non-streaming messages
-  if (parsedData.value?.additional_kwargs?.deep_research_pdf_filename) {
-    return parsedData.value.additional_kwargs.deep_research_pdf_filename;
-  }
-  
-  return null;
 })
 
 // Function to download PDF with authentication
@@ -1844,9 +1810,7 @@ async function downloadPdf(fileId, filename) {
     // Make authenticated request to download the PDF
     const response = await fetch(`/api/files/${fileId}`, {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+      headers
     });
 
     // Check if the response is ok

@@ -47,6 +47,14 @@ class RedisStorage:
         """Get the Redis key for cumulative usage data"""
         return f"cumulative_usage:{user_id}:{conversation_id}"
 
+    def _get_share_key(self, share_token: str) -> str:
+        """Get the Redis key for share token data"""
+        return f"share:{share_token}"
+
+    def _get_user_shares_key(self, user_id: str) -> str:
+        """Get the Redis key for user's created shares"""
+        return f"user_shares:{user_id}"
+
     async def is_message_new(
         self, user_id: str, conversation_id: str, message_id: str
     ) -> bool:
@@ -365,6 +373,8 @@ class RedisStorage:
     async def list_user_files(self, user_id: str) -> list:
         """List all files for a user."""
         try:
+            import asyncio
+            import os
 
             user_files_key = self._get_user_files_key(user_id)
             file_ids = await self.redis_client.smembers(user_files_key)
@@ -372,14 +382,70 @@ class RedisStorage:
             if not file_ids:
                 return []
 
-            # Get metadata for each file
+            # Optimize: Use controlled concurrent Redis calls to avoid connection pool exhaustion
+            # Limit concurrent connections to prevent pool exhaustion
+            max_concurrent_connections = int(
+                os.getenv("REDIS_MAX_CONCURRENT_CONNECTIONS", "5")
+            )
+            semaphore = asyncio.Semaphore(max_concurrent_connections)
+
+            async def get_metadata_with_semaphore(file_id):
+                async with semaphore:
+                    if isinstance(file_id, bytes):
+                        file_id = file_id.decode("utf-8")
+                    metadata = await self.get_file_metadata(user_id, file_id)
+                    if metadata:
+                        metadata["file_id"] = file_id
+                    return metadata
+
+            # Try concurrent approach first
+            try:
+                # Execute metadata retrieval calls with controlled concurrency
+                metadata_tasks = [
+                    get_metadata_with_semaphore(file_id) for file_id in file_ids
+                ]
+                metadata_results = await asyncio.gather(
+                    *metadata_tasks, return_exceptions=True
+                )
+
+                # Check if we got connection errors
+                connection_errors = [
+                    r
+                    for r in metadata_results
+                    if isinstance(r, Exception) and "Too many connections" in str(r)
+                ]
+                if connection_errors:
+                    logger.warning(
+                        f"Connection pool exhausted, falling back to sequential calls for user {user_id}"
+                    )
+                    raise Exception("Connection pool exhausted")
+
+            except Exception as e:
+                # Fallback to sequential calls if concurrent approach fails
+                logger.info(f"Using sequential Redis calls for user {user_id}")
+                metadata_results = []
+                for file_id in file_ids:
+                    try:
+                        if isinstance(file_id, bytes):
+                            file_id = file_id.decode("utf-8")
+                        metadata = await self.get_file_metadata(user_id, file_id)
+                        if metadata:
+                            metadata["file_id"] = file_id
+                        metadata_results.append(metadata)
+                    except Exception as get_error:
+                        logger.error(
+                            f"Failed to get metadata for file {file_id}: {get_error}"
+                        )
+                        metadata_results.append(None)
+
+            # Process results
             files = []
-            for file_id in file_ids:
-                if isinstance(file_id, bytes):
-                    file_id = file_id.decode("utf-8")
-                metadata = await self.get_file_metadata(user_id, file_id)
+            for metadata in metadata_results:
+                if isinstance(metadata, Exception):
+                    logger.error(f"Failed to get file metadata: {metadata}")
+                    continue
+
                 if metadata:
-                    metadata["file_id"] = file_id
                     files.append(metadata)
 
             return files
@@ -524,3 +590,69 @@ class RedisStorage:
             )
 
         return cumulative_usage
+
+    async def create_share(
+        self, user_id: str, conversation_id: str, title: Optional[str] = None
+    ) -> str:
+        """Create a new share token for a conversation"""
+        import uuid
+        from datetime import datetime
+
+        # Verify conversation exists and belongs to user
+        if not await self.verify_conversation_exists(user_id, conversation_id):
+            raise ValueError("Conversation not found or access denied")
+
+        # Generate UUID-style share token like ChatGPT
+        share_token = str(uuid.uuid4())
+
+        # Get conversation title from metadata if not provided
+        if not title:
+            meta_key = self._get_chat_metadata_key(user_id, conversation_id)
+            meta_data = await self.redis_client.get(meta_key, user_id)
+            if meta_data:
+                metadata = json.loads(meta_data)
+                title = metadata.get("name", "Shared Conversation")
+            else:
+                title = "Shared Conversation"
+
+        # Create simple mapping: share_token -> user_id:conversation_id
+        share_key = self._get_share_key(share_token)
+        share_data = {
+            "user_id": user_id,
+            "conversation_id": conversation_id,
+            "title": title,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+
+        # Store the mapping with dummy user ID for encryption
+        await self.redis_client.set(share_key, json.dumps(share_data), "public_shared")
+
+        # Add to user's shares list for management
+        user_shares_key = self._get_user_shares_key(user_id)
+        await self.redis_client.sadd(user_shares_key, share_token, user_id)
+
+        return share_token
+
+    async def get_shared_conversation(self, share_token: str) -> Optional[dict]:
+        """Get full shared conversation data by reading original user data"""
+        share_key = self._get_share_key(share_token)
+        share_data = await self.redis_client.get(share_key, "public_shared")
+
+        if not share_data:
+            return None
+
+        share_info = json.loads(share_data)
+        user_id = share_info["user_id"]
+        conversation_id = share_info["conversation_id"]
+
+        # Read the original conversation data directly
+        messages = await self.get_messages(user_id, conversation_id)
+
+        return {
+            "share_token": share_token,
+            "title": share_info["title"],
+            "messages": messages,
+            "created_at": share_info["created_at"],
+            "conversation_id": conversation_id,
+            "user_id": user_id,
+        }

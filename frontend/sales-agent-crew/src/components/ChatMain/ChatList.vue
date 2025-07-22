@@ -12,10 +12,13 @@
           :key="conversation.conversation_id"
           :conversation="conversation"
           :preselectedChat="preselectedChat"
+          :isMultiSelectMode="isMultiSelectMode"
+          :isSelected="selectedChats.includes(conversation.conversation_id)"
           @select-conversation="handleSelectConversation"
           @delete-chat="handleDeleteChat"
           @share-chat="handleShareChat"
           @download-chat="handleDownloadChat"
+          @toggle-selection="handleToggleSelection"
         />
       </div>
     </div>
@@ -36,6 +39,14 @@ const props = defineProps({
     type: [String, Number],
     default: null,
   },
+  isMultiSelectMode: {
+    type: Boolean,
+    default: false,
+  },
+  selectedChats: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 // Emit events so that parent can listen.
@@ -44,6 +55,7 @@ const emit = defineEmits([
   'delete-chat',
   'share-chat',
   'download-chat',
+  'toggle-chat-selection',
 ]);
 
 // Helper function to compute group label based on timestamp.
@@ -137,6 +149,10 @@ function handleShareChat(conversationId) {
 
 function handleDownloadChat(conversationId) {
   emit('download-chat', conversationId);
+}
+
+function handleToggleSelection(conversationId) {
+  emit('toggle-chat-selection', conversationId);
 }
 </script>
 

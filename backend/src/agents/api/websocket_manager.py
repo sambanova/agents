@@ -550,58 +550,6 @@ class WebSocketConnectionManager(WebSocketInterface):
                 if cumulative_usage:
                     data["cumulative_usage_metadata"] = cumulative_usage
 
-                # Check if this is a deep_research_end message and generate PDF
-                if (
-                    data.get("event") == "agent_completion"
-                    and data.get("additional_kwargs", {}).get("agent_type")
-                    == "deep_research_end"
-                ):
-
-                    try:
-                        # Extract the final_report content from the message
-                        final_report_content = data.get("content", "")
-
-                        # Try to parse as JSON to get the structured data
-                        if final_report_content:
-                            pdf_result = await generate_deep_research_pdf(
-                                final_report_content
-                            )
-                            if pdf_result:
-                                file_id, filename, pdf_data = pdf_result
-
-                                # Store the PDF file in Redis
-                                await self.message_storage.put_file(
-                                    user_id=user_id,
-                                    file_id=file_id,
-                                    data=pdf_data,
-                                    filename=filename,
-                                    format="application/pdf",
-                                    upload_timestamp=time.time(),
-                                    indexed=False,
-                                    source="deep_research_pdf",
-                                    vector_ids=[],
-                                )
-
-                                data["additional_kwargs"][
-                                    "deep_research_pdf_file_id"
-                                ] = file_id
-                                data["additional_kwargs"][
-                                    "deep_research_pdf_filename"
-                                ] = filename
-
-                                logger.info(
-                                    "PDF generated and attached to deep research message",
-                                    file_id=file_id,
-                                    filename=filename,
-                                )
-
-                    except Exception as e:
-                        logger.error(
-                            "Failed to generate PDF for deep research report",
-                            error=str(e),
-                        )
-                        # Continue without PDF - don't fail the message sending
-
                 content = to_agent_thinking(data)
                 if content:
                     # Map to old format persist it and send it
@@ -650,6 +598,10 @@ class WebSocketConnectionManager(WebSocketInterface):
                 data_analysis_doc_ids.append(doc_id["id"])
                 directory_content.append(doc_id["filename"])
 
+        enable_data_science = False
+        if data_analysis_doc_ids:
+            enable_data_science = True
+
         retrieval_prompt = ""
         if indexed_doc_ids:
             retrieval_prompt = (
@@ -657,9 +609,12 @@ class WebSocketConnectionManager(WebSocketInterface):
             )
 
         data_analysis_prompt = ""
-        if data_analysis_doc_ids:
+        if enable_data_science:
             data_analysis_prompt = f"The following datasets are available to use in data science subgraph:\n\n"
             data_analysis_prompt += "\n".join(directory_content)
+            data_analysis_prompt += (
+                "Use the data_science subgraph to analyze the data.\n\n"
+            )
 
         daytona_manager = self.daytona_managers.get(f"{user_id}:{thread_id}")
         if not daytona_manager:
@@ -706,8 +661,7 @@ class WebSocketConnectionManager(WebSocketInterface):
             "type==default/system_message"
         ] = f"""
 You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {retrieval_prompt} {data_analysis_prompt} 
-CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph or data_science subgraph only.
-If the user includes any datasets you MUST use the data_science subgraph to analyze the data.
+CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph.
 """
 
         if multimodal_input:
@@ -727,13 +681,19 @@ If the user includes any datasets you MUST use the data_science subgraph to anal
                 "description": "This subgraph generates comprehensive research reports with multiple perspectives, sources, and analysis. Use when the user requests: detailed research, in-depth analysis, comprehensive reports, market research, academic research, or thorough investigation of any topic. IMPORTANT: Pass the user's specific research question or topic as a clear, focused query. Extract the core research intent from the user's message and formulate it as a specific research question or topic statement. Examples: 'AI impact on healthcare industry', 'sustainable energy solutions for developing countries', 'cryptocurrency market trends 2024'.",
                 "next_node": END,
                 "graph": create_deep_research_graph(
-                    api_keys.sambanova_key, "sambanova", request_timeout=120
+                    api_key=api_keys.sambanova_key,
+                    provider="sambanova",
+                    request_timeout=120,
+                    redis_storage=self.message_storage,
+                    user_id=user_id,
                 ),
                 "state_input_mapper": lambda x: {"topic": x},
                 "state_output_mapper": lambda x: AIMessage(
                     content=x["final_report"],
+                    name="DeepResearch",
                     additional_kwargs={
                         "agent_type": "deep_research_end",
+                        "files": x["files"],
                     },
                 ),
             },
@@ -744,21 +704,25 @@ If the user includes any datasets you MUST use the data_science subgraph to anal
                     user_id=user_id,
                     sambanova_api_key=api_keys.sambanova_key,
                     redis_storage=self.message_storage,
+                    daytona_manager=daytona_manager,
                 ),
                 "state_input_mapper": lambda x: {
                     "code": x,
                     "current_retry": 0,
                     "max_retries": 5,
-                    "error_log": "",
+                    "steps_taken": [],
+                    "error_detected": False,
                     "final_result": "",
                     "corrections_proposed": [],
+                    "files": [],
                 },
                 "state_output_mapper": lambda x: LiberalFunctionMessage(
                     name="DaytonaCodeSandbox",
-                    content=x["final_result"] if x["final_result"] else x["error_log"],
+                    content="\n".join(x["steps_taken"]),
                     additional_kwargs={
                         "agent_type": "tool_response",
                         "timestamp": datetime.now().isoformat(),
+                        "files": x["files"],
                     },
                     # TODO: Mesure latency for code execution
                     result={"useage": {"total_latency": 0.0}},
@@ -780,7 +744,7 @@ If the user includes any datasets you MUST use the data_science subgraph to anal
                 }
             )
 
-        if data_analysis_doc_ids:
+        if enable_data_science:
             config["configurable"]["type==default/subgraphs"]["data_science"] = {
                 "description": "This subgraph performs comprehensive end-to-end data science workflows with multiple specialized agents. Use ONLY for complex projects requiring: machine learning model development, predictive analytics, statistical modeling, hypothesis testing, or multi-step data science pipelines. IMPORTANT: Pass the user's natural language request (e.g., 'build a machine learning model to predict customer churn', 'perform statistical analysis on sales trends'), NOT code. Do NOT use for simple data exploration - use DaytonaCodeSandbox instead.",
                 "next_node": END,

@@ -1,6 +1,6 @@
 <template>
   <!-- The "group" class allows us to use group-hover on the tooltip -->
-  <div class="relative inline-block group">
+  <div class="relative inline-block group pointer-events-auto">
     <!-- Slot for the target element -->
     <slot></slot>
     <!-- Tooltip content -->

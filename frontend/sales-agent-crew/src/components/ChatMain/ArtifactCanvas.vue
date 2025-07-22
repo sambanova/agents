@@ -37,10 +37,10 @@
         </div>
         
         <!-- Content -->
-        <div class="p-6">
+        <div class="p-6 bg-gray-50 max-h-[75vh] overflow-y-auto">
           <div v-if="artifact?.type === 'chart'" class="space-y-4">
             <!-- Chart Display -->
-            <div class="bg-gray-50 rounded-lg p-4">
+            <div class="bg-white rounded-lg p-4 border">
               <img 
                 v-if="chartUrl"
                 :src="chartUrl" 
@@ -59,9 +59,9 @@
             </div>
             
             <!-- Chart Details -->
-            <div v-if="artifact?.details" class="bg-blue-50 rounded-lg p-4">
-              <h4 class="font-medium text-blue-900 mb-2">Analysis</h4>
-              <p class="text-blue-800 text-sm">{{ artifact.details }}</p>
+            <div v-if="artifact?.details" class="bg-white rounded-lg p-4 border">
+              <h4 class="font-medium text-gray-900 mb-2">Analysis</h4>
+              <p class="text-gray-700 text-sm">{{ artifact.details }}</p>
             </div>
           </div>
           
@@ -96,17 +96,17 @@
         </div>
         
         <!-- Footer -->
-        <div class="flex justify-end gap-2 p-4 border-t bg-gray-50">
+        <div class="flex justify-end gap-2 p-4 border-t bg-white">
           <button 
             @click="downloadArtifact"
             v-if="canDownload"
-            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            class="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-primary-brandColor border border-transparent rounded-md shadow-sm hover:bg-primary-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
           >
             Download
           </button>
           <button 
             @click="$emit('close')"
-            class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            class="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
             Close
           </button>

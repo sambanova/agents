@@ -1,9 +1,10 @@
+import asyncio
 import json
 import os
 import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import List, Optional
 
 import jwt
 import mlflow
@@ -20,8 +21,6 @@ from agents.components.compound.xml_agent import (
     create_checkpointer,
     set_global_checkpointer,
 )
-from agents.components.routing.route import SemanticRouterAgent
-from agents.components.routing.user_proxy import UserProxyAgent
 from agents.rag.upload import convert_ingestion_input_to_blob, ingest_runnable
 from agents.storage.global_services import (
     get_secure_redis_client,
@@ -90,8 +89,6 @@ async def lifespan(app: FastAPI):
         redis_client=app.state.redis_client,
         sync_redis_client=app.state.sync_redis_client,
     )
-    UserProxyAgent.connection_manager = app.state.manager
-    SemanticRouterAgent.connection_manager = app.state.manager
 
     # Create checkpointer using the existing Redis client
     app.state.checkpointer = create_checkpointer(app.state.redis_client)
@@ -395,6 +392,7 @@ async def list_chats(
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
     try:
+        start_time = time.time()
         if not user_id:
             return JSONResponse(
                 status_code=401,
@@ -408,16 +406,90 @@ async def list_chats(
         if not conversation_ids:
             return JSONResponse(status_code=200, content={"chats": []})
 
-        # Get metadata for each conversation
+        # Optimize: Use controlled concurrent Redis calls to avoid connection pool exhaustion
+        meta_keys = [
+            f"chat_metadata:{user_id}:{conv_id}" for conv_id in conversation_ids
+        ]
+
+        # Limit concurrent connections to prevent pool exhaustion
+        # Use environment variable or default to 5 for safety
+        max_concurrent_connections = int(
+            os.getenv("REDIS_MAX_CONCURRENT_CONNECTIONS", "5")
+        )
+        semaphore = asyncio.Semaphore(max_concurrent_connections)
+
+        logger.debug(
+            f"Using max {max_concurrent_connections} concurrent Redis connections for user {user_id}"
+        )
+
+        async def get_metadata_with_semaphore(meta_key):
+            async with semaphore:
+                return await app.state.redis_client.get(meta_key, user_id)
+
+        # Try concurrent approach first
+        try:
+            # Execute metadata retrieval calls with controlled concurrency
+            meta_data_tasks = [
+                get_metadata_with_semaphore(meta_key) for meta_key in meta_keys
+            ]
+            meta_data_results = await asyncio.gather(
+                *meta_data_tasks, return_exceptions=True
+            )
+
+            # Check if we got connection errors
+            connection_errors = [
+                r
+                for r in meta_data_results
+                if isinstance(r, Exception) and "Too many connections" in str(r)
+            ]
+            if connection_errors:
+                logger.warning(
+                    f"Connection pool exhausted, falling back to sequential calls for user {user_id}"
+                )
+                raise Exception("Connection pool exhausted")
+
+        except Exception as e:
+            # Fallback to sequential calls if concurrent approach fails
+            logger.info(f"Using sequential Redis calls for user {user_id}")
+            meta_data_results = []
+            for meta_key in meta_keys:
+                try:
+                    result = await app.state.redis_client.get(meta_key, user_id)
+                    meta_data_results.append(result)
+                except Exception as get_error:
+                    logger.error(
+                        f"Failed to get metadata for key {meta_key}: {get_error}"
+                    )
+                    meta_data_results.append(None)
+
+        # Process results
         chats = []
-        for conv_id in conversation_ids:
-            meta_key = f"chat_metadata:{user_id}:{conv_id}"
-            meta_data = await app.state.redis_client.get(meta_key, user_id)
+        for i, meta_data in enumerate(meta_data_results):
+            if isinstance(meta_data, Exception):
+                logger.error(
+                    f"Failed to get metadata for conversation {conversation_ids[i]}: {meta_data}"
+                )
+                continue
+
             if meta_data:
-                data = json.loads(meta_data)
-                if "name" not in data:
-                    data["name"] = ""
-                chats.append(data)
+                try:
+                    data = json.loads(meta_data)
+                    if "name" not in data:
+                        data["name"] = ""
+                    chats.append(data)
+                except json.JSONDecodeError:
+                    logger.error(
+                        f"Failed to parse metadata for conversation {conversation_ids[i]}"
+                    )
+                    continue
+
+        duration = time.time() - start_time
+        logger.info(
+            f"Retrieved {len(chats)} chats for user {user_id} in {duration:.3f}s",
+            user_id=user_id,
+            chat_count=len(chats),
+            duration_ms=round(duration * 1000, 2),
+        )
 
         return JSONResponse(status_code=200, content={"chats": chats})
 
@@ -458,6 +530,44 @@ async def delete_chat(
                 content={"error": "Chat not found or access denied"},
             )
 
+        # Get all messages in the conversation to find file references
+        conversation_messages = await app.state.redis_storage_service.get_messages(
+            user_id, conversation_id
+        )
+
+        # Collect all file IDs referenced in the conversation
+        file_ids_to_delete = set()
+
+        for message in conversation_messages:
+            # Check files in additional_kwargs
+            files = message.get("additional_kwargs", {}).get("files", [])
+            file_ids_to_delete.update(files)
+
+        # Delete all referenced files
+        deleted_files = []
+        failed_files = []
+
+        for file_id in file_ids_to_delete:
+            try:
+                # Delete the file directly
+                result = await app.state.redis_storage_service.delete_file(
+                    user_id, file_id
+                )
+                if result:
+                    deleted_files.append(file_id)
+                    logger.info(f"Deleted file {file_id} as part of chat deletion")
+                else:
+                    failed_files.append(file_id)
+                    logger.warning(
+                        f"Failed to delete file {file_id} as part of chat deletion"
+                    )
+
+            except Exception as e:
+                failed_files.append(file_id)
+                logger.error(
+                    f"Error deleting file {file_id} as part of chat deletion: {str(e)}"
+                )
+
         # Close any active WebSocket connections for this chat
         connection = app.state.manager.get_connection(user_id, conversation_id)
         if connection:
@@ -469,8 +579,22 @@ async def delete_chat(
             user_id, conversation_id
         )
 
+        # Log deletion summary
+        logger.info(
+            f"Chat deletion completed for {conversation_id}. "
+            f"Deleted {len(deleted_files)} files, {len(failed_files)} files failed to delete",
+            conversation_id=conversation_id,
+            deleted_files_count=len(deleted_files),
+            failed_files_count=len(failed_files),
+        )
+
         return JSONResponse(
-            status_code=200, content={"message": "Chat deleted successfully"}
+            status_code=200,
+            content={
+                "message": "Chat deleted successfully",
+                "deleted_files_count": len(deleted_files),
+                "failed_files_count": len(failed_files),
+            },
         )
 
     except Exception as e:
@@ -563,6 +687,7 @@ async def get_user_files(
 ):
     """Retrieve all documents and uploaded files for a user."""
     try:
+        start_time = time.time()
         if not user_id:
             return JSONResponse(
                 status_code=401,
@@ -572,6 +697,14 @@ async def get_user_files(
         files = await app.state.redis_storage_service.list_user_files(user_id)
 
         files.sort(key=lambda x: x.get("created_at", 0), reverse=True)
+
+        duration = time.time() - start_time
+        logger.info(
+            f"Retrieved {len(files)} files for user {user_id} in {duration:.3f}s",
+            user_id=user_id,
+            file_count=len(files),
+            duration_ms=round(duration * 1000, 2),
+        )
 
         return JSONResponse(status_code=200, content={"documents": files})
 
@@ -745,6 +878,195 @@ async def get_api_keys(
             status_code=500,
             content={"error": f"Failed to retrieve API keys: {str(e)}"},
         )
+
+
+@app.post("/chat/{conversation_id}/share")
+async def create_conversation_share(
+    conversation_id: str,
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+):
+    """Create a new share link for a conversation (like ChatGPT)"""
+    try:
+        user_id = get_user_id_from_token(token_data)
+        if not user_id:
+            return JSONResponse(
+                status_code=401, content={"error": "Invalid authentication token"}
+            )
+
+        share_token = await app.state.redis_storage_service.create_share(
+            user_id, conversation_id
+        )
+
+        return JSONResponse(
+            status_code=201,
+            content={
+                "share_url": f"/share/{share_token}",
+                "share_token": share_token,
+                "message": "Share created successfully",
+            },
+        )
+
+    except ValueError as e:
+        return JSONResponse(status_code=404, content={"error": str(e)})
+    except Exception as e:
+        logger.error(f"Error creating share: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/share/{share_token}")
+async def get_shared_conversation(share_token: str):
+    """Get shared conversation (public access, no authentication required)"""
+    try:
+        shared_conversation = (
+            await app.state.redis_storage_service.get_shared_conversation(share_token)
+        )
+
+        if not shared_conversation:
+            return JSONResponse(
+                status_code=404, content={"error": "Shared conversation not found"}
+            )
+
+        return JSONResponse(status_code=200, content=shared_conversation)
+
+    except Exception as e:
+        logger.error(f"Error accessing shared conversation: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/share/{share_token}/files/{file_id}")
+async def get_shared_file(share_token: str, file_id: str):
+    """Get file from shared conversation (public access, no authentication required)"""
+    try:
+        # First verify the share token is valid and get the original user/conversation
+        shared_conversation = (
+            await app.state.redis_storage_service.get_shared_conversation(share_token)
+        )
+
+        if not shared_conversation:
+            return JSONResponse(
+                status_code=404, content={"error": "Shared conversation not found"}
+            )
+
+        # Get the original user_id and conversation_id from the shared conversation
+        original_user_id = shared_conversation.get("user_id")
+        conversation_id = shared_conversation.get("conversation_id")
+
+        if not original_user_id or not conversation_id:
+            return JSONResponse(
+                status_code=404, content={"error": "Invalid shared conversation data"}
+            )
+
+        # Get the conversation messages to verify the file is actually part of this conversation
+        conversation_messages = await app.state.redis_storage_service.get_messages(
+            original_user_id, conversation_id
+        )
+
+        # Check if the file_id is referenced in any message in this conversation
+        file_referenced_in_conversation = False
+        for message in conversation_messages:
+            # Parse file references from the message content
+            files = message.get("additional_kwargs", {}).get("files", [])
+            if file_id in files:
+                file_referenced_in_conversation = True
+                break
+
+        if not file_referenced_in_conversation:
+            return JSONResponse(
+                status_code=403,
+                content={"error": "File not part of this shared conversation"},
+            )
+
+        # Get the file data using the original user's context
+        file_data, file_metadata = await app.state.redis_storage_service.get_file(
+            original_user_id, file_id
+        )
+
+        if not file_data:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "File not found in shared conversation"},
+            )
+
+        return Response(
+            content=file_data,
+            media_type=file_metadata["format"],
+            headers={
+                "Content-Disposition": f"inline; filename={file_metadata['filename']}"
+            },
+        )
+
+    except Exception as e:
+        logger.error(
+            f"Error serving shared file: {str(e)}",
+            share_token=share_token,
+            file_id=file_id,
+        )
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/chat/{conversation_id}/shares")
+async def list_conversation_shares(
+    conversation_id: str,
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+):
+    """List all shares for a conversation"""
+    try:
+        user_id = get_user_id_from_token(token_data)
+        if not user_id:
+            return JSONResponse(
+                status_code=401, content={"error": "Invalid authentication token"}
+            )
+
+        # Verify user owns the conversation
+        if not await app.state.redis_storage_service.verify_conversation_exists(
+            user_id, conversation_id
+        ):
+            return JSONResponse(
+                status_code=404, content={"error": "Conversation not found"}
+            )
+
+        # Get all user's shares and filter for this conversation
+        all_shares = await app.state.redis_storage_service.get_user_shares(user_id)
+        conversation_shares = [
+            share for share in all_shares if share["conversation_id"] == conversation_id
+        ]
+
+        return JSONResponse(status_code=200, content={"shares": conversation_shares})
+
+    except Exception as e:
+        logger.error(f"Error listing shares: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.delete("/share/{share_token}")
+async def delete_share(
+    share_token: str,
+    token_data: HTTPAuthorizationCredentials = Depends(clerk_auth_guard),
+):
+    """Delete a share (owner only)"""
+    try:
+        user_id = get_user_id_from_token(token_data)
+        if not user_id:
+            return JSONResponse(
+                status_code=401, content={"error": "Invalid authentication token"}
+            )
+
+        success = await app.state.redis_storage_service.delete_share(
+            user_id, share_token
+        )
+
+        if not success:
+            return JSONResponse(
+                status_code=404, content={"error": "Share not found or access denied"}
+            )
+
+        return JSONResponse(
+            status_code=200, content={"message": "Share deleted successfully"}
+        )
+
+    except Exception as e:
+        logger.error(f"Error deleting share: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 @app.delete("/user/data")

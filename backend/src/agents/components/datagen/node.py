@@ -115,44 +115,42 @@ async def human_choice_node(state: State, llm: BaseChatModel) -> State:
     logger.debug(f"Received feedback: {feedback}")
 
     prompt = f"""
-Your task is to classify user input about a plan. Respond with a single word:
+TASK: Classify user feedback. Respond with a single label only.
+LABELS: APPROVE, REVISE
+RULE: Any question, doubt, or suggestion requires the REVISE label.
 
-APPROVE: If the user explicitly agrees with the plan or gives a simple, neutral acknowledgement (e.g., "ok").
-REVISE: If the user suggests a change, asks a clarifying question, or expresses any doubt.
+---
+Input: Looks great, let's do it.
+Output: APPROVE
 
-User: Looks great, let's do it.
-You: APPROVE
+Input: Can we change the deadline?
+Output: REVISE
 
-User: Can we change the deadline?
-You: REVISE
+Input: It's good, but can we review the budget?
+Output: REVISE
 
-User: I'm not sure about the first step.
-You: REVISE
-
-User: ok
-You: APPROVE
-
-User: Approved
-You: APPROVE
-
-User: Let's add a new section for risks.
-You: REVISE
-
-User: Can you only focus on visualizations?
-You:
+Input: ok
+Output: APPROVE
+---
+Input: [New User Input Goes Here]
+Output:
 """
 
     result = await llm.ainvoke(
         [SystemMessage(content=prompt), HumanMessage(content=feedback)]
     )
 
+    result.additional_kwargs["agent_type"] = "data_science_human_choice"
+
     update_state = {}
 
-    if "APPROVE" in result.content:
+    cleaned_feedback = drop_think_section(result.content)
+
+    if "APPROVE" in cleaned_feedback:
         content = "Continue the research process"
         update_state["modification_areas"] = ""
         logger.info("Human approved - continuing research process")
-    elif "REVISE" in result.content:
+    elif "REVISE" in cleaned_feedback:
         modification_areas = feedback
         content = f"Regenerate hypothesis. Areas to modify: {modification_areas}"
         update_state["hypothesis"] = ""
@@ -359,6 +357,7 @@ async def refiner_node(
     If token limit is exceeded, use only MD file names instead of full content.
     """
     logger.info(f"Processing refiner node: {name} for user {user_id}")
+    files = []
     try:
         # Get storage path
         storage_path = await daytona_manager.list_files()
@@ -409,8 +408,10 @@ async def refiner_node(
             refiner_state["internal_messages"] = [
                 AIMessage(
                     content=simplified_report_content,
+                    name=name,
                     id=str(uuid.uuid4()),
                     sender=name,
+                    additional_kwargs={"files": files},
                 )
             ]
             result = await agent.ainvoke(refiner_state)
@@ -431,6 +432,7 @@ async def refiner_node(
                     logger.error(f"Failed to read file for storage: {file_name}")
                     continue
                 mime_type = mimetypes.guess_type(file_name)[0]
+                files.append(file_id)
                 await redis_storage.put_file(
                     user_id,
                     file_id,
@@ -452,6 +454,7 @@ async def refiner_node(
                 sender=name,
                 usage_metadata=result.usage_metadata,
                 response_metadata=result.response_metadata,
+                additional_kwargs={"files": files},
             )
         )
         state["sender"] = name
@@ -466,6 +469,7 @@ async def refiner_node(
                 name=name,
                 id=str(uuid.uuid4()),
                 sender=name,
+                additional_kwargs={"files": files},
             )
         )
         return state

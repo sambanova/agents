@@ -203,10 +203,24 @@ const props = defineProps({
   runId: {
     type: String,
     default: ''
-  }
+  },
+  isMobile: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const collapsed = ref(true)
+
+watch(
+  () => props.isMobile,
+  (isMobile) => {
+    if (isMobile) {
+      collapsed.value = true;
+    }
+  },
+  { immediate: true }
+);
 
 // SSE
 const messages = ref([])

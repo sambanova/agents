@@ -10,6 +10,22 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  build: {
+    // Basic optimizations
+    target: 'es2015',
+    minify: 'esbuild',
+    rollupOptions: {
+      output: {
+        // Simple chunk splitting
+        manualChunks: {
+          vendor: ['vue', 'vue-router', 'pinia'],
+          ui: ['@headlessui/vue', '@heroicons/vue'],
+        },
+      },
+    },
+    sourcemap: false,
+    cssCodeSplit: true,
+  },
   server: {
     hmr: {
       host: 'localhost',

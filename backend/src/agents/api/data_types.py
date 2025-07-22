@@ -1,15 +1,12 @@
 ########## data_types.py (FULL, UNCHANGED EXCEPT NEW FIELDS) ##########
-from pydantic import BaseModel, model_validator, Field
+from datetime import date
 from enum import Enum
-from typing import Any, List, Optional, Union, Dict, Sequence
-from datetime import date, datetime
-from agents.components.financial_analysis.financial_analysis_crew import (
-    FinancialAnalysisResult,
-)
+from typing import Any, Dict, List, Optional, Union
+
 from agents.components.samba_research_flow.crews.edu_research.edu_research_crew import (
     Section,
 )
-from agents.components.lead_generation_crew import OutreachList
+from pydantic import BaseModel, Field, model_validator
 
 
 # Enum to Define Agent Types
@@ -65,6 +62,27 @@ class APIKeys(BaseModel):
     fireworks_key: str = ""
     serper_key: str
     exa_key: str
+
+
+class ShareResponse(BaseModel):
+    share_url: str
+    share_token: str
+    message: str
+
+
+class SharedConversationData(BaseModel):
+    share_token: str
+    title: str
+    messages: List[Dict[str, Any]]
+    created_at: str
+    conversation_id: str
+
+
+class ShareInfo(BaseModel):
+    share_token: str
+    title: str
+    created_at: str
+    conversation_id: str
 
 
 class FinancialAnalysis(BaseModel):
@@ -177,30 +195,3 @@ class DeepResearchSection(BaseModel):
     citations: List[Dict[str, str]] = Field(default_factory=list)
 
 
-class DeepResearchReport(BaseModel):
-    """
-    A structured object that collects the final multi-section deep research report,
-    plus the raw final text if needed, plus a list of all citations.
-    """
-
-    sections: List[DeepResearchSection]
-    final_report: str
-    citations: List[DeepCitation] = Field(default_factory=list)
-
-
-class AgentStructuredResponse(BaseModel):
-    agent_type: AgentEnum
-    data: Union[
-        FinancialAnalysisResult,
-        EducationalPlanResult,
-        OutreachList,
-        Greeter,
-        AssistantResponse,
-        UserQuestion,
-        DeepResearchUserQuestion,
-        DeepResearchReport,
-        ErrorResponse,
-    ]
-    metadata: Optional[Dict[str, Any]] = None
-    message_id: str
-    message: Optional[str] = None  # Additional message or notes from the agent

@@ -78,6 +78,15 @@ export default {
       type: Object,
       required: true,
     },
+    // Add props for shared conversation context
+    isSharedConversation: {
+      type: Boolean,
+      default: false
+    },
+    shareToken: {
+      type: String,
+      default: ''
+    }
   },
   data() {
     return {
@@ -196,7 +205,11 @@ export default {
         const response = await api.get(`/files/${fileId}`, {
           headers: {
             'Authorization': `Bearer ${token}`
-          },
+          };
+        }
+        
+        const response = await api.get(endpoint, {
+          headers,
           responseType: 'blob'
         });
         

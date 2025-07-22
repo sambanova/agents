@@ -94,7 +94,7 @@
     overflow-x: auto;
     white-space: nowrap;
     scroll-behavior: smooth;
-    padding: 20px 50px; /* Reserve space for arrow buttons */
+    padding: 8px 50px;
     -ms-overflow-style: none;
     scrollbar-width: none;
   }

@@ -63,8 +63,7 @@
   </template>
   
   <script setup>
-  import { defineProps } from 'vue'
-  import { formattedDuration } from '@/utils/globalFunctions'
+import { formattedDuration } from '@/utils/globalFunctions'
 
   const props = defineProps({
     presentMetadata: {

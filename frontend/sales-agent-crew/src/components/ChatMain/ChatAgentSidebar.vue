@@ -243,8 +243,23 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  isMobile: {
+    type: Boolean,
+    default: false,
+  },
 });
 const agentThoughtsData = ref([]);
+const collapsed = ref(false);
+
+watch(
+  () => props.isMobile,
+  (isMobile) => {
+    if (isMobile) {
+      collapsed.value = true;
+    }
+  },
+  { immediate: true }
+);
 
 watch(
   () => props.streamCompleted,
@@ -271,7 +286,6 @@ watch(
   },
   { deep: true } // If you want to detect nested mutations
 );
-const collapsed = ref(false);
 
 // SSE
 const messages = ref([]);

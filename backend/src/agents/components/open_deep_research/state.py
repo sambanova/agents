@@ -50,6 +50,7 @@ class ReportStateInput(TypedDict):
 
 class ReportStateOutput(TypedDict):
     final_report: str  # Final report
+    files: list[str]  # List of files from the agent
 
 
 class ReportState(TypedDict):
@@ -65,6 +66,7 @@ class ReportState(TypedDict):
     messages: Annotated[
         List[BaseMessage], operator.add
     ]  # List of messages from the agent
+    files: Annotated[list[str], operator.add]  # List of files from the agent
 
 
 class SectionState(TypedDict):

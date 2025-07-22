@@ -50,7 +50,6 @@
 </template>
 
 <script setup>
-import { defineProps } from 'vue';
 import { isNumeric } from '@/utils/globalFunctions';
 
 const props = defineProps({

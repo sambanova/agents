@@ -88,6 +88,35 @@
         </div>
       </div>
 
+      <!-- Code (for data science tool calls) -->
+      <div v-else-if="typeof value === 'object' && value.code" class="py-1 text-xs">
+        <pre class="text-xs text-gray-700 whitespace-pre-wrap overflow-x-auto">{{ value.code }}</pre>
+      </div>
+
+      <!-- Data Science Tool Calls -->
+      <div v-else-if="isDataScienceToolCall" class="py-1 text-xs">
+        <!-- Show explanation text at the top like other messages -->
+        <div v-if="explanationText" class="mb-3 text-gray-700 leading-relaxed">
+          <div v-html="renderMarkdown(explanationText)"></div>
+        </div>
+        
+        <!-- Show code button -->
+        <button
+          v-if="extractedCode"
+          @click="isModalOpen = true"
+          class="inline-flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-md hover:bg-gray-100 hover:border-gray-300 transition-colors"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+          </svg>
+          <span>View Code</span>
+        </button>
+        <div v-else class="bg-gray-100 p-3 rounded border text-xs">
+          <div class="text-gray-600 mb-2">Raw content (no code extracted):</div>
+          <pre class="text-xs overflow-x-auto">{{ value }}</pre>
+        </div>
+      </div>
+
       <!-- Otherwise, render the value as markdown -->
       <div v-else class="py-1 text-xs text-gray-700 leading-relaxed">
         <div
@@ -96,15 +125,26 @@
       </div>
     </div>
   </div>
+  
+  <!-- Code Modal (outside the conditional rendering) -->
+  <CodeModal
+    :is-open="isModalOpen"
+    :code="extractedCode"
+    :language="'Python'"
+    :title="`Data Science Tool Call - ${toolCallName}`"
+    @close="isModalOpen = false"
+  />
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import RecursiveDisplay from './RecursiveDisplay.vue';
+import CodeModal from './CodeModal.vue';
 import { isNumeric } from '@/utils/globalFunctions';
 import { renderMarkdown } from '@/utils/markdownRenderer';
 
 const isOpen = ref(false);
+const isModalOpen = ref(false);
 
 const props = defineProps({
   heading: {
@@ -173,6 +213,114 @@ function formatKey(key) {
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 }
+
+// Detect and parse data science tool calls
+const isDataScienceToolCall = computed(() => {
+  // Check if value is a code object
+  if (typeof props.value === 'object' && props.value.code) {
+    const content = props.value.code
+    const isToolCall = content.includes('<tool>user_daytona_execute_code</tool>') ||
+                       content.includes('user_daytona_execute_code')
+    
+    // Debug logging
+    if (isToolCall) {
+      console.log('Data science tool call detected in TimelineCollapsibleContent (code):', {
+        heading: props.heading,
+        contentPreview: content.substring(0, 200) + '...'
+      })
+    }
+    
+    return isToolCall
+  }
+  
+  // Check if value is a string
+  if (typeof props.value !== 'string') return false
+  
+  const content = props.value
+  const isToolCall = content.includes('<tool>user_daytona_execute_code</tool>') ||
+                     content.includes('user_daytona_execute_code')
+  
+  // Debug logging
+  if (isToolCall) {
+    console.log('Data science tool call detected in TimelineCollapsibleContent:', {
+      heading: props.heading,
+      contentPreview: content.substring(0, 200) + '...'
+    })
+  }
+  
+  return isToolCall
+})
+
+const toolCallName = computed(() => {
+  if (!isDataScienceToolCall.value) return ''
+  
+  let content
+  if (typeof props.value === 'object' && props.value.code) {
+    content = props.value.code
+  } else {
+    content = props.value
+  }
+  
+  const toolMatch = content.match(/<tool>([^<]+)<\/tool>/)
+  return toolMatch ? toolMatch[1].replace(/_/g, ' ') : 'user_daytona_execute_code'
+})
+
+const extractedCode = computed(() => {
+  if (!isDataScienceToolCall.value) return ''
+
+  // Get the content from either code object or string
+  let content
+  if (typeof props.value === 'object' && props.value.code) {
+    content = props.value.code
+  } else {
+    content = props.value
+  }
+
+  console.log('RAW CONTENT DEBUG:', {
+    heading: props.heading,
+    valueType: typeof props.value,
+    hasRawText: typeof props.value === 'object' && props.value.raw_text,
+    contentLength: content.length,
+    contentPreview: content.substring(0, 500) + '...'
+  })
+
+  // Extract only the code part from the tool call
+  const toolStart = content.indexOf('<tool>user_daytona_execute_code</tool>')
+  if (toolStart === -1) return content
+
+  const toolInputStart = content.indexOf('<tool_input>', toolStart)
+  if (toolInputStart === -1) return content
+
+  const codeStart = content.indexOf('<code>', toolInputStart)
+  if (codeStart === -1) return content
+
+  const codeEnd = content.indexOf('</code>', codeStart)
+  if (codeEnd === -1) return content
+
+  // Extract the code between <code> and </code> tags
+  const code = content.substring(codeStart + 6, codeEnd).trim()
+  return code
+})
+
+const explanationText = computed(() => {
+  if (!isDataScienceToolCall.value) return ''
+
+  // Get the content from either code object or string
+  let content
+  if (typeof props.value === 'object' && props.value.code) {
+    content = props.value.code
+  } else {
+    content = props.value
+  }
+
+  // Extract the explanation text (everything before the tool call)
+  const toolStart = content.indexOf('<tool>user_daytona_execute_code</tool>')
+  if (toolStart === -1) return ''
+
+  // Get everything before the tool call
+  const explanation = content.substring(0, toolStart).trim()
+  return explanation
+})
 
 // Get the correct heading text value to display.
 const getHeadingValue = () => {
