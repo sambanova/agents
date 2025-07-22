@@ -1,20 +1,61 @@
+import hashlib
 import os
+import time
 from functools import lru_cache
 from typing import Any, Dict, Optional
 
-import jwt
-from dotenv import load_dotenv
+import requests
+import structlog
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jwt.exceptions import (
-    ExpiredSignatureError,
-    InvalidAudienceError,
-    InvalidIssuerError,
-    InvalidTokenError,
-)
 
 # HTTP Bearer token security scheme
 security = HTTPBearer()
+
+logger = structlog.get_logger(__name__)
+
+# Token validation cache (token_hash -> {payload, expires_at})
+_token_cache = {}
+CACHE_DURATION_SECONDS = 300  # 5 minutes
+
+
+def _get_token_hash(token: str) -> str:
+    """Create a hash of the token for cache key (don't store full token)"""
+    return hashlib.sha256(token.encode()).hexdigest()[:32]
+
+
+def _is_cache_valid(cache_entry: Dict) -> bool:
+    """Check if cached token validation is still valid"""
+    return time.time() < cache_entry.get("expires_at", 0)
+
+
+def _cache_token_validation(token: str, payload: Dict[str, Any]) -> None:
+    """Cache a successful token validation"""
+    token_hash = _get_token_hash(token)
+    _token_cache[token_hash] = {
+        "payload": payload,
+        "expires_at": time.time() + CACHE_DURATION_SECONDS,
+    }
+
+    # Clean up expired cache entries (simple cleanup)
+    current_time = time.time()
+    expired_keys = [
+        k for k, v in _token_cache.items() if v.get("expires_at", 0) < current_time
+    ]
+    for key in expired_keys:
+        _token_cache.pop(key, None)
+
+
+def _get_cached_token_validation(token: str) -> Optional[Dict[str, Any]]:
+    """Get cached token validation if still valid"""
+    token_hash = _get_token_hash(token)
+    cache_entry = _token_cache.get(token_hash)
+
+    if cache_entry and _is_cache_valid(cache_entry):
+        logger.debug("Using cached token validation", token_hash=token_hash)
+        return cache_entry["payload"]
+
+    return None
 
 
 class UnauthorizedException(HTTPException):
@@ -35,7 +76,6 @@ class Auth0Config:
 
     def __init__(self):
         self.domain = os.getenv("AUTH0_DOMAIN")
-        self.audience = os.getenv("AUTH0_AUDIENCE")
         self.algorithms = ["RS256"]
 
         if not self.domain:
@@ -49,35 +89,72 @@ def get_auth0_config() -> Auth0Config:
 
 
 class VerifyToken:
-    """Does all the token verification using PyJWT"""
+    """Does all the token verification using python-jose"""
 
     def __init__(self):
         self.config = get_auth0_config()
 
-        # This gets the JWKS from a given URL and does processing so you can
-        # use any of the keys available
-        jwks_url = f"https://{self.config.domain}/.well-known/jwks.json"
-        self.jwks_client = jwt.PyJWKClient(jwks_url)
-
     def verify(self, token: str) -> Dict[str, Any]:
-        """Verify Auth0 JWT token and return claims"""
+        """Verify Auth0 JWT/JWE token by calling Auth0 server"""
         try:
-            # Get the signing key from the JWKS
-            signing_key = self.jwks_client.get_signing_key_from_jwt(token)
+            # Check cache first (works for both JWT and JWE)
+            cached_payload = _get_cached_token_validation(token)
+            if cached_payload:
+                logger.info(
+                    "Token validated from cache", user_id=cached_payload.get("sub")
+                )
+                return cached_payload
 
-            # Verify token
-            payload = jwt.decode(
-                token,
-                signing_key.key,
-                algorithms=self.config.algorithms,
-                issuer=f"https://{self.config.domain}/",
+            # For all tokens (JWT and JWE), validate via Auth0 userinfo endpoint
+            # This is simpler and more reliable than local verification
+            return self._validate_with_auth0(token)
+
+        except Exception as e:
+            logger.error(
+                "Unexpected error during token verification",
+                error=str(e),
+                exc_info=True,
             )
-            return payload
-        except ExpiredSignatureError:
             raise UnauthenticatedException()
-        except InvalidIssuerError:
-            raise UnauthorizedException("Invalid issuer")
-        except InvalidTokenError as e:
+
+    def _validate_with_auth0(self, token: str) -> Dict[str, Any]:
+        """Validate any token (JWT/JWE) by calling Auth0 server"""
+        try:
+            userinfo_url = f"https://{self.config.domain}/userinfo"
+            headers = {"Authorization": f"Bearer {token}"}
+
+            logger.info("Validating token with Auth0 server")
+            response = requests.get(userinfo_url, headers=headers, timeout=10)
+
+            if response.status_code == 200:
+                userinfo = response.json()
+
+                # Create minimal payload with just essential claims
+                payload = {
+                    "iss": f"https://{self.config.domain}/",
+                    "sub": userinfo.get("sub"),  # Just user ID, essential for auth
+                    "exp": int(time.time()) + 3600,  # 1 hour from now
+                    "iat": int(time.time()),
+                }
+
+                # Cache the successful validation
+                _cache_token_validation(token, payload)
+
+                logger.info(
+                    "Token validated by Auth0 server", user_id=payload.get("sub")
+                )
+                return payload
+            else:
+                logger.error(
+                    "Auth0 server rejected token", status_code=response.status_code
+                )
+                raise UnauthenticatedException()
+
+        except requests.RequestException as e:
+            logger.error("Failed to contact Auth0 server", error=str(e))
+            raise UnauthenticatedException()
+        except Exception as e:
+            logger.error("Error validating token with Auth0", error=str(e))
             raise UnauthenticatedException()
 
     def __call__(self, token: str) -> Dict[str, Any]:

@@ -14,6 +14,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "arxiv" },
+    { name = "authlib" },
     { name = "autogen-agentchat" },
     { name = "autogen-core" },
     { name = "autogen-ext" },
@@ -60,6 +61,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "arxiv", specifier = "==2.2.0" },
+    { name = "authlib", specifier = "==1.3.0" },
     { name = "autogen-agentchat", specifier = "==0.4.5" },
     { name = "autogen-core", specifier = "==0.4.5" },
     { name = "autogen-ext", specifier = "==0.4.5" },
@@ -385,6 +387,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b1/e3/68d004f82771f7b8e5a1bdcf4334a06fdd86c975471e30101c4c0f1a0bcd/auth0_python-4.10.0.tar.gz", hash = "sha256:fca0f29cd32618803b59a940041ee78c6304de9ab5a02cd7863f82951affdee6", size = 74755, upload-time = "2025-06-10T08:56:03.628Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/67/e4/485d49a296fbd73d5fa33e97ddf9decf6f3d8d0c52a12df466adbf9b2590/auth0_python-4.10.0-py3-none-any.whl", hash = "sha256:c005cebbbe66bbfaa593353be76d7c9d52dc41fcb9680f815067496d5f3a9968", size = 138788, upload-time = "2025-06-10T08:56:02.141Z" },
+]
+
+[[package]]
+name = "authlib"
+version = "1.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b9/8b/2921c26d3867d365e528a6e79b44efc799fcfbeaf2fc6dfa7b21cce7406d/Authlib-1.3.0.tar.gz", hash = "sha256:959ea62a5b7b5123c5059758296122b57cd2585ae2ed1c0622c21b371ffdae06", size = 145865, upload-time = "2023-12-17T23:51:33.464Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/25/65/b78eb948b71ab232d08b30c38a2e3b69e6e50c6e166863a0068c877155b9/Authlib-1.3.0-py2.py3-none-any.whl", hash = "sha256:9637e4de1fb498310a56900b3e2043a206b03cb11c05422014b0302cbc814be3", size = 223706, upload-time = "2023-12-17T23:51:31.617Z" },
 ]
 
 [[package]]
