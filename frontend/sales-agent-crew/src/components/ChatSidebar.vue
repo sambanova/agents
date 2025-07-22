@@ -211,7 +211,7 @@ function toggleCollapse() {
 }
 
 /** Auth0 user */
-const { user, getAccessTokenSilently } = useAuth0();
+const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
 const userId = computed(() => user.value?.sub);
 
 const sambanovaKey = ref(null);
@@ -305,7 +305,7 @@ onMounted(() => {
   console.log('ChatSidebar mounted, authentication check');
   
   // Check if user is authenticated before loading data
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping user data loading - user not authenticated');
     return;
   }
@@ -328,7 +328,7 @@ onUnmounted(() => {
 
 async function deleteChat(conversationId) {
   // Check if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping deleteChat - user not authenticated');
     return;
   }
@@ -359,7 +359,7 @@ async function deleteChat(conversationId) {
 
 async function loadKeys(missingKeysListData) {
   // Check if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping loadKeys - user not authenticated');
     return;
   }
@@ -396,7 +396,7 @@ const missingKeysArray = computed(() => {
 });
 async function loadChats() {
   // Check if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping loadChats - user not authenticated');
     return;
   }
@@ -422,7 +422,7 @@ async function loadChats() {
 /** Start a new conversation => calls /chat/init with decrypted keys */
 async function createNewChat() {
   // Check if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping createNewChat - user not authenticated');
     return;
   }
@@ -459,7 +459,7 @@ watch(
     }
     
     // Only load chats if user is authenticated and chats haven't been loaded yet
-    if (window.Clerk && window.Clerk.session && !chatsLoaded.value) {
+    if (isAuthenticated.value && !chatsLoaded.value) {
       loadChats();
     }
   }

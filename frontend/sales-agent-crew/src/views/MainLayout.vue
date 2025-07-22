@@ -41,7 +41,7 @@
               <!-- ChatView for conversation -->
               <ChatView
                 :conversationId="selectedConversationId"
-                :userId="clerkUserId"
+                :userId="userId"
                 class="flex-1"
                 @agentThoughtsDataChanged="agentThoughtsDataChanged"
                 @daytona-sidebar-state-changed="handleDaytonaSidebarStateChange"
@@ -246,7 +246,7 @@ const isDev = ref(import.meta.env.DEV);
 const headerRef = ref(null);
 
 // Auth0 user ID
-const { user } = useAuth0();
+const { user, isAuthenticated } = useAuth0();
 const userId = computed(() => user.value?.sub || 'anonymous_user');
 
 const agentData = ref([]);
@@ -262,7 +262,7 @@ const agentThoughtsDataChanged = (agentThoughtsData) => {
   agentData.value = agentThoughtsData;
 
   // Only load chats if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping loadChats - user not authenticated in MainLayout');
     return;
   }

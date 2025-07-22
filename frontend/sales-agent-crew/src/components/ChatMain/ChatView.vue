@@ -677,7 +677,7 @@ const iconComponents = {
 };
 async function handleButtonClick(data) {
   // Check if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping handleButtonClick - user not authenticated');
     return;
   }
@@ -711,7 +711,7 @@ async function genPDF() {
 
 async function createNewChat() {
   // Check if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping createNewChat - user not authenticated');
     return;
   }
@@ -746,7 +746,7 @@ async function shareConversation() {
   isSharing.value = true;
   
   try {
-    const result = await sharing.createShare(conversationId.value);
+    const result = await sharing.createShare(conversationId.value, getAccessTokenSilently);
     const shareUrl = `${window.location.origin}/share/${result.share_token}`;
     
     // Copy to clipboard
@@ -1383,6 +1383,11 @@ async function filterChat(msgData) {
   );
   completionData.forEach((completion) => {
     try {
+      // Skip if completion or its data is undefined/null
+      if (!completion || !completion.data) {
+        return;
+      }
+      
       let parsedData;
       if (typeof completion.data === 'string') {
         parsedData = JSON.parse(completion.data);
@@ -1390,7 +1395,8 @@ async function filterChat(msgData) {
         parsedData = completion.data;
       }
       
-      if (parsedData.metadata) {
+      // Additional safety check for parsedData
+      if (parsedData && parsedData.metadata) {
         completionMetaData.value = parsedData.metadata;
         emit('metadataChanged', completionMetaData.value);
       }
@@ -1399,9 +1405,9 @@ async function filterChat(msgData) {
       if (completion.event === 'stream_complete' && parsedData) {
         // Create synthetic completion metadata if not present
         if (!completionMetaData.value && workflowData.value.length > 0) {
-          const totalDuration = workflowData.value.reduce((sum, item) => sum + (item.duration || 0), 0);
-          const uniqueProviders = [...new Set(workflowData.value.map(item => item.llm_provider))];
-          const uniqueModels = [...new Set(workflowData.value.map(item => item.llm_name))];
+          const totalDuration = workflowData.value.reduce((sum, item) => sum + (item?.duration || 0), 0);
+          const uniqueProviders = [...new Set(workflowData.value.map(item => item?.llm_provider).filter(Boolean))];
+          const uniqueModels = [...new Set(workflowData.value.map(item => item?.llm_name).filter(Boolean))];
           
           completionMetaData.value = {
             total_duration: totalDuration,
@@ -1426,7 +1432,7 @@ async function filterChat(msgData) {
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     .forEach((completion) => {
       // Check for cumulative_usage_metadata for header display
-      if (completion.cumulative_usage_metadata) {
+      if (completion && completion.cumulative_usage_metadata) {
         latestCumulativeUsage = completion.cumulative_usage_metadata;
       }
     });
@@ -1570,12 +1576,12 @@ function toggleSelectAllUploaded() {
 }
 
 // Auth0
-const { user: auth0User, getAccessTokenSilently } = useAuth0();
+const { user: auth0User, getAccessTokenSilently, isAuthenticated } = useAuth0();
 const userId = computed(() => auth0User.value?.sub);
 
 async function loadKeys() {
   // Check if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping loadKeys - user not authenticated');
     return;
   }
@@ -1632,7 +1638,7 @@ onMounted(async () => {
     await loadSharedConversation();
   } else {
     // Normal conversation - load keys and user data only if authenticated
-    if (window.Clerk && window.Clerk.session) {
+    if (isAuthenticated.value) {
       await loadKeys();
       await loadUserDocuments();
     }
@@ -1903,7 +1909,7 @@ async function handleFileUpload(event) {
 
 async function loadUserDocuments() {
   // Check if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping loadUserDocuments - user not authenticated');
     return;
   }
@@ -2093,7 +2099,7 @@ const addMessage = async () => {
 
 async function connectWebSocket() {
   // Check if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping WebSocket connection - user not authenticated');
     return;
   }
@@ -2116,13 +2122,10 @@ async function connectWebSocket() {
       }
     );
 
-    // Use the same base URL pattern as API calls
+    // Use the same proxy pattern as API calls - let Vite proxy handle it
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const baseUrl = import.meta.env.PROD
-      ? `${wsProtocol}//${window.location.host}/api` // Use the current origin in production
-      : import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:8000';
-
-    const WEBSOCKET_URL = `${baseUrl}/chat`;
+    const wsHost = window.location.host;
+    const WEBSOCKET_URL = `${wsProtocol}//${wsHost}/api/chat`;
     const token = await getAccessTokenSilently();
     const fullUrl = `${WEBSOCKET_URL}?conversation_id=${currentId.value}`;
     socket.value = new WebSocket(fullUrl);
@@ -2304,7 +2307,7 @@ async function connectWebSocket() {
           isLoading.value = false;
           
           // Reload user documents (artifacts) after chat completion
-          if (!isSharedConversation.value && window.Clerk && window.Clerk.session) {
+          if (!isSharedConversation.value && isAuthenticated.value) {
             console.log('Reloading user documents after chat completion');
             await loadUserDocuments();
           }

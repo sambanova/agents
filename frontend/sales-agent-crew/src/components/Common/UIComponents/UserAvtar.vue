@@ -23,7 +23,7 @@ import { useAuth0 } from '@auth0/auth0-vue'
 const auth0 = useAuth0()
 
 const props = defineProps({
-  // When type is "user", we'll use Clerk's user data.
+  // When type is "user", we'll use Auth0's user data.
   // Otherwise, we'll treat props.type as a full name from which to extract initials.
   type: {
     type: String,

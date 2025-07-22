@@ -116,10 +116,10 @@ let socket = null;
 
 // Function to establish the WebSocket connection.
 function connectWebSocket() {
-  // Construct the base WebSocket URL with /chat endpoint
-  let WEBSOCKET_URL =
-    import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:8000';
-  WEBSOCKET_URL = `${WEBSOCKET_URL}/chat`;
+  // Use the same proxy pattern as API calls - let Vite proxy handle it
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsHost = window.location.host;
+  const WEBSOCKET_URL = `${wsProtocol}//${wsHost}/api/chat`;
 
   // Construct the full URL using query parameters.
   const fullUrl = `${WEBSOCKET_URL}?user_id=${props.userId}&conversation_id=${props.runId}`;
