@@ -29,6 +29,11 @@ const routes = [
     path: '/login',
     name: 'LoginPage',
     component: LoginPage
+  },
+  {
+    path: '/callback',
+    name: 'callback',
+    component: MainLayout
   }
   
 ]
