@@ -102,8 +102,8 @@ export const uploadDocument = async (file, userId, sessionId) => {
 
 export const sharing = {
   // Create a share link for a conversation
-  createShare: async (conversationId) => {
-    const token = await window.Clerk.session.getToken();
+  createShare: async (conversationId, getAccessTokenSilently) => {
+    const token = await getAccessTokenSilently();
     const response = await axios.post(
       `${API_URL}/chat/${conversationId}/share`,
       {},
@@ -124,8 +124,8 @@ export const sharing = {
   },
 
   // List shares for a conversation
-  getConversationShares: async (conversationId) => {
-    const token = await window.Clerk.session.getToken();
+  getConversationShares: async (conversationId, getAccessTokenSilently) => {
+    const token = await getAccessTokenSilently();
     const response = await axios.get(
       `${API_URL}/chat/${conversationId}/shares`,
       {
@@ -139,8 +139,8 @@ export const sharing = {
   },
 
   // Delete a share
-  deleteShare: async (shareToken) => {
-    const token = await window.Clerk.session.getToken();
+  deleteShare: async (shareToken, getAccessTokenSilently) => {
+    const token = await getAccessTokenSilently();
     const response = await axios.delete(
       `${API_URL}/share/${shareToken}`,
       {

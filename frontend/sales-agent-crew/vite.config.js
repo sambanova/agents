@@ -27,15 +27,12 @@ export default defineConfig({
     cssCodeSplit: true,
   },
   server: {
-    hmr: {
-      host: 'localhost',
-      protocol: 'wss',
-    },
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
+        ws: true, // Enable WebSocket proxying
       },
     },
   },

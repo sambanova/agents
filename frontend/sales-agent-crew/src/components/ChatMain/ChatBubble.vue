@@ -344,10 +344,10 @@
 </template>
   
   <script setup>
-  import { computed, ref, watch, nextTick, provide } from 'vue'
-import { useRoute } from 'vue-router'
-  
-  import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
+import { computed, defineProps, ref,watch,nextTick, provide, defineEmits } from 'vue'
+import { useAuth0 } from '@auth0/auth0-vue'
+
+import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
   import WorkflowDataItem from '@/components/ChatMain/WorkflowDataItem.vue'
   import { getComponentByAgentType } from '@/utils/componentUtils.js'
 
@@ -364,6 +364,9 @@ import {
 import jsPDF from "jspdf";
 import html2pdf from 'html2pdf.js'
 import { renderMarkdown } from '@/utils/markdownRenderer'
+
+// Auth0 composable
+const { getAccessTokenSilently } = useAuth0()
 import { isFinalAgentType } from '@/utils/globalFunctions.js'
 
 
@@ -1796,34 +1799,16 @@ const deepResearchPdfFileId = computed(() => {
 // Function to download PDF with authentication
 async function downloadPdf(fileId, filename) {
   try {
-    let endpoint;
-    let headers = {};
+    // Get the auth token from Auth0
+    const token = await getAccessTokenSilently();
     
-    // Use different endpoint based on whether this is a shared conversation
-    if (props.isSharedConversation && props.shareToken) {
-      // Use the public shared file endpoint
-      endpoint = `/api/share/${props.shareToken}/files/${fileId}`;
-    } else {
-      // Check if user is authenticated for regular conversations
-      if (!window.Clerk || !window.Clerk.session) {
-        console.log('Skipping downloadPdf - user not authenticated');
-        return;
-      }
-      
-      // Use the authenticated endpoint
-      endpoint = `/api/files/${fileId}`;
-      const token = await window.Clerk.session.getToken();
-      
-      if (!token) {
-        console.error('No authentication token found');
-        return;
-      }
-      
-      headers['Authorization'] = `Bearer ${token}`;
+    if (!token) {
+      console.error('No authentication token found');
+      return;
     }
 
-    // Make request to download the PDF
-    const response = await fetch(endpoint, {
+    // Make authenticated request to download the PDF
+    const response = await fetch(`/api/files/${fileId}`, {
       method: 'GET',
       headers
     });

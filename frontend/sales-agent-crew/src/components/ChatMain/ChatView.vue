@@ -635,7 +635,7 @@ import ChatBubble from '@/components/ChatMain/ChatBubble.vue';
 import ChatLoaderBubble from '@/components/ChatMain/ChatLoaderBubble.vue';
 const router = useRouter();
 const route = useRoute();
-import { useAuth, useUser } from '@clerk/vue';
+import { useAuth0 } from '@auth0/auth0-vue';
 import { decryptKey } from '../../utils/encryption';
 import Tooltip from '@/components/Common/UIComponents/CustomTooltip.vue';
 
@@ -655,11 +655,11 @@ import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue';
 import { isFinalAgentType, shouldExcludeFromGrouping } from '@/utils/globalFunctions.js';
 import { sharing } from '@/services/api.js';
 
-// Access Clerk user for personalization
-const { user } = useUser();
+// Access Auth0 user for personalization
+const { user } = useAuth0();
 const userFirstName = computed(() => {
   if (user && user.value) {
-    return user.value.firstName || user.value.first_name || '';
+    return user.value.given_name || user.value.name?.split(' ')[0] || '';
   }
   return '';
 });
@@ -677,7 +677,7 @@ const iconComponents = {
 };
 async function handleButtonClick(data) {
   // Check if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping handleButtonClick - user not authenticated');
     return;
   }
@@ -711,7 +711,7 @@ async function genPDF() {
 
 async function createNewChat() {
   // Check if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping createNewChat - user not authenticated');
     return;
   }
@@ -722,7 +722,7 @@ async function createNewChat() {
       {},
       {
         headers: {
-          Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+          Authorization: `Bearer ${await getAccessTokenSilently()}`,
         },
       }
     );
@@ -746,7 +746,7 @@ async function shareConversation() {
   isSharing.value = true;
   
   try {
-    const result = await sharing.createShare(conversationId.value);
+    const result = await sharing.createShare(conversationId.value, getAccessTokenSilently);
     const shareUrl = `${window.location.origin}/share/${result.share_token}`;
     
     // Copy to clipboard
@@ -987,7 +987,7 @@ async function loadPreviousChat(convId) {
       `${import.meta.env.VITE_API_URL}/chat/history/${convId}`,
       {
         headers: {
-          Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+          Authorization: `Bearer ${await getAccessTokenSilently()}`,
         },
       }
     );
@@ -1383,6 +1383,11 @@ async function filterChat(msgData) {
   );
   completionData.forEach((completion) => {
     try {
+      // Skip if completion or its data is undefined/null
+      if (!completion || !completion.data) {
+        return;
+      }
+      
       let parsedData;
       if (typeof completion.data === 'string') {
         parsedData = JSON.parse(completion.data);
@@ -1390,7 +1395,8 @@ async function filterChat(msgData) {
         parsedData = completion.data;
       }
       
-      if (parsedData.metadata) {
+      // Additional safety check for parsedData
+      if (parsedData && parsedData.metadata) {
         completionMetaData.value = parsedData.metadata;
         emit('metadataChanged', completionMetaData.value);
       }
@@ -1399,9 +1405,9 @@ async function filterChat(msgData) {
       if (completion.event === 'stream_complete' && parsedData) {
         // Create synthetic completion metadata if not present
         if (!completionMetaData.value && workflowData.value.length > 0) {
-          const totalDuration = workflowData.value.reduce((sum, item) => sum + (item.duration || 0), 0);
-          const uniqueProviders = [...new Set(workflowData.value.map(item => item.llm_provider))];
-          const uniqueModels = [...new Set(workflowData.value.map(item => item.llm_name))];
+          const totalDuration = workflowData.value.reduce((sum, item) => sum + (item?.duration || 0), 0);
+          const uniqueProviders = [...new Set(workflowData.value.map(item => item?.llm_provider).filter(Boolean))];
+          const uniqueModels = [...new Set(workflowData.value.map(item => item?.llm_name).filter(Boolean))];
           
           completionMetaData.value = {
             total_duration: totalDuration,
@@ -1426,7 +1432,7 @@ async function filterChat(msgData) {
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     .forEach((completion) => {
       // Check for cumulative_usage_metadata for header display
-      if (completion.cumulative_usage_metadata) {
+      if (completion && completion.cumulative_usage_metadata) {
         latestCumulativeUsage = completion.cumulative_usage_metadata;
       }
     });
@@ -1569,12 +1575,13 @@ function toggleSelectAllUploaded() {
   }
 }
 
-// Clerk
-const { userId } = useAuth();
+// Auth0
+const { user: auth0User, getAccessTokenSilently, isAuthenticated } = useAuth0();
+const userId = computed(() => auth0User.value?.sub);
 
 async function loadKeys() {
   // Check if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping loadKeys - user not authenticated');
     return;
   }
@@ -1631,7 +1638,7 @@ onMounted(async () => {
     await loadSharedConversation();
   } else {
     // Normal conversation - load keys and user data only if authenticated
-    if (window.Clerk && window.Clerk.session) {
+    if (isAuthenticated.value) {
       await loadKeys();
       await loadUserDocuments();
     }
@@ -1872,7 +1879,7 @@ async function handleFileUpload(event) {
         formData,
         {
           headers: {
-            Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+            Authorization: `Bearer ${await getAccessTokenSilently()}`,
           },
         }
       );
@@ -1902,7 +1909,7 @@ async function handleFileUpload(event) {
 
 async function loadUserDocuments() {
   // Check if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping loadUserDocuments - user not authenticated');
     return;
   }
@@ -1912,7 +1919,7 @@ async function loadUserDocuments() {
       `${import.meta.env.VITE_API_URL}/files`,
       {
         headers: {
-          Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+          Authorization: `Bearer ${await getAccessTokenSilently()}`,
         },
       }
     );
@@ -2092,7 +2099,7 @@ const addMessage = async () => {
 
 async function connectWebSocket() {
   // Check if user is authenticated
-  if (!window.Clerk || !window.Clerk.session) {
+  if (!isAuthenticated.value) {
     console.log('Skipping WebSocket connection - user not authenticated');
     return;
   }
@@ -2110,19 +2117,16 @@ async function connectWebSocket() {
       },
       {
         headers: {
-          Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+          Authorization: `Bearer ${await getAccessTokenSilently()}`,
         },
       }
     );
 
-    // Use the same base URL pattern as API calls
+    // Use the same proxy pattern as API calls - let Vite proxy handle it
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const baseUrl = import.meta.env.PROD
-      ? `${wsProtocol}//${window.location.host}/api` // Use the current origin in production
-      : import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:8000';
-
-    const WEBSOCKET_URL = `${baseUrl}/chat`;
-    const token = await window.Clerk.session.getToken();
+    const wsHost = window.location.host;
+    const WEBSOCKET_URL = `${wsProtocol}//${wsHost}/api/chat`;
+    const token = await getAccessTokenSilently();
     const fullUrl = `${WEBSOCKET_URL}?conversation_id=${currentId.value}`;
     socket.value = new WebSocket(fullUrl);
     socket.value.onopen = () => {
@@ -2303,7 +2307,7 @@ async function connectWebSocket() {
           isLoading.value = false;
           
           // Reload user documents (artifacts) after chat completion
-          if (!isSharedConversation.value && window.Clerk && window.Clerk.session) {
+          if (!isSharedConversation.value && isAuthenticated.value) {
             console.log('Reloading user documents after chat completion');
             await loadUserDocuments();
           }
@@ -2419,7 +2423,7 @@ async function removeDocument(docId) {
 
     await axios.delete(`${import.meta.env.VITE_API_URL}/files/${docId}`, {
       headers: {
-        Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
+        Authorization: `Bearer ${await getAccessTokenSilently()}`,
       },
     });
     const selectedIndex = selectedDocuments.value.indexOf(docId);
@@ -3145,25 +3149,15 @@ async function viewGeneratedFile(doc) {
 
 async function downloadFile(doc) {
   try {
-    let downloadUrl;
-    let headers = {};
-    
-    // Use different endpoint based on whether this is a shared conversation
-    if (isSharedConversation.value && shareToken.value) {
-      // Use the public shared file endpoint
-      downloadUrl = `${import.meta.env.VITE_API_URL}/share/${shareToken.value}/files/${doc.file_id}`;
-    } else {
-      // Use the authenticated endpoint
-      downloadUrl = `${import.meta.env.VITE_API_URL}/files/${doc.file_id}`;
-      headers = {
-        Authorization: `Bearer ${await window.Clerk.session.getToken()}`,
-      };
-    }
-    
-    const response = await axios.get(downloadUrl, {
-      headers,
-      responseType: 'blob'
-    });
+    const response = await axios.get(
+      `${import.meta.env.VITE_API_URL}/files/${doc.file_id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${await getAccessTokenSilently()}`,
+        },
+        responseType: 'blob'
+      }
+    );
     
     if (!response.data) {
       throw new Error('No file data received');

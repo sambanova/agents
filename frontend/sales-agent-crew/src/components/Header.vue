@@ -47,16 +47,53 @@
           </svg>
         </button>
 
-        <SignedIn>
-          <UserButton
-            afterSignOutUrl="/login"
-            :appearance="{
-              elements: {
-                avatarBox: 'bg-primary-800 h-10 w-10',
-              },
-            }"
-          />
-        </SignedIn>
+        <div v-if="isAuthenticated" class="relative">
+          <button
+            @click="toggleUserMenu"
+            class="bg-gray-100 hover:bg-gray-200 h-10 w-10 rounded-full flex items-center justify-center text-gray-700 font-semibold transition-all duration-200 ring-2 ring-transparent hover:ring-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            {{ userInitials }}
+          </button>
+          
+          <!-- User Menu Dropdown -->
+          <div 
+            v-if="showUserMenu"
+            @click.stop
+            class="absolute right-0 mt-3 w-72 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden"
+          >
+            <!-- User Info Section -->
+            <div class="px-6 py-4 bg-gray-50 border-b border-gray-100">
+              <div class="flex items-center space-x-3">
+                <div class="bg-indigo-100 h-12 w-12 rounded-full flex items-center justify-center">
+                  <span class="text-indigo-600 font-semibold text-lg">{{ userInitials }}</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-gray-900 truncate">
+                    {{ user?.name || user?.email?.split('@')[0] || 'User' }}
+                  </div>
+                  <div class="text-sm text-gray-500 truncate">{{ user?.email }}</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Menu Items -->
+            <div class="py-2">
+              <!-- Sign Out -->
+              <button
+                @click="logout"
+                class="w-full px-6 py-3 text-left flex items-center space-x-3 text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+              >
+                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                </svg>
+                <div>
+                  <div class="font-medium">Sign out</div>
+                  <div class="text-xs text-gray-500">Log out of your account</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -70,7 +107,7 @@
 
 <script setup>
 import { ref, computed, watch, inject, onMounted } from 'vue';
-import { SignedIn, UserButton } from '@clerk/vue';
+import { useAuth0 } from '@auth0/auth0-vue';
 import SettingsModal from './SettingsModal.vue';
 import ToggleSwitch from '@/components/Common/UIComponents/ToggleSwitch.vue';
 import SelectProvider from '@/components/ChatMain/SelectProvider.vue';
@@ -83,6 +120,37 @@ const isWorkflowEnabled = computed(() => {
 // Inject the shared state provided in MainLayout.vue.
 const selectedOption = inject('selectedOption');
 
+// Auth0 composable
+const { isAuthenticated, user, logout: auth0Logout } = useAuth0();
+
+// User menu state
+const showUserMenu = ref(false);
+
+// Computed user initials
+const userInitials = computed(() => {
+  if (!user.value) return '';
+  const name = user.value.name || user.value.email || '';
+  const nameParts = name.split(' ');
+  if (nameParts.length >= 2) {
+    return (nameParts[0][0] + nameParts[1][0]).toUpperCase();
+  }
+  return name[0]?.toUpperCase() || '';
+});
+
+// User menu functions
+const toggleUserMenu = () => {
+  showUserMenu.value = !showUserMenu.value;
+};
+
+const logout = () => {
+  showUserMenu.value = false;
+  auth0Logout({ 
+    logoutParams: { 
+      returnTo: window.location.origin 
+    } 
+  });
+};
+
 const chatMode = ref(true);
 // We'll emit 'modeToggled' to the parent
 const emit = defineEmits(['keysUpdated', 'modeToggled']);
@@ -94,11 +162,18 @@ watch(chatMode, (val) => {
 onMounted(async () => {
   emit('modeToggled', true);
   settingsModalRef.value?.checkRequiredKeys();
+  
+  // Close user menu when clicking outside
+  document.addEventListener('click', (event) => {
+    if (showUserMenu.value && !event.target.closest('.relative')) {
+      showUserMenu.value = false;
+    }
+  });
 });
 
 const settingsModalRef = ref(null);
 function openSettings() {
-  // settingsModalRef.value.isOpen = true
+  showUserMenu.value = false; // Close user menu
   settingsModalRef.value?.openModal();
 }
 
