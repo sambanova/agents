@@ -23,9 +23,8 @@ router = APIRouter(
 
 
 # WebSocket endpoint to handle user messages
-@router.websocket("/")
+@router.websocket("")
 async def websocket_endpoint(
-    request: Request,
     websocket: WebSocket,
     conversation_id: str = Query(..., description="Conversation ID"),
 ):
@@ -82,7 +81,7 @@ async def websocket_endpoint(
                 return
 
             # Verify conversation exists and belongs to user
-            if not await request.app.state.redis_storage_service.verify_conversation_exists(
+            if not await websocket.app.state.redis_storage_service.verify_conversation_exists(
                 user_id, conversation_id
             ):
                 try:
@@ -91,7 +90,7 @@ async def websocket_endpoint(
                     logger.error(f"Error closing WebSocket: {str(close_error)}")
                 return
 
-            await request.app.state.manager.handle_websocket(
+            await websocket.app.state.manager.handle_websocket(
                 websocket, user_id, conversation_id
             )
         except json.JSONDecodeError:
@@ -144,12 +143,6 @@ async def init_chat(
         chat_name (Optional[str]): Optional name for the chat. If not provided, a default will be used.
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
-    # Get and verify authenticated user
-    if not user_id:
-        return JSONResponse(
-            status_code=401, content={"error": "Invalid authentication token"}
-        )
-
     try:
         # Generate a unique chat ID
         conversation_id = str(uuid.uuid4())
@@ -208,11 +201,6 @@ async def get_conversation_messages(
         conversation_id (str): The ID of the conversation
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
-    if not user_id:
-        return JSONResponse(
-            status_code=401, content={"error": "Invalid authentication token"}
-        )
-
     try:
         # Verify chat exists and belongs to user
         if not await request.app.state.redis_storage_service.verify_conversation_exists(
@@ -384,12 +372,6 @@ async def delete_chat(
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
     try:
-        if not user_id:
-            return JSONResponse(
-                status_code=401,
-                content={"error": "Invalid authentication token"},
-            )
-
         # Verify chat exists and belongs to user
         if not await request.app.state.redis_storage_service.verify_conversation_exists(
             user_id, conversation_id

@@ -11,6 +11,7 @@ import structlog
 from agents.api.data_types import APIKeys
 from agents.api.middleware import LoggingMiddleware
 from agents.api.routers.chat import router as chat_router
+from agents.api.routers.upload import router as upload_router
 from agents.api.websocket_manager import WebSocketConnectionManager
 from agents.auth.auth0_config import (
     extract_user_id,
@@ -148,6 +149,7 @@ app.add_middleware(
 )
 
 app.include_router(chat_router)
+app.include_router(upload_router)
 
 
 @app.get("/health")
@@ -164,82 +166,6 @@ async def health_check():
         return JSONResponse(
             status_code=503, content={"status": "unhealthy", "message": str(e)}
         )
-
-
-@app.post("/upload")
-async def upload_document(
-    file: UploadFile = File(...),
-    user_id: str = Depends(get_current_user_id),
-):
-    """Upload and process a document or image file."""
-    try:
-        # Get and verify authenticated user
-        if not user_id:
-            return JSONResponse(
-                status_code=401,
-                content={"error": "Invalid authentication token"},
-            )
-
-        # Generate unique file ID
-        file_id = str(uuid.uuid4())
-
-        # Read file content
-        content = await file.read()
-        indexed = False
-        vector_ids = []
-
-        upload_time = time.time()
-        if file.content_type == "application/pdf":
-            file_blobs = await convert_ingestion_input_to_blob(content, file.filename)
-            api_keys = await app.state.redis_storage_service.get_user_api_key(user_id)
-            vector_ids = await ingest_runnable.ainvoke(
-                file_blobs,
-                {
-                    "user_id": user_id,
-                    "document_id": file_id,
-                    "api_key": api_keys.sambanova_key,
-                    "redis_client": app.state.sync_redis_client,
-                },
-            )
-            logger.info("Indexed file successfully", file_id=file_id)
-            indexed = True
-
-        await app.state.redis_storage_service.put_file(
-            user_id,
-            file_id,
-            data=content,
-            filename=file.filename,
-            format=file.content_type,
-            upload_timestamp=upload_time,
-            indexed=indexed,
-            source="upload",
-            vector_ids=vector_ids,
-        )
-
-        duration = time.time() - upload_time
-        logger.info(
-            "File uploaded successfully",
-            file_id=file_id,
-            duration_ms=round(duration * 1000, 2),
-        )
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "message": "File uploaded successfully",
-                "file": {
-                    "file_id": file_id,
-                    "filename": file.filename,
-                    "type": file.content_type,
-                    "created_at": upload_time,
-                    "user_id": user_id,
-                },
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Error processing file: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 @app.get("/files")
@@ -281,12 +207,6 @@ async def get_file(
 ):
     """Serve a file by its ID for authenticated users."""
     try:
-        if not user_id:
-            return JSONResponse(
-                status_code=401,
-                content={"error": "Invalid authentication token"},
-            )
-
         file_data, file_metadata = await app.state.redis_storage_service.get_file(
             user_id, file_id
         )
@@ -317,12 +237,6 @@ async def delete_file(
 ):
     """Delete a file (document or uploaded file) and its associated data."""
     try:
-        if not user_id:
-            return JSONResponse(
-                status_code=401,
-                content={"error": "Invalid authentication token"},
-            )
-
         # If the file is indexed, delete its vectors from the vector store
         metadata = await app.state.redis_storage_service.get_file_metadata(
             user_id, file_id
@@ -376,12 +290,6 @@ async def set_api_keys(
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
     try:
-        if not user_id:
-            return JSONResponse(
-                status_code=401,
-                content={"error": "Invalid authentication token"},
-            )
-
         await app.state.redis_storage_service.set_user_api_key(user_id, keys)
 
         return JSONResponse(
@@ -408,12 +316,6 @@ async def get_api_keys(
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
     try:
-        if not user_id:
-            return JSONResponse(
-                status_code=401,
-                content={"error": "Invalid authentication token"},
-            )
-
         key_prefix = f"api_keys:{user_id}"
         stored_keys = await app.state.redis_client.hgetall(key_prefix, user_id)
 
@@ -624,12 +526,6 @@ async def delete_user_data(
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
     try:
-        if not user_id:
-            return JSONResponse(
-                status_code=401,
-                content={"error": "Invalid authentication token"},
-            )
-
         # 1. Delete all conversations
         user_chats_key = f"user_chats:{user_id}"
         conversation_ids = await app.state.redis_client.zrange(user_chats_key, 0, -1)
