@@ -456,3 +456,62 @@ async def delete_chat(
             status_code=500,
             content={"error": f"Failed to delete chat: {str(e)}"},
         )
+
+
+@router.post("/{conversation_id}/share")
+async def create_conversation_share(
+    request: Request,
+    conversation_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Create a new share link for a conversation (like ChatGPT)"""
+    try:
+        share_token = await request.app.state.redis_storage_service.create_share(
+            user_id, conversation_id
+        )
+
+        return JSONResponse(
+            status_code=201,
+            content={
+                "share_url": f"/share/{share_token}",
+                "share_token": share_token,
+                "message": "Share created successfully",
+            },
+        )
+
+    except ValueError as e:
+        return JSONResponse(status_code=404, content={"error": str(e)})
+    except Exception as e:
+        logger.error(f"Error creating share: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/{conversation_id}/shares")
+async def list_conversation_shares(
+    request: Request,
+    conversation_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """List all shares for a conversation"""
+    try:
+        # Verify user owns the conversation
+        if not await request.app.state.redis_storage_service.verify_conversation_exists(
+            user_id, conversation_id
+        ):
+            return JSONResponse(
+                status_code=404, content={"error": "Conversation not found"}
+            )
+
+        # Get all user's shares and filter for this conversation
+        all_shares = await request.app.state.redis_storage_service.get_user_shares(
+            user_id
+        )
+        conversation_shares = [
+            share for share in all_shares if share["conversation_id"] == conversation_id
+        ]
+
+        return JSONResponse(status_code=200, content={"shares": conversation_shares})
+
+    except Exception as e:
+        logger.error(f"Error listing shares: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})

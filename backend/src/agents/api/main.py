@@ -11,6 +11,8 @@ import structlog
 from agents.api.data_types import APIKeys
 from agents.api.middleware import LoggingMiddleware
 from agents.api.routers.chat import router as chat_router
+from agents.api.routers.files import router as files_router
+from agents.api.routers.share import router as share_router
 from agents.api.routers.upload import router as upload_router
 from agents.api.websocket_manager import WebSocketConnectionManager
 from agents.auth.auth0_config import (
@@ -150,6 +152,8 @@ app.add_middleware(
 
 app.include_router(chat_router)
 app.include_router(upload_router)
+app.include_router(files_router)
+app.include_router(share_router)
 
 
 @app.get("/health")
@@ -166,114 +170,6 @@ async def health_check():
         return JSONResponse(
             status_code=503, content={"status": "unhealthy", "message": str(e)}
         )
-
-
-@app.get("/files")
-async def get_user_files(
-    user_id: str = Depends(get_current_user_id),
-):
-    """Retrieve all documents and uploaded files for a user."""
-    try:
-        start_time = time.time()
-        if not user_id:
-            return JSONResponse(
-                status_code=401,
-                content={"error": "Invalid authentication token"},
-            )
-
-        files = await app.state.redis_storage_service.list_user_files(user_id)
-
-        files.sort(key=lambda x: x.get("created_at", 0), reverse=True)
-
-        duration = time.time() - start_time
-        logger.info(
-            f"Retrieved {len(files)} files for user {user_id} in {duration:.3f}s",
-            user_id=user_id,
-            file_count=len(files),
-            duration_ms=round(duration * 1000, 2),
-        )
-
-        return JSONResponse(status_code=200, content={"documents": files})
-
-    except Exception as e:
-        logger.error(f"Error retrieving files: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-@app.get("/files/{file_id}")
-async def get_file(
-    file_id: str,
-    user_id: str = Depends(get_current_user_id),
-):
-    """Serve a file by its ID for authenticated users."""
-    try:
-        file_data, file_metadata = await app.state.redis_storage_service.get_file(
-            user_id, file_id
-        )
-
-        if not file_data:
-            return JSONResponse(
-                status_code=404,
-                content={"error": "File data not found"},
-            )
-
-        return Response(
-            content=file_data,
-            media_type=file_metadata["format"],
-            headers={
-                "Content-Disposition": f"inline; filename={file_metadata['filename']}"
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Error serving file: {str(e)}", file_id=file_id)
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-@app.delete("/files/{file_id}")
-async def delete_file(
-    file_id: str,
-    user_id: str = Depends(get_current_user_id),
-):
-    """Delete a file (document or uploaded file) and its associated data."""
-    try:
-        # If the file is indexed, delete its vectors from the vector store
-        metadata = await app.state.redis_storage_service.get_file_metadata(
-            user_id, file_id
-        )
-
-        if not metadata:
-            logger.error("File metadata not found", file_id=file_id)
-            return JSONResponse(
-                status_code=404,
-                content={"error": "File not found"},
-            )
-
-        if metadata and metadata.get("indexed"):
-            vector_ids = metadata.get("vector_ids")
-            if vector_ids:
-                api_keys = await app.state.redis_storage_service.get_user_api_key(
-                    user_id
-                )
-                if api_keys and api_keys.sambanova_key:
-                    await app.state.redis_storage_service.delete_vectors(vector_ids)
-
-        result = await app.state.redis_storage_service.delete_file(user_id, file_id)
-
-        if not result:
-            return JSONResponse(
-                status_code=404,
-                content={"error": "File not found or access denied"},
-            )
-
-        return JSONResponse(
-            status_code=200,
-            content={"message": "File deleted successfully"},
-        )
-
-    except Exception as e:
-        logger.error(f"Error deleting file: {str(e)}", file_id=file_id)
-        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 @app.post("/set_api_keys")
@@ -341,177 +237,6 @@ async def get_api_keys(
             status_code=500,
             content={"error": f"Failed to retrieve API keys: {str(e)}"},
         )
-
-
-@app.post("/chat/{conversation_id}/share")
-async def create_conversation_share(
-    conversation_id: str,
-    user_id: str = Depends(get_current_user_id),
-):
-    """Create a new share link for a conversation (like ChatGPT)"""
-    try:
-        share_token = await app.state.redis_storage_service.create_share(
-            user_id, conversation_id
-        )
-
-        return JSONResponse(
-            status_code=201,
-            content={
-                "share_url": f"/share/{share_token}",
-                "share_token": share_token,
-                "message": "Share created successfully",
-            },
-        )
-
-    except ValueError as e:
-        return JSONResponse(status_code=404, content={"error": str(e)})
-    except Exception as e:
-        logger.error(f"Error creating share: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-@app.get("/share/{share_token}")
-async def get_shared_conversation(share_token: str):
-    """Get shared conversation (public access, no authentication required)"""
-    try:
-        shared_conversation = (
-            await app.state.redis_storage_service.get_shared_conversation(share_token)
-        )
-
-        if not shared_conversation:
-            return JSONResponse(
-                status_code=404, content={"error": "Shared conversation not found"}
-            )
-
-        return JSONResponse(status_code=200, content=shared_conversation)
-
-    except Exception as e:
-        logger.error(f"Error accessing shared conversation: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-@app.get("/share/{share_token}/files/{file_id}")
-async def get_shared_file(share_token: str, file_id: str):
-    """Get file from shared conversation (public access, no authentication required)"""
-    try:
-        # First verify the share token is valid and get the original user/conversation
-        shared_conversation = (
-            await app.state.redis_storage_service.get_shared_conversation(share_token)
-        )
-
-        if not shared_conversation:
-            return JSONResponse(
-                status_code=404, content={"error": "Shared conversation not found"}
-            )
-
-        # Get the original user_id and conversation_id from the shared conversation
-        original_user_id = shared_conversation.get("user_id")
-        conversation_id = shared_conversation.get("conversation_id")
-
-        if not original_user_id or not conversation_id:
-            return JSONResponse(
-                status_code=404, content={"error": "Invalid shared conversation data"}
-            )
-
-        # Get the conversation messages to verify the file is actually part of this conversation
-        conversation_messages = await app.state.redis_storage_service.get_messages(
-            original_user_id, conversation_id
-        )
-
-        # Check if the file_id is referenced in any message in this conversation
-        file_referenced_in_conversation = False
-        for message in conversation_messages:
-            # Parse file references from the message content
-            files = message.get("additional_kwargs", {}).get("files", [])
-            if file_id in files:
-                file_referenced_in_conversation = True
-                break
-
-        if not file_referenced_in_conversation:
-            return JSONResponse(
-                status_code=403,
-                content={"error": "File not part of this shared conversation"},
-            )
-
-        # Get the file data using the original user's context
-        file_data, file_metadata = await app.state.redis_storage_service.get_file(
-            original_user_id, file_id
-        )
-
-        if not file_data:
-            return JSONResponse(
-                status_code=404,
-                content={"error": "File not found in shared conversation"},
-            )
-
-        return Response(
-            content=file_data,
-            media_type=file_metadata["format"],
-            headers={
-                "Content-Disposition": f"inline; filename={file_metadata['filename']}"
-            },
-        )
-
-    except Exception as e:
-        logger.error(
-            f"Error serving shared file: {str(e)}",
-            share_token=share_token,
-            file_id=file_id,
-        )
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-@app.get("/chat/{conversation_id}/shares")
-async def list_conversation_shares(
-    conversation_id: str,
-    user_id: str = Depends(get_current_user_id),
-):
-    """List all shares for a conversation"""
-    try:
-        # Verify user owns the conversation
-        if not await app.state.redis_storage_service.verify_conversation_exists(
-            user_id, conversation_id
-        ):
-            return JSONResponse(
-                status_code=404, content={"error": "Conversation not found"}
-            )
-
-        # Get all user's shares and filter for this conversation
-        all_shares = await app.state.redis_storage_service.get_user_shares(user_id)
-        conversation_shares = [
-            share for share in all_shares if share["conversation_id"] == conversation_id
-        ]
-
-        return JSONResponse(status_code=200, content={"shares": conversation_shares})
-
-    except Exception as e:
-        logger.error(f"Error listing shares: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-@app.delete("/share/{share_token}")
-async def delete_share(
-    share_token: str,
-    user_id: str = Depends(get_current_user_id),
-):
-    """Delete a share (owner only)"""
-    try:
-        success = await app.state.redis_storage_service.delete_share(
-            user_id, share_token
-        )
-
-        if not success:
-            return JSONResponse(
-                status_code=404, content={"error": "Share not found or access denied"}
-            )
-
-        return JSONResponse(
-            status_code=200, content={"message": "Share deleted successfully"}
-        )
-
-    except Exception as e:
-        logger.error(f"Error deleting share: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 @app.delete("/user/data")

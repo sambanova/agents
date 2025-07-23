@@ -29,7 +29,7 @@
         <router-view />
       </div>
       <div v-else>
-        <router-view v-if="isTermsOfServiceRoute" />
+        <router-view v-if="isTermsOfServiceRoute || isSharedConversationRoute" />
         <LoginPage v-else />
       </div>
     </main>
@@ -46,6 +46,7 @@ const { isAuthenticated, isLoading, error } = useAuth0()
 const route = useRoute()
 const router = useRouter()
 const isTermsOfServiceRoute = computed(() => route.path === '/terms-of-service')
+const isSharedConversationRoute = computed(() => route.path.startsWith('/share/'))
 
 const handleRetry = () => {
   // Clear any error state and redirect to login
