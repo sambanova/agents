@@ -1,10 +1,5 @@
-import asyncio
-import json
 import os
-import time
-import uuid
 from contextlib import asynccontextmanager
-from typing import List, Optional
 
 import mlflow
 import structlog
@@ -17,15 +12,12 @@ from agents.api.routers.upload import router as upload_router
 from agents.api.routers.user import router as user_router
 from agents.api.websocket_manager import WebSocketConnectionManager
 from agents.auth.auth0_config import (
-    extract_user_id,
     get_current_user_id,
-    token_verifier,
 )
 from agents.components.compound.xml_agent import (
     create_checkpointer,
     set_global_checkpointer,
 )
-from agents.rag.upload import convert_ingestion_input_to_blob, ingest_runnable
 from agents.storage.global_services import (
     get_secure_redis_client,
     get_sync_redis_client,
@@ -33,11 +25,9 @@ from agents.storage.global_services import (
 )
 from agents.storage.redis_storage import RedisStorage
 from agents.utils.logging_config import configure_logging
-from fastapi import Depends, FastAPI, File, Query, Response, UploadFile, WebSocket
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPAuthorizationCredentials
-from fastapi.websockets import WebSocketDisconnect, WebSocketState
 from langgraph.checkpoint.redis import AsyncRedisSaver
 
 logger = structlog.get_logger(__name__)
