@@ -46,7 +46,7 @@ from langchain_core.runnables import RunnableConfig, RunnableLambda
 from langchain_fireworks import ChatFireworks
 from langgraph.constants import Send
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import Command, interrupt
+from langgraph.types import Checkpointer, Command, interrupt
 
 logger = structlog.get_logger(__name__)
 
@@ -855,6 +855,7 @@ def create_deep_research_graph(
     redis_storage: RedisStorage,
     user_id: str,
     request_timeout: int = 120,
+    checkpointer: Checkpointer = None,
 ):
     """
     Create and configure the graph for deep research.
@@ -980,4 +981,4 @@ def create_deep_research_graph(
     builder.add_edge("write_final_sections", "compile_final_report")
     builder.add_edge("compile_final_report", END)
 
-    return builder.compile()
+    return builder.compile(checkpointer=checkpointer)

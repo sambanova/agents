@@ -5,15 +5,14 @@ import mlflow
 import structlog
 from agents.api.data_types import APIKeys
 from agents.api.middleware import LoggingMiddleware
+from agents.api.routers.agent import router as agent_router
 from agents.api.routers.chat import router as chat_router
 from agents.api.routers.files import router as files_router
 from agents.api.routers.share import router as share_router
 from agents.api.routers.upload import router as upload_router
 from agents.api.routers.user import router as user_router
 from agents.api.websocket_manager import WebSocketConnectionManager
-from agents.auth.auth0_config import (
-    get_current_user_id,
-)
+from agents.auth.auth0_config import get_current_user_id
 from agents.components.compound.xml_agent import (
     create_checkpointer,
     set_global_checkpointer,
@@ -146,6 +145,7 @@ app.include_router(upload_router)
 app.include_router(files_router)
 app.include_router(share_router)
 app.include_router(user_router)
+app.include_router(agent_router)
 
 
 @app.get("/health")
