@@ -11,3 +11,7 @@ class SoftwareArchitectState(BaseModel):
     implementation_research_scratchpad: Annotated[list[AnyMessage], add_messages] = Field([], description="The scratchpad for implementation research")
     is_valid_research_step: Optional[bool] = Field(None, description="Whether the research step is valid")
     working_directory: Optional[str] = Field(".", description="The working directory for the repository (e.g., './repo-name' or '.' for current directory)")
+    human_feedback: Optional[str] = Field("", description="Feedback from human about the implementation plan")
+    plan_approved: Optional[bool] = Field(None, description="Whether the human has approved the implementation plan")
+    messages: Annotated[list[AnyMessage], add_messages] = Field([], description="Messages to be sent to the frontend")
+    sender: Optional[str] = Field(None, description="The sender of the last message")

@@ -1,7 +1,10 @@
 import json
+import structlog
 from typing import List, TypedDict, Optional
 
 from agents.utils.llms import get_sambanova_llm
+
+logger = structlog.get_logger(__name__)
 from agents.components.compound.util import extract_api_key
 from langchain_core.messages import HumanMessage, AIMessage, AnyMessage
 from langchain_core.output_parsers import JsonOutputParser
@@ -107,8 +110,15 @@ def check_research_step(state: SoftwareArchitectState, *, config: RunnableConfig
 def conduct_research(state: SoftwareArchitectState, *, config: RunnableConfig = None, daytona_tools=None):
     """Conduct research based on the proposed hypothesis"""
     conduct_research_runnable = create_conduct_research_runnable(config, daytona_tools)
+    
+    # Trim scratchpad to prevent context overflow (keep last 10 messages)
+    scratchpad = state.implementation_research_scratchpad
+    if len(scratchpad) > 10:
+        scratchpad = scratchpad[-10:]
+        logger.info(f"Trimmed scratchpad from {len(state.implementation_research_scratchpad)} to {len(scratchpad)} messages to prevent context overflow")
+    
     response = conduct_research_runnable.invoke({
-        "implementation_research_scratchpad": state.implementation_research_scratchpad,
+        "implementation_research_scratchpad": scratchpad,
         "codebase_structure": get_files_structure.invoke({"directory": state.working_directory or "."})
     })
     return {"implementation_research_scratchpad": [response]}

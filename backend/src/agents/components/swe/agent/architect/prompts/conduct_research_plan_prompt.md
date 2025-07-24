@@ -23,11 +23,13 @@ Your research process follows these key steps:
    - Define specific questions that need to be answered
 
 3. **Investigation Execution**:
-   - Use `daytona_read_file` to examine relevant code files
+   - FIRST: Use `daytona_get_repository_structure` to understand what directories and files actually exist
+   - THEN: Use `daytona_read_file` to examine relevant code files that you've confirmed exist
    - Use `daytona_execute_command` for running tests or build commands
    - Research technical feasibility and best practices
    - Validate assumptions and dependencies
    - Document findings and observations
+   - NEVER assume directory structures - always verify with `daytona_get_repository_structure` or `daytona_list_files` first
 
 4. **Synthesis & Conclusions**:
    - Synthesize findings into actionable insights

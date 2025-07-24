@@ -27,7 +27,52 @@ The SWE agent now supports:
 - ✅ **Unified Search**: `daytona_search_keyword_in_directory` replaces local search
 - ✅ **Unified Codemap**: `daytona_get_code_definitions` replaces local codemap
 
+### **Repository Management Issues Fixed**
+**Problem**: Repository cloning conflicts and directory assumption errors:
+```
+[error] Failed to clone repository: repository already exists
+[error] Error listing files: no such file or directory: './sales-crew/backend/auth'
+```
+
+**Solution**: Intelligent repository and directory handling:
+- ✅ **Graceful Clone Handling**: Detects existing repositories and continues with them
+- ✅ **Smart Directory Exploration**: Uses `daytona_get_repository_structure` before assuming directories exist
+- ✅ **No Directory Assumptions**: Updated prompts to verify structure before accessing
+
+### **Human Interrupt Workflow Fixed**
+**Problem**: User saying "approved" restarted the entire workflow instead of continuing.
+
+**Solution**: Implemented datagen-style human choice handling:
+- ✅ **Human Choice Node**: Classifies feedback as APPROVE/REVISE
+- ✅ **Workflow Continuation**: "approved" → proceed to developer implementation
+- ✅ **Feedback Integration**: Specific feedback → regenerate plan with context
+- ✅ **State Management**: Proper state fields for human feedback and approval status
+
+### **Context Management Fixed**  
+**Problem**: Context overflow causing 32k token limit errors.
+
+**Solution**: Intelligent context trimming:
+- ✅ **Message Limiting**: Auto-trim to last 10 messages in research scratchpad
+- ✅ **Context Preservation**: Keep most recent and relevant context
+- ✅ **Performance Optimization**: Prevent expensive context regeneration
+
 ## 📋 Integration Checklist
+
+### ✅ Critical Bug Fixes Applied
+
+**New Files Created:**
+- ✅ `backend/src/agents/components/swe/human_choice.py` - Human interrupt handling like datagen
+- ✅ Enhanced all Daytona tools with comprehensive Git operations
+- ✅ Updated all prompts with sandbox-first workflow guidance
+- ✅ Enhanced state models with human feedback fields
+
+**Files Modified:**
+- ✅ `daytona_tools.py` - Added 15 comprehensive tools, fixed clone conflicts, added search/codemap
+- ✅ `architect/graph.py` - Added context trimming, exclusive tool usage
+- ✅ `developer/graph.py` - Added exclusive tool usage 
+- ✅ `architect/state.py` - Added human feedback fields
+- ✅ `compound/prompts.py` - Added SWE detection and auto-routing
+- ✅ All SWE prompts - Updated for sandbox-first operations
 
 ### ✅ Backend Integration Complete
 

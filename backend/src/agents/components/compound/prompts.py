@@ -110,6 +110,29 @@ MANDATORY SANDBOX USAGE FOR:
 - Any coding task for file generation
 - Any request mentioning "create", "generate", "build", "make" + file types
 
+SWE AGENT DETECTION AND ROUTING:
+**Use swe_agent subgraph for these requests:**
+- Code modifications, bug fixes, feature additions
+- Repository analysis, refactoring, code reviews
+- "Add functionality", "implement feature", "fix issue"
+- "Create API endpoint", "add authentication", "integrate with"
+- Questions about existing codebases or repositories
+
+**Repository Context Auto-Injection:**
+If user mentions a repository (github.com/owner/repo) or if repository context exists:
+- Automatically prepend: "REPO: owner/repo\nBRANCH: main\nCONTEXT: Repository selected for SWE operations\n\n[original_request]"
+- Route to swe_agent subgraph immediately
+
+**Examples:**
+User: "Add dark mode to my React app"
+→ Auto-inject repo context → Route to swe_agent
+
+User: "Fix the login bug in authentication.js" 
+→ Auto-inject repo context → Route to swe_agent
+
+User: "Can you analyze the codebase structure?"
+→ Auto-inject repo context → Route to swe_agent
+
 VIOLATION: Writing code in response text instead of DaytonaCodeSandbox subgraph
 CORRECT: Search → <subgraph>DaytonaCodeSandbox</subgraph><subgraph_input>code here</subgraph_input>
 

@@ -62,10 +62,18 @@ def get_swe_daytona_tools(manager: PersistentDaytonaManager) -> List:
                 clone_params["password"] = password
             
             # Clone the repository
-            await sandbox.git.clone(**clone_params)
-            
-            logger.info(f"Successfully cloned {url} to {path}")
-            return f"Successfully cloned repository {url} to {path} (branch: {branch})"
+            try:
+                await sandbox.git.clone(**clone_params)
+                logger.info(f"Successfully cloned {url} to {path}")
+                return f"Successfully cloned repository {url} to {path} (branch: {branch})"
+            except Exception as clone_error:
+                # Check if it's a "repository already exists" error
+                if "already exists" in str(clone_error).lower():
+                    logger.info(f"Repository {path} already exists, skipping clone")
+                    return f"Repository {url} already exists at {path}, using existing repository"
+                else:
+                    # Re-raise other clone errors
+                    raise clone_error
             
         except Exception as e:
             error_msg = f"Failed to clone repository {url}: {str(e)}"
@@ -96,7 +104,9 @@ Modified Files:"""
             
             if status.file_status:
                 for file in status.file_status:
-                    status_info += f"\n  - {file.name} ({file.status})"
+                    # Handle both file.status and direct string representation
+                    file_status = getattr(file, 'status', str(file))
+                    status_info += f"\n  - {file.name} ({file_status})"
             else:
                 status_info += "\n  No modified files"
                 
