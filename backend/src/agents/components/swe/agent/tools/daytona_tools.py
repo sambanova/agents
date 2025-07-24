@@ -4,6 +4,8 @@ Follows the datagen pattern for proper sandbox integration.
 """
 
 import os
+import re
+import json
 import structlog
 from typing import List, Optional, Dict, Any
 from langchain.tools import tool
@@ -331,6 +333,206 @@ Modified Files:"""
             logger.error(error_msg)
             return error_msg
 
+    @tool
+    async def daytona_search_keyword_in_directory(
+        directory: Annotated[str, "Directory to search in within the sandbox"],
+        search_term: Annotated[str, "Term to search for in files (case-insensitive, minimum 3 characters)"],
+        context: Annotated[int, "Number of context lines before and after each match"] = 2
+    ) -> str:
+        """
+        Search for a keyword in all files within a directory in the Daytona sandbox.
+        This is like Cmd+F in your IDE but works within the sandbox environment.
+        """
+        try:
+            if len(search_term) < 3:
+                return "Error: search_term must be at least 3 characters long"
+            
+            # Get all files in the directory recursively
+            all_files = await manager.get_all_files_recursive(directory)
+            
+            if not all_files:
+                return f"No files found in directory {directory}"
+            
+            results = []
+            pattern = re.compile(re.escape(search_term), re.IGNORECASE)
+            
+            for file_info in all_files:
+                file_path = file_info["path"]
+                
+                # Skip binary files and only search text files
+                if not any(file_path.endswith(ext) for ext in ['.py', '.js', '.jsx', '.ts', '.tsx', '.vue', '.html', '.css', '.json', '.md', '.txt', '.yml', '.yaml']):
+                    continue
+                
+                try:
+                    success, content = await manager.read_file(file_path)
+                    if not success:
+                        continue
+                    
+                    lines = content.splitlines()
+                    
+                    for i, line in enumerate(lines):
+                        if pattern.search(line):
+                            # Get context lines
+                            start = max(i - context, 0)
+                            end = min(i + context + 1, len(lines))
+                            
+                            results.append(f"\nFile: {file_path}")
+                            results.append(f"Match found at line: {i + 1}")
+                            
+                            for j in range(start, end):
+                                line_marker = ">>>" if j == i else "   "
+                                results.append(f"{line_marker} {j+1:4} | {lines[j]}")
+                            
+                            results.append("-" * 50)
+                            
+                except Exception as e:
+                    logger.warning(f"Could not search in file {file_path}: {e}")
+                    continue
+            
+            if not results:
+                return f"No matches found for '{search_term}' in {directory}"
+            
+            return "\n".join(results)
+            
+        except Exception as e:
+            error_msg = f"Failed to search for '{search_term}' in {directory}: {str(e)}"
+            logger.error(error_msg)
+            return error_msg
+
+    @tool
+    async def daytona_get_code_definitions(
+        file_path: Annotated[str, "Path to the source file to analyze in the sandbox"]
+    ) -> str:
+        """
+        Extract function and class definitions from a file in the Daytona sandbox.
+        Shows signatures with line numbers. Works with Python, JavaScript, TypeScript files.
+        """
+        try:
+            # Read file from sandbox
+            success, content = await manager.read_file(file_path)
+            if not success:
+                return content  # Error message
+            
+            # Simple regex-based parsing for common languages
+            lines = content.splitlines()
+            definitions = []
+            
+            # Determine file type
+            suffix = file_path.split(".")[-1].lower()
+            
+            if suffix == "py":
+                # Python definitions
+                class_pattern = re.compile(r'^(\s*)class\s+(\w+).*?:')
+                func_pattern = re.compile(r'^(\s*)def\s+(\w+)\s*\(.*?\):')
+                
+                for i, line in enumerate(lines):
+                    class_match = class_pattern.match(line)
+                    func_match = func_pattern.match(line)
+                    
+                    if class_match:
+                        indent, name = class_match.groups()
+                        definitions.append(f"{i+1:4} | {line.strip()}")
+                    elif func_match:
+                        indent, name = func_match.groups()
+                        definitions.append(f"{i+1:4} | {line.strip()}")
+                        
+            elif suffix in ["js", "jsx", "ts", "tsx"]:
+                # JavaScript/TypeScript definitions
+                func_patterns = [
+                    re.compile(r'^\s*function\s+(\w+)\s*\(.*?\)'),
+                    re.compile(r'^\s*const\s+(\w+)\s*=\s*\(.*?\)\s*=>'),
+                    re.compile(r'^\s*(\w+)\s*:\s*function\s*\(.*?\)'),
+                    re.compile(r'^\s*(\w+)\s*\(.*?\)\s*\{'),  # Method definitions
+                ]
+                class_pattern = re.compile(r'^\s*class\s+(\w+)')
+                
+                for i, line in enumerate(lines):
+                    class_match = class_pattern.match(line)
+                    if class_match:
+                        definitions.append(f"{i+1:4} | {line.strip()}")
+                        continue
+                    
+                    for pattern in func_patterns:
+                        if pattern.match(line):
+                            definitions.append(f"{i+1:4} | {line.strip()}")
+                            break
+                            
+            elif suffix == "vue":
+                # Vue.js component methods
+                func_pattern = re.compile(r'^\s*(\w+)\s*\(.*?\)\s*\{')
+                setup_pattern = re.compile(r'^\s*setup\s*\(.*?\)')
+                
+                for i, line in enumerate(lines):
+                    if func_pattern.match(line) or setup_pattern.match(line):
+                        definitions.append(f"{i+1:4} | {line.strip()}")
+            
+            if not definitions:
+                return f"No function or class definitions found in {file_path}"
+            
+            result = f"\nCode definitions in {file_path}:\n"
+            result += "\n".join(definitions)
+            return result
+            
+        except Exception as e:
+            error_msg = f"Failed to get code definitions from {file_path}: {str(e)}"
+            logger.error(error_msg)
+            return error_msg
+
+    @tool
+    async def daytona_get_function_implementation(
+        file_path: Annotated[str, "Path to the source file in the sandbox"],
+        function_name: Annotated[str, "Name of the function to extract"]
+    ) -> str:
+        """
+        Extract the full implementation of a specific function from a file in the Daytona sandbox.
+        """
+        try:
+            # Read file from sandbox
+            success, content = await manager.read_file(file_path)
+            if not success:
+                return content  # Error message
+            
+            lines = content.splitlines()
+            
+            # Simple function extraction (works for most cases)
+            function_lines = []
+            found_function = False
+            initial_indent = None
+            
+            for i, line in enumerate(lines):
+                # Look for function definition
+                if (f"def {function_name}(" in line or 
+                    f"function {function_name}(" in line or
+                    f"const {function_name} =" in line or
+                    f"{function_name}(" in line):
+                    
+                    found_function = True
+                    initial_indent = len(line) - len(line.lstrip())
+                    function_lines.append(f"{i+1:4} | {line}")
+                    continue
+                
+                if found_function:
+                    # Continue until we find a line with same or less indentation (or empty line)
+                    current_indent = len(line) - len(line.lstrip()) if line.strip() else initial_indent + 1
+                    
+                    if line.strip() == "" or current_indent > initial_indent:
+                        function_lines.append(f"{i+1:4} | {line}")
+                    else:
+                        # End of function
+                        break
+            
+            if not function_lines:
+                return f"Function '{function_name}' not found in {file_path}"
+            
+            result = f"\nFunction '{function_name}' implementation in {file_path}:\n"
+            result += "\n".join(function_lines)
+            return result
+            
+        except Exception as e:
+            error_msg = f"Failed to get function implementation from {file_path}: {str(e)}"
+            logger.error(error_msg)
+            return error_msg
+
     return [
         daytona_git_clone,
         daytona_git_status,
@@ -344,6 +546,9 @@ Modified Files:"""
         daytona_write_file,
         daytona_execute_command,
         daytona_get_repository_structure,
+        daytona_search_keyword_in_directory,
+        daytona_get_code_definitions,
+        daytona_get_function_implementation,
     ]
 
 
@@ -361,4 +566,7 @@ SWE_DAYTONA_TOOL_NAMES = [
     "daytona_write_file",
     "daytona_execute_command",
     "daytona_get_repository_structure",
+    "daytona_search_keyword_in_directory",
+    "daytona_get_code_definitions",
+    "daytona_get_function_implementation",
 ] 

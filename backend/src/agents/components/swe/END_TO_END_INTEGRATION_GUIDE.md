@@ -6,10 +6,26 @@ Complete guide for integrating the SWE (Software Engineering) agent with GitHub 
 
 The SWE agent now supports:
 - ✅ **GitHub PAT Integration** - Users provide GitHub Personal Access Token
-- ✅ **Repository Selection** - Dropdown of user repos + public repo input
+- ✅ **Repository Selection** - Dropdown of user repos + public repo input  
 - ✅ **Streaming Progress** - Real-time step updates like datagen
 - ✅ **Repository Context** - Full codebase awareness with clone/branch/PR support
 - ✅ **Daytona Integration** - Safe code execution in sandbox
+- ✅ **Exclusive Sandbox Operations** - No local file access conflicts
+
+## 🔧 Critical Fixes Applied
+
+### **Local File Access Conflict Resolution**
+**Problem**: SWE agent was mixing local file tools with Daytona sandbox tools, causing:
+```
+[error] Error in astream_websocket: [Errno 2] No such file or directory: './sales-crew/frontend/sales-agent-crew/src/views/LoginPage.vue'
+```
+
+**Solution**: Implemented exclusive tool usage pattern:
+- ✅ **15 Daytona Tools**: All file operations happen in sandbox
+- ✅ **No Tool Mixing**: When Daytona manager exists, use ONLY Daytona tools
+- ✅ **Proper Fallback**: Local tools only for testing without Daytona
+- ✅ **Unified Search**: `daytona_search_keyword_in_directory` replaces local search
+- ✅ **Unified Codemap**: `daytona_get_code_definitions` replaces local codemap
 
 ## 📋 Integration Checklist
 

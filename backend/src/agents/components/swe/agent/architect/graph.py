@@ -206,19 +206,26 @@ workflow.add_edge("extract_implementation_plan", END)
 def create_swe_architect(daytona_manager=None, github_token=None):
     """Create the SWE architect workflow with optional Daytona tools"""
     from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
-    
+
     # Get Daytona tools if manager is provided
     daytona_tools = []
     if daytona_manager:
         daytona_tools = get_swe_daytona_tools(daytona_manager)
-    
+
     # Get GitHub tools if token is provided
     github_tools = []
     if github_token:
         github_tools = get_github_tools(github_token)
+
+    # IMPORTANT: Use ONLY Daytona tools for SWE operations to avoid local file access conflicts
+    # Remove codemap_tools + search_tools to prevent mixing local and sandbox file access
+    if daytona_tools:
+        # Use only Daytona-based tools when sandbox is available
+        all_tools = daytona_tools + github_tools
+    else:
+        # Fallback to basic tools when no Daytona manager (for testing)
+        all_tools = codemap_tools + search_tools + github_tools
     
-    # Create tool node with all tools
-    all_tools = codemap_tools + search_tools + daytona_tools + github_tools
     tool_node = ToolNode(all_tools, messages_key="implementation_research_scratchpad")
     
     # Create workflow with Daytona-enhanced functions
