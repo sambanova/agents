@@ -783,6 +783,40 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 else:
                     subgraph_input = subgraph_input_part
 
+            # REPOSITORY CONTEXT INJECTION FOR SWE AGENT
+            # Automatically inject repository context when routing to swe_agent
+            if subgraph_name == "swe_agent":
+                # Check if repository context is available in config metadata
+                repository_context = None
+                
+                if config and "metadata" in config:
+                    repository_context = config["metadata"].get("repository_context")
+                
+                # Only inject repository context if:
+                # 1. Repository context is available
+                # 2. Input doesn't already contain repository context (starts with "REPO:")
+                # 3. This appears to be a code/development request
+                if (repository_context and 
+                    not subgraph_input.strip().startswith("REPO:") and
+                    _is_swe_related_request(subgraph_input)):
+                    
+                    logger.info(
+                        "Injecting repository context for SWE agent",
+                        repo_full_name=repository_context.get("repo_full_name"),
+                        branch=repository_context.get("branch"),
+                    )
+                    
+                    # Format repository context
+                    repo_context_prefix = f"REPO: {repository_context['repo_full_name']}"
+                    if repository_context.get("branch") and repository_context["branch"] != "main":
+                        repo_context_prefix += f"\nBRANCH: {repository_context['branch']}"
+                    repo_context_prefix += "\nCONTEXT: Repository selected for SWE operations\n\n"
+                    
+                    # Prepend repository context to the input
+                    subgraph_input = repo_context_prefix + subgraph_input
+                    
+                    logger.info("Repository context injected successfully")
+
             subgraph_messages = state_input_mapper(subgraph_input)
             logger.info(
                 "Invoking subgraph",
@@ -801,6 +835,39 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             return state_output_mapper(result)
 
         return subgraph_entry_node
+
+    # Helper function to determine if request is SWE-related
+    def _is_swe_related_request(input_text: str) -> bool:
+        """
+        Check if the input appears to be a software engineering/code-related request.
+        """
+        if not input_text:
+            return False
+            
+        input_lower = input_text.lower()
+        
+        # SWE-related keywords and phrases
+        swe_keywords = [
+            "implement", "add", "create", "build", "fix", "bug", "feature",
+            "refactor", "modify", "update", "code", "function", "class",
+            "api", "endpoint", "authentication", "database", "frontend",
+            "backend", "component", "module", "library", "framework",
+            "test", "debug", "optimize", "integrate", "deploy", "migrate",
+            "review", "analyze codebase", "architecture"
+        ]
+        
+        # Check for SWE-related patterns
+        for keyword in swe_keywords:
+            if keyword in input_lower:
+                return True
+                
+        # Check for file extensions that suggest code work
+        code_extensions = [".js", ".py", ".java", ".cpp", ".ts", ".jsx", ".vue", ".html", ".css"]
+        for ext in code_extensions:
+            if ext in input_lower:
+                return True
+                
+        return False
 
     # Build the workflow
     workflow = MessageGraph()

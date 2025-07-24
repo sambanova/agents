@@ -30,7 +30,7 @@ async def swe_human_choice_node(state: Dict[str, Any], llm: BaseChatModel) -> Di
     logger.info("Processing SWE human choice node")
     
     # Get the current implementation plan from state
-    current_plan = state.get("implementation_plan", "No implementation plan yet.")
+    current_plan = getattr(state, "implementation_plan", "No implementation plan yet.")
     
     # Format the plan for display
     if hasattr(current_plan, 'model_dump'):
@@ -126,10 +126,10 @@ def swe_human_choice_router(state: Dict[str, Any]) -> str:
     logger.info("Entering SWE human choice router")
     
     # Check if user wants to revise the plan
-    if state.get("human_feedback") and not state.get("plan_approved", False):
+    if getattr(state, "human_feedback", None) and not getattr(state, "plan_approved", False):
         logger.info("User requested plan revision. Routing to: architect")
         return "architect"
-    elif state.get("plan_approved", False):
+    elif getattr(state, "plan_approved", False):
         logger.info("User approved plan. Routing to: developer")
         return "developer"
     

@@ -67,17 +67,19 @@ def swe_state_input_mapper(input_text: str) -> Dict:
     Map input text to SWE agent state format.
 
     Args:
-        input_text: User's implementation request (can include repository context)
+        input_text: User's implementation request (should only include repo context when explicitly provided)
 
     Returns:
         State dictionary for the SWE agent
     """
-    # Parse input for repository context if provided
+    # Only parse repository context if explicitly provided in the input
+    # This should NOT automatically prepend repo context to general queries
     # Format: "REPO: owner/repo\nBRANCH: main\n\nTask description here"
     repo_context = ""
     task_content = input_text
     repository_name = None  # Default to None - work with current directory like datagen
     
+    # Only process repo context if it's explicitly in the input
     if input_text.startswith("REPO:"):
         lines = input_text.split("\n")
         repo_lines = []

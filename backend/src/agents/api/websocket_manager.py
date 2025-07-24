@@ -323,6 +323,9 @@ class WebSocketConnectionManager(WebSocketInterface):
                     user_id, user_message_input
                 )
 
+                # Extract repository context if provided
+                repository_context = user_message_input.get("repository_context")
+
                 config = await self.create_config(
                     user_id=user_id,
                     thread_id=conversation_id,
@@ -332,6 +335,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                     llm_type=model,
                     doc_ids=tuple(user_message_input["document_ids"]),
                     multimodal_input=multimodal_input,
+                    repository_context=repository_context,
                 )
 
                 await enhanced_agent.astream_websocket(
@@ -585,6 +589,7 @@ class WebSocketConnectionManager(WebSocketInterface):
         llm_type: str,
         doc_ids: Dict[str, Any],
         multimodal_input: bool,
+        repository_context: Optional[Dict[str, Any]] = None,
     ):
         # Add cleanup task
         self.cleanup_task: Optional[asyncio.Task] = None
@@ -655,8 +660,17 @@ class WebSocketConnectionManager(WebSocketInterface):
                 "api_key": api_keys.sambanova_key,
                 "message_id": message_id,
             },
+            "metadata": {
+                "user_id": user_id,
+                "thread_id": thread_id,
+                "message_id": message_id,
+            },
             "recursion_limit": 50,
         }
+
+        # Include repository context in metadata if provided
+        if repository_context:
+            config["metadata"]["repository_context"] = repository_context
 
         config["configurable"][
             "type==default/system_message"

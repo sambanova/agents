@@ -56,6 +56,24 @@ The SWE agent now supports:
 - ✅ **Context Preservation**: Keep most recent and relevant context
 - ✅ **Performance Optimization**: Prevent expensive context regeneration
 
+### **Auto-Prepending Issue Fixed**
+**Problem**: Repository context being automatically added to ALL user queries, breaking general app usage.
+
+**Solution**: Smart context injection only when appropriate:
+- ✅ **No Auto-Prepending**: Repository context only added when explicitly provided
+- ✅ **Smart Detection**: Only for explicit SWE requests with repo context
+- ✅ **General Use Preserved**: Normal queries work without repo context injection
+
+### **Complete Human Workflow Integration**
+**Problem**: Missing human interrupt workflow - "approved" wasn't continuing to implementation.
+
+**Solution**: Full datagen-style workflow integration:
+- ✅ **Human Choice Node**: Integrated into main SWE graph workflow
+- ✅ **Conditional Routing**: architect → human_choice → developer 
+- ✅ **Approval Flow**: "approved" → proceed to developer implementation
+- ✅ **Revision Flow**: feedback → back to architect for plan refinement
+- ✅ **State Management**: Proper state sharing between all workflow nodes
+
 ## 📋 Integration Checklist
 
 ### ✅ Critical Bug Fixes Applied

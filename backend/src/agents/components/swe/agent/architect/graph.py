@@ -56,9 +56,20 @@ def create_check_research_runnable(config: RunnableConfig = None):
 
 def create_conduct_research_runnable(config: RunnableConfig = None, daytona_tools=None):
     llm = get_swe_llm(config=config)
-    all_tools = search_tools + codemap_tools
+    
+    # IMPORTANT: For security, use ONLY web search tools initially, then Daytona tools for file access
+    # This prevents local file system access during hypothesis generation
     if daytona_tools:
-        all_tools = all_tools + daytona_tools
+        # Use web search tools + Daytona tools (no local codemap/search tools)
+        from agents.tools.langgraph_tools import TOOL_REGISTRY
+        web_search_tools = []
+        if "search_tavily" in TOOL_REGISTRY:
+            web_search_tools.append(TOOL_REGISTRY["search_tavily"]["factory"]())
+        all_tools = web_search_tools + daytona_tools
+    else:
+        # Fallback for testing - use search tools only (no local codemap tools)
+        all_tools = search_tools
+    
     return conduct_research_prompt | llm.bind_tools(all_tools)
 
 def create_extract_implementation_runnable(config: RunnableConfig = None):

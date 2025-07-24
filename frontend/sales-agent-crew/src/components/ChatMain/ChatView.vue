@@ -2029,9 +2029,9 @@ const addMessage = async () => {
     }
   }
   
-  // Format message with repository context if available
-  const repositoryContextPrefix = formatRepositoryContextForMessage();
-  const messageData = repositoryContextPrefix + searchQuery.value;
+  // Only add repository context for explicit SWE agent requests
+  // Repository context should NOT be auto-prepended to general queries
+  const messageData = searchQuery.value;
   
   const messagePayload = {
     event: 'user_message',
@@ -2043,6 +2043,15 @@ const addMessage = async () => {
     conversation_id: currentId.value,
     resume: shouldResume,
   };
+
+  // Include repository context if available (for SWE agent routing)
+  if (repositoryContext.value) {
+    messagePayload.repository_context = {
+      repo_full_name: repositoryContext.value.repo_full_name,
+      branch: repositoryContext.value.branch || 'main',
+      selection_type: repositoryContext.value.selection_type || 'user_repo'
+    };
+  }
 
   if (selectedDocuments.value && selectedDocuments.value.length > 0) {
     messagePayload.document_ids = selectedDocuments.value.map((docId) => {
