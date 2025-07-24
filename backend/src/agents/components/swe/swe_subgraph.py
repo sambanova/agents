@@ -109,15 +109,45 @@ def swe_state_input_mapper(input_text: str) -> Dict:
     
     # Create enhanced prompt with repository context
     if repo_context:
+        # Extract repository URL from context for cloning
+        repo_full_name = None
+        branch = "main"
+        for line in repo_context.split("\n"):
+            if line.startswith("REPO:"):
+                repo_full_name = line.split("REPO:", 1)[1].strip()
+            elif line.startswith("BRANCH:"):
+                branch = line.split("BRANCH:", 1)[1].strip()
+        
+        clone_url = f"https://github.com/{repo_full_name}.git" if repo_full_name else ""
+        
         prompt_content = f"""Repository Context:
 {repo_context.strip()}
 
 Implementation Task:
 {task_content}
 
-Please analyze the repository context and implement the requested changes. Use the GitHub tools to explore the repository structure, understand the codebase, and plan your implementation accordingly."""
+**CRITICAL FIRST STEP**: Before analyzing or implementing anything, you MUST clone the repository into the Daytona sandbox:
+
+1. Use `daytona_git_clone` with:
+   - URL: {clone_url}
+   - Path: {repository_name or 'repository'}
+   - Branch: {branch}
+
+2. After cloning, use `daytona_get_repository_structure` to understand the codebase layout
+
+3. Then proceed with analysis and implementation using Daytona tools:
+   - `daytona_read_file` to examine code files
+   - `daytona_write_file` to make changes
+   - `daytona_execute_command` to test changes
+
+All operations must be performed within the Daytona sandbox. Do not attempt to access local files.
+
+If GitHub authentication is needed, the system will provide the appropriate credentials."""
     else:
-        prompt_content = f"Please implement the following requirement: {task_content}"
+        prompt_content = f"""Implementation Task:
+{task_content}
+
+You are working in a secure Daytona sandbox environment. Use the provided Daytona tools for all file operations and code execution. If you need to work with an existing codebase, it should be cloned into the sandbox first using `daytona_git_clone`."""
     
     # Create state with repository information
     initial_state = {

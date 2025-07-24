@@ -53,7 +53,11 @@ def write_to_file(path: str, content: str) -> str:
 @tool(parse_docstring=True)
 def get_files_structure(directory: str = ".") -> str:
     """Generate a JSON representation of the file and directory structure starting from the specified directory.
-    Uses gitingest to analyze the codebase structure.
+    
+    NOTE: This tool should only be used for initial directory structure overview.
+    For SWE operations with repository context, agents should use the Daytona sandbox tools:
+    - daytona_get_repository_structure for comprehensive repository analysis
+    - daytona_list_files for directory listing within the sandbox
 
     Args:
         directory: The root directory to start scanning from (defaults to current directory ".")
@@ -61,8 +65,12 @@ def get_files_structure(directory: str = ".") -> str:
     Returns:
         str: A string representing the hierarchical directory structure and file listing
     """
-    summary, tree, content = ingest(directory)
-    return tree
+    try:
+        from gitingest import ingest
+        summary, tree, content = ingest(directory)
+        return tree
+    except Exception as e:
+        return f"Error scanning directory structure: {str(e)}\n\nIMPORTANT: For repository analysis, use Daytona sandbox tools instead:\n- daytona_git_clone to clone the repository\n- daytona_get_repository_structure for detailed analysis\n- daytona_list_files for directory exploration"
 
 
 # List of available tools
