@@ -509,6 +509,7 @@ class RedisStorage:
             serper_key=api_keys.get("serper_key", ""),
             exa_key=api_keys.get("exa_key", ""),
             fireworks_key=api_keys.get("fireworks_key", ""),
+            github_token=api_keys.get("github_token", ""),
         )
 
     async def set_user_api_key(self, user_id: str, keys: "APIKeys") -> None:
@@ -523,6 +524,7 @@ class RedisStorage:
                 "serper_key": keys.serper_key,
                 "exa_key": keys.exa_key,
                 "fireworks_key": keys.fireworks_key,
+                "github_token": keys.github_token,
             },
             user_id=user_id,
         )

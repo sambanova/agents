@@ -278,6 +278,80 @@
             </label>
             <SelectProvider  v-model:selectedOption="selectedOption" />
           </div>
+
+          <!-- GitHub Personal Access Token -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              GitHub Personal Access Token
+              <span class="text-gray-500 text-xs">(Optional - for SWE Agent repository access)</span>
+              <a 
+                href="https://github.com/settings/tokens"
+                target="_blank"
+                class="text-primary-link hover:text-primary-800 ml-2 text-sm"
+              >
+                Generate Token →
+              </a>
+            </label>
+            <div class="relative">
+              <input
+                v-model="githubToken"
+                :type="githubTokenVisible ? 'text' : 'password'"
+                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                class="block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500 pr-10"
+              />
+              <button 
+                @click="toggleGithubTokenVisibility"
+                class="absolute inset-y-0 right-0 px-3 flex items-center text-primary-brandTextSecondary hover:text-gray-700"
+              >
+                <svg v-if="githubTokenVisible" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+                     viewBox="0 0 24 24" stroke="currentColor">
+                  <!-- Eye Open Icon -->
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                        d="M2.458 12C3.732 7.943 7.519 5 12 5c4.481 0 8.268 2.943 9.542 7" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                        d="M2.458 12c1.508 4.057 5.294 7 9.542 7s8.034-2.943 9.542-7" />
+                </svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+                     viewBox="0 0 24 24" stroke="currentColor">
+                  <!-- Eye Closed Icon -->
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M13.875 18.825A9.952 9.952 0 0112 19.5c-5.247 0-9.645-4.028-9.985-9.227M9.642 9.642a3 3 0 104.715 4.715" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3 3l18 18" />
+                </svg>
+              </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">
+              Required for SWE Agent to access your repositories. Token needs 'repo' scope for private repos or 'public_repo' scope for public repos only.
+            </p>
+            <!-- Save and Clear Buttons -->
+            <div class="flex justify-end space-x-2 mt-2">
+              <button 
+                @click="clearGithubToken"
+                class="px-3 py-1 text-sm border  border-primary-brandBorder text-primary-brandColor text-sm  rounded focus:outline-none"
+              >
+                Clear Token
+              </button>
+              <button 
+                @click="saveGithubToken"
+                class="px-3 py-1 text-sm bg-primary-brandColor text-white rounded focus:outline-none"
+              >
+                Save Token
+              </button>
+            </div>
+          </div>
+
+          <!-- Repository Selector for SWE Agent (only show if GitHub token exists) -->
+          <div v-if="githubToken && githubToken.trim()" class="mt-6">
+            <RepositorySelector 
+              ref="repositorySelector" 
+              :key="githubTokenKey"
+              @repository-selected="handleRepositorySelected"
+            />
+          </div>
+
           <div class="mt-6 flex flex-row items-center pt-4 text-primary-link">
             <a class="text-sm underline" href="https://community.sambanova.ai/c/agents/87" target="_blank">FAQ (SN Community)</a>
             </div>
@@ -346,6 +420,7 @@ import { encryptKey, decryptKey } from '../utils/encryption'
 import axios from 'axios'
 import emitterMitt from '@/utils/eventBus.js';
 import SelectProvider from '@/components/ChatMain/SelectProvider.vue'
+import RepositorySelector from '@/components/RepositorySelector.vue'
 
 
 const selectedOption = inject('selectedOption')
@@ -372,6 +447,7 @@ const sambanovaKey = ref('')
 const exaKey = ref('')
 const serperKey = ref('')
 const fireworksKey = ref('')
+const githubToken = ref('')
 const errorMessage = ref('')
 const successMessage = ref('')
 // Available model options - update both here and in the template when adding new models
@@ -383,6 +459,9 @@ const sambanovaKeyVisible = ref(false)
 const exaKeyVisible = ref(false)
 const serperKeyVisible = ref(false)
 const fireworksKeyVisible = ref(false)
+const githubTokenVisible = ref(false)
+const repositorySelector = ref(null)
+const githubTokenKey = ref(0) // Force re-render when token changes
 
 // Missing keys state for validation messages
 const missingKeys = ref({
@@ -402,6 +481,7 @@ const loadKeys = async () => {
     const savedExaKey = localStorage.getItem(`exa_key_${userId.value}`);
     const savedSerperKey = localStorage.getItem(`serper_key_${userId.value}`);
     const savedFireworksKey = localStorage.getItem(`fireworks_key_${userId.value}`);
+    const savedGithubToken = localStorage.getItem(`github_token_${userId.value}`);
     const savedModel = localStorage.getItem(`selected_model_${userId.value}`);
 
     // Decrypt and set sambanova key (always available)
@@ -417,6 +497,9 @@ const loadKeys = async () => {
       serperKey.value = '';
       fireworksKey.value = '';
     }
+
+    // Decrypt and set GitHub token (always available for SWE Agent)
+    githubToken.value = savedGithubToken ? await decryptKey(savedGithubToken) : '';
 
     // Handle model selection
     if (!savedModel || savedModel === 'null' || savedModel === 'undefined' || savedModel.trim() === '' || !AVAILABLE_MODELS.includes(savedModel)) {
@@ -488,6 +571,10 @@ const toggleSerperKeyVisibility = () => {
 
 const toggleFireworksKeyVisibility = () => {
   fireworksKeyVisible.value = !fireworksKeyVisible.value
+}
+
+const toggleGithubTokenVisibility = () => {
+  githubTokenVisible.value = !githubTokenVisible.value
 }
 
 const handleModelSelection = () => {
@@ -607,7 +694,8 @@ const updateBackendKeys = async () => {
       sambanova_key: sambanovaKey.value || '',
       serper_key: serperKey.value || '',
       exa_key: exaKey.value || '',
-      fireworks_key: fireworksKey.value || ''
+      fireworks_key: fireworksKey.value || '',
+      github_token: githubToken.value || ''
     }
 
     const response = await axios.post(url, postParams, {
@@ -675,6 +763,50 @@ const clearSerperKey = async () => {
   updateAndCallEvents()
   clearMessagesAfterDelay()
 
+}
+
+const saveGithubToken = async () => {
+  try {
+    if (!githubToken.value) {
+      errorMessage.value = 'GitHub token cannot be empty!'
+      return
+    }
+    const encryptedKey = await encryptKey(githubToken.value)
+    localStorage.setItem(`github_token_${userId.value}`, encryptedKey)
+    successMessage.value = 'GitHub token saved successfully!'
+    await updateBackendKeys()
+    updateAndCallEvents()
+
+    // Refresh repository selector to load repositories with new token
+    githubTokenKey.value++
+    if (repositorySelector.value) {
+      await repositorySelector.value.checkGitHubToken()
+    }
+
+  } catch (error) {
+    console.error('Failed to save GitHub token:', error)
+    errorMessage.value = 'Failed to save GitHub token'
+  } finally {
+    clearMessagesAfterDelay()
+  }
+}
+
+const clearGithubToken = async () => {
+  localStorage.removeItem(`github_token_${userId.value}`)
+  githubToken.value = ''
+  successMessage.value = 'GitHub token cleared successfully!'
+  await updateBackendKeys()
+  updateAndCallEvents()
+  clearMessagesAfterDelay()
+
+  // Refresh repository selector when token is cleared
+  githubTokenKey.value++
+}
+
+const handleRepositorySelected = (repositoryContext) => {
+  console.log('Repository selected in settings:', repositoryContext)
+  successMessage.value = `Repository context set: ${repositoryContext.repo_full_name}`
+  clearMessagesAfterDelay()
 }
 
 const updateAndCallEvents=()=>{

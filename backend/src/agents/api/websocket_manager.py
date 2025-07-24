@@ -23,6 +23,7 @@ from agents.components.compound.financial_analysis_subgraph import (
 )
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.components.open_deep_research.graph import create_deep_research_graph
+from agents.components.swe.swe_subgraph import get_swe_subgraph_config
 from agents.storage.redis_service import SecureRedisService
 from agents.storage.redis_storage import RedisStorage
 from agents.tools.langgraph_tools import RETRIEVAL_DESCRIPTION, load_static_tools
@@ -728,6 +729,13 @@ CRITICAL: For file creation, NEVER show code in response text - write ALL code i
                     result={"useage": {"total_latency": 0.0}},
                 ),
             },
+            "swe_agent": get_swe_subgraph_config(
+                user_id=user_id,
+                sambanova_api_key=api_keys.sambanova_key,
+                redis_storage=self.message_storage,
+                daytona_manager=daytona_manager,
+                github_token=api_keys.github_token,
+            ),
         }
 
         if indexed_doc_ids:

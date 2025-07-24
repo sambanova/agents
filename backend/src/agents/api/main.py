@@ -852,22 +852,16 @@ async def get_api_keys(
                 content={"error": "Invalid authentication token"},
             )
 
-        key_prefix = f"api_keys:{user_id}"
-        stored_keys = await app.state.redis_client.hgetall(key_prefix, user_id)
-
-        if not stored_keys:
-            return JSONResponse(
-                status_code=404,
-                content={"error": "No API keys found for this user"},
-            )
+        stored_keys = await app.state.redis_storage_service.get_user_api_key(user_id)
 
         return JSONResponse(
             status_code=200,
             content={
-                "sambanova_key": stored_keys.get("sambanova_key", ""),
-                "serper_key": stored_keys.get("serper_key", ""),
-                "exa_key": stored_keys.get("exa_key", ""),
-                "fireworks_key": stored_keys.get("fireworks_key", ""),
+                "sambanova_key": stored_keys.sambanova_key,
+                "serper_key": stored_keys.serper_key,
+                "exa_key": stored_keys.exa_key,
+                "fireworks_key": stored_keys.fireworks_key,
+                "github_token": stored_keys.github_token,
             },
         )
 
@@ -876,6 +870,101 @@ async def get_api_keys(
         return JSONResponse(
             status_code=500,
             content={"error": f"Failed to retrieve API keys: {str(e)}"},
+        )
+
+
+# SWE Agent GitHub Repository Endpoints
+@app.get("/swe/repositories/user")
+async def list_user_repositories(
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    List repositories for the authenticated GitHub user.
+    """
+    try:
+        if not user_id:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Invalid authentication token"},
+            )
+
+        # Get user's API keys
+        api_keys = await app.state.redis_storage_service.get_user_api_key(user_id)
+        
+        if not api_keys.github_token:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "GitHub token not configured. Please add your GitHub Personal Access Token in settings."},
+            )
+
+        # Import GitHub tools
+        from agents.components.swe.repository_manager import RepositoryManager
+        repo_manager = RepositoryManager(github_token=api_keys.github_token)
+        
+        # Get user repositories
+        repos = await repo_manager.list_user_repositories()
+        
+        return JSONResponse(
+            status_code=200,
+            content=repos,
+        )
+
+    except Exception as e:
+        logger.error(f"Error listing user repositories: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to list repositories: {str(e)}"},
+        )
+
+
+@app.post("/swe/repositories/validate")
+async def validate_repository(
+    request: dict,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Validate if a repository exists and is accessible.
+    """
+    try:
+        if not user_id:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Invalid authentication token"},
+            )
+
+        repo_full_name = request.get("repo_full_name")
+        if not repo_full_name:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "repo_full_name is required"},
+            )
+
+        # Get user's API keys
+        api_keys = await app.state.redis_storage_service.get_user_api_key(user_id)
+        
+        if not api_keys.github_token:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "GitHub token not configured. Please add your GitHub Personal Access Token in settings."},
+            )
+
+        # Import GitHub tools
+        from agents.components.swe.repository_manager import RepositoryManager
+        repo_manager = RepositoryManager(github_token=api_keys.github_token)
+        
+        # Validate repository
+        validation = await repo_manager.validate_repository(repo_full_name)
+        
+        return JSONResponse(
+            status_code=200,
+            content=validation,
+        )
+
+    except Exception as e:
+        logger.error(f"Error validating repository: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to validate repository: {str(e)}"},
         )
 
 

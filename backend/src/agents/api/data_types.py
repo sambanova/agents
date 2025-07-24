@@ -62,6 +62,7 @@ class APIKeys(BaseModel):
     fireworks_key: str = ""
     serper_key: str
     exa_key: str
+    github_token: str = ""
 
 
 class ShareResponse(BaseModel):
