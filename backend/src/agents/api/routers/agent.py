@@ -22,6 +22,10 @@ router = APIRouter(
 
 class DeepResearchRequest(BaseModel):
     prompt: str
+
+
+class DeepResearchInteractiveRequest(BaseModel):
+    prompt: str
     thread_id: Optional[str] = None
     resume: bool = False
 
@@ -45,10 +49,8 @@ async def deepresearch_agent(
     authorization: Optional[str] = Header(None),
 ):
     """
-    Two-step deep research API:
-
-    Step 1: Submit prompt, get thread_id
-    Step 2: Submit prompt with thread_id and resume=true, get results
+    Fire-and-forget deep research API.
+    Submits a prompt and returns the final report in a single call.
     """
     # Extract API key from Authorization header (Bearer token)
     if not authorization or not authorization.startswith("Bearer "):
@@ -70,6 +72,85 @@ async def deepresearch_agent(
         user_id=api_key,
         checkpointer=checkpointer,
     )
+
+    thread_id = str(uuid.uuid4())
+    try:
+        # Step 1: Initial call
+        graph_input_step1 = {"topic": research_request.prompt}
+        await agent.ainvoke(
+            graph_input_step1,
+            config={"configurable": {"thread_id": thread_id}},
+        )
+
+        # Step 2: Auto-approve
+        graph_input_step2 = Command(resume="APPROVE")
+        result_step2 = await agent.ainvoke(
+            graph_input_step2,
+            config={"configurable": {"thread_id": thread_id}},
+        )
+
+        if "final_report" in result_step2:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "thread_id": thread_id,
+                    "status": "completed",
+                    "result": result_step2["final_report"],
+                },
+            )
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "thread_id": thread_id,
+                "status": "error",
+                "result": "Failed to get final report after auto-approval.",
+                "details": result_step2,
+            },
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "thread_id": thread_id,
+                "status": "error",
+                "error": str(e),
+            },
+        )
+
+
+@router.post("/deepresearch/interactive")
+async def deepresearch_interactive_agent(
+    request: Request,
+    research_request: DeepResearchInteractiveRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Two-step interactive deep research API:
+    Step 1: Submit prompt, get thread_id and research plan for approval.
+    Step 2: Submit prompt with thread_id and resume=true to get the final report.
+    """
+    # Extract API key from Authorization header (Bearer token)
+    if not authorization or not authorization.startswith("Bearer "):
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Authorization header with Bearer token is required"},
+        )
+
+    api_key = authorization.replace("Bearer ", "")
+    redis_storage = request.app.state.redis_storage_service
+    checkpointer = get_global_checkpointer()
+
+    # Create and execute the deep research graph
+    agent = create_deep_research_graph(
+        api_key=api_key,
+        provider="sambanova",
+        request_timeout=120,
+        redis_storage=redis_storage,
+        user_id=api_key,
+        checkpointer=checkpointer,
+    )
+
     if research_request.resume is False:
         thread_id = str(uuid.uuid4())
     else:
