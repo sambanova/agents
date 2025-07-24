@@ -33,3 +33,4 @@ class SoftwareDeveloperState(BaseModel):
     atomic_implementation_research: Annotated[list[AnyMessage], add_messages_with_clear]
     codebase_structure: Optional[str] = Field(None, description="The codebase structure")
     current_file_content: Optional[str] = Field(None, description="The current content of the file being edited")
+    working_directory: Optional[str] = Field(".", description="The working directory for the repository (e.g., './repo-name' or '.' for current directory)")

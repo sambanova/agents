@@ -104,7 +104,7 @@ search_tools_map = {tool.name: tool for tool in search_tools}
 
 if __name__ == "__main__":
     # Example usage
-    directory = "./workspace_repo/browser-use"  # Current directory
+    directory = "./browser-use"  # Example repository directory
     search_term = "screenshot"  # Search for function definitions
     
     # Example 1: Search all Python files

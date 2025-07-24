@@ -75,7 +75,7 @@ def come_up_with_research_next_step(state: SoftwareArchitectState, *, config: Ru
     response = plan_next_step_runnable.invoke({
         "implementation_research_scratchpad": state.implementation_research_scratchpad,
         "codebase_structure": get_files_structure.invoke({
-            "directory": "./workspace_repo"
+            "directory": state.working_directory or "."
         }),
     })
     return {"research_next_step": response.hypothesis,
@@ -109,7 +109,7 @@ def conduct_research(state: SoftwareArchitectState, *, config: RunnableConfig = 
     conduct_research_runnable = create_conduct_research_runnable(config, daytona_tools)
     response = conduct_research_runnable.invoke({
         "implementation_research_scratchpad": state.implementation_research_scratchpad,
-        "codebase_structure": get_files_structure.invoke({"directory": "./workspace_repo"})
+        "codebase_structure": get_files_structure.invoke({"directory": state.working_directory or "."})
     })
     return {"implementation_research_scratchpad": [response]}
 
@@ -134,7 +134,7 @@ def extract_implementation_plan(state: SoftwareArchitectState, *, config: Runnab
     extract_implementation_runnable = create_extract_implementation_runnable(config)
     response = extract_implementation_runnable.invoke({
         "research_findings": convert_tools_messages_to_ai_and_human(state.implementation_research_scratchpad),
-        "codebase_structure": get_files_structure.invoke({"directory": "./workspace_repo"}),
+        "codebase_structure": get_files_structure.invoke({"directory": state.working_directory or "."}),
         "output_format": JsonOutputParser(pydantic_object=ImplementationPlan).get_format_instructions()
     })
     response = ImplementationPlan(**response)
@@ -158,15 +158,17 @@ def should_conduct_research(state: SoftwareArchitectState):
 def call_model(state: SoftwareArchitectState, *, config: RunnableConfig = None):
     plan_next_step_runnable = create_plan_next_step_runnable(config)
     response = plan_next_step_runnable.invoke({"atomic_implementation_research":state.implementation_research_scratchpad,
-                                               "codebase_structure": get_files_structure.invoke({"directory": "./workspace_repo"}),
+                                               "codebase_structure": get_files_structure.invoke({"directory": state.working_directory or "."}),
                                                "historical_actions": "No historical actions"})
     return {"implementation_research_scratchpad": [response]}
 
 class SoftwareArchitectInput(TypedDict):
     implementation_research_scratchpad: List[AnyMessage]
+    working_directory: Optional[str]
 
 class SoftwareArchitectOutput(TypedDict):
     implementation_plan: Optional[ImplementationPlan]
+    working_directory: Optional[str]
 
 workflow = StateGraph(SoftwareArchitectState,
                       input=SoftwareArchitectInput,

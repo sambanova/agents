@@ -76,6 +76,7 @@ def swe_state_input_mapper(input_text: str) -> Dict:
     # Format: "REPO: owner/repo\nBRANCH: main\n\nTask description here"
     repo_context = ""
     task_content = input_text
+    repository_name = None  # Default to None - work with current directory like datagen
     
     if input_text.startswith("REPO:"):
         lines = input_text.split("\n")
@@ -86,6 +87,16 @@ def swe_state_input_mapper(input_text: str) -> Dict:
             if line.startswith(("REPO:", "BRANCH:", "CONTEXT:")):
                 repo_lines.append(line)
                 content_start = i + 1
+                
+                # Extract repository name from REPO: line
+                if line.startswith("REPO:"):
+                    repo_full_name = line.split("REPO:", 1)[1].strip()
+                    if "/" in repo_full_name:
+                        # Extract just the repo name from "owner/repo"
+                        repository_name = repo_full_name.split("/")[-1]
+                    else:
+                        repository_name = repo_full_name
+                        
             elif line.strip() == "":
                 content_start = i + 1
                 break
@@ -108,11 +119,20 @@ Please analyze the repository context and implement the requested changes. Use t
     else:
         prompt_content = f"Please implement the following requirement: {task_content}"
     
-    return {
+    # Create state with repository information
+    initial_state = {
         "implementation_research_scratchpad": [
             HumanMessage(content=prompt_content)
         ]
     }
+    
+    # Add repository name to state if we have one, otherwise use current directory approach like datagen
+    if repository_name:
+        initial_state["working_directory"] = f"./{repository_name}"
+    else:
+        initial_state["working_directory"] = "."  # Current directory like datagen
+    
+    return initial_state
 
 
 def swe_state_output_mapper(result: Dict) -> AIMessage:

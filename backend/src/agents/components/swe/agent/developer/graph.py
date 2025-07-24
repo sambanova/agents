@@ -61,9 +61,11 @@ dmp = diff_match_patch()
 # Define input/output types for the developer workflow
 class SoftwareDeveloperInput(TypedDict):
     implementation_plan: Optional[ImplementationPlan]
+    working_directory: Optional[str]
 
 class SoftwareDeveloperOutput(TypedDict):
     implementation_plan: Optional[ImplementationPlan]
+    working_directory: Optional[str]
 
 def start_implementing(state: SoftwareDeveloperState):
     return {
@@ -131,7 +133,7 @@ def prepare_for_implementation(state: SoftwareDeveloperState):
         file_content = "This is a new file"
 
     return {"current_file_content": file_content,
-            "codebase_structure": get_files_structure.invoke({"directory": "./workspace_repo"}),
+            "codebase_structure": get_files_structure.invoke({"directory": state.working_directory or "."}),
             "atomic_implementation_research": None}
 
 

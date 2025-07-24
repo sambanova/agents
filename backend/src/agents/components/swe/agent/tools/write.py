@@ -51,12 +51,12 @@ def write_to_file(path: str, content: str) -> str:
 
 
 @tool(parse_docstring=True)
-def get_files_structure(directory: str = "./workspace_repo") -> str:
+def get_files_structure(directory: str = ".") -> str:
     """Generate a JSON representation of the file and directory structure starting from the specified directory.
     Uses gitingest to analyze the codebase structure.
 
     Args:
-        directory: The root directory to start scanning from (defaults to "./workspace_repo")
+        directory: The root directory to start scanning from (defaults to current directory ".")
 
     Returns:
         str: A string representing the hierarchical directory structure and file listing

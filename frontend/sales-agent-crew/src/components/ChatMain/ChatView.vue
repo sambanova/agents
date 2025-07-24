@@ -1658,11 +1658,22 @@ onMounted(async () => {
 
   emitterMitt.on('new-chat', handleButtonClick);
   emitterMitt.on('reload-user-documents', loadUserDocuments);
+  
+  // Load repository context from localStorage on mount
+  loadRepositoryContext();
+  
+  // Listen for repository context changes
+  window.addEventListener('repository-context-set', handleRepositoryContextSet);
+  window.addEventListener('repository-context-cleared', handleRepositoryContextCleared);
 });
 
 onUnmounted(() => {
   emitterMitt.off('new-chat', handleButtonClick);
   emitterMitt.off('reload-user-documents', loadUserDocuments);
+  
+  // Remove repository context event listeners
+  window.removeEventListener('repository-context-set', handleRepositoryContextSet);
+  window.removeEventListener('repository-context-cleared', handleRepositoryContextCleared);
 });
 
 watch(
@@ -2018,9 +2029,13 @@ const addMessage = async () => {
     }
   }
   
+  // Format message with repository context if available
+  const repositoryContextPrefix = formatRepositoryContextForMessage();
+  const messageData = repositoryContextPrefix + searchQuery.value;
+  
   const messagePayload = {
     event: 'user_message',
-    data: searchQuery.value,
+    data: messageData,
     timestamp: new Date().toISOString(),
     provider: provider.value,
     planner_model: localStorage.getItem(`selected_model_${userId.value}`) || '',
@@ -2690,6 +2705,9 @@ const daytonaSidebarClosed = ref(false) // Track if user manually closed it
 const showArtifactCanvas = ref(false)
 const selectedArtifact = ref(null)
 
+// Repository context for SWE agent
+const repositoryContext = ref(null)
+
 // Functions for managing the single DaytonaSidebar
 function closeDaytonaSidebar() {
   console.log('Manual Daytona sidebar close requested')
@@ -3237,6 +3255,46 @@ function getFileExtensionFromFormat(format) {
   };
   
   return extensions[type] || 'txt';
+}
+
+// Repository context functions for SWE agent
+function loadRepositoryContext() {
+  try {
+    const stored = localStorage.getItem('swe_repository_context');
+    if (stored) {
+      repositoryContext.value = JSON.parse(stored);
+      console.log('Loaded repository context:', repositoryContext.value);
+    }
+  } catch (error) {
+    console.error('Error loading repository context:', error);
+    repositoryContext.value = null;
+  }
+}
+
+function handleRepositoryContextSet(event) {
+  repositoryContext.value = event.detail;
+  console.log('Repository context set:', repositoryContext.value);
+}
+
+function handleRepositoryContextCleared() {
+  repositoryContext.value = null;
+  console.log('Repository context cleared');
+}
+
+function formatRepositoryContextForMessage() {
+  if (!repositoryContext.value) return '';
+  
+  const context = repositoryContext.value;
+  let formatted = `REPO: ${context.repo_full_name}`;
+  
+  if (context.branch && context.branch !== 'main') {
+    formatted += `\nBRANCH: ${context.branch}`;
+  }
+  
+  // Add context information
+  formatted += `\nCONTEXT: Repository selected for SWE operations`;
+  
+  return formatted + '\n\n';
 }
 
 
