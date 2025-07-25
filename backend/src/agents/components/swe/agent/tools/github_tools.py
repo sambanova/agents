@@ -119,6 +119,14 @@ class GitHubManager:
         except Exception as e:
             logger.error(f"Failed to get pull requests: {str(e)}")
             return []
+    
+    async def create_pull_request(self, owner: str, repo: str, pr_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a pull request in the repository."""
+        try:
+            return await self._make_request("POST", f"/repos/{owner}/{repo}/pulls", json=pr_data)
+        except Exception as e:
+            logger.error(f"Failed to create pull request: {str(e)}")
+            raise
 
 
 def get_github_tools(github_token: str) -> List:

@@ -229,6 +229,46 @@ Modified Files:"""
             return error_msg
 
     @tool
+    async def daytona_git_push(
+        path: Annotated[str, "Path to the repository in the sandbox"]
+    ) -> str:
+        """
+        Push commits to the remote repository.
+        """
+        try:
+            sandbox = await manager._get_sandbox()
+            if not sandbox:
+                return "Error: Daytona sandbox not initialized"
+            
+            await sandbox.git.push(path)
+            return f"Successfully pushed changes in {path} to remote repository"
+            
+        except Exception as e:
+            error_msg = f"Failed to push changes in {path}: {str(e)}"
+            logger.error(error_msg)
+            return error_msg
+
+    @tool
+    async def daytona_git_pull(
+        path: Annotated[str, "Path to the repository in the sandbox"]
+    ) -> str:
+        """
+        Pull latest changes from the remote repository.
+        """
+        try:
+            sandbox = await manager._get_sandbox()
+            if not sandbox:
+                return "Error: Daytona sandbox not initialized"
+            
+            await sandbox.git.pull(path)
+            return f"Successfully pulled latest changes in {path} from remote repository"
+            
+        except Exception as e:
+            error_msg = f"Failed to pull changes in {path}: {str(e)}"
+            logger.error(error_msg)
+            return error_msg
+
+    @tool
     async def daytona_list_files(
         directory: Annotated[str, "Directory to list files from"] = "."
     ) -> str:
@@ -551,6 +591,8 @@ Modified Files:"""
         daytona_git_create_branch,
         daytona_git_add,
         daytona_git_commit,
+        daytona_git_push,
+        daytona_git_pull,
         daytona_list_files,
         daytona_read_file,
         daytona_write_file,
@@ -571,6 +613,8 @@ SWE_DAYTONA_TOOL_NAMES = [
     "daytona_git_create_branch",
     "daytona_git_add",
     "daytona_git_commit",
+    "daytona_git_push",
+    "daytona_git_pull",
     "daytona_list_files",
     "daytona_read_file",
     "daytona_write_file",
