@@ -11,6 +11,7 @@ from agents.components.swe.repository_manager import RepositoryManager
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.storage.redis_storage import RedisStorage
 from agents.utils.llms import get_sambanova_llm
+from datetime import datetime
 
 logger = structlog.get_logger(__name__)
 
@@ -229,9 +230,9 @@ def swe_state_output_mapper(result: Dict) -> AIMessage:
     # ENHANCED PATTERN: Check sender to determine appropriate response
     sender = result.get("sender", "")
     
-    # Handle architect review completion
-    if sender == "architect_review":
-        logger.info("Processing architect review completion")
+    # Handle architect review completion - FINAL WORKFLOW COMPLETION
+    if sender == "architect_review_complete":
+        logger.info("Processing architect review completion - WORKFLOW COMPLETE")
         if result.get("messages") and len(result["messages"]) > 0:
             last_message = result["messages"][-1]
             if hasattr(last_message, 'model_copy'):
@@ -239,13 +240,35 @@ def swe_state_output_mapper(result: Dict) -> AIMessage:
                     update={
                         "additional_kwargs": {
                             **(last_message.additional_kwargs or {}),
-                            "agent_type": "swe_architect_review_complete",
+                            "agent_type": "swe_workflow_complete",
                             "status": "completed",
                             "workflow_complete": True,
+                            "final_step": True,
                         }
                     }
                 )
-                logger.info("Returning architect review completion message")
+                logger.info("Returning final workflow completion message")
+                logger.info("=== END SWE STATE OUTPUT MAPPER DEBUG ===")
+                return enhanced_message
+    
+    # Handle architect review requesting changes - BACK TO DEVELOPER
+    if sender == "architect_review_changes":
+        logger.info("Processing architect review - changes needed")
+        if result.get("messages") and len(result["messages"]) > 0:
+            last_message = result["messages"][-1]
+            if hasattr(last_message, 'model_copy'):
+                enhanced_message = last_message.model_copy(
+                    update={
+                        "additional_kwargs": {
+                            **(last_message.additional_kwargs or {}),
+                            "agent_type": "swe_architect_review_changes",
+                            "status": "changes_required",
+                            "needs_changes": True,
+                            "returning_to_developer": True,
+                        }
+                    }
+                )
+                logger.info("Returning architect review - changes needed message")
                 logger.info("=== END SWE STATE OUTPUT MAPPER DEBUG ===")
                 return enhanced_message
     
@@ -253,22 +276,29 @@ def swe_state_output_mapper(result: Dict) -> AIMessage:
     if sender == "developer":
         logger.info("Processing developer completion with streaming messages")
         if result.get("messages") and len(result["messages"]) > 0:
-            # Return the final completion message from the developer workflow
-            final_message = result["messages"][-1]
-            if hasattr(final_message, 'model_copy'):
-                enhanced_message = final_message.model_copy(
-                    update={
-                        "additional_kwargs": {
-                            **(final_message.additional_kwargs or {}),
-                            "agent_type": "swe_development_complete",
-                            "status": "completed",
-                            "proceeding_to_review": True,
-                        }
-                    }
-                )
-                logger.info("Returning developer completion message")
-                logger.info("=== END SWE STATE OUTPUT MAPPER DEBUG ===")
-                return enhanced_message
+            # For streaming developer, we want to return a summary that indicates architect review is next
+            summary_content = f"""🔄 **Implementation Phase Complete**
+
+**📊 Implementation Summary:**
+- **Total Messages Streamed:** {len(result["messages"])}
+- **Status:** All atomic tasks completed successfully
+- **Next Phase:** Architect review in progress
+
+*All implementation details have been streamed in real-time above. Proceeding to architectural review...*"""
+            
+            summary_message = AIMessage(
+                content=summary_content,
+                additional_kwargs={
+                    "agent_type": "swe_development_complete",
+                    "status": "completed",
+                    "proceeding_to_review": True,
+                    "messages_streamed": len(result["messages"]),
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+            logger.info("Returning developer completion summary")
+            logger.info("=== END SWE STATE OUTPUT MAPPER DEBUG ===")
+            return summary_message
     
     # FOLLOW DATAGEN PATTERN: Use the last message from the detailed work
     # Check if we have messages with detailed work information
@@ -369,12 +399,14 @@ The implementation is complete and ready for use!"""
 
 The SWE agent has analyzed your requirements and created a detailed implementation plan. Each task includes specific atomic steps for code changes.
 
-**Workflow will include:**
-- ✅ Feature branch creation
-- ✅ Real-time progress streaming  
-- ✅ Diff visibility for all changes
-- ✅ Architect review after completion
-- ✅ PR creation readiness"""
+**Enhanced Workflow Features:**
+- ✅ Real-time streaming of implementation progress
+- ✅ Diff visibility for all changes as they happen
+- ✅ Single feature branch workflow
+- ✅ Automatic architect review after completion
+- ✅ PR creation readiness
+
+*Ready for human approval to begin real-time implementation...*"""
         else:
             content = """📋 **Implementation Plan Created**
 
