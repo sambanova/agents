@@ -1,6 +1,6 @@
 from agents.components.swe.agent.architect.graph import create_swe_architect, swe_architect
 from agents.components.swe.agent.common.entities import ImplementationPlan
-from agents.components.swe.agent.developer.graph import create_swe_developer, swe_developer
+from agents.components.swe.agent.developer.graph import create_swe_developer
 from agents.components.swe.human_choice import swe_human_choice_node, swe_human_choice_router
 from agents.utils.llms import get_sambanova_llm
 from agents.components.compound.util import extract_api_key
@@ -23,78 +23,32 @@ class AgentState(BaseModel):
     working_directory: Optional[str] = Field(".", description="The working directory for the repository")
 
 
-def architect_router(state: AgentState) -> str:
-    """Route from architect: if plan exists, go to human choice; otherwise stay in architect"""
-    if getattr(state, "implementation_plan", None):
-        logger.info("Implementation plan created, routing to human choice for approval")
-        return "human_choice"
-    else:
-        logger.info("No implementation plan yet, continuing research")
-        return "swe_architect"
-
-
-def create_workflow_graph(daytona_manager=None, github_token=None):
-    """Create and return the workflow graph with conditional routing and optional Daytona support"""
-    # Initialize graph
-    graph_builder = StateGraph(AgentState)
+def create_swe_agent(daytona_manager=None, github_token=None):
+    """Create the main SWE agent with both architect and developer subgraphs"""
     
-    # Create architect and developer with Daytona support if manager is provided
-    if daytona_manager:
-        architect = create_swe_architect(daytona_manager, github_token)
-        developer = create_swe_developer(daytona_manager, github_token)
-    else:
-        architect = swe_architect
-        developer = swe_developer
+    # Create the architect and developer with Daytona support
+    architect_subgraph = create_swe_architect(daytona_manager=daytona_manager, github_token=github_token)
+    developer_subgraph = create_swe_developer(daytona_manager=daytona_manager, github_token=github_token)
     
-    # Create human choice node function
-    async def human_choice_node_async(state, *, config: RunnableConfig = None):
-        """Human choice node for SWE workflow"""
+    # Create human choice node wrapper function that provides LLM
+    async def human_choice_node_wrapper(state, *, config: RunnableConfig = None):
+        """Human choice node wrapper that provides LLM from config"""
         api_key = extract_api_key(config)
         llm = get_sambanova_llm(api_key=api_key, model="DeepSeek-V3-0324")
         return await swe_human_choice_node(state, llm)
     
+    # Create the main workflow
+    workflow = StateGraph(AgentState)
+    
     # Add nodes
-    graph_builder.add_node("swe_architect", architect)
-    graph_builder.add_node("human_choice", human_choice_node_async)
-    graph_builder.add_node("swe_developer", developer)
+    workflow.add_node("architect", architect_subgraph)
+    workflow.add_node("human_choice", human_choice_node_wrapper)
+    workflow.add_node("developer", developer_subgraph)
     
-    # Add edges for the workflow with human choice integration
-    graph_builder.add_edge(START, "swe_architect")
+    # Add edges
+    workflow.add_edge(START, "architect")
+    workflow.add_edge("architect", "human_choice")
+    workflow.add_conditional_edges("human_choice", swe_human_choice_router, {"developer": "developer", "architect": "architect"})
+    workflow.add_edge("developer", END)
     
-    # Conditional edge from architect: loop until plan is created, then go to human choice
-    graph_builder.add_conditional_edges(
-        "swe_architect",
-        architect_router,
-        {
-            "swe_architect": "swe_architect",  # Continue research if no plan
-            "human_choice": "human_choice",   # Go to human choice when plan is ready
-        }
-    )
-    
-    # Conditional edge from human choice: revise plan or proceed to developer
-    graph_builder.add_conditional_edges(
-        "human_choice", 
-        swe_human_choice_router,
-        {
-            "architect": "swe_architect",  # Revise plan
-            "developer": "swe_developer",  # Proceed with implementation
-        }
-    )
-    
-    # Developer completes and ends
-    graph_builder.add_edge("swe_developer", END)
-
-    return graph_builder
-
-
-def create_swe_agent(daytona_manager=None, github_token=None):
-    """Create the complete SWE agent with human choice workflow"""
-    logger.info("Creating SWE agent with human choice workflow")
-    graph_builder = create_workflow_graph(daytona_manager, github_token)
-    return graph_builder.compile().with_config({
-        "tags": ["swe-agent-v3"],
-        "recursion_limit": 200
-    })
-
-# For backward compatibility
-swe_agent = create_swe_agent()
+    return workflow.compile()

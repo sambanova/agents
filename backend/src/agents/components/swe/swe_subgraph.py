@@ -128,28 +128,62 @@ def swe_state_input_mapper(input_text: str) -> Dict:
 Implementation Task:
 {task_content}
 
-**CRITICAL FIRST STEP**: Before analyzing or implementing anything, you MUST clone the repository into the Daytona sandbox:
+**CRITICAL DEVELOPMENT WORKFLOW**: Before making ANY changes, follow this exact sequence:
 
-1. Use `daytona_git_clone` with:
+1. **CLONE REPOSITORY**: Use `daytona_git_clone` with:
    - URL: {clone_url}
    - Path: {repository_name or 'repository'}
    - Branch: {branch}
 
-2. After cloning, use `daytona_get_repository_structure` to understand the codebase layout
+2. **CREATE FEATURE BRANCH**: After cloning, IMMEDIATELY create a feature branch:
+   - Use `daytona_execute_command` with: `cd {repository_name or 'repository'} && git checkout -b swe-agent-feature-$(date +%s)`
+   - NEVER work directly on main/master branch
 
-3. Then proceed with analysis and implementation using Daytona tools:
-   - `daytona_read_file` to examine code files
-   - `daytona_write_file` to make changes
-   - `daytona_execute_command` to test changes
+3. **ANALYZE CODEBASE**: Use `daytona_get_repository_structure` to understand the project layout
 
-All operations must be performed within the Daytona sandbox. Do not attempt to access local files.
+4. **CHECK EXISTING FILES**: Before creating files, check if they already exist using `daytona_read_file`
+   - If file EXISTS: Edit it using the existing content as base
+   - If file DOESN'T EXIST: Create it as new file
 
-If GitHub authentication is needed, the system will provide the appropriate credentials."""
+5. **IMPLEMENT CHANGES**: Use Daytona tools for all operations:
+   - `daytona_read_file` to examine existing code
+   - `daytona_write_file` to create/modify files  
+   - `daytona_execute_command` to run tests/builds
+
+6. **COMMIT CHANGES**: After implementation:
+   - `git add .`
+   - `git commit -m "descriptive commit message"`
+
+**IMPORTANT RULES**:
+- All operations MUST be performed within the Daytona sandbox
+- Do NOT attempt to access local files outside sandbox
+- Always work on a feature branch, never directly on main/master
+- Check if files exist before deciding to create vs edit them
+- Use descriptive commit messages explaining what was implemented
+
+If GitHub authentication is needed, the system will provide appropriate credentials."""
     else:
         prompt_content = f"""Implementation Task:
 {task_content}
 
-You are working in a secure Daytona sandbox environment. Use the provided Daytona tools for all file operations and code execution. If you need to work with an existing codebase, it should be cloned into the sandbox first using `daytona_git_clone`."""
+**DEVELOPMENT ENVIRONMENT**: You are working in a secure Daytona sandbox environment.
+
+**CRITICAL WORKFLOW**:
+1. If working with an existing codebase, clone it first using `daytona_git_clone`
+2. ALWAYS create a feature branch before making changes: `git checkout -b swe-agent-feature-$(date +%s)`
+3. Use ONLY Daytona tools for all file operations and code execution
+4. Check if files exist using `daytona_read_file` before deciding to create vs edit
+5. Commit your changes with descriptive messages when implementation is complete
+
+**AVAILABLE TOOLS**:
+- `daytona_git_clone` - Clone repositories into sandbox
+- `daytona_read_file` - Read existing files  
+- `daytona_write_file` - Create or modify files
+- `daytona_execute_command` - Run shell commands, tests, builds
+- `daytona_get_repository_structure` - Analyze codebase structure
+- `daytona_search_keyword_in_directory` - Search for code patterns
+
+All operations happen within the sandbox. No local file access outside the sandbox."""
     
     # Create state with repository information
     initial_state = {
