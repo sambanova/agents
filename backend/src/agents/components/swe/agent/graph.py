@@ -40,8 +40,23 @@ def create_swe_agent(daytona_manager=None, github_token=None):
     # Create developer node that works with AgentState directly
     async def developer_node(state, *, config: RunnableConfig = None):
         """Developer node that implements the plan using Daytona tools"""
+        import structlog
+        debug_logger = structlog.get_logger(__name__)
+        
+        # DEBUG: Log the input state
+        debug_logger.info("=== DEVELOPER NODE DEBUG START ===")
+        debug_logger.info("Input state keys:", keys=list(state.__dict__.keys()) if hasattr(state, '__dict__') else "Not a class instance")
+        
+        if hasattr(state, '__dict__'):
+            for key, value in state.__dict__.items():
+                if value is None:
+                    debug_logger.warning(f"Input state has None value for key: {key}")
+                else:
+                    debug_logger.info(f"Input state key '{key}' has value type: {type(value).__name__}")
+        
         if not state.implementation_plan:
-            return {
+            debug_logger.warning("No implementation plan available - returning error state")
+            return_state = {
                 "implementation_research_scratchpad": [AIMessage(content="No implementation plan available")],
                 "messages": [AIMessage(content="Error: No implementation plan to execute")],
                 "sender": "developer",
@@ -49,12 +64,24 @@ def create_swe_agent(daytona_manager=None, github_token=None):
                 "human_feedback": state.human_feedback,
                 "working_directory": state.working_directory
             }
+            
+            # DEBUG: Log what we're returning
+            for key, value in return_state.items():
+                if value is None:
+                    debug_logger.warning(f"Return state has None value for key: {key}")
+            debug_logger.info("=== DEVELOPER NODE DEBUG END (NO PLAN) ===")
+            
+            return return_state
         
         try:
             # Get the first task from the implementation plan
             if state.implementation_plan.tasks:
                 task = state.implementation_plan.tasks[0]
                 atomic_task = task.atomic_tasks[0] if task.atomic_tasks else None
+                
+                debug_logger.info("Processing task:", 
+                                file_path=task.file_path, 
+                                has_atomic_task=atomic_task is not None)
                 
                 if atomic_task and daytona_manager:
                     # Execute the task using proper Daytona Git operations
@@ -65,7 +92,9 @@ def create_swe_agent(daytona_manager=None, github_token=None):
                         state.working_directory or "."
                     )
                     
-                    return {
+                    debug_logger.info("Task implementation completed successfully")
+                    
+                    return_state = {
                         "implementation_research_scratchpad": [AIMessage(content=f"Implemented: {atomic_task.atomic_task}")],
                         "messages": [AIMessage(content=f"✅ Successfully implemented task: {atomic_task.atomic_task}\n\nFile updated: {task.file_path}")],
                         "sender": "developer",
@@ -74,8 +103,20 @@ def create_swe_agent(daytona_manager=None, github_token=None):
                         "working_directory": state.working_directory,
                         "implementation_plan": state.implementation_plan  # Keep the plan
                     }
+                    
+                    # DEBUG: Log what we're returning
+                    for key, value in return_state.items():
+                        if value is None:
+                            debug_logger.warning(f"Return state has None value for key: {key}")
+                        else:
+                            debug_logger.info(f"Return state key '{key}' has value type: {type(value).__name__}")
+                    debug_logger.info("=== DEVELOPER NODE DEBUG END (SUCCESS) ===")
+                    
+                    return return_state
             
-            return {
+            debug_logger.info("Implementation completed - no more tasks")
+            
+            return_state = {
                 "implementation_research_scratchpad": [AIMessage(content="Implementation completed")],
                 "messages": [AIMessage(content="✅ Implementation completed successfully")],
                 "sender": "developer",
@@ -84,6 +125,16 @@ def create_swe_agent(daytona_manager=None, github_token=None):
                 "working_directory": state.working_directory,
                 "implementation_plan": state.implementation_plan
             }
+            
+            # DEBUG: Log what we're returning
+            for key, value in return_state.items():
+                if value is None:
+                    debug_logger.warning(f"Return state has None value for key: {key}")
+                else:
+                    debug_logger.info(f"Return state key '{key}' has value type: {type(value).__name__}")
+            debug_logger.info("=== DEVELOPER NODE DEBUG END (COMPLETED) ===")
+            
+            return return_state
             
         except Exception as e:
             logger.error(f"Developer error: {e}")

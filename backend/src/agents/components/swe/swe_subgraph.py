@@ -211,6 +211,21 @@ def swe_state_output_mapper(result: Dict) -> AIMessage:
     Returns:
         AIMessage with implementation results
     """
+    import structlog
+    logger = structlog.get_logger(__name__)
+    
+    # DEBUG: Log the entire result to identify None values
+    logger.info("=== SWE STATE OUTPUT MAPPER DEBUG ===")
+    logger.info("Raw result keys:", keys=list(result.keys()) if result else "Result is None")
+    
+    # Log each key-value pair to identify None values
+    if result:
+        for key, value in result.items():
+            if value is None:
+                logger.warning(f"Found None value for key: {key}")
+            else:
+                logger.info(f"Key '{key}' has value type: {type(value).__name__}")
+    
     # Check if implementation was completed
     if result.get("plan_approved") and not result.get("implementation_plan"):
         # Implementation completed successfully
@@ -230,17 +245,29 @@ The SWE agent has successfully completed the requested implementation:
 
 The implementation is complete and ready for use!"""
         
+        # DEBUG: Log what we're about to return
+        additional_kwargs = {
+            "agent_type": "swe_completion",
+            "status": "completed",
+            "implementation_complete": True,
+        }
+        logger.info("Returning completion message with additional_kwargs:", additional_kwargs=additional_kwargs)
+        
         return AIMessage(
             content=content,
-            additional_kwargs={
-                "agent_type": "swe_completion",
-                "status": "completed",
-                "implementation_complete": True,
-            },
+            additional_kwargs=additional_kwargs,
         )
     
     # Handle planning phase
     implementation_plan = result.get("implementation_plan")
+    
+    # DEBUG: Log implementation plan details
+    if implementation_plan is None:
+        logger.warning("Implementation plan is None")
+    else:
+        logger.info("Implementation plan exists:", plan_type=type(implementation_plan).__name__)
+        if hasattr(implementation_plan, 'tasks'):
+            logger.info("Implementation plan has tasks:", num_tasks=len(implementation_plan.tasks))
     
     if implementation_plan:
         # Extract information from the implementation plan
@@ -271,12 +298,35 @@ The SWE agent has analyzed your requirements and created a detailed implementati
 
 The SWE agent has analyzed your requirements and conducted research on the implementation approach. Ready to proceed with implementation planning."""
     
+    # Prepare additional_kwargs with safe serialization
+    additional_kwargs = {
+        "agent_type": "swe_planning",
+    }
+    
+    # Only add implementation_plan if it exists and can be serialized
+    if implementation_plan:
+        try:
+            if hasattr(implementation_plan, 'model_dump'):
+                plan_data = implementation_plan.model_dump()
+                # Check for None values in the plan data
+                for key, value in plan_data.items():
+                    if value is None:
+                        logger.warning(f"Found None value in implementation_plan.{key}")
+                additional_kwargs["implementation_plan"] = plan_data
+            else:
+                # Fallback for non-Pydantic objects
+                additional_kwargs["implementation_plan"] = implementation_plan
+        except Exception as e:
+            logger.error("Error serializing implementation_plan:", error=str(e))
+            # Don't include implementation_plan if it can't be serialized
+    
+    # DEBUG: Log what we're about to return
+    logger.info("Returning planning message with additional_kwargs:", additional_kwargs=additional_kwargs)
+    logger.info("=== END SWE STATE OUTPUT MAPPER DEBUG ===")
+    
     return AIMessage(
         content=content,
-        additional_kwargs={
-            "agent_type": "swe_planning",
-            "implementation_plan": implementation_plan.model_dump() if hasattr(implementation_plan, 'model_dump') else implementation_plan,
-        },
+        additional_kwargs=additional_kwargs,
     )
 
 

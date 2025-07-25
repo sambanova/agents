@@ -289,18 +289,44 @@ async def creating_diffs_for_task(state: SoftwareDeveloperState, daytona_manager
             await daytona_manager.write_file(file_path, modified_content)
             logger.info(f"Successfully updated existing file: {file_path}")
 
-        return {
+        # DEBUG: Log what we're about to return
+        return_dict = {
             "current_branch": branch_name,
             "atomic_implementation_research": []  # Clear research after implementation
         }
+        
+        import structlog
+        debug_logger = structlog.get_logger(__name__)
+        debug_logger.info("=== CREATING_DIFFS_FOR_TASK DEBUG ===")
+        for key, value in return_dict.items():
+            if value is None:
+                debug_logger.warning(f"creating_diffs_for_task returning None value for key: {key}")
+            else:
+                debug_logger.info(f"creating_diffs_for_task returning key '{key}' with type: {type(value).__name__}")
+        debug_logger.info("=== END CREATING_DIFFS_FOR_TASK DEBUG ===")
+        
+        return return_dict
             
     except Exception as e:
         logger.error(f"Error in creating_diffs_for_task: {e}")
-        return {
+        
+        error_return = {
             "atomic_implementation_research": [
                 AIMessage(content=f"Error implementing task: {str(e)}")
             ]
         }
+        
+        import structlog
+        debug_logger = structlog.get_logger(__name__)
+        debug_logger.info("=== CREATING_DIFFS_FOR_TASK ERROR DEBUG ===")
+        for key, value in error_return.items():
+            if value is None:
+                debug_logger.warning(f"creating_diffs_for_task error returning None value for key: {key}")
+            else:
+                debug_logger.info(f"creating_diffs_for_task error returning key '{key}' with type: {type(value).__name__}")
+        debug_logger.info("=== END CREATING_DIFFS_FOR_TASK ERROR DEBUG ===")
+        
+        return error_return
 
 
 async def _apply_diffs_to_content(diffs_tasks: str, original_content: str, daytona_manager, file_path: str) -> str:
