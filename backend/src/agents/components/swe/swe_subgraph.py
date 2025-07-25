@@ -251,6 +251,29 @@ def swe_state_output_mapper(result: Dict) -> AIMessage:
                 logger.info("=== END SWE STATE OUTPUT MAPPER DEBUG ===")
                 return enhanced_message
     
+    # Handle new completion node states
+    if sender in ["completion_complete", "completion_error"]:
+        logger.info(f"Processing completion node - sender: {sender}")
+        if result.get("messages") and len(result["messages"]) > 0:
+            last_message = result["messages"][-1]
+            if hasattr(last_message, 'model_copy'):
+                enhanced_message = last_message.model_copy(
+                    update={
+                        "additional_kwargs": {
+                            **(last_message.additional_kwargs or {}),
+                            "agent_type": "swe_final_completion",
+                            "status": "completed" if sender == "completion_complete" else "error",
+                            "workflow_complete": True,
+                            "final_step": True,
+                            "pr_created": bool(result.get("pr_info") and not result.get("pr_info", {}).get("error")),
+                            "branch_info": result.get("branch_info", {}),
+                        }
+                    }
+                )
+                logger.info("Returning enhanced completion node message")
+                logger.info("=== END SWE STATE OUTPUT MAPPER DEBUG ===")
+                return enhanced_message
+    
     # Handle architect review requesting changes - BACK TO DEVELOPER
     if sender == "architect_review_changes":
         logger.info("Processing architect review - changes needed")
