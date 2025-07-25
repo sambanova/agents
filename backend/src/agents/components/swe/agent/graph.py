@@ -3,7 +3,7 @@ from agents.components.swe.agent.common.entities import ImplementationPlan
 from agents.components.swe.agent.developer.graph import create_swe_developer
 from agents.components.swe.human_choice import swe_human_choice_node, swe_human_choice_router
 from agents.utils.llms import get_sambanova_llm
-from agents.components.compound.util import extract_api_key
+from agents.components.compound.util import extract_api_key, extract_github_token
 from agents.utils.message_interceptor import MessageInterceptor
 from pydantic import BaseModel, Field
 from langchain_core.messages import AnyMessage, AIMessage, HumanMessage
@@ -855,11 +855,16 @@ Your response must start with either "APPROVED" or "CHANGES_NEEDED" followed by 
             logger.warning(f"Unexpected sender in architect_review_router: '{sender}' - defaulting to completion")
             return "completion"
 
-    async def completion_node(state: AgentState) -> dict:
+    async def completion_node(state: AgentState, *, config: RunnableConfig = None) -> dict:
         """Final completion node that handles PR creation and workflow summary."""
         logger.info("=== COMPLETION NODE START ===")
         
         working_directory = getattr(state, 'working_directory', './sales-crew')
+        
+        # Extract GitHub token from config (similar to how sambanova API key is handled)
+        config_github_token = extract_github_token(config)
+        active_github_token = config_github_token or github_token
+        logger.info(f"GitHub token availability: config={bool(config_github_token)}, fallback={bool(github_token)}, active={bool(active_github_token)}")
         
         try:
             # Get current branch name and commit info
@@ -888,30 +893,79 @@ Your response must start with either "APPROVED" or "CHANGES_NEEDED" followed by 
                     
                     logger.info(f"Branch info: {branch_info}")
                     
-                    # Push the branch to remote using Daytona native git operations
-                    logger.info(f"Pushing branch {current_branch} to remote using Daytona git...")
-                    sandbox = await daytona_manager._get_sandbox()
-                    if sandbox:
+                    # Push branch to remote with authentication
+                    logger.info(f"Pushing branch {current_branch} to remote...")
+                    push_success = False
+                    push_result = ""
+                    
+                    #test wit valid token 
+                    active_github_token = "ghp_1234567890"
+
+                    if active_github_token:
                         try:
-                            # Use Daytona's native git push instead of shell command
-                            push_result = await sandbox.git.push(working_directory)
-                            logger.info(f"Branch pushed successfully using Daytona git: {push_result}")
-                            push_success = True
-                        except Exception as push_error:
-                            logger.warning(f"Daytona git push failed: {push_error}")
-                            # Fallback to shell command if native git fails
+                            # Use authenticated push with GitHub PAT token
+                            logger.info("Attempting authenticated push with GitHub PAT...")
+                            
+                            # Configure git credentials and push
+                            remote_result = await daytona_manager.execute(f"cd {working_directory} && git remote get-url origin")
+                            remote_url = remote_result.strip()
+                            logger.info(f"Remote URL: {remote_url}")
+                            
+                            # Parse repository information
+                            import re
+                            github_pattern = r'github\.com[:/]([^/]+)/([^/\s]+?)(?:\.git)?$'
+                            match = re.search(github_pattern, remote_url)
+                            
+                            if match:
+                                owner, repo = match.groups()
+                                
+                                # Create authenticated remote URL with PAT token
+                                auth_url = f"https://{active_github_token}@github.com/{owner}/{repo}.git"
+                                
+                                # Temporarily update remote for authenticated push
+                                await daytona_manager.execute(f"cd {working_directory} && git remote set-url origin {auth_url}")
+                                
+                                try:
+                                    # Push with authentication
+                                    push_result = await daytona_manager.execute(f"cd {working_directory} && git push -u origin {current_branch}")
+                                    push_success = True
+                                    logger.info(f"Successfully pushed branch {current_branch} with PAT authentication")
+                                finally:
+                                    # Always reset remote URL for security
+                                    try:
+                                        await daytona_manager.execute(f"cd {working_directory} && git remote set-url origin {remote_url}")
+                                    except Exception as reset_error:
+                                        logger.warning(f"Failed to reset remote URL: {reset_error}")
+                                
+                            else:
+                                logger.warning(f"Could not parse GitHub repository from remote URL: {remote_url}")
+                                push_result = f"Could not parse repository from remote: {remote_url}"
+                                
+                        except Exception as auth_error:
+                            logger.warning(f"Authenticated git push failed: {auth_error}")
+                            push_result = f"Authenticated push failed: {auth_error}"
+                            
+                            # Fallback to unauthenticated push (for public repos)
                             try:
-                                push_result = await daytona_manager.execute(f"cd {working_directory} && git push -u origin {current_branch}")
-                                logger.info(f"Fallback shell push completed: {push_result}")
+                                logger.info("Falling back to unauthenticated push...")
+                                fallback_result = await daytona_manager.execute(f"cd {working_directory} && git push -u origin {current_branch}")
                                 push_success = True
-                            except Exception as shell_error:
-                                logger.error(f"Both git push methods failed: {shell_error}")
-                                push_success = False
-                                push_result = f"Push failed: {shell_error}"
+                                push_result = f"Fallback unauthenticated push succeeded: {fallback_result}"
+                                logger.info("Fallback unauthenticated push succeeded (public repository)")
+                            except Exception as fallback_error:
+                                logger.error(f"All git push methods failed: {fallback_error}")
+                                push_result = f"All push methods failed. Auth error: {auth_error}, Fallback error: {fallback_error}"
                     else:
-                        logger.error("No sandbox available for git push")
-                        push_success = False
-                        push_result = "No sandbox available"
+                        logger.warning("No GitHub token available - attempting unauthenticated push")
+                        try:
+                            # Try unauthenticated push (will work for public repos)
+                            push_result = await daytona_manager.execute(f"cd {working_directory} && git push -u origin {current_branch}")
+                            push_success = True
+                            logger.info("Unauthenticated push succeeded (public repository)")
+                        except Exception as unauth_error:
+                            logger.error(f"Unauthenticated push failed: {unauth_error}")
+                            push_success = False
+                            push_result = f"Push failed - no authentication: {unauth_error}"
                     
                     # Create GitHub PR using GitHub CLI
                     logger.info("Creating GitHub pull request...")
@@ -952,7 +1006,7 @@ This PR has been automatically generated and reviewed by our SWE agent architect
                     pr_url = ""
                     pr_result = ""
                     
-                    if github_token:
+                    if active_github_token:
                         try:
                             from agents.components.swe.agent.tools.github_tools import GitHubManager
                             
@@ -971,7 +1025,7 @@ This PR has been automatically generated and reviewed by our SWE agent architect
                                     owner, repo = match.groups()
                                     repo_full_name = f"{owner}/{repo}"
                                     
-                                    github_manager = GitHubManager(github_token)
+                                    github_manager = GitHubManager(active_github_token)
                                     
                                     pr_data = {
                                         "title": pr_title,

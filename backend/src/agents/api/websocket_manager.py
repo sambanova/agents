@@ -228,6 +228,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                     fireworks_key=os.getenv("FIREWORKS_KEY", ""),
                     serper_key=os.getenv("SERPER_KEY", ""),
                     exa_key=os.getenv("EXA_KEY", ""),
+                    github_token=redis_api_keys.github_token,  # Always include GitHub token for SWE Agent
                 )
 
             # Start background task for Redis messages if not restored
@@ -681,6 +682,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                 "thread_id": thread_id,
                 "user_id": user_id,
                 "api_key": api_keys.sambanova_key,
+                "github_token": api_keys.github_token,
                 "message_id": message_id,
             },
             "metadata": {

@@ -269,6 +269,67 @@ Modified Files:"""
             return error_msg
 
     @tool
+    async def daytona_git_push_with_auth(
+        path: Annotated[str, "Path to the repository in the sandbox"],
+        branch: Annotated[str, "Branch name to push"],
+        github_token: Annotated[str, "GitHub Personal Access Token for authentication"]
+    ) -> str:
+        """
+        Push commits to remote repository with GitHub PAT authentication.
+        This method configures git credentials temporarily to enable authenticated push operations.
+        """
+        try:
+            if not github_token:
+                return "Error: GitHub token is required for authenticated push"
+            
+            # Get the remote URL to determine repository info
+            remote_result = await manager.execute(f"cd {path} && git remote get-url origin")
+            remote_url = remote_result.strip()
+            logger.info(f"Remote URL: {remote_url}")
+            
+            # Parse repository information
+            import re
+            github_pattern = r'github\.com[:/]([^/]+)/([^/\s]+?)(?:\.git)?$'
+            match = re.search(github_pattern, remote_url)
+            
+            if not match:
+                return f"Error: Could not parse GitHub repository from remote URL: {remote_url}"
+            
+            owner, repo = match.groups()
+            
+            # Configure git credentials using credential store
+            logger.info("Setting up git credential helper...")
+            await manager.execute(f"cd {path} && git config credential.helper store")
+            
+            # Create authenticated remote URL with PAT token
+            auth_url = f"https://{github_token}@github.com/{owner}/{repo}.git"
+            
+            # Update the remote to use authenticated URL
+            await manager.execute(f"cd {path} && git remote set-url origin {auth_url}")
+            
+            try:
+                # Push using the authenticated remote
+                push_result = await manager.execute(f"cd {path} && git push -u origin {branch}")
+                
+                # Reset remote URL to original (without embedded token) for security
+                await manager.execute(f"cd {path} && git remote set-url origin {remote_url}")
+                
+                return f"Successfully pushed branch {branch} to remote repository"
+                
+            except Exception as push_error:
+                # Ensure we reset the remote URL even if push fails
+                try:
+                    await manager.execute(f"cd {path} && git remote set-url origin {remote_url}")
+                except:
+                    pass  # Don't fail on cleanup
+                raise push_error
+                
+        except Exception as e:
+            error_msg = f"Failed to push branch {branch} in {path}: {str(e)}"
+            logger.error(error_msg)
+            return error_msg
+
+    @tool
     async def daytona_list_files(
         directory: Annotated[str, "Directory to list files from"] = "."
     ) -> str:
@@ -593,6 +654,7 @@ Modified Files:"""
         daytona_git_commit,
         daytona_git_push,
         daytona_git_pull,
+        daytona_git_push_with_auth,
         daytona_list_files,
         daytona_read_file,
         daytona_write_file,
@@ -615,6 +677,7 @@ SWE_DAYTONA_TOOL_NAMES = [
     "daytona_git_commit",
     "daytona_git_push",
     "daytona_git_pull",
+    "daytona_git_push_with_auth",
     "daytona_list_files",
     "daytona_read_file",
     "daytona_write_file",
