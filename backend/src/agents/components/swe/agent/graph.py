@@ -40,7 +40,7 @@ def create_swe_agent(daytona_manager=None, github_token=None):
 
     # Create developer node that works with AgentState directly
     async def developer_node(state, *, config: RunnableConfig = None):
-        """Developer node that implements the plan using Daytona tools"""
+        """Developer node that implements ALL tasks in the plan using Daytona tools"""
         import structlog
         debug_logger = structlog.get_logger(__name__)
         
@@ -55,122 +55,124 @@ def create_swe_agent(daytona_manager=None, github_token=None):
                 else:
                     debug_logger.info(f"Input state key '{key}' has value type: {type(value).__name__}")
         
-        if not state.implementation_plan:
-            debug_logger.warning("No implementation plan available - returning error state")
-            return_state = {
-                "implementation_research_scratchpad": [AIMessage(content="No implementation plan available")],
-                "messages": [AIMessage(content="Error: No implementation plan to execute")],
-                "sender": "developer",
-                "plan_approved": state.plan_approved,  # Preserve existing values
-                "human_feedback": state.human_feedback,
-                "working_directory": state.working_directory
-            }
-            
-            # DEBUG: Log what we're returning
-            for key, value in return_state.items():
-                if value is None:
-                    debug_logger.warning(f"Return state has None value for key: {key}")
-            debug_logger.info("=== DEVELOPER NODE DEBUG END (NO PLAN) ===")
-            
-            return return_state
-        
         try:
-            # Get the first task from the implementation plan
-            if state.implementation_plan.tasks:
-                task = state.implementation_plan.tasks[0]
-                atomic_task = task.atomic_tasks[0] if task.atomic_tasks else None
-                
-                debug_logger.info("Processing task:", 
-                                file_path=task.file_path, 
-                                has_atomic_task=atomic_task is not None)
-                
-                if atomic_task and daytona_manager:
-                    # Execute the task using proper Daytona Git operations
-                    result = await creating_diffs_for_task_simple(
-                        task.file_path, 
-                        atomic_task.atomic_task,
-                        daytona_manager,
-                        state.working_directory or "."
-                    )
-                    
-                    debug_logger.info("Task implementation completed successfully")
-                    
-                    # Create detailed success message with file and commit information
-                    success_content = f"""✅ **Successfully Implemented: {atomic_task.atomic_task}**
+            # Process ALL tasks in the implementation plan, not just the first one
+            if not state.implementation_plan or not state.implementation_plan.tasks:
+                debug_logger.info("No implementation plan or tasks to process")
+                completion_content = """🎉 **Implementation Completed**
 
-**📄 File Updated:** `{task.file_path}`
-
-**🔧 Changes Made:**
-- {atomic_task.atomic_task}
-- Changes committed to feature branch
-
-**📁 Repository:** {state.working_directory or "."}
-
-**✅ Status:** Implementation completed successfully
+**📋 Status:** No tasks to implement
+**✅ Result:** Ready for use
 
 ---
-*Ready for next task or testing*"""
+*All implementation tasks completed successfully*"""
+                
+                return_state = {
+                    "implementation_research_scratchpad": [AIMessage(content="No tasks to implement")],
+                    "messages": [AIMessage(
+                        content=completion_content,
+                        additional_kwargs={
+                            "agent_type": "swe_completion",
+                            "status": "completed",
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )],
+                    "sender": "developer",
+                    "plan_approved": state.plan_approved,
+                    "human_feedback": state.human_feedback,
+                    "working_directory": state.working_directory,
+                    "implementation_plan": state.implementation_plan
+                }
+                
+                for key, value in return_state.items():
+                    if value is None:
+                        debug_logger.warning(f"Return state has None value for key: {key}")
+                    else:
+                        debug_logger.info(f"Return state key '{key}' has value type: {type(value).__name__}")
+                debug_logger.info("=== DEVELOPER NODE DEBUG END (NO TASKS) ===")
+                
+                return return_state
+            
+            # Process ALL tasks in sequence
+            all_completed_tasks = []
+            implementation_messages = []
+            
+            for task_index, task in enumerate(state.implementation_plan.tasks):
+                if not task.atomic_tasks:
+                    continue
+                
+                for atomic_index, atomic_task in enumerate(task.atomic_tasks):
+                    debug_logger.info("Processing task:", 
+                                    task_number=f"{task_index + 1}.{atomic_index + 1}",
+                                    file_path=task.file_path, 
+                                    atomic_task=atomic_task.atomic_task)
                     
-                    return_state = {
-                        "implementation_research_scratchpad": [AIMessage(content=f"Implemented: {atomic_task.atomic_task}")],
-                        "messages": [AIMessage(
-                            content=success_content,
+                    if atomic_task and daytona_manager:
+                        # Execute the task using proper Daytona Git operations
+                        result = await creating_diffs_for_task_simple(
+                            task.file_path, 
+                            atomic_task.atomic_task,
+                            daytona_manager,
+                            state.working_directory or "."
+                        )
+                        
+                        debug_logger.info(f"Task {task_index + 1}.{atomic_index + 1} implementation completed successfully")
+                        
+                        # Track completed task
+                        all_completed_tasks.append(f"✅ {atomic_task.atomic_task} ({task.file_path})")
+                        
+                        # Create detailed success message for this task
+                        task_content = f"""**Task {task_index + 1}.{atomic_index + 1} Completed:** {atomic_task.atomic_task}
+
+**📄 File:** `{task.file_path}`
+**🔧 Changes:** {atomic_task.atomic_task}
+**📁 Repository:** {state.working_directory or "."}
+
+---"""
+                        
+                        implementation_messages.append(AIMessage(
+                            content=task_content,
                             additional_kwargs={
-                                "agent_type": "swe_implementation",
+                                "agent_type": "swe_task_completion",
                                 "status": "completed",
                                 "file_path": task.file_path,
                                 "task_completed": atomic_task.atomic_task,
+                                "task_number": f"{task_index + 1}.{atomic_index + 1}",
                                 "repository": state.working_directory or ".",
                                 "timestamp": datetime.now().isoformat(),
                             }
-                        )],
-                        "sender": "developer",
-                        "plan_approved": state.plan_approved,  # Preserve existing values
-                        "human_feedback": state.human_feedback,
-                        "working_directory": state.working_directory,
-                        "implementation_plan": state.implementation_plan  # Keep the plan
-                    }
-                    
-                    # DEBUG: Log what we're returning
-                    for key, value in return_state.items():
-                        if value is None:
-                            debug_logger.warning(f"Return state has None value for key: {key}")
-                        else:
-                            debug_logger.info(f"Return state key '{key}' has value type: {type(value).__name__}")
-                    debug_logger.info("=== DEVELOPER NODE DEBUG END (SUCCESS) ===")
-                    
-                    return return_state
+                        ))
             
-            debug_logger.info("Implementation completed - no more tasks")
-            
-            # Create detailed completion message
+            # Create comprehensive completion summary
             completion_content = f"""🎉 **All Implementation Tasks Completed Successfully**
 
-**📋 Implementation Plan:** Fully executed
-**📁 Repository:** {state.working_directory or "."}
-**✅ Status:** All tasks completed
+**📋 Completed Tasks ({len(all_completed_tasks)}):**
+{chr(10).join(all_completed_tasks)}
 
-**🚀 Next Steps:**
-- All changes have been committed to feature branch
-- Ready for testing and integration
-- Consider creating a pull request for code review
+**📁 Repository:** {state.working_directory or "."}
+**✅ Status:** All tasks completed and committed
+**🚀 Ready for:** Testing, integration, and deployment
 
 ---
-*Implementation workflow completed successfully*"""
+*Complete implementation workflow finished successfully*"""
+            
+            # Add final completion message
+            implementation_messages.append(AIMessage(
+                content=completion_content,
+                additional_kwargs={
+                    "agent_type": "swe_implementation_complete",
+                    "status": "all_completed",
+                    "total_tasks": len(all_completed_tasks),
+                    "repository": state.working_directory or ".",
+                    "timestamp": datetime.now().isoformat(),
+                }
+            ))
             
             return_state = {
-                "implementation_research_scratchpad": [AIMessage(content="Implementation completed")],
-                "messages": [AIMessage(
-                    content=completion_content,
-                    additional_kwargs={
-                        "agent_type": "swe_completion",
-                        "status": "all_completed",
-                        "repository": state.working_directory or ".",
-                        "timestamp": datetime.now().isoformat(),
-                    }
-                )],
+                "implementation_research_scratchpad": [AIMessage(content=f"Completed {len(all_completed_tasks)} implementation tasks")],
+                "messages": implementation_messages,  # All detailed task messages + summary
                 "sender": "developer",
-                "plan_approved": state.plan_approved,  # Preserve existing values
+                "plan_approved": state.plan_approved,
                 "human_feedback": state.human_feedback,
                 "working_directory": state.working_directory,
                 "implementation_plan": state.implementation_plan
@@ -182,7 +184,7 @@ def create_swe_agent(daytona_manager=None, github_token=None):
                     debug_logger.warning(f"Return state has None value for key: {key}")
                 else:
                     debug_logger.info(f"Return state key '{key}' has value type: {type(value).__name__}")
-            debug_logger.info("=== DEVELOPER NODE DEBUG END (COMPLETED) ===")
+            debug_logger.info("=== DEVELOPER NODE DEBUG END (SUCCESS) ===")
             
             return return_state
             
@@ -192,7 +194,7 @@ def create_swe_agent(daytona_manager=None, github_token=None):
                 "implementation_research_scratchpad": [AIMessage(content=f"Error: {str(e)}")],
                 "messages": [AIMessage(content=f"❌ Implementation failed: {str(e)}")],
                 "sender": "developer",
-                "plan_approved": state.plan_approved,  # Preserve existing values
+                "plan_approved": state.plan_approved,
                 "human_feedback": state.human_feedback,
                 "working_directory": state.working_directory,
                 "implementation_plan": state.implementation_plan

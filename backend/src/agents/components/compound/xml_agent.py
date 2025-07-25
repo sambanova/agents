@@ -936,12 +936,32 @@ def _collapse_messages(messages):
     else:
         scratchpad = messages
         final = None
+    
+    # Handle unpaired action/observation sequences safely
     if len(scratchpad) % 2 != 0:
-        raise ValueError("Unexpected")
-    for i in range(0, len(scratchpad), 2):
-        action = messages[i]
-        observation = messages[i + 1]
-        log += f"{action.content}<observation>{observation.content}</observation>"
+        import structlog
+        logger = structlog.get_logger(__name__)
+        logger.warning(f"Unpaired action/observation sequence detected. Scratchpad length: {len(scratchpad)}")
+        
+        # Handle the unpaired case by processing pairs and handling the last message separately
+        paired_count = (len(scratchpad) // 2) * 2
+        for i in range(0, paired_count, 2):
+            action = messages[i]
+            observation = messages[i + 1]
+            log += f"{action.content}<observation>{observation.content}</observation>"
+        
+        # Handle the unpaired message at the end
+        if paired_count < len(scratchpad):
+            unpaired_message = scratchpad[paired_count]
+            logger.info(f"Processing unpaired message: {type(unpaired_message).__name__}")
+            log += f"{unpaired_message.content}"
+    else:
+        # Normal paired processing
+        for i in range(0, len(scratchpad), 2):
+            action = messages[i]
+            observation = messages[i + 1]
+            log += f"{action.content}<observation>{observation.content}</observation>"
+    
     if final is not None:
         log += final.content
     return AIMessage(content=log)
