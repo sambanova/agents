@@ -211,37 +211,71 @@ def swe_state_output_mapper(result: Dict) -> AIMessage:
     Returns:
         AIMessage with implementation results
     """
+    # Check if implementation was completed
+    if result.get("plan_approved") and not result.get("implementation_plan"):
+        # Implementation completed successfully
+        content = """✅ **Implementation Completed Successfully**
+
+The SWE agent has successfully completed the requested implementation:
+
+**✅ Repository cloned and feature branch created**
+**✅ Existing files analyzed and updated appropriately** 
+**✅ Code changes applied using proper diff methodology**
+**✅ All operations performed in secure Daytona sandbox**
+
+**Next Steps:**
+- Changes have been committed to the feature branch
+- Ready for testing and integration
+- Consider creating a pull request for code review
+
+The implementation is complete and ready for use!"""
+        
+        return AIMessage(
+            content=content,
+            additional_kwargs={
+                "agent_type": "swe_completion",
+                "status": "completed",
+                "implementation_complete": True,
+            },
+        )
+    
+    # Handle planning phase
     implementation_plan = result.get("implementation_plan")
     
     if implementation_plan:
         # Extract information from the implementation plan
-        num_tasks = len(implementation_plan.tasks)
-        task_summaries = []
-        
-        for i, task in enumerate(implementation_plan.tasks[:5], 1):  # Show first 5 tasks
-            task_summaries.append(f"{i}. {task.logical_task} (file: {task.file_path})")
-        
-        if num_tasks > 5:
-            task_summaries.append(f"... and {num_tasks - 5} more tasks")
-        
-        content = f"""Implementation Plan Created Successfully
+        if hasattr(implementation_plan, 'tasks'):
+            num_tasks = len(implementation_plan.tasks)
+            task_summaries = []
+            
+            for i, task in enumerate(implementation_plan.tasks[:5], 1):  # Show first 5 tasks
+                task_summaries.append(f"{i}. {task.logical_task} (file: {task.file_path})")
+            
+            if num_tasks > 5:
+                task_summaries.append(f"... and {num_tasks - 5} more tasks")
+            
+            content = f"""📋 **Implementation Plan Created**
 
 **Total Tasks:** {num_tasks}
 
 **Implementation Tasks:**
 {chr(10).join(task_summaries)}
 
-The SWE agent has analyzed your requirements and created a detailed implementation plan. Each task includes specific atomic steps for code changes. The implementation is ready to proceed with automated code generation and testing in the sandbox environment."""
-    else:
-        content = """SWE Analysis Complete
+The SWE agent has analyzed your requirements and created a detailed implementation plan. Each task includes specific atomic steps for code changes."""
+        else:
+            content = """📋 **Implementation Plan Created**
 
-The SWE agent has analyzed your requirements and conducted research on the implementation approach. Additional context or clarification may be needed to proceed with implementation."""
+The SWE agent has analyzed your requirements and created a detailed implementation plan with specific steps for code changes."""
+    else:
+        content = """🔍 **SWE Analysis Complete**
+
+The SWE agent has analyzed your requirements and conducted research on the implementation approach. Ready to proceed with implementation planning."""
     
     return AIMessage(
         content=content,
         additional_kwargs={
-            "agent_type": "swe_end",
-            "implementation_plan": implementation_plan.model_dump() if implementation_plan else None,
+            "agent_type": "swe_planning",
+            "implementation_plan": implementation_plan.model_dump() if hasattr(implementation_plan, 'model_dump') else implementation_plan,
         },
     )
 

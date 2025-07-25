@@ -36,7 +36,7 @@ dependencies = [
   "tavily-python==0.5.1",
   "python-jose[cryptography]==3.5.0",
   "requests-cache==1.2.1",
-  "daytona_sdk==0.21.0",
+  "daytona-sdk==0.23.0",
   "arxiv==2.2.0",
   "wikipedia==1.4.0",
   "langgraph-checkpoint-redis==0.0.6",

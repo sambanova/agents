@@ -126,7 +126,14 @@ async def prepare_for_implementation(state: SoftwareDeveloperState, daytona_mana
             # Try to read the file from Daytona sandbox
             success, content = await daytona_manager.read_file(file_path)
             if success:
-                file_content = content
+                # Ensure content is a string, not bytes
+                if isinstance(content, bytes):
+                    try:
+                        file_content = content.decode('utf-8')
+                    except UnicodeDecodeError:
+                        file_content = content.decode('utf-8', errors='ignore')
+                else:
+                    file_content = str(content)
             else:
                 # File doesn't exist - that's okay, we'll create it
                 file_content = "This is a new file"
@@ -230,6 +237,15 @@ async def creating_diffs_for_task(state: SoftwareDeveloperState, daytona_manager
 
         # STEP 2: Check if file exists in sandbox
         success, existing_content = await daytona_manager.read_file(file_path)
+        
+        # Ensure content is a string, not bytes
+        if success and existing_content:
+            if isinstance(existing_content, bytes):
+                try:
+                    existing_content = existing_content.decode('utf-8')
+                except UnicodeDecodeError:
+                    existing_content = existing_content.decode('utf-8', errors='ignore')
+        
         file_exists = success and existing_content and existing_content != "This is a new file"
         
         if not file_exists:
@@ -290,6 +306,13 @@ async def creating_diffs_for_task(state: SoftwareDeveloperState, daytona_manager
 async def _apply_diffs_to_content(diffs_tasks: str, original_content: str, daytona_manager, file_path: str) -> str:
     """Apply diffs to content and return modified content"""
     try:
+        # Ensure original_content is a string
+        if isinstance(original_content, bytes):
+            try:
+                original_content = original_content.decode('utf-8')
+            except UnicodeDecodeError:
+                original_content = original_content.decode('utf-8', errors='ignore')
+        
         # Find all content between <code_change_request> and </code_change_request>
         blocks = re.findall(
             r"<code_change_request>(.*?)</code_change_request>", diffs_tasks, re.DOTALL
@@ -315,7 +338,7 @@ async def _apply_diffs_to_content(diffs_tasks: str, original_content: str, dayto
                         first_line = int(orig_lines[0].split("|")[0].strip())
                         last_line = int(orig_lines[-1].split("|")[0].strip())
                         
-                        # Apply the change
+                        # Apply the change - ensure all operations work with strings
                         content_lines = current_content.splitlines()
                         new_content_lines = (
                             content_lines[: first_line - 1]
@@ -328,11 +351,18 @@ async def _apply_diffs_to_content(diffs_tasks: str, original_content: str, dayto
                         logger.warning(f"Could not parse line numbers from diff: {e}")
                         continue
                         
-        return current_content
+        # Ensure we return a string
+        return str(current_content)
         
     except Exception as e:
         logger.error(f"Error applying diffs: {e}")
-        return original_content
+        # Ensure we return the original content as a string
+        if isinstance(original_content, bytes):
+            try:
+                return original_content.decode('utf-8')
+            except UnicodeDecodeError:
+                return original_content.decode('utf-8', errors='ignore')
+        return str(original_content)
 
 
 async def _creating_diffs_for_task_local(state: SoftwareDeveloperState, config: RunnableConfig = None):
