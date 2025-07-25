@@ -891,10 +891,30 @@ Your response must start with either "APPROVED" or "CHANGES_NEEDED" followed by 
                     
                     logger.info(f"Branch info: {branch_info}")
                     
-                    # Push the branch to remote
-                    logger.info(f"Pushing branch {current_branch} to remote...")
-                    push_result = await daytona_manager.execute(f"cd {working_directory} && git push -u origin {current_branch}")
-                    logger.info(f"Branch pushed successfully: {push_result}")
+                    # Push the branch to remote using Daytona native git operations
+                    logger.info(f"Pushing branch {current_branch} to remote using Daytona git...")
+                    sandbox = await daytona_manager._get_sandbox()
+                    if sandbox:
+                        try:
+                            # Use Daytona's native git push instead of shell command
+                            push_result = sandbox.git.push(working_directory)
+                            logger.info(f"Branch pushed successfully using Daytona git: {push_result}")
+                            push_success = True
+                        except Exception as push_error:
+                            logger.warning(f"Daytona git push failed: {push_error}")
+                            # Fallback to shell command if native git fails
+                            try:
+                                push_result = await daytona_manager.execute(f"cd {working_directory} && git push -u origin {current_branch}")
+                                logger.info(f"Fallback shell push completed: {push_result}")
+                                push_success = True
+                            except Exception as shell_error:
+                                logger.error(f"Both git push methods failed: {shell_error}")
+                                push_success = False
+                                push_result = f"Push failed: {shell_error}"
+                    else:
+                        logger.error("No sandbox available for git push")
+                        push_success = False
+                        push_result = "No sandbox available"
                     
                     # Create GitHub PR using GitHub CLI
                     logger.info("Creating GitHub pull request...")
