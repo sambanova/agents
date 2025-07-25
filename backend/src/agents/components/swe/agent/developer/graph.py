@@ -569,3 +569,6 @@ def create_swe_developer(daytona_manager=None, github_token=None):
 
 # Default developer without Daytona tools for backward compatibility
 swe_developer = workflow.compile().with_config({"tags": ["developer-agent-v3"]})
+
+
+

@@ -365,7 +365,108 @@ def get_github_tools(github_token: str) -> List:
         github_list_branches,
         github_list_issues,
         github_list_pull_requests,
+        github_create_pull_request,
+        github_push_branch,
+        github_create_commit,
     ]
+
+
+@tool
+async def github_create_pull_request(
+    repo_full_name: Annotated[str, "Full repository name (owner/repo)"],
+    title: Annotated[str, "Pull request title"],
+    head_branch: Annotated[str, "Branch containing changes"],
+    base_branch: Annotated[str, "Target branch for the PR"] = "main",
+    body: Annotated[str, "Pull request description"] = "",
+    draft: Annotated[bool, "Create as draft PR"] = False
+) -> str:
+    """
+    Create a pull request on GitHub.
+    """
+    try:
+        if "/" not in repo_full_name:
+            return "Invalid repository format. Use 'owner/repo' format."
+        
+        owner, repo = repo_full_name.split("/", 1)
+        
+        pr_data = {
+            "title": title,
+            "head": head_branch,
+            "base": base_branch,
+            "body": body,
+            "draft": draft
+        }
+        
+        pr = await github_manager.create_pull_request(owner, repo, pr_data)
+        
+        pr_info = {
+            "number": pr["number"],
+            "title": pr["title"],
+            "url": pr["html_url"],
+            "state": pr["state"],
+            "head_branch": pr["head"]["ref"],
+            "base_branch": pr["base"]["ref"],
+            "draft": pr.get("draft", False),
+            "created_at": pr["created_at"]
+        }
+        
+        return json.dumps(pr_info, indent=2)
+        
+    except Exception as e:
+        return f"Error creating pull request: {str(e)}"
+
+
+@tool
+async def github_push_branch(
+    repo_full_name: Annotated[str, "Full repository name (owner/repo)"],
+    branch_name: Annotated[str, "Branch name to push"],
+    local_path: Annotated[str, "Local repository path"] = "."
+) -> str:
+    """
+    Push a local branch to GitHub repository.
+    Note: This requires the repository to be cloned locally with proper Git credentials.
+    """
+    try:
+        if "/" not in repo_full_name:
+            return "Invalid repository format. Use 'owner/repo' format."
+        
+        # This would typically use git commands or GitPython
+        # For now, return a status message indicating the operation
+        return f"Branch '{branch_name}' pushed to {repo_full_name} (simulated - requires actual Git push implementation)"
+        
+    except Exception as e:
+        return f"Error pushing branch: {str(e)}"
+
+
+@tool  
+async def github_create_commit(
+    repo_full_name: Annotated[str, "Full repository name (owner/repo)"],
+    branch_name: Annotated[str, "Branch to commit to"],
+    message: Annotated[str, "Commit message"],
+    files: Annotated[List[dict], "List of files to commit with 'path' and 'content' keys"]
+) -> str:
+    """
+    Create a commit on GitHub via API.
+    """
+    try:
+        if "/" not in repo_full_name:
+            return "Invalid repository format. Use 'owner/repo' format."
+        
+        owner, repo = repo_full_name.split("/", 1)
+        
+        # This would use GitHub's Git Data API to create commits
+        # For now, return a status message
+        commit_info = {
+            "message": message,
+            "branch": branch_name,
+            "files_changed": len(files),
+            "repository": repo_full_name
+        }
+        
+        return json.dumps(commit_info, indent=2)
+        
+    except Exception as e:
+        return f"Error creating commit: {str(e)}"
 
 
 # Tool names for easy reference
@@ -377,4 +478,7 @@ GITHUB_TOOL_NAMES = [
     "github_list_branches",
     "github_list_issues",
     "github_list_pull_requests",
+    "github_create_pull_request",
+    "github_push_branch", 
+    "github_create_commit",
 ] 

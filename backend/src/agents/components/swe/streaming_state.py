@@ -111,7 +111,15 @@ def create_step_message(step_name: str, description: str, status: str = "in_prog
         "planning": "📋",
         "implementation": "⚙️",
         "testing": "🧪",
-        "github": "📁"
+        "github": "📁",
+        "branch_creation": "🌿",
+        "atomic_progress": "⚙️",
+        "atomic_completion": "✅",
+        "task_start": "📝",
+        "task_completion": "✅",
+        "architect_review": "🏗️",
+        "diff": "📄",
+        "commit": "💾"
     }
     
     # Determine icon based on step name or status
@@ -120,12 +128,20 @@ def create_step_message(step_name: str, description: str, status: str = "in_prog
         icon = icons["research"]
     elif "plan" in step_name.lower():
         icon = icons["planning"]
-    elif "implement" in step_name.lower():
+    elif "implement" in step_name.lower() or "atomic" in step_name.lower():
         icon = icons["implementation"]
     elif "test" in step_name.lower():
         icon = icons["testing"]
     elif "github" in step_name.lower() or "repo" in step_name.lower():
         icon = icons["github"]
+    elif "branch" in step_name.lower():
+        icon = icons["branch_creation"]
+    elif "architect" in step_name.lower() or "review" in step_name.lower():
+        icon = icons["architect_review"]
+    elif "diff" in step_name.lower():
+        icon = icons["diff"]
+    elif "commit" in step_name.lower():
+        icon = icons["commit"]
     
     content = f"{icon} **{step_name}**\n\n{description}"
     
@@ -300,6 +316,111 @@ def create_implementation_plan_message(plan: ImplementationPlan) -> AIMessage:
     )
 
 
+def create_diff_message(
+    file_path: str,
+    diff_content: str,
+    operation_type: str = "modified",
+    commit_info: dict = None
+) -> AIMessage:
+    """
+    Create a diff display message for frontend streaming.
+    
+    Args:
+        file_path: Path of the file being changed
+        diff_content: The actual diff content to display
+        operation_type: Type of operation (created, modified, deleted)
+        commit_info: Information about the commit
+    
+    Returns:
+        AIMessage with diff information
+    """
+    operation_icons = {
+        "created": "📄➕",
+        "modified": "📄✏️", 
+        "deleted": "📄🗑️"
+    }
+    
+    icon = operation_icons.get(operation_type, "📄")
+    
+    content = f"""{icon} **File {operation_type.title()}: `{file_path}`**
+
+**Changes:**
+```diff
+{diff_content}
+```"""
+    
+    if commit_info:
+        content += f"""
+
+**Commit Info:**
+- Message: {commit_info.get('commit_message', 'N/A')}
+- Status: {commit_info.get('commit_status', 'N/A')}
+- Branch: {commit_info.get('branch_name', 'N/A')}"""
+    
+    additional_kwargs = {
+        "agent_type": "swe_diff",
+        "file_path": file_path,
+        "operation_type": operation_type,
+        "has_diff": bool(diff_content),
+    }
+    
+    if commit_info:
+        additional_kwargs.update(commit_info)
+    
+    return AIMessage(
+        content=content,
+        additional_kwargs=additional_kwargs
+    )
+
+
+def create_branch_operation_message(
+    branch_name: str,
+    operation: str,
+    repository: str,
+    status: str = "completed"
+) -> AIMessage:
+    """
+    Create a branch operation message for frontend streaming.
+    
+    Args:
+        branch_name: Name of the branch
+        operation: Operation performed (created, switched, pushed)
+        repository: Repository path
+        status: Status of the operation
+    
+    Returns:
+        AIMessage with branch operation information
+    """
+    operation_icons = {
+        "created": "🌿➕",
+        "switched": "🌿🔄",
+        "pushed": "🌿⬆️",
+        "merged": "🌿🔗"
+    }
+    
+    icon = operation_icons.get(operation, "🌿")
+    status_icon = "✅" if status == "completed" else "⚠️" if status == "warning" else "❌"
+    
+    content = f"""{icon} **Branch {operation.title()}**
+
+{status_icon} **Branch:** `{branch_name}`
+**Repository:** {repository}
+**Status:** {status.title()}
+
+Branch operation {operation} {'completed successfully' if status == 'completed' else 'completed with issues' if status == 'warning' else 'failed'}."""
+    
+    return AIMessage(
+        content=content,
+        additional_kwargs={
+            "agent_type": "swe_branch_operation",
+            "branch_name": branch_name,
+            "operation": operation,
+            "repository": repository,
+            "status": status,
+        }
+    )
+
+
 # Helper functions for state updates
 def update_streaming_state(
     state: SWEStreamingState,
@@ -309,9 +430,11 @@ def update_streaming_state(
     progress: tuple = None,  # (current, total)
     repository_context: dict = None,
     implementation_plan: ImplementationPlan = None,
+    diff_info: dict = None,
+    branch_info: dict = None,
 ) -> dict:
     """
-    Helper function to update streaming state with frontend messages.
+    Enhanced helper function to update streaming state with frontend messages.
     
     Args:
         state: Current SWE streaming state
@@ -321,6 +444,8 @@ def update_streaming_state(
         progress: Tuple of (current_task, total_tasks)
         repository_context: Repository context dictionary
         implementation_plan: Implementation plan object
+        diff_info: Diff information dictionary
+        branch_info: Branch operation information dictionary
     
     Returns:
         Dictionary of state updates
@@ -360,6 +485,24 @@ def update_streaming_state(
     if implementation_plan:
         frontend_messages.append(create_implementation_plan_message(implementation_plan))
         updates["implementation_plan"] = implementation_plan
+    
+    # Add diff message if provided
+    if diff_info:
+        frontend_messages.append(create_diff_message(
+            diff_info.get("file_path", ""),
+            diff_info.get("diff_text", ""),
+            diff_info.get("operation_type", "modified"),
+            diff_info
+        ))
+    
+    # Add branch operation message if provided
+    if branch_info:
+        frontend_messages.append(create_branch_operation_message(
+            branch_info.get("branch_name", ""),
+            branch_info.get("operation", "created"),
+            branch_info.get("repository", ""),
+            branch_info.get("status", "completed")
+        ))
     
     # Update messages for frontend streaming
     if frontend_messages:

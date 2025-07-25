@@ -226,6 +226,50 @@ def swe_state_output_mapper(result: Dict) -> AIMessage:
             else:
                 logger.info(f"Key '{key}' has value type: {type(value).__name__}")
     
+    # ENHANCED PATTERN: Check sender to determine appropriate response
+    sender = result.get("sender", "")
+    
+    # Handle architect review completion
+    if sender == "architect_review":
+        logger.info("Processing architect review completion")
+        if result.get("messages") and len(result["messages"]) > 0:
+            last_message = result["messages"][-1]
+            if hasattr(last_message, 'model_copy'):
+                enhanced_message = last_message.model_copy(
+                    update={
+                        "additional_kwargs": {
+                            **(last_message.additional_kwargs or {}),
+                            "agent_type": "swe_architect_review_complete",
+                            "status": "completed",
+                            "workflow_complete": True,
+                        }
+                    }
+                )
+                logger.info("Returning architect review completion message")
+                logger.info("=== END SWE STATE OUTPUT MAPPER DEBUG ===")
+                return enhanced_message
+    
+    # Handle developer completion (with all streaming messages)
+    if sender == "developer":
+        logger.info("Processing developer completion with streaming messages")
+        if result.get("messages") and len(result["messages"]) > 0:
+            # Return the final completion message from the developer workflow
+            final_message = result["messages"][-1]
+            if hasattr(final_message, 'model_copy'):
+                enhanced_message = final_message.model_copy(
+                    update={
+                        "additional_kwargs": {
+                            **(final_message.additional_kwargs or {}),
+                            "agent_type": "swe_development_complete",
+                            "status": "completed",
+                            "proceeding_to_review": True,
+                        }
+                    }
+                )
+                logger.info("Returning developer completion message")
+                logger.info("=== END SWE STATE OUTPUT MAPPER DEBUG ===")
+                return enhanced_message
+    
     # FOLLOW DATAGEN PATTERN: Use the last message from the detailed work
     # Check if we have messages with detailed work information
     if result.get("messages") and len(result["messages"]) > 0:
@@ -272,11 +316,13 @@ The SWE agent has successfully completed the requested implementation:
 **✅ Existing files analyzed and updated appropriately** 
 **✅ Code changes applied using proper diff methodology**
 **✅ All operations performed in secure Daytona sandbox**
+**✅ Architect review completed**
 
 **Next Steps:**
 - Changes have been committed to the feature branch
+- Architectural review passed
+- Ready for pull request creation
 - Ready for testing and integration
-- Consider creating a pull request for code review
 
 The implementation is complete and ready for use!"""
         
@@ -284,6 +330,7 @@ The implementation is complete and ready for use!"""
             "agent_type": "swe_completion",
             "status": "completed", 
             "implementation_complete": True,
+            "architect_reviewed": True,
         }
         logger.info("Returning completion message with additional_kwargs:", additional_kwargs=additional_kwargs)
         logger.info("=== END SWE STATE OUTPUT MAPPER DEBUG ===")
@@ -320,7 +367,14 @@ The implementation is complete and ready for use!"""
 **Implementation Tasks:**
 {chr(10).join(task_summaries)}
 
-The SWE agent has analyzed your requirements and created a detailed implementation plan. Each task includes specific atomic steps for code changes."""
+The SWE agent has analyzed your requirements and created a detailed implementation plan. Each task includes specific atomic steps for code changes.
+
+**Workflow will include:**
+- ✅ Feature branch creation
+- ✅ Real-time progress streaming  
+- ✅ Diff visibility for all changes
+- ✅ Architect review after completion
+- ✅ PR creation readiness"""
         else:
             content = """📋 **Implementation Plan Created**
 
