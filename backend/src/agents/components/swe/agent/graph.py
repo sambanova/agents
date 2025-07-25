@@ -550,7 +550,8 @@ main();
         """Stream git log output for better visibility using Daytona process execution."""
         try:
             # Use Daytona process execution for log streaming as per documentation
-            session_id = f"git-log-{hash(repo_path) % 10000}"
+            import time
+            session_id = f"git-log-{int(time.time() * 1000)}"  # Use timestamp for uniqueness
             
             # Create a process session
             await sandbox.process.create_session(session_id)
@@ -584,8 +585,10 @@ main();
             logger.warning(f"Could not stream git log: {e}")
             # Fallback to simple execution
             try:
+                simple_session = f"simple-git-{int(time.time() * 1000)}"
+                await sandbox.process.create_session(simple_session)
                 simple_result = await sandbox.process.execute_session_command(
-                    "simple-git-log",
+                    simple_session,
                     {"command": f"cd {repo_path} && git log --oneline -3", "async": False}
                 )
                 logger.info(f"Git log (simple): {simple_result}")
@@ -885,6 +888,19 @@ Your response must start with either "APPROVED" or "CHANGES_NEEDED" followed by 
                     logger.warning(f"Could not get git info: {e}")
                     branch_info = {"error": str(e)}
             
+            # Generate goal description from implementation plan tasks
+            goal_description = "Automated code changes"
+            if implementation_plan and implementation_plan.tasks:
+                # Create a meaningful description from the first few tasks
+                task_descriptions = []
+                for task in implementation_plan.tasks[:3]:  # Use first 3 tasks
+                    task_descriptions.append(task.logical_task)
+                
+                if len(implementation_plan.tasks) > 3:
+                    goal_description = f"{', '.join(task_descriptions)}, and {len(implementation_plan.tasks) - 3} more tasks"
+                else:
+                    goal_description = ', '.join(task_descriptions)
+            
             # Create PR if GitHub token is available
             pr_info = None
             if github_token and daytona_manager:
@@ -902,10 +918,10 @@ Your response must start with either "APPROVED" or "CHANGES_NEEDED" followed by 
                             repo_full_name = f"{repo_owner}/{repo_name}"
                             
                             # Create PR title and description
-                            pr_title = f"SWE Agent Implementation: {implementation_plan.goal if implementation_plan else 'Code Changes'}"
+                            pr_title = f"SWE Agent Implementation: {goal_description}"
                             pr_body = f"""## SWE Agent Implementation
 
-**Goal:** {implementation_plan.goal if implementation_plan else 'Automated code changes'}
+**Goal:** {goal_description}
 
 ### Changes Made:
 """
@@ -923,7 +939,7 @@ Your response must start with either "APPROVED" or "CHANGES_NEEDED" followed by 
 ### Technical Details:
 - **Branch:** `{branch_info.get('current_branch', 'unknown')}`
 - **Commits:** {branch_info.get('commit_count', 'unknown')} new commits
-- **Latest Commit:** {branch_info.get('latest_commit', 'unknown')}
+- **Latest Commit:** {branch_info.get('latest_commit', 'unknown')}`
 
 ### Review Status:
 ✅ Architect review completed and approved
@@ -960,7 +976,7 @@ Your response must start with either "APPROVED" or "CHANGES_NEEDED" followed by 
             
             if implementation_plan:
                 completion_content += f"""
-**Goal:** {implementation_plan.goal}
+**Goal:** {goal_description}
 **Tasks Completed:** {len(implementation_plan.tasks) if implementation_plan.tasks else 0}
 """
                 
