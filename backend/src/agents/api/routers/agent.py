@@ -12,8 +12,18 @@ from agents.components.compound.financial_analysis_subgraph import (
 from agents.components.compound.xml_agent import get_global_checkpointer
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.components.open_deep_research.graph import create_deep_research_graph
-from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.responses import JSONResponse
+from langchain_core.messages import HumanMessage
 from langgraph.types import Command, Interrupt
 from pydantic import BaseModel
 
@@ -23,10 +33,6 @@ router = APIRouter(
 
 
 class DeepResearchRequest(BaseModel):
-    prompt: str
-
-
-class DataScienceRequest(BaseModel):
     prompt: str
 
 
@@ -45,6 +51,7 @@ class DataScienceInteractiveRequest(BaseModel):
 @router.post("/datascience", tags=["Analysis"])
 async def datascience_agent_and_report(
     request: Request,
+    prompt: str = Form(..., description="The main prompt for the data science agent."),
     files: List[UploadFile] = File(
         ..., description="One or more files to be analyzed."
     ),
@@ -63,12 +70,16 @@ async def datascience_agent_and_report(
             detail="Authorization header with Bearer token is required",
         )
 
+    thread_id = str(uuid.uuid4())
+    api_key = authorization.replace("Bearer ", "")
+
     file_ids = []
+    file_names = []
     for file in files:
         file_info = await process_and_store_file(request, file, api_key)
         file_ids.append(file_info["file_id"])
+        file_names.append(file_info["filename"])
 
-    api_key = authorization.replace("Bearer ", "")
     checkpointer = get_global_checkpointer()
     daytona_manager = PersistentDaytonaManager(
         user_id=api_key,
@@ -82,7 +93,29 @@ async def datascience_agent_and_report(
         sambanova_api_key=api_key,
         redis_storage=request.app.state.redis_storage_service,
         daytona_manager=daytona_manager,
-        directory_content=[],
+        directory_content=file_names,
+        checkpointer=checkpointer,
+    )
+    results = await agent.ainvoke(
+        {
+            "internal_messages": [HumanMessage(content=prompt, id=str(uuid.uuid4()))],
+            "hypothesis": "",
+            "process": "",
+            "process_decision": None,
+            "visualization_state": "",
+            "searcher_state": "",
+            "code_state": "",
+            "report_section": "",
+            "quality_review": "",
+            "needs_revision": False,
+            "sender": "",
+        },
+        config={"configurable": {"thread_id": thread_id}},
+    )
+    graph_input_step2 = Command(resume="APPROVE")
+    result_step2 = await agent.ainvoke(
+        graph_input_step2,
+        config={"configurable": {"thread_id": thread_id}},
     )
     return JSONResponse(
         status_code=status.HTTP_200_OK, content={"message": "Hello, world!"}
@@ -90,7 +123,16 @@ async def datascience_agent_and_report(
 
 
 @router.post("/datascience/interactive")
-async def datascience_interactive_agent(request: Request, api_key: str):
+async def datascience_agent_and_report(
+    request: Request,
+    prompt: str = Form(..., description="The main prompt for the data science agent."),
+    files: List[UploadFile] = File(
+        ..., description="One or more files to be analyzed."
+    ),
+    authorization: Optional[str] = Header(
+        None, description="Authorization header with Bearer token."
+    ),
+):
     agent = create_data_science_subgraph(
         user_id=request.app.state.user_id,
         sambanova_api_key=api_key,
