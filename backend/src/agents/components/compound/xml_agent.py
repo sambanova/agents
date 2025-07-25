@@ -821,10 +821,16 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             logger.info(
                 "Invoking subgraph",
             )
-            # Execute subgraph with the same config (for proper state management)
+            # Execute subgraph with enhanced config for SWE operations
+            # SWE agent needs higher recursion limit for architect review cycles
+            subgraph_config = {**config} if config else {}
+            if subgraph_name == "swe_agent":
+                subgraph_config["recursion_limit"] = 100  # Increased for architect review cycles
+                logger.info("Using enhanced config for SWE agent with recursion_limit=100")
+            
             # For MessageGraph, pass messages directly, not wrapped in a dict
             start_time = time.time()
-            result = await subgraph.ainvoke(subgraph_messages, config)
+            result = await subgraph.ainvoke(subgraph_messages, subgraph_config)
             duration = time.time() - start_time
             logger.info(
                 "Subgraph invocation completed",

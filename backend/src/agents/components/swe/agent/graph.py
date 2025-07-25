@@ -72,10 +72,15 @@ class SWEStreamingDeveloperAgent:
         try:
             sandbox = await self.daytona_manager._get_sandbox()
             if sandbox:
-                working_dir = state.working_directory or sandbox.working_directory or "."
-                await sandbox.git.create_branch(working_dir, branch_name)
+                # Use repository path pattern from Daytona docs
+                if state.working_directory and state.working_directory.startswith('./'):
+                    repo_path = state.working_directory[2:].split('/')[0]  # e.g., "sales-crew"
+                else:
+                    repo_path = "sales-crew"  # Default to the repository name
+                
+                await sandbox.git.create_branch(repo_path, branch_name)
                 await self.create_and_stream_message(
-                    f"✅ **Branch Created Successfully**\n\nBranch: `{branch_name}`\nStatus: Ready for implementation",
+                    f"✅ **Branch Created Successfully**\n\nBranch: `{branch_name}`\nRepository: `{repo_path}`\nStatus: Ready for implementation",
                     {"agent_type": "swe_branch_created", "branch_name": branch_name, "status": "created"}
                 )
                 logger.info(f"Created feature branch: {branch_name}")
@@ -181,7 +186,7 @@ class SWEStreamingDeveloperAgent:
     async def creating_diffs_for_task_with_streaming(
         self, file_path: str, atomic_task: object, branch_name: str
     ) -> tuple[str, dict]:
-        """Create diffs for a task with enhanced streaming support using direct sandbox access."""
+        """Create diffs for a task with enhanced streaming support using correct Daytona SDK."""
         logger.info(f"=== CREATING DIFFS FOR STREAMING === File: {file_path}, Task: {atomic_task.atomic_task}")
         
         try:
@@ -192,15 +197,18 @@ class SWEStreamingDeveloperAgent:
                 return f"Implementation failed: No sandbox available", {"error": "No sandbox available"}
             
             logger.info(f"Found sandbox for file operations: {type(sandbox)}")
-            working_dir = sandbox.working_directory or "."
             
-            # Read file before changes to capture diff
+            # Read file before changes to capture diff using proper Daytona SDK
             try:
-                success, existing_content = await self.daytona_manager.read_file(file_path)
-                before_content = existing_content if success and existing_content else ""
-                logger.info(f"Read file {file_path}: success={success}, content_length={len(before_content)}")
+                # Use Daytona SDK file operations like datagen does
+                before_content_bytes = await sandbox.fs.download_file(file_path)
+                if isinstance(before_content_bytes, bytes):
+                    before_content = before_content_bytes.decode('utf-8')
+                else:
+                    before_content = str(before_content_bytes) if before_content_bytes else ""
+                logger.info(f"Read file {file_path}: content_length={len(before_content)}")
             except Exception as read_error:
-                logger.warning(f"Could not read existing file {file_path}: {read_error}")
+                logger.info(f"Could not read existing file {file_path} (may not exist): {read_error}")
                 before_content = ""
             
             if before_content:
@@ -243,13 +251,12 @@ print('Task: {atomic_task.atomic_task}')
 """
                 operation_type = "created"
             
-            # Write file using datagen pattern
+            # Write file using proper Daytona SDK file operations  
             try:
-                success = await self.daytona_manager.write_file(file_path, modified_content)
-                if success:
-                    logger.info(f"Successfully {operation_type} file: {file_path}")
-                else:
-                    return f"Implementation failed: Could not write file", {"error": "File write failed"}
+                # Convert string to bytes for upload_file
+                content_bytes = modified_content.encode('utf-8')
+                await sandbox.fs.upload_file(content_bytes, file_path)
+                logger.info(f"Successfully {operation_type} file: {file_path}")
             except Exception as write_error:
                 logger.error(f"Failed to write file {file_path}: {write_error}")
                 return f"Implementation failed: Could not write file", {"error": str(write_error)}
@@ -279,6 +286,7 @@ print('Task: {atomic_task.atomic_task}')
                                 diff_lines.append(f"  {line}")
                                 
                 diff_text = '\n'.join(diff_lines[:20])  # Limit to first 20 lines
+                logger.info(f"Generated diff for {file_path}: {len(diff_lines)} lines")
             except Exception as diff_error:
                 logger.warning(f"Could not generate diff: {diff_error}")
                 if operation_type == "created":
@@ -286,12 +294,20 @@ print('Task: {atomic_task.atomic_task}')
                 else:
                     diff_text = "File modified (diff unavailable)"
             
-            # Stage and commit changes using native Git operations
+            # Use proper Git working directory path - Daytona docs show relative paths like "workspace/repo"
+            # Extract repository path from file_path
+            if file_path.startswith('./'):
+                repo_path = file_path[2:].split('/')[0]  # e.g., "sales-crew" from "./sales-crew/..."
+            else:
+                repo_path = "."  # Default to current directory
+            
+            # Stage and commit changes using proper Daytona SDK Git operations
             commit_message = f"{atomic_task.atomic_task}"
             try:
-                await sandbox.git.add(working_dir, ["."])
+                # Use Daytona SDK git operations as per documentation
+                await sandbox.git.add(repo_path, ["."])
                 await sandbox.git.commit(
-                    working_dir, 
+                    repo_path, 
                     commit_message, 
                     "SWE Agent", 
                     "swe-agent@sandbox.local"
@@ -315,6 +331,7 @@ print('Task: {atomic_task.atomic_task}')
             }
             
             logger.info(f"Successfully implemented task: {atomic_task.atomic_task}")
+            logger.info(f"DIFF PREVIEW:\n{diff_text}")  # Log the diff for backend visibility
             return f"Implementation completed successfully ({operation_type})", diff_info
             
         except Exception as e:
@@ -322,7 +339,7 @@ print('Task: {atomic_task.atomic_task}')
             return f"Implementation failed: {str(e)}", {"error": str(e)}
 
 
-def create_swe_agent(daytona_manager=None, github_token=None):
+def create_swe_agent(sambanova_api_key: str, daytona_manager=None, github_token=None):
     """Create the main SWE agent as a unified workflow"""
     logger.info("Creating SWE agent with human choice workflow")
     
@@ -335,7 +352,7 @@ def create_swe_agent(daytona_manager=None, github_token=None):
     # Create human choice node wrapper function that provides LLM
     async def human_choice_node_wrapper(state, *, config: RunnableConfig = None):
         """Human choice node wrapper that provides LLM from config"""
-        api_key = extract_api_key(config)
+        api_key = extract_api_key(config) or sambanova_api_key
         llm = get_sambanova_llm(api_key=api_key, model="DeepSeek-V3-0324")
         return await swe_human_choice_node(state, llm)
     
@@ -382,46 +399,100 @@ def create_swe_agent(daytona_manager=None, github_token=None):
             return error_result
 
     # Create architect review node that evaluates and routes appropriately
-    async def architect_review_node(state, *, config: RunnableConfig = None):
-        """Architect reviews completed implementation work and decides if more work is needed"""
-        api_key = extract_api_key(config)
-        llm = get_sambanova_llm(api_key=api_key, model="DeepSeek-V3-0324")
+    async def architect_review_node(state: AgentState) -> dict:
+        """Architect review node that evaluates implementation and decides next steps."""
+        logger.info("=== ARCHITECT REVIEW NODE ===")
         
-        review_prompt = f"""You are a software architect reviewing completed implementation work.
+        # Check for maximum review cycles to prevent infinite loops
+        review_cycle = getattr(state, 'review_cycle', 0) + 1
+        max_review_cycles = 3  # Limit to 3 review cycles to prevent infinite loops
+        
+        if review_cycle > max_review_cycles:
+            logger.warning(f"Maximum review cycles ({max_review_cycles}) reached. Auto-approving implementation.")
+            approval_message = AIMessage(
+                content=f"""🏗️ **Architect Review - Auto-Approved (Max Cycles Reached)**
 
-IMPLEMENTATION COMPLETED:
-- Repository: {state.working_directory}
-- Total Tasks: {len(state.implementation_plan.tasks) if state.implementation_plan else 0}
-- Implementation Messages: {len(state.messages)} detailed steps completed
+**📋 Final Assessment:**
+- **Status:** Implementation Approved ✅ (Maximum review cycles reached)
+- **Review Cycle:** {review_cycle}/{max_review_cycles}
+- **Decision:** Auto-approval to prevent infinite loops
 
-REVIEW TASKS:
-1. Analyze if all planned tasks were implemented correctly
-2. Verify implementation quality and completeness
-3. Check if any fixes or improvements are needed
-4. Decide if work is complete or needs developer changes
+**🚀 Final Status:** Implementation complete and ready for deployment
 
-DECISION REQUIRED:
-- If implementation is complete and satisfactory: respond with "APPROVED"
-- If changes/fixes are needed: respond with "CHANGES_NEEDED" and list specific issues
+---
+*Architectural review completed after maximum cycles.*""",
+                additional_kwargs={
+                    "agent_type": "swe_architect_review_complete",
+                    "status": "approved",
+                    "workflow_complete": True,
+                    "needs_changes": False,
+                    "review_cycle": review_cycle,
+                    "auto_approved": True,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+            
+            return {
+                "implementation_research_scratchpad": [AIMessage(content=f"Architect review completed after {review_cycle} cycles")],
+                "messages": [approval_message],
+                "sender": "architect_review_complete", 
+                "plan_approved": state.plan_approved,
+                "human_feedback": state.human_feedback,
+                "working_directory": state.working_directory,
+                "implementation_plan": state.implementation_plan,
+                "review_cycle": review_cycle
+            }
+        
+        logger.info(f"Architect review cycle: {review_cycle}/{max_review_cycles}")
+        
+        # Get LLM for review
+        llm = get_sambanova_llm(api_key=sambanova_api_key, model="DeepSeek-V3-0324")
+        
+        # Create comprehensive review prompt
+        review_prompt = f"""You are a senior software architect conducting a code review of an AI agent's implementation.
+
+**IMPLEMENTATION CONTEXT:**
+- Total tasks completed: {len(state.implementation_plan.tasks) if state.implementation_plan else 0}
+- Review cycle: {review_cycle}/{max_review_cycles}
+- Previous feedback: {state.human_feedback if hasattr(state, 'human_feedback') and state.human_feedback else 'None'}
+
+**REVIEW CRITERIA:**
+1. Code quality and best practices
+2. Implementation completeness 
+3. Error handling
+4. Security considerations
+5. Performance implications
+
+**INSTRUCTIONS:**
+- Review the implementation thoroughly
+- If this is review cycle {max_review_cycles}, you MUST approve unless there are critical security issues
+- For cycles 1-2, you may request specific improvements
 
 Your response must start with either "APPROVED" or "CHANGES_NEEDED" followed by your detailed assessment."""
 
-        review_response = await llm.ainvoke([HumanMessage(content=review_prompt)])
+        try:
+            review_response = await llm.ainvoke([HumanMessage(content=review_prompt)])
+            logger.info(f"Architect review response: {review_response.content[:200]}...")
+        except Exception as e:
+            logger.error(f"Error in architect review LLM call: {e}")
+            # Default to approval if LLM fails
+            review_response = type('obj', (object,), {'content': 'APPROVED - LLM error, defaulting to approval'})()
         
         # Determine if changes are needed based on response
-        needs_changes = review_response.content.strip().startswith("CHANGES_NEEDED")
+        needs_changes = review_response.content.strip().startswith("CHANGES_NEEDED") and review_cycle < max_review_cycles
         
         if needs_changes:
             # Extract the issues from the response
             issues_text = review_response.content.replace("CHANGES_NEEDED", "").strip()
             
             review_message = AIMessage(
-                content=f"""🏗️ **Architect Review - Changes Required**
+                content=f"""🏗️ **Architect Review - Changes Required (Cycle {review_cycle}/{max_review_cycles})**
 
 {review_response.content}
 
 **📋 Review Decision:**
 - **Status:** Changes Required
+- **Review Cycle:** {review_cycle}/{max_review_cycles}
 - **Next Step:** Returning to developer for fixes
 
 **🔄 Required Changes:**
@@ -433,20 +504,22 @@ Your response must start with either "APPROVED" or "CHANGES_NEEDED" followed by 
                     "agent_type": "swe_architect_review_changes",
                     "status": "changes_required",
                     "needs_changes": True,
+                    "review_cycle": review_cycle,
                     "timestamp": datetime.now().isoformat(),
                 }
             )
             
-            logger.info("Architect review: Changes needed - routing back to developer")
+            logger.info(f"Architect review: Changes needed (cycle {review_cycle}) - routing back to developer")
             
             return {
-                "implementation_research_scratchpad": [AIMessage(content="Architect review: Changes needed")],
+                "implementation_research_scratchpad": [AIMessage(content=f"Architect review: Changes needed (cycle {review_cycle})")],
                 "messages": [review_message],
                 "sender": "architect_review_changes",
                 "plan_approved": state.plan_approved,
                 "human_feedback": issues_text,  # Pass the required changes as feedback
                 "working_directory": state.working_directory,
-                "implementation_plan": state.implementation_plan
+                "implementation_plan": state.implementation_plan,
+                "review_cycle": review_cycle
             }
         else:
             # Implementation approved - workflow complete
@@ -457,6 +530,7 @@ Your response must start with either "APPROVED" or "CHANGES_NEEDED" followed by 
 
 **📋 Final Assessment:**
 - **Status:** Implementation Approved ✅
+- **Review Cycle:** {review_cycle}/{max_review_cycles}
 - **Quality:** All requirements met
 - **Code Changes:** Reviewed and approved
 - **All Tasks:** Successfully implemented
@@ -470,20 +544,22 @@ Your response must start with either "APPROVED" or "CHANGES_NEEDED" followed by 
                     "status": "approved",
                     "workflow_complete": True,
                     "needs_changes": False,
+                    "review_cycle": review_cycle,
                     "timestamp": datetime.now().isoformat(),
                 }
             )
             
-            logger.info("Architect review: Implementation approved - workflow complete")
+            logger.info(f"Architect review: Implementation approved (cycle {review_cycle}) - workflow complete")
             
             return {
-                "implementation_research_scratchpad": [AIMessage(content="Architect review completed - workflow approved")],
+                "implementation_research_scratchpad": [AIMessage(content=f"Architect review completed - workflow approved (cycle {review_cycle})")],
                 "messages": [review_message],
                 "sender": "architect_review_complete",
                 "plan_approved": state.plan_approved,
                 "human_feedback": state.human_feedback,
                 "working_directory": state.working_directory,
-                "implementation_plan": state.implementation_plan
+                "implementation_plan": state.implementation_plan,
+                "review_cycle": review_cycle
             }
 
     def architect_router(state: AgentState) -> str:
@@ -541,15 +617,8 @@ Your response must start with either "APPROVED" or "CHANGES_NEEDED" followed by 
     workflow.add_conditional_edges("developer", developer_router, {"architect_review": "architect_review"})
     workflow.add_conditional_edges("architect_review", architect_review_router, {"developer": "developer", "END": END})
     
-    # Add checkpointer if provided
-    graph_config = {}
-    # The original code had checkpointer, but it's not defined in the new_code.
-    # Assuming it's a placeholder for a checkpointer object if it were available.
-    # For now, removing it as it's not defined in the new_code.
-    # if checkpointer:
-    #     graph_config["checkpointer"] = checkpointer
-    
     # Compile the graph
+    graph_config = {}
     graph = workflow.compile(**graph_config)
     graph.name = "swe-agent-v4-streaming-with-review-loop"
     

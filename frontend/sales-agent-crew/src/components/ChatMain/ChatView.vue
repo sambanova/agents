@@ -2051,6 +2051,9 @@ const addMessage = async () => {
       branch: repositoryContext.value.branch || 'main',
       selection_type: repositoryContext.value.selection_type || 'user_repo'
     };
+    console.log('🔧 SWE: Including repository context in message:', messagePayload.repository_context);
+  } else {
+    console.log('⚠️ SWE: No repository context available - user may not have selected a repository');
   }
 
   if (selectedDocuments.value && selectedDocuments.value.length > 0) {
@@ -2069,6 +2072,12 @@ const addMessage = async () => {
   } else {
     messagePayload.document_ids = [];
   }
+
+  // DEBUG: Log the complete message payload before sending
+  console.log('📤 Complete WebSocket message payload:', {
+    ...messagePayload,
+    data: messagePayload.data.substring(0, 50) + '...' // Truncate long messages for readability
+  });
 
   if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
     try {
@@ -3289,6 +3298,23 @@ function handleRepositoryContextCleared() {
   repositoryContext.value = null;
   console.log('Repository context cleared');
 }
+
+// DEBUG: Global function to check repository context (can be called from browser console)
+window.checkSWERepositoryContext = function() {
+  const stored = localStorage.getItem('swe_repository_context');
+  const current = repositoryContext.value;
+  
+  console.log('🔍 SWE Repository Context Status:');
+  console.log('📁 localStorage value:', stored ? JSON.parse(stored) : 'None');
+  console.log('💾 Current context:', current || 'None');
+  console.log('✅ Ready for SWE agent:', !!(current && current.repo_full_name));
+  
+  if (!current) {
+    console.log('💡 To set repository context: Go to Settings → GitHub section → Select a repository');
+  }
+  
+  return { stored: stored ? JSON.parse(stored) : null, current };
+};
 
 function formatRepositoryContextForMessage() {
   if (!repositoryContext.value) return '';

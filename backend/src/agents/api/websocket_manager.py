@@ -325,6 +325,29 @@ class WebSocketConnectionManager(WebSocketInterface):
 
                 # Extract repository context if provided
                 repository_context = user_message_input.get("repository_context")
+                
+                # DEBUG: Log repository context status
+                if repository_context:
+                    logger.info(
+                        "✅ Repository context received from frontend",
+                        repo_full_name=repository_context.get("repo_full_name"),
+                        branch=repository_context.get("branch"),
+                        selection_type=repository_context.get("selection_type"),
+                        user_id=user_id
+                    )
+                else:
+                    # Check if this might be a SWE-related request without repo context
+                    message_content = user_message_input.get("data", "").lower()
+                    swe_keywords = ["add", "implement", "create", "fix", "feature", "bug", "code", "repo", "repository", "swe agent"]
+                    is_swe_request = any(keyword in message_content for keyword in swe_keywords)
+                    
+                    if is_swe_request:
+                        logger.warning(
+                            "⚠️ SWE-related request detected but no repository context provided from frontend",
+                            message_preview=user_message_input.get("data", "")[:100],
+                            user_id=user_id,
+                            suggestion="User may not have selected a repository in Settings > GitHub section"
+                        )
 
                 config = await self.create_config(
                     user_id=user_id,

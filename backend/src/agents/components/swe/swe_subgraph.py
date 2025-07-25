@@ -57,7 +57,7 @@ def create_swe_graph(
         logger.info("Created new Daytona manager for SWE operations")
     
     # Create the SWE agent with Daytona support
-    swe_agent = create_swe_agent(daytona_manager, github_token)
+    swe_agent = create_swe_agent(sambanova_api_key, daytona_manager, github_token)
     
     logger.info("SWE subgraph created successfully")
     return swe_agent
