@@ -2,6 +2,7 @@ from agents.components.datagen.tools.persistent_daytona import PersistentDaytona
 from agents.components.datagen.workflow import WorkflowManager
 from agents.storage.redis_storage import RedisStorage
 from agents.utils.llms import get_sambanova_llm
+from langgraph.types import Checkpointer
 
 
 def setup_language_models(sambanova_api_key: str):
@@ -43,6 +44,7 @@ def create_data_science_subgraph(
     redis_storage: RedisStorage,
     daytona_manager: PersistentDaytonaManager,
     directory_content: list[str],
+    checkpointer: Checkpointer = None,
 ):
     language_models = setup_language_models(sambanova_api_key)
     manager = WorkflowManager(
@@ -51,6 +53,7 @@ def create_data_science_subgraph(
         redis_storage,
         daytona_manager,
         directory_content,
+        checkpointer,
     )
 
     return manager.graph

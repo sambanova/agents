@@ -33,6 +33,7 @@ from agents.components.datagen.tools.persistent_daytona import PersistentDaytona
 from agents.storage.redis_storage import RedisStorage
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import Checkpointer
 
 logger = structlog.get_logger(__name__)
 
@@ -45,6 +46,7 @@ class WorkflowManager:
         redis_storage: RedisStorage,
         daytona_manager: PersistentDaytonaManager,
         directory_content: list[str],
+        checkpointer: Checkpointer = None,
     ):
         """
         Initialize the workflow manager with language models.
@@ -71,6 +73,7 @@ class WorkflowManager:
         self.redis_storage = redis_storage
         self.daytona_manager = daytona_manager
         self.directory_content = directory_content
+        self.checkpointer = checkpointer
         self.agents = self.create_agents()
         self.setup_workflow()
 
@@ -331,7 +334,7 @@ class WorkflowManager:
         self.workflow.add_edge("Refiner", "Cleanup")
         self.workflow.add_edge("Cleanup", END)
 
-        self.graph = self.workflow.compile()
+        self.graph = self.workflow.compile(checkpointer=self.checkpointer)
 
     async def cleanup_node(self, state: dict) -> dict:
         """Node to perform cleanup."""

@@ -1,7 +1,8 @@
 import json
 import uuid
-from typing import Optional
+from typing import List, Optional
 
+from agents.api.routers.upload import process_and_store_file, upload_document
 from agents.components.compound.data_science_subgraph import (
     create_data_science_subgraph,
 )
@@ -9,8 +10,9 @@ from agents.components.compound.financial_analysis_subgraph import (
     create_financial_analysis_graph,
 )
 from agents.components.compound.xml_agent import get_global_checkpointer
+from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.components.open_deep_research.graph import create_deep_research_graph
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse
 from langgraph.types import Command, Interrupt
 from pydantic import BaseModel
@@ -24,14 +26,71 @@ class DeepResearchRequest(BaseModel):
     prompt: str
 
 
+class DataScienceRequest(BaseModel):
+    prompt: str
+
+
 class DeepResearchInteractiveRequest(BaseModel):
     prompt: str
     thread_id: Optional[str] = None
     resume: bool = False
 
 
-@router.post("/datascience")
-async def datascience_agent(request: Request, api_key: str):
+class DataScienceInteractiveRequest(BaseModel):
+    prompt: str
+    thread_id: Optional[str] = None
+    resume: bool = False
+
+
+@router.post("/datascience", tags=["Analysis"])
+async def datascience_agent_and_report(
+    request: Request,
+    files: List[UploadFile] = File(
+        ..., description="One or more files to be analyzed."
+    ),
+    authorization: Optional[str] = Header(
+        None, description="Authorization header with Bearer token."
+    ),
+):
+    """
+    Fire-and-forget data science API.
+    Submits a prompt and returns the final report in a single call.
+    """
+    # Extract API key from Authorization header (Bearer token)
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header with Bearer token is required",
+        )
+
+    file_ids = []
+    for file in files:
+        file_info = await process_and_store_file(request, file, api_key)
+        file_ids.append(file_info["file_id"])
+
+    api_key = authorization.replace("Bearer ", "")
+    checkpointer = get_global_checkpointer()
+    daytona_manager = PersistentDaytonaManager(
+        user_id=api_key,
+        redis_storage=request.app.state.redis_storage_service,
+        snapshot="data-analysis:0.0.10",
+        file_ids=file_ids,
+    )
+
+    agent = create_data_science_subgraph(
+        user_id=api_key,
+        sambanova_api_key=api_key,
+        redis_storage=request.app.state.redis_storage_service,
+        daytona_manager=daytona_manager,
+        directory_content=[],
+    )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK, content={"message": "Hello, world!"}
+    )
+
+
+@router.post("/datascience/interactive")
+async def datascience_interactive_agent(request: Request, api_key: str):
     agent = create_data_science_subgraph(
         user_id=request.app.state.user_id,
         sambanova_api_key=api_key,
@@ -39,7 +98,9 @@ async def datascience_agent(request: Request, api_key: str):
         daytona_manager=request.app.state.daytona_manager,
         directory_content=[],
     )
-    return JSONResponse(status_code=200, content={"message": "Hello, world!"})
+    return JSONResponse(
+        status_code=status.HTTP_200_OK, content={"message": "Hello, world!"}
+    )
 
 
 @router.post("/deepresearch")
@@ -55,7 +116,7 @@ async def deepresearch_agent(
     # Extract API key from Authorization header (Bearer token)
     if not authorization or not authorization.startswith("Bearer "):
         return JSONResponse(
-            status_code=401,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             content={"error": "Authorization header with Bearer token is required"},
         )
 
@@ -91,7 +152,7 @@ async def deepresearch_agent(
 
         if "final_report" in result_step2:
             return JSONResponse(
-                status_code=200,
+                status_code=status.HTTP_200_OK,
                 content={
                     "thread_id": thread_id,
                     "status": "completed",
@@ -100,7 +161,7 @@ async def deepresearch_agent(
             )
 
         return JSONResponse(
-            status_code=500,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "thread_id": thread_id,
                 "status": "error",
@@ -110,7 +171,7 @@ async def deepresearch_agent(
         )
     except Exception as e:
         return JSONResponse(
-            status_code=500,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "thread_id": thread_id,
                 "status": "error",
@@ -133,7 +194,7 @@ async def deepresearch_interactive_agent(
     # Extract API key from Authorization header (Bearer token)
     if not authorization or not authorization.startswith("Bearer "):
         return JSONResponse(
-            status_code=401,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             content={"error": "Authorization header with Bearer token is required"},
         )
 
@@ -177,7 +238,7 @@ async def deepresearch_interactive_agent(
             if isinstance(interrupt_message, Interrupt):
                 interrupt_message = interrupt_message.value
                 return JSONResponse(
-                    status_code=200,
+                    status_code=status.HTTP_200_OK,
                     content={
                         "thread_id": thread_id,
                         "status": "interrupted",
@@ -186,7 +247,7 @@ async def deepresearch_interactive_agent(
                 )
         elif "final_report" in result:
             return JSONResponse(
-                status_code=200,
+                status_code=status.HTTP_200_OK,
                 content={
                     "thread_id": thread_id,
                     "status": "completed",
@@ -195,7 +256,7 @@ async def deepresearch_interactive_agent(
             )
 
         return JSONResponse(
-            status_code=500,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "thread_id": thread_id,
                 "status": "completed",
@@ -204,7 +265,7 @@ async def deepresearch_interactive_agent(
         )
     except Exception as e:
         return JSONResponse(
-            status_code=500,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "thread_id": thread_id,
                 "status": "error",
@@ -224,7 +285,9 @@ async def compound_agent(request: Request, api_key: str):
         redis_storage=request.app.state.redis_storage_service,
         user_id=request.app.state.user_id,
     )
-    return JSONResponse(status_code=200, content={"message": "Hello, world!"})
+    return JSONResponse(
+        status_code=status.HTTP_200_OK, content={"message": "Hello, world!"}
+    )
 
 
 @router.post("/financialanalysis")
@@ -236,4 +299,6 @@ async def financialanalysis_agent(request: Request, api_key: str):
         redis_storage=request.app.state.redis_storage_service,
         user_id=request.app.state.user_id,
     )
-    return JSONResponse(status_code=200, content={"message": "Hello, world!"})
+    return JSONResponse(
+        status_code=status.HTTP_200_OK, content={"message": "Hello, world!"}
+    )
