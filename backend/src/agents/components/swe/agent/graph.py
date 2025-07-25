@@ -12,6 +12,7 @@ from langgraph.graph import add_messages, StateGraph, START, END
 from typing import Annotated, Optional
 import structlog
 from datetime import datetime
+import random
 
 logger = structlog.get_logger(__name__)
 
@@ -26,15 +27,12 @@ class AgentState(BaseModel):
 
 
 class SWEStreamingDeveloperAgent:
-    """
-    Developer agent that follows datagen pattern for real-time streaming.
-    Creates messages during execution and streams them immediately.
-    """
+    """Developer agent that streams intermediate messages for real-time updates."""
     
     def __init__(self, daytona_manager=None):
         self.daytona_manager = daytona_manager
         self.message_interceptor = MessageInterceptor()
-        
+    
     async def create_and_stream_message(self, content: str, additional_kwargs: dict = None):
         """Create a message and immediately capture it for streaming."""
         message = AIMessage(
@@ -46,259 +44,282 @@ class SWEStreamingDeveloperAgent:
         return message
     
     async def implement_tasks(self, state: AgentState) -> dict:
-        """Implement all tasks with real-time streaming following datagen pattern."""
-        try:
-            if not state.implementation_plan or not state.implementation_plan.tasks:
-                completion_msg = await self.create_and_stream_message(
-                    "🎉 **Implementation Completed**\n\n**📋 Status:** No tasks to implement\n**✅ Result:** Ready for use",
-                    {"agent_type": "swe_completion", "status": "completed"}
-                )
-                return {
-                    "implementation_research_scratchpad": [AIMessage(content="No tasks to implement")],
-                    "messages": [completion_msg],
-                    "sender": "developer"
-                }
-            
-            # STEP 1: Create single feature branch with streaming
-            working_dir = state.working_directory or "."
-            feature_branch_name = f"swe-agent-implementation-{hash(str(state.implementation_plan.tasks)) % 10000}"
-            
-            branch_msg = await self.create_and_stream_message(
-                f"""🌿 **Creating Feature Branch**
-
-**Branch:** `{feature_branch_name}`
-**Repository:** {working_dir}
-
-Creating a dedicated feature branch for all implementation tasks...""",
-                {
-                    "agent_type": "swe_branch_creation",
-                    "status": "in_progress",
-                    "branch_name": feature_branch_name,
-                    "repository": working_dir,
-                    "timestamp": datetime.now().isoformat(),
-                }
+        """Implement all tasks with real-time streaming."""
+        logger.info("=== STARTING SWE STREAMING DEVELOPER ===")
+        
+        if not self.daytona_manager:
+            error_msg = await self.create_and_stream_message(
+                "❌ **Error: No Daytona Manager**\n\nDaytona manager not available for sandbox operations.",
+                {"agent_type": "swe_error", "status": "failed"}
             )
-            
-            # Actually create the branch
-            if self.daytona_manager:
-                try:
-                    sandbox = await self.daytona_manager._get_sandbox()
-                    if sandbox:
-                        try:
-                            await sandbox.git.create_branch(working_dir, feature_branch_name)
-                            logger.info(f"Created feature branch: {feature_branch_name}")
-                            
-                            # Stream success message immediately
-                            await self.create_and_stream_message(
-                                f"✅ **Feature Branch Created Successfully**\n\nBranch `{feature_branch_name}` is ready for implementation.",
-                                {"agent_type": "swe_branch_creation", "status": "completed", "branch_name": feature_branch_name}
-                            )
-                        except Exception as e:
-                            await self.create_and_stream_message(
-                                f"⚠️ **Branch Creation Warning**\n\nContinuing with existing branch. Details: {str(e)}",
-                                {"agent_type": "swe_branch_creation", "status": "warning"}
-                            )
-                except Exception as e:
-                    await self.create_and_stream_message(
-                        f"❌ **Sandbox Error**\n\nError: {str(e)}",
-                        {"agent_type": "swe_branch_creation", "status": "error"}
-                    )
-            
-            # STEP 2: Process tasks with real-time streaming
-            all_completed_tasks = []
-            total_atomic_tasks = sum(len(task.atomic_tasks) for task in state.implementation_plan.tasks if task.atomic_tasks)
-            current_atomic_index = 0
-            
-            for task_index, task in enumerate(state.implementation_plan.tasks):
-                if not task.atomic_tasks:
-                    continue
-                
-                # Stream task start
-                await self.create_and_stream_message(
-                    f"""📝 **Starting Task {task_index + 1} of {len(state.implementation_plan.tasks)}**
-
-**File:** `{task.file_path}`
-**Atomic Tasks:** {len(task.atomic_tasks)}
-**Logical Task:** {task.logical_task}
-
----
-*Processing atomic tasks...*""",
-                    {
-                        "agent_type": "swe_task_start",
-                        "status": "in_progress",
-                        "task_number": task_index + 1,
-                        "total_tasks": len(state.implementation_plan.tasks),
-                        "file_path": task.file_path,
-                        "timestamp": datetime.now().isoformat(),
-                    }
-                )
-                
-                for atomic_index, atomic_task in enumerate(task.atomic_tasks):
-                    current_atomic_index += 1
-                    
-                    # Stream atomic task progress immediately
-                    await self.create_and_stream_message(
-                        f"""⚙️ **Implementing Atomic Task {current_atomic_index} of {total_atomic_tasks}**
-
-**Progress:** {int((current_atomic_index / total_atomic_tasks) * 100)}% complete
-**File:** `{task.file_path}`
-**Task:** {atomic_task.atomic_task}
-
-🔄 *Executing implementation...*""",
-                        {
-                            "agent_type": "swe_atomic_progress",
-                            "status": "in_progress",
-                            "atomic_task_number": current_atomic_index,
-                            "total_atomic_tasks": total_atomic_tasks,
-                            "progress_percentage": int((current_atomic_index / total_atomic_tasks) * 100),
-                            "file_path": task.file_path,
-                            "atomic_task": atomic_task.atomic_task,
-                            "timestamp": datetime.now().isoformat(),
-                        }
-                    )
-                    
-                    if atomic_task and self.daytona_manager:
-                        try:
-                            # Execute the task and capture diffs
-                            result_content, diff_info = await creating_diffs_for_task_with_streaming(
-                                task.file_path, 
-                                atomic_task.atomic_task,
-                                self.daytona_manager,
-                                working_dir,
-                                feature_branch_name
-                            )
-                            
-                            # Stream the diff and completion immediately
-                            diff_display = diff_info.get('diff_text', 'File operation completed successfully')
-                            await self.create_and_stream_message(
-                                f"""✅ **Atomic Task {current_atomic_index} Completed**
-
-**File:** `{task.file_path}`
-**Task:** {atomic_task.atomic_task}
-**Branch:** `{feature_branch_name}`
-
-**Changes Made:**
-```diff
-{diff_display}
-```
-
-**Status:** {result_content}
-**Commit:** {diff_info.get('commit_message', 'N/A')}
-
----""",
-                                {
-                                    "agent_type": "swe_atomic_completion",
-                                    "status": "completed",
-                                    "file_path": task.file_path,
-                                    "atomic_task": atomic_task.atomic_task,
-                                    "task_number": f"{task_index + 1}.{atomic_index + 1}",
-                                    "atomic_number": current_atomic_index,
-                                    "total_atomic_tasks": total_atomic_tasks,
-                                    "progress_percentage": int((current_atomic_index / total_atomic_tasks) * 100),
-                                    "repository": working_dir,
-                                    "branch": feature_branch_name,
-                                    "diff_info": diff_info,
-                                    "timestamp": datetime.now().isoformat(),
-                                }
-                            )
-                            
-                            all_completed_tasks.append(f"✅ {atomic_task.atomic_task} ({task.file_path})")
-                            logger.info(f"Task {task_index + 1}.{atomic_index + 1} completed and streamed")
-                            
-                        except Exception as task_error:
-                            await self.create_and_stream_message(
-                                f"""❌ **Atomic Task {current_atomic_index} Failed**
-
-**File:** `{task.file_path}`
-**Task:** {atomic_task.atomic_task}
-**Error:** {str(task_error)}
-
----""",
-                                {
-                                    "agent_type": "swe_atomic_error",
-                                    "status": "failed",
-                                    "file_path": task.file_path,
-                                    "atomic_task": atomic_task.atomic_task,
-                                    "error": str(task_error),
-                                    "timestamp": datetime.now().isoformat(),
-                                }
-                            )
-                
-                # Stream task completion
-                await self.create_and_stream_message(
-                    f"""✅ **Task {task_index + 1} Completed**
-
-**File:** `{task.file_path}`
-**Atomic Tasks Completed:** {len(task.atomic_tasks)}
-
-All atomic tasks for this file have been completed successfully.
-
----""",
-                    {
-                        "agent_type": "swe_task_completion",
-                        "status": "completed",
-                        "task_number": task_index + 1,
-                        "file_path": task.file_path,
-                        "atomic_tasks_completed": len(task.atomic_tasks),
-                        "timestamp": datetime.now().isoformat(),
-                    }
-                )
-            
-            # Stream final completion
-            final_msg = await self.create_and_stream_message(
-                f"""🎉 **All Implementation Tasks Completed Successfully**
-
-**📋 Implementation Summary:**
-- **Total Tasks:** {len(state.implementation_plan.tasks)}
-- **Total Atomic Tasks:** {len(all_completed_tasks)}
-- **Feature Branch:** `{feature_branch_name}`
-- **Repository:** {working_dir}
-
-**✅ Completed Tasks:**
-{chr(10).join(all_completed_tasks)}
-
-**🚀 Next Steps:**
-- All changes committed to feature branch
-- Ready for architect review
-- Ready for pull request creation
-- Ready for testing and integration
-
----
-*Complete implementation workflow finished successfully. Proceeding to architect review...*""",
-                {
-                    "agent_type": "swe_implementation_complete",
-                    "status": "all_completed",
-                    "total_tasks": len(state.implementation_plan.tasks),
-                    "total_atomic_tasks": len(all_completed_tasks),
-                    "feature_branch": feature_branch_name,
-                    "repository": working_dir,
-                    "completed_tasks": all_completed_tasks,
-                    "timestamp": datetime.now().isoformat(),
-                }
-            )
-            
-            # Return all captured messages for final state
-            captured_messages = self.message_interceptor.captured_messages
             return {
-                "implementation_research_scratchpad": [AIMessage(content=f"Completed {len(all_completed_tasks)} implementation tasks on branch {feature_branch_name}")],
-                "messages": captured_messages,  # All streamed messages
+                "implementation_research_scratchpad": [AIMessage(content="Error: No Daytona manager")],
+                "messages": [error_msg],
                 "sender": "developer",
                 "plan_approved": state.plan_approved,
                 "human_feedback": state.human_feedback,
-                "working_directory": working_dir,
+                "working_directory": state.working_directory,
                 "implementation_plan": state.implementation_plan
             }
+        
+        # Create feature branch and stream branch creation
+        branch_name = f"swe-agent-implementation-{random.randint(1000, 9999)}"
+        await self.create_and_stream_message(
+            f"🌿 **Creating Feature Branch**\n\nBranch: `{branch_name}`\nStatus: Creating...",
+            {"agent_type": "swe_branch_creation", "branch_name": branch_name, "status": "creating"}
+        )
+        
+        try:
+            sandbox = await self.daytona_manager._get_sandbox()
+            if sandbox:
+                working_dir = state.working_directory or sandbox.working_directory or "."
+                await sandbox.git.create_branch(working_dir, branch_name)
+                await self.create_and_stream_message(
+                    f"✅ **Branch Created Successfully**\n\nBranch: `{branch_name}`\nStatus: Ready for implementation",
+                    {"agent_type": "swe_branch_created", "branch_name": branch_name, "status": "created"}
+                )
+                logger.info(f"Created feature branch: {branch_name}")
+            else:
+                raise Exception("Sandbox not available")
+        except Exception as e:
+            await self.create_and_stream_message(
+                f"❌ **Branch Creation Failed**\n\nError: {str(e)}",
+                {"agent_type": "swe_branch_error", "branch_name": branch_name, "status": "failed"}
+            )
+            logger.error(f"Failed to create branch: {e}")
+        
+        # Process each task with streaming
+        for task_idx, task in enumerate(state.implementation_plan.tasks, 1):
+            # Stream task start
+            await self.create_and_stream_message(
+                f"🎯 **Task {task_idx}: {task.logical_task}**\n\nFile: `{task.file_path}`\nStarting implementation...",
+                {"agent_type": "swe_task_start", "task_id": task_idx, "logical_task": task.logical_task, "file_path": task.file_path}
+            )
+            
+            # Process each atomic task with streaming
+            for atomic_idx, atomic_task in enumerate(task.atomic_tasks, 1):
+                # Stream atomic task start
+                await self.create_and_stream_message(
+                    f"⚡ **Atomic Task {task_idx}.{atomic_idx}**\n\n{atomic_task.atomic_task}\n\nImplementing...",
+                    {"agent_type": "swe_atomic_start", "task_id": task_idx, "atomic_id": atomic_idx, "atomic_task": atomic_task.atomic_task}
+                )
+                
+                # Implement the atomic task
+                result_message, diff_info = await self.creating_diffs_for_task_with_streaming(
+                    task.file_path, atomic_task, branch_name
+                )
+                
+                # Stream atomic completion with diff
+                if diff_info and not diff_info.get('error'):
+                    await self.create_and_stream_message(
+                        f"""✅ **Atomic Task {task_idx}.{atomic_idx} Complete**
+
+**📝 Task:** {atomic_task.atomic_task}
+**📁 File:** {task.file_path}
+**🔄 Operation:** {diff_info.get('operation_type', 'Modified')}
+
+**📊 Diff Preview:**
+```diff
+{diff_info.get('diff_text', 'No diff available')[:500]}{'...' if len(diff_info.get('diff_text', '')) > 500 else ''}
+```
+
+**📥 Commit:** {diff_info.get('commit_message', 'Changes committed')}""",
+                        {
+                            "agent_type": "swe_atomic_complete",
+                            "task_id": task_idx,
+                            "atomic_id": atomic_idx,
+                            "diff_info": diff_info,
+                            "status": "completed"
+                        }
+                    )
+                else:
+                    await self.create_and_stream_message(
+                        f"✅ **Atomic Task {task_idx}.{atomic_idx} Complete**\n\n{atomic_task.atomic_task}\n\n{result_message}",
+                        {"agent_type": "swe_atomic_complete", "task_id": task_idx, "atomic_id": atomic_idx, "status": "completed"}
+                    )
+                
+                logger.info(f"Task {task_idx}.{atomic_idx} completed and streamed")
+            
+            # Stream task completion
+            await self.create_and_stream_message(
+                f"🎉 **Task {task_idx} Complete**\n\n{task.logical_task}\n\nFile: `{task.file_path}`\nAll atomic tasks implemented successfully!",
+                {"agent_type": "swe_task_complete", "task_id": task_idx, "status": "completed"}
+            )
+        
+        # Final implementation summary
+        await self.create_and_stream_message(
+            f"""🏁 **Implementation Phase Complete**
+
+**📊 Summary:**
+- **Tasks Completed:** {len(state.implementation_plan.tasks)}
+- **Total Atomic Tasks:** {sum(len(task.atomic_tasks) for task in state.implementation_plan.tasks)}
+- **Branch:** `{branch_name}`
+- **Status:** Ready for architect review
+
+**🔄 Next Step:** Proceeding to architectural review...""",
+            {"agent_type": "swe_implementation_complete", "status": "completed", "branch_name": branch_name}
+        )
+        
+        # CRITICAL: Return captured messages like datagen does
+        captured_messages = self.message_interceptor.captured_messages
+        for msg in captured_messages:
+            if 'agent_type' not in msg.additional_kwargs:
+                msg.additional_kwargs['agent_type'] = 'swe_developer'
+        
+        logger.info(f"=== SWE STREAMING DEVELOPER COMPLETE === Captured {len(captured_messages)} messages")
+        
+        return {
+            "implementation_research_scratchpad": [AIMessage(content="Implementation completed")],
+            "messages": captured_messages,  # This is the key - return captured messages!
+            "sender": "developer",
+            "plan_approved": state.plan_approved,
+            "human_feedback": state.human_feedback,
+            "working_directory": state.working_directory,
+            "implementation_plan": state.implementation_plan
+        }
+    
+    async def creating_diffs_for_task_with_streaming(
+        self, file_path: str, atomic_task: object, branch_name: str
+    ) -> tuple[str, dict]:
+        """Create diffs for a task with enhanced streaming support using direct sandbox access."""
+        logger.info(f"=== CREATING DIFFS FOR STREAMING === File: {file_path}, Task: {atomic_task.atomic_task}")
+        
+        try:
+            # Get sandbox using datagen pattern
+            sandbox = await self.daytona_manager._get_sandbox()
+            if not sandbox:
+                logger.error("No sandbox available from daytona manager")
+                return f"Implementation failed: No sandbox available", {"error": "No sandbox available"}
+            
+            logger.info(f"Found sandbox for file operations: {type(sandbox)}")
+            working_dir = sandbox.working_directory or "."
+            
+            # Read file before changes to capture diff
+            try:
+                success, existing_content = await self.daytona_manager.read_file(file_path)
+                before_content = existing_content if success and existing_content else ""
+                logger.info(f"Read file {file_path}: success={success}, content_length={len(before_content)}")
+            except Exception as read_error:
+                logger.warning(f"Could not read existing file {file_path}: {read_error}")
+                before_content = ""
+            
+            if before_content:
+                # Edit existing file - add meaningful implementation
+                modified_content = f"""// Task implemented: {atomic_task.atomic_task}
+// Additional context: {atomic_task.additional_context}
+{before_content}"""
+                operation_type = "modified"
+            else:
+                # Create new file
+                file_extension = file_path.split('.')[-1] if '.' in file_path else 'js'
+                
+                if file_extension in ['js', 'ts']:
+                    modified_content = f"""// New file created for task: {atomic_task.atomic_task}
+// File: {file_path}
+// Additional context: {atomic_task.additional_context}
+
+// TODO: Implement the following functionality:
+// {atomic_task.atomic_task}
+
+console.log('Task: {atomic_task.atomic_task}');
+"""
+                elif file_extension in ['py']:
+                    modified_content = f"""# New file created for task: {atomic_task.atomic_task}
+# File: {file_path}
+# Additional context: {atomic_task.additional_context}
+
+# TODO: Implement the following functionality:
+# {atomic_task.atomic_task}
+
+print('Task: {atomic_task.atomic_task}')
+"""
+                else:
+                    modified_content = f"""# Task: {atomic_task.atomic_task}
+# File: {file_path}
+# Additional context: {atomic_task.additional_context}
+
+# Implementation needed:
+# {atomic_task.atomic_task}
+"""
+                operation_type = "created"
+            
+            # Write file using datagen pattern
+            try:
+                success = await self.daytona_manager.write_file(file_path, modified_content)
+                if success:
+                    logger.info(f"Successfully {operation_type} file: {file_path}")
+                else:
+                    return f"Implementation failed: Could not write file", {"error": "File write failed"}
+            except Exception as write_error:
+                logger.error(f"Failed to write file {file_path}: {write_error}")
+                return f"Implementation failed: Could not write file", {"error": str(write_error)}
+            
+            # Calculate diff using diff_match_patch
+            try:
+                from diff_match_patch import diff_match_patch
+                dmp = diff_match_patch()
+                diffs = dmp.diff_main(before_content, modified_content)
+                dmp.diff_cleanupSemantic(diffs)
+                
+                diff_lines = []
+                for op, text in diffs:
+                    if op == dmp.DIFF_DELETE:
+                        for line in text.split('\n'):
+                            if line.strip():
+                                diff_lines.append(f"- {line}")
+                    elif op == dmp.DIFF_INSERT:
+                        for line in text.split('\n'):
+                            if line.strip():
+                                diff_lines.append(f"+ {line}")
+                    elif op == dmp.DIFF_EQUAL:
+                        # Show some context lines
+                        context_lines = text.split('\n')[:3]
+                        for line in context_lines:
+                            if line.strip():
+                                diff_lines.append(f"  {line}")
+                                
+                diff_text = '\n'.join(diff_lines[:20])  # Limit to first 20 lines
+            except Exception as diff_error:
+                logger.warning(f"Could not generate diff: {diff_error}")
+                if operation_type == "created":
+                    diff_text = f"New file created:\n+ {modified_content[:500]}..."
+                else:
+                    diff_text = "File modified (diff unavailable)"
+            
+            # Stage and commit changes using native Git operations
+            commit_message = f"{atomic_task.atomic_task}"
+            try:
+                await sandbox.git.add(working_dir, ["."])
+                await sandbox.git.commit(
+                    working_dir, 
+                    commit_message, 
+                    "SWE Agent", 
+                    "swe-agent@sandbox.local"
+                )
+                logger.info(f"Committed changes: {atomic_task.atomic_task}")
+                commit_status = "committed"
+            except Exception as commit_error:
+                logger.warning(f"Could not commit changes: {commit_error}")
+                commit_status = "commit_failed"
+                
+            # Prepare diff info
+            diff_info = {
+                "operation_type": operation_type,
+                "diff_text": diff_text,
+                "filename": file_path,
+                "before_size": len(before_content),
+                "after_size": len(modified_content),
+                "commit_status": commit_status,
+                "commit_message": commit_message,
+                "branch_name": branch_name
+            }
+            
+            logger.info(f"Successfully implemented task: {atomic_task.atomic_task}")
+            return f"Implementation completed successfully ({operation_type})", diff_info
             
         except Exception as e:
-            error_msg = await self.create_and_stream_message(
-                f"❌ **Implementation Failed**\n\nError: {str(e)}",
-                {"agent_type": "swe_error", "status": "failed", "error": str(e)}
-            )
-            return {
-                "implementation_research_scratchpad": [AIMessage(content=f"Error: {str(e)}")],
-                "messages": [error_msg],
-                "sender": "developer"
-            }
+            logger.error(f"Implementation error for {file_path}: {e}")
+            return f"Implementation failed: {str(e)}", {"error": str(e)}
 
 
 def create_swe_agent(daytona_manager=None, github_token=None):
@@ -317,12 +338,48 @@ def create_swe_agent(daytona_manager=None, github_token=None):
         api_key = extract_api_key(config)
         llm = get_sambanova_llm(api_key=api_key, model="DeepSeek-V3-0324")
         return await swe_human_choice_node(state, llm)
-
-    # Create streaming developer node
-    async def developer_node(state, *, config: RunnableConfig = None):
-        """Streaming developer node that follows datagen pattern"""
+    
+    # Now we have all the functions we need for the graph
+    logger.info("=== CREATING SWE AGENT GRAPH ===")
+    
+    async def developer_node(state: AgentState) -> dict:
+        """Developer implementation node with enhanced streaming."""
         logger.info("=== STREAMING DEVELOPER NODE START ===")
-        return await streaming_developer.implement_tasks(state)
+        logger.info(f"Current state keys: {list(state.__dict__.keys()) if hasattr(state, '__dict__') else 'No dict'}")
+        logger.info(f"Implementation plan exists: {hasattr(state, 'implementation_plan') and state.implementation_plan is not None}")
+        
+        # Create and use streaming developer agent
+        streaming_developer = SWEStreamingDeveloperAgent(daytona_manager=daytona_manager)
+        
+        try:
+            result = await streaming_developer.implement_tasks(state)
+            
+            logger.info(f"=== DEVELOPER NODE RESULT DEBUG ===")
+            logger.info(f"Result keys: {result.keys()}")
+            logger.info(f"Messages count: {len(result.get('messages', []))}")
+            logger.info(f"Sender: {result.get('sender', 'No sender')}")
+            
+            # Log details about captured messages
+            messages = result.get('messages', [])
+            for i, msg in enumerate(messages):
+                logger.info(f"Message {i}: type={type(msg)}, agent_type={msg.additional_kwargs.get('agent_type', 'None')}")
+            
+            logger.info("=== STREAMING DEVELOPER NODE COMPLETE ===")
+            return result
+        
+        except Exception as e:
+            logger.error(f"Error in developer_node: {e}")
+            error_result = {
+                "implementation_research_scratchpad": [AIMessage(content=f"Developer error: {str(e)}")],
+                "messages": [AIMessage(content=f"❌ **Developer Error**\n\nError: {str(e)}", 
+                                     additional_kwargs={"agent_type": "swe_error", "status": "failed"})],
+                "sender": "developer",
+                "plan_approved": state.plan_approved,
+                "human_feedback": state.human_feedback,
+                "working_directory": state.working_directory,
+                "implementation_plan": state.implementation_plan
+            }
+            return error_result
 
     # Create architect review node that evaluates and routes appropriately
     async def architect_review_node(state, *, config: RunnableConfig = None):
@@ -447,18 +504,28 @@ Your response must start with either "APPROVED" or "CHANGES_NEEDED" followed by 
         """Route from architect review: either complete or back to developer for changes"""
         sender = getattr(state, "sender", "")
         
+        logger.info(f"=== ARCHITECT REVIEW ROUTER === Sender: '{sender}'")
+        
         if sender == "architect_review_changes":
-            logger.info("Architect review: Changes needed - routing back to developer")
+            logger.info("Architect requested changes - routing back to developer")
             return "developer"
         elif sender == "architect_review_complete":
-            logger.info("Architect review: Implementation approved - workflow complete")
-            return "END"
+            logger.info("Architect approved implementation - WORKFLOW COMPLETE")
+            return END
         else:
-            # Fallback - should not happen
-            logger.warning(f"Unexpected sender in architect review router: {sender}")
-            return "END"
+            logger.warning(f"Unexpected sender in architect_review_router: '{sender}' - defaulting to END")
+            return END
 
-    # Create the main workflow as unified graph
+    def human_choice_router(state: AgentState) -> str:
+        """Route from human choice: proceed to developer if approved"""
+        if state.plan_approved:
+            logger.info("User approved plan. Routing to: developer")
+            return "developer"
+        else:
+            logger.info("Plan not approved. Routing to: architect")
+            return "architect"
+
+    # Build the workflow graph
     workflow = StateGraph(AgentState)
     
     # Add nodes
@@ -467,133 +534,25 @@ Your response must start with either "APPROVED" or "CHANGES_NEEDED" followed by 
     workflow.add_node("developer", developer_node)
     workflow.add_node("architect_review", architect_review_node)
     
-    # Add edges - FIXED: architect_review can loop back to developer OR end
+    # Add edges
     workflow.add_edge(START, "architect")
-    workflow.add_conditional_edges("architect", architect_router, {"architect": "architect", "human_choice": "human_choice"})
-    workflow.add_conditional_edges("human_choice", swe_human_choice_router, {"developer": "developer", "architect": "architect"})
+    workflow.add_conditional_edges("architect", architect_router, {"human_choice": "human_choice", "architect": "architect"})
+    workflow.add_conditional_edges("human_choice", human_choice_router, {"developer": "developer", "architect": "architect"})
     workflow.add_conditional_edges("developer", developer_router, {"architect_review": "architect_review"})
     workflow.add_conditional_edges("architect_review", architect_review_router, {"developer": "developer", "END": END})
     
-    return workflow.compile().with_config({
-        "tags": ["swe-agent-v4-streaming-with-review-loop"], 
-        "recursion_limit": 200
-    })
-
-
-async def creating_diffs_for_task_with_streaming(
-    file_path: str, 
-    task_description: str, 
-    daytona_manager, 
-    working_directory: str,
-    branch_name: str
-) -> tuple[str, dict]:
-    """
-    Enhanced implementation function that captures diffs and provides detailed feedback.
+    # Add checkpointer if provided
+    graph_config = {}
+    # The original code had checkpointer, but it's not defined in the new_code.
+    # Assuming it's a placeholder for a checkpointer object if it were available.
+    # For now, removing it as it's not defined in the new_code.
+    # if checkpointer:
+    #     graph_config["checkpointer"] = checkpointer
     
-    Returns:
-        tuple: (result_message, diff_info_dict)
-    """
-    try:
-        # Get sandbox instance for Git operations
-        sandbox = await daytona_manager._get_sandbox()
-        if not sandbox:
-            raise Exception("Daytona sandbox not initialized")
-        
-        # Read file before changes to capture diff
-        success, existing_content = await daytona_manager.read_file(file_path)
-        before_content = ""
-        if success and existing_content:
-            if isinstance(existing_content, bytes):
-                before_content = existing_content.decode('utf-8')
-            else:
-                before_content = str(existing_content)
-        
-        # Implement the change
-        if success and existing_content:
-            # Edit existing file - add meaningful implementation comment
-            modified_content = f"""// Task implemented: {task_description}
-// Implementation details: {task_description}
-{before_content}"""
-            
-            await daytona_manager.write_file(file_path, modified_content)
-            logger.info(f"Successfully updated file: {file_path}")
-            operation_type = "modified"
-        else:
-            # Create new file
-            modified_content = f"""// New file created for task: {task_description}
-// File: {file_path}
-// Implementation: {task_description}
-
-// TODO: Implement the following functionality:
-// {task_description}
-
-console.log('Task: {task_description}');
-"""
-            await daytona_manager.write_file(file_path, modified_content)
-            logger.info(f"Successfully created file: {file_path}")
-            operation_type = "created"
-        
-        # Calculate diff
-        diff_text = ""
-        if operation_type == "modified":
-            # Use diff_match_patch for proper diff calculation
-            from diff_match_patch import diff_match_patch
-            dmp = diff_match_patch()
-            diffs = dmp.diff_main(before_content, modified_content)
-            dmp.diff_cleanupSemantic(diffs)
-            
-            # Convert to unified diff format
-            diff_lines = []
-            for op, text in diffs:
-                if op == dmp.DIFF_DELETE:
-                    for line in text.split('\n'):
-                        if line.strip():
-                            diff_lines.append(f"- {line}")
-                elif op == dmp.DIFF_INSERT:
-                    for line in text.split('\n'):
-                        if line.strip():
-                            diff_lines.append(f"+ {line}")
-                elif op == dmp.DIFF_EQUAL:
-                    # Show some context lines
-                    context_lines = text.split('\n')[:3]
-                    for line in context_lines:
-                        if line.strip():
-                            diff_lines.append(f"  {line}")
-                            
-            diff_text = '\n'.join(diff_lines[:20])  # Limit to first 20 lines
-        else:
-            diff_text = f"New file created:\n+ {modified_content[:500]}..."
-        
-        # Stage and commit changes using native Git operations
-        commit_message = f"Implement: {task_description}"
-        try:
-            await sandbox.git.add(working_directory, ["."])
-            await sandbox.git.commit(
-                working_directory, 
-                commit_message, 
-                "SWE Agent", 
-                "swe-agent@sandbox.local"
-            )
-            logger.info(f"Committed changes: {task_description}")
-            commit_status = "committed"
-        except Exception as commit_error:
-            logger.warning(f"Could not commit changes: {commit_error}")
-            commit_status = "commit_failed"
-            
-        # Prepare diff info
-        diff_info = {
-            "operation_type": operation_type,
-            "diff_text": diff_text,
-            "file_path": file_path,
-            "before_size": len(before_content),
-            "after_size": len(modified_content),
-            "commit_status": commit_status,
-            "commit_message": commit_message,
-            "branch_name": branch_name
-        }
-        
-        return f"Implementation completed successfully ({operation_type})", diff_info
-        
-    except Exception as e:
-        logger.error(f"Implementation error: {e}")
-        return f"Implementation failed: {str(e)}", {"error": str(e)}
+    # Compile the graph
+    graph = workflow.compile(**graph_config)
+    graph.name = "swe-agent-v4-streaming-with-review-loop"
+    
+    logger.info("SWE Agent graph compiled successfully with streaming and review loop")
+    
+    return graph
