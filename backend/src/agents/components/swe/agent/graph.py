@@ -10,6 +10,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import add_messages, StateGraph, START, END
 from typing import Annotated, Optional
 import structlog
+from datetime import datetime
 
 logger = structlog.get_logger(__name__)
 
@@ -94,9 +95,35 @@ def create_swe_agent(daytona_manager=None, github_token=None):
                     
                     debug_logger.info("Task implementation completed successfully")
                     
+                    # Create detailed success message with file and commit information
+                    success_content = f"""✅ **Successfully Implemented: {atomic_task.atomic_task}**
+
+**📄 File Updated:** `{task.file_path}`
+
+**🔧 Changes Made:**
+- {atomic_task.atomic_task}
+- Changes committed to feature branch
+
+**📁 Repository:** {state.working_directory or "."}
+
+**✅ Status:** Implementation completed successfully
+
+---
+*Ready for next task or testing*"""
+                    
                     return_state = {
                         "implementation_research_scratchpad": [AIMessage(content=f"Implemented: {atomic_task.atomic_task}")],
-                        "messages": [AIMessage(content=f"✅ Successfully implemented task: {atomic_task.atomic_task}\n\nFile updated: {task.file_path}")],
+                        "messages": [AIMessage(
+                            content=success_content,
+                            additional_kwargs={
+                                "agent_type": "swe_implementation",
+                                "status": "completed",
+                                "file_path": task.file_path,
+                                "task_completed": atomic_task.atomic_task,
+                                "repository": state.working_directory or ".",
+                                "timestamp": datetime.now().isoformat(),
+                            }
+                        )],
                         "sender": "developer",
                         "plan_approved": state.plan_approved,  # Preserve existing values
                         "human_feedback": state.human_feedback,
@@ -116,9 +143,32 @@ def create_swe_agent(daytona_manager=None, github_token=None):
             
             debug_logger.info("Implementation completed - no more tasks")
             
+            # Create detailed completion message
+            completion_content = f"""🎉 **All Implementation Tasks Completed Successfully**
+
+**📋 Implementation Plan:** Fully executed
+**📁 Repository:** {state.working_directory or "."}
+**✅ Status:** All tasks completed
+
+**🚀 Next Steps:**
+- All changes have been committed to feature branch
+- Ready for testing and integration
+- Consider creating a pull request for code review
+
+---
+*Implementation workflow completed successfully*"""
+            
             return_state = {
                 "implementation_research_scratchpad": [AIMessage(content="Implementation completed")],
-                "messages": [AIMessage(content="✅ Implementation completed successfully")],
+                "messages": [AIMessage(
+                    content=completion_content,
+                    additional_kwargs={
+                        "agent_type": "swe_completion",
+                        "status": "all_completed",
+                        "repository": state.working_directory or ".",
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )],
                 "sender": "developer",
                 "plan_approved": state.plan_approved,  # Preserve existing values
                 "human_feedback": state.human_feedback,

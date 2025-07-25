@@ -226,7 +226,42 @@ def swe_state_output_mapper(result: Dict) -> AIMessage:
             else:
                 logger.info(f"Key '{key}' has value type: {type(value).__name__}")
     
-    # Check if implementation was completed
+    # FOLLOW DATAGEN PATTERN: Use the last message from the detailed work
+    # Check if we have messages with detailed work information
+    if result.get("messages") and len(result["messages"]) > 0:
+        # Get the last message which contains the detailed implementation work
+        last_message = result["messages"][-1]
+        
+        # If it's already an AIMessage, preserve it and enhance with SWE-specific info
+        if hasattr(last_message, 'model_copy'):
+            enhanced_message = last_message.model_copy(
+                update={
+                    "additional_kwargs": {
+                        **(last_message.additional_kwargs or {}),
+                        "agent_type": "swe_completion",
+                        "status": "completed",
+                        "implementation_complete": True,
+                    }
+                }
+            )
+            logger.info("Returning enhanced detailed message from SWE work")
+            logger.info("=== END SWE STATE OUTPUT MAPPER DEBUG ===")
+            return enhanced_message
+        else:
+            # Convert dict to AIMessage if needed
+            content = last_message.get("content", "SWE implementation completed")
+            additional_kwargs = {
+                **(last_message.get("additional_kwargs", {})),
+                "agent_type": "swe_completion", 
+                "status": "completed",
+                "implementation_complete": True,
+            }
+            
+            logger.info("Returning converted detailed message from SWE work")
+            logger.info("=== END SWE STATE OUTPUT MAPPER DEBUG ===")
+            return AIMessage(content=content, additional_kwargs=additional_kwargs)
+    
+    # FALLBACK: If no detailed messages, check completion status
     if result.get("plan_approved") and not result.get("implementation_plan"):
         # Implementation completed successfully
         content = """✅ **Implementation Completed Successfully**
@@ -245,18 +280,15 @@ The SWE agent has successfully completed the requested implementation:
 
 The implementation is complete and ready for use!"""
         
-        # DEBUG: Log what we're about to return
         additional_kwargs = {
             "agent_type": "swe_completion",
-            "status": "completed",
+            "status": "completed", 
             "implementation_complete": True,
         }
         logger.info("Returning completion message with additional_kwargs:", additional_kwargs=additional_kwargs)
+        logger.info("=== END SWE STATE OUTPUT MAPPER DEBUG ===")
         
-        return AIMessage(
-            content=content,
-            additional_kwargs=additional_kwargs,
-        )
+        return AIMessage(content=content, additional_kwargs=additional_kwargs)
     
     # Handle planning phase
     implementation_plan = result.get("implementation_plan")
@@ -308,10 +340,9 @@ The SWE agent has analyzed your requirements and conducted research on the imple
         try:
             if hasattr(implementation_plan, 'model_dump'):
                 plan_data = implementation_plan.model_dump()
-                # Check for None values in the plan data
-                for key, value in plan_data.items():
-                    if value is None:
-                        logger.warning(f"Found None value in implementation_plan.{key}")
+                # Remove any None values from the plan data
+                if isinstance(plan_data, dict):
+                    plan_data = {k: v for k, v in plan_data.items() if v is not None}
                 additional_kwargs["implementation_plan"] = plan_data
             else:
                 # Fallback for non-Pydantic objects
@@ -324,10 +355,7 @@ The SWE agent has analyzed your requirements and conducted research on the imple
     logger.info("Returning planning message with additional_kwargs:", additional_kwargs=additional_kwargs)
     logger.info("=== END SWE STATE OUTPUT MAPPER DEBUG ===")
     
-    return AIMessage(
-        content=content,
-        additional_kwargs=additional_kwargs,
-    )
+    return AIMessage(content=content, additional_kwargs=additional_kwargs)
 
 
 def get_swe_subgraph_config(

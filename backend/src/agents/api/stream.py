@@ -194,6 +194,16 @@ async def astream_state_websocket(
         )
 
 
+def _remove_none_values(data):
+    """Recursively remove None values from dictionaries and lists."""
+    if isinstance(data, dict):
+        return {k: _remove_none_values(v) for k, v in data.items() if v is not None}
+    elif isinstance(data, list):
+        return [_remove_none_values(item) for item in data if item is not None]
+    else:
+        return data
+
+
 def convert_messages_to_dict(output_list):
     """Convert message objects to dictionaries in the output data."""
     result = []
@@ -219,11 +229,15 @@ def convert_messages_to_dict(output_list):
                     # Pydantic v2 style
                     msg_dict = value.model_dump()
                     msg_dict["type"] = value.__class__.__name__
+                    # Remove None values to prevent WebSocket serialization errors
+                    msg_dict = _remove_none_values(msg_dict)
                     converted_item[key] = msg_dict
                 elif hasattr(value, "dict"):
                     # Pydantic v1 style
                     msg_dict = value.dict()
                     msg_dict["type"] = value.__class__.__name__
+                    # Remove None values to prevent WebSocket serialization errors
+                    msg_dict = _remove_none_values(msg_dict)
                     converted_item[key] = msg_dict
                 else:
                     converted_item[key] = value
@@ -246,6 +260,10 @@ def convert_messages_to_dict(output_list):
 
             # Add the message type
             msg_dict["type"] = item.__class__.__name__
+            
+            # Remove None values to prevent WebSocket serialization errors
+            msg_dict = _remove_none_values(msg_dict)
+            
             result.append(msg_dict)
 
         elif isinstance(item, Interrupt):

@@ -158,6 +158,12 @@ def create_progress_message(
     Returns:
         AIMessage with progress information
     """
+    # Safely handle None values
+    current_task = current_task if current_task is not None else 0
+    total_tasks = total_tasks if total_tasks is not None else 1
+    task_description = task_description if task_description is not None else "Unknown task"
+    repository_name = repository_name if repository_name is not None else ""
+    
     percentage = int((current_task / total_tasks) * 100) if total_tasks > 0 else 0
     
     repo_info = f" in **{repository_name}**" if repository_name else ""
@@ -193,10 +199,14 @@ def create_repository_context_message(repo_info: dict) -> AIMessage:
     Returns:
         AIMessage with repository context
     """
-    repo_name = repo_info.get("full_name", "Unknown Repository")
-    description = repo_info.get("description", "No description available")
-    language = repo_info.get("language", "Unknown")
-    branch = repo_info.get("branch", "main")
+    # Safely handle None values and missing keys
+    if not repo_info or not isinstance(repo_info, dict):
+        repo_info = {}
+    
+    repo_name = repo_info.get("full_name", "Unknown Repository") or "Unknown Repository"
+    description = repo_info.get("description", "No description available") or "No description available"
+    language = repo_info.get("language", "Unknown") or "Unknown"
+    branch = repo_info.get("branch", "main") or "main"
     
     content = f"""📁 **Repository Context Set**
 
@@ -208,11 +218,17 @@ def create_repository_context_message(repo_info: dict) -> AIMessage:
 
 🔄 Analyzing repository structure and preparing for implementation..."""
     
+    # Create a clean repo_info dict without None values
+    clean_repo_info = {}
+    for key, value in repo_info.items():
+        if value is not None:
+            clean_repo_info[key] = value
+    
     return AIMessage(
         content=content,
         additional_kwargs={
             "agent_type": "swe_repository_context",
-            "repository": repo_info,
+            "repository": clean_repo_info,
         }
     )
 
@@ -253,13 +269,34 @@ def create_implementation_plan_message(plan: ImplementationPlan) -> AIMessage:
 ---
 *Starting implementation process...*"""
     
+    # Safely serialize the plan data to avoid None values
+    plan_data = None
+    try:
+        if hasattr(plan, 'model_dump'):
+            plan_data = plan.model_dump()
+            # Remove any None values from the plan data
+            if isinstance(plan_data, dict):
+                plan_data = {k: v for k, v in plan_data.items() if v is not None}
+        else:
+            plan_data = str(plan)
+    except Exception as e:
+        import structlog
+        logger = structlog.get_logger(__name__)
+        logger.warning("Failed to serialize implementation plan", error=str(e))
+        plan_data = f"Implementation plan with {len(plan.tasks)} tasks"
+    
+    additional_kwargs = {
+        "agent_type": "swe_implementation_plan",
+        "total_tasks": len(plan.tasks),
+    }
+    
+    # Only add plan data if it's safe to serialize
+    if plan_data and plan_data != "":
+        additional_kwargs["plan"] = plan_data
+    
     return AIMessage(
         content=content,
-        additional_kwargs={
-            "agent_type": "swe_implementation_plan",
-            "plan": plan.model_dump() if hasattr(plan, 'model_dump') else str(plan),
-            "total_tasks": len(plan.tasks),
-        }
+        additional_kwargs=additional_kwargs
     )
 
 
