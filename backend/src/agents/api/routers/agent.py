@@ -1,8 +1,11 @@
 import json
+import re
 import uuid
 from typing import List, Optional
 
+import markdown
 from agents.api.routers.upload import process_and_store_file, upload_document
+from agents.api.utils import replace_redis_chart
 from agents.components.compound.data_science_subgraph import (
     create_data_science_subgraph,
 )
@@ -22,7 +25,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command, Interrupt
 from pydantic import BaseModel
@@ -73,53 +76,82 @@ async def datascience_agent_and_report(
     thread_id = str(uuid.uuid4())
     api_key = authorization.replace("Bearer ", "")
 
-    file_ids = []
-    file_names = []
-    for file in files:
-        file_info = await process_and_store_file(request, file, api_key)
-        file_ids.append(file_info["file_id"])
-        file_names.append(file_info["filename"])
+    try:
+        file_ids = []
+        file_names = []
+        for file in files:
+            file_info = await process_and_store_file(request, file, api_key)
+            file_ids.append(file_info["file_id"])
+            file_names.append(file_info["filename"])
 
-    checkpointer = get_global_checkpointer()
-    daytona_manager = PersistentDaytonaManager(
-        user_id=api_key,
-        redis_storage=request.app.state.redis_storage_service,
-        snapshot="data-analysis:0.0.10",
-        file_ids=file_ids,
-    )
+        checkpointer = get_global_checkpointer()
+        daytona_manager = PersistentDaytonaManager(
+            user_id=api_key,
+            redis_storage=request.app.state.redis_storage_service,
+            snapshot="data-analysis:0.0.10",
+            file_ids=file_ids,
+        )
 
-    agent = create_data_science_subgraph(
-        user_id=api_key,
-        sambanova_api_key=api_key,
-        redis_storage=request.app.state.redis_storage_service,
-        daytona_manager=daytona_manager,
-        directory_content=file_names,
-        checkpointer=checkpointer,
-    )
-    results = await agent.ainvoke(
-        {
-            "internal_messages": [HumanMessage(content=prompt, id=str(uuid.uuid4()))],
-            "hypothesis": "",
-            "process": "",
-            "process_decision": None,
-            "visualization_state": "",
-            "searcher_state": "",
-            "code_state": "",
-            "report_section": "",
-            "quality_review": "",
-            "needs_revision": False,
-            "sender": "",
-        },
-        config={"configurable": {"thread_id": thread_id}},
-    )
-    graph_input_step2 = Command(resume="APPROVE")
-    result_step2 = await agent.ainvoke(
-        graph_input_step2,
-        config={"configurable": {"thread_id": thread_id}},
-    )
-    return JSONResponse(
-        status_code=status.HTTP_200_OK, content={"message": "Hello, world!"}
-    )
+        agent = create_data_science_subgraph(
+            user_id=api_key,
+            sambanova_api_key=api_key,
+            redis_storage=request.app.state.redis_storage_service,
+            daytona_manager=daytona_manager,
+            directory_content=file_names,
+            checkpointer=checkpointer,
+        )
+        results = await agent.ainvoke(
+            {
+                "internal_messages": [
+                    HumanMessage(content=prompt, id=str(uuid.uuid4()))
+                ],
+                "hypothesis": "",
+                "process": "",
+                "process_decision": None,
+                "visualization_state": "",
+                "searcher_state": "",
+                "code_state": "",
+                "report_section": "",
+                "quality_review": "",
+                "needs_revision": False,
+                "sender": "",
+            },
+            config={"configurable": {"thread_id": thread_id}},
+        )
+        graph_input_step2 = Command(resume="APPROVE")
+        result_step2 = await agent.ainvoke(
+            graph_input_step2,
+            config={"configurable": {"thread_id": thread_id}},
+        )
+        markdown_report = result_step2["internal_messages"][-1].content
+        files = result_step2["internal_messages"][-1].additional_kwargs["files"]
+        files_content = {}
+        for file in files:
+            file_data, file_metadata = (
+                await request.app.state.redis_storage_service.get_file(api_key, file)
+            )
+            files_content[file] = file_data
+
+        # Find and replace redis-chart URLs in markdown
+        markdown_report = re.sub(
+            r"!\[(.*?)\]\(redis-chart:([^)]+)\)",
+            lambda match: replace_redis_chart(files_content, match),
+            markdown_report,
+        )
+
+        html_report = markdown.markdown(
+            markdown_report, extensions=["tables", "fenced_code"]
+        )
+        return HTMLResponse(content=html_report, status_code=status.HTTP_200_OK)
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "thread_id": thread_id,
+                "status": "error",
+                "error": str(e),
+            },
+        )
 
 
 @router.post("/datascience/interactive")

@@ -509,6 +509,8 @@ def get_daytona_read_document(manager: PersistentDaytonaManager):
         This function reads the specified file from the sandbox and returns its content.
         Optionally, it can return a specific range of lines.
 
+        Note: if start and end are not provided, it will return the first 10 lines of the document.
+
         Args:
             filename: Name of the file to read
             start: Starting line number to read from (0-based indexing)
@@ -528,13 +530,13 @@ def get_daytona_read_document(manager: PersistentDaytonaManager):
             # Split content into lines for range reading
             lines = content.splitlines()
 
-            # Handle line range selection
-            if start is None:
+            if start is None or end is None:
                 start = 0
+                end = 10
 
             # Get the specified range of lines
             selected_lines = lines[start:end]
-            result_content = "\n".join(selected_lines)
+            result_content = b"".join(selected_lines).decode("utf-8")
 
             logger.info(
                 "Document read successfully from sandbox",
