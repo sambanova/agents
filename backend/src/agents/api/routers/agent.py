@@ -1,3 +1,4 @@
+import base64
 import json
 import re
 import uuid
@@ -155,26 +156,233 @@ async def datascience_agent_and_report(
 
 
 @router.post("/datascience/interactive")
-async def datascience_agent_and_report(
+async def datascience_interactive(
     request: Request,
-    prompt: str = Form(..., description="The main prompt for the data science agent."),
-    files: List[UploadFile] = File(
-        ..., description="One or more files to be analyzed."
-    ),
-    authorization: Optional[str] = Header(
-        None, description="Authorization header with Bearer token."
+    prompt: str = Form(...),
+    authorization: Optional[str] = Header(None),
+    resume: bool = Form(False),
+    thread_id: Optional[str] = Form(None),
+    files: Optional[List[UploadFile]] = File(None),
+    file_ids_json: Optional[str] = Form(
+        None, description="A JSON string of file IDs, required for resuming a session"
     ),
 ):
-    agent = create_data_science_subgraph(
-        user_id=request.app.state.user_id,
-        sambanova_api_key=api_key,
-        redis_storage=request.app.state.redis_storage_service,
-        daytona_manager=request.app.state.daytona_manager,
-        directory_content=[],
-    )
-    return JSONResponse(
-        status_code=status.HTTP_200_OK, content={"message": "Hello, world!"}
-    )
+    """
+    Two-step interactive data science API:
+    Step 1: Submit prompt and files, get thread_id and hypothesis for approval.
+    Step 2: Submit prompt with thread_id, file_ids_json, and resume=true to get the final report.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header with Bearer token is required",
+        )
+    api_key = authorization.replace("Bearer ", "")
+
+    try:
+        if not resume:
+            # Step 1: Hypothesis Generation
+            if not files:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Files are required for the initial request.",
+                )
+
+            new_thread_id = str(uuid.uuid4())
+            file_ids = []
+            file_names = []
+            for file in files:
+                file_info = await process_and_store_file(request, file, api_key)
+                file_ids.append(file_info["file_id"])
+                file_names.append(file_info["filename"])
+
+            checkpointer = get_global_checkpointer()
+            daytona_manager = PersistentDaytonaManager(
+                user_id=api_key,
+                redis_storage=request.app.state.redis_storage_service,
+                snapshot="data-analysis:0.0.10",
+                file_ids=file_ids,
+            )
+
+            agent = create_data_science_subgraph(
+                user_id=api_key,
+                sambanova_api_key=api_key,
+                redis_storage=request.app.state.redis_storage_service,
+                daytona_manager=daytona_manager,
+                directory_content=file_names,
+                checkpointer=checkpointer,
+            )
+
+            result = await agent.ainvoke(
+                {
+                    "internal_messages": [
+                        HumanMessage(content=prompt, id=str(uuid.uuid4()))
+                    ],
+                    "hypothesis": "",
+                    "process": "",
+                    "process_decision": None,
+                    "visualization_state": "",
+                    "searcher_state": "",
+                    "code_state": "",
+                    "report_section": "",
+                    "quality_review": "",
+                    "needs_revision": False,
+                    "sender": "",
+                },
+                config={"configurable": {"thread_id": new_thread_id}},
+            )
+
+            # Manually stop sandbox
+            await daytona_manager.cleanup()
+
+            if "__interrupt__" in result and len(result["__interrupt__"]) > 0:
+                interrupt_message = result["__interrupt__"][0]
+                if isinstance(interrupt_message, Interrupt):
+                    interrupt_message = interrupt_message.value
+                    return JSONResponse(
+                        status_code=status.HTTP_200_OK,
+                        content={
+                            "thread_id": new_thread_id,
+                            "file_ids": file_ids,
+                            "status": "interrupted",
+                            "result": interrupt_message,
+                        },
+                    )
+
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={
+                    "thread_id": new_thread_id,
+                    "status": "completed",
+                    "result": "Unable to extract hypothesis from the graph",
+                },
+            )
+        else:
+            # Step 2: Execution and Reporting
+            if not thread_id or not file_ids_json:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="thread_id and file_ids_json are required for resuming.",
+                )
+
+            file_ids = json.loads(file_ids_json)
+            # We need file_names, but they are not passed from step 1.
+            # For now, let's retrieve them, but this is inefficient.
+            # A better solution would be to store them or pass them along.
+            file_names = []
+            for file_id in file_ids:
+                _, metadata = await request.app.state.redis_storage_service.get_file(
+                    api_key, file_id
+                )
+                file_names.append(metadata["filename"])
+
+            checkpointer = get_global_checkpointer()
+            daytona_manager = PersistentDaytonaManager(
+                user_id=api_key,
+                redis_storage=request.app.state.redis_storage_service,
+                snapshot="data-analysis:0.0.10",
+                file_ids=file_ids,
+            )
+
+            agent = create_data_science_subgraph(
+                user_id=api_key,
+                sambanova_api_key=api_key,
+                redis_storage=request.app.state.redis_storage_service,
+                daytona_manager=daytona_manager,
+                directory_content=file_names,
+                checkpointer=checkpointer,
+            )
+
+            graph_input_step2 = Command(resume=prompt)
+            result_step2 = await agent.ainvoke(
+                graph_input_step2,
+                config={"configurable": {"thread_id": thread_id}},
+            )
+
+            # User decided to revise graph
+            if (
+                "__interrupt__" in result_step2
+                and len(result_step2["__interrupt__"]) > 0
+            ):
+                # Manually stop sandbox
+                await daytona_manager.cleanup()
+                interrupt_message = result_step2["__interrupt__"][0]
+                if isinstance(interrupt_message, Interrupt):
+                    interrupt_message = interrupt_message.value
+                    return JSONResponse(
+                        status_code=status.HTTP_200_OK,
+                        content={
+                            "thread_id": thread_id,
+                            "file_ids": file_ids,
+                            "status": "interrupted",
+                            "result": interrupt_message,
+                        },
+                    )
+
+            markdown_report = result_step2["internal_messages"][-1].content
+            files_from_report = result_step2["internal_messages"][
+                -1
+            ].additional_kwargs.get("files", [])
+            files_content = {}
+            for file_id in files_from_report:
+                file_data, metadata = (
+                    await request.app.state.redis_storage_service.get_file(
+                        api_key, file_id
+                    )
+                )
+                if metadata and "filename" in metadata:
+                    files_content[metadata["filename"]] = file_data
+
+            html_report = markdown.markdown(
+                markdown_report, extensions=["tables", "fenced_code"]
+            )
+
+            def replace_chart_placeholder(match):
+                alt_text = match.group(1)
+                filename = match.group(2)
+                if filename in files_content:
+                    file_data = files_content[filename]
+                    if isinstance(file_data, bytes):
+                        encoded_data = base64.b64encode(file_data).decode("utf-8")
+                        return f'<img src="data:image/png;base64,{encoded_data}" alt="{alt_text}" style="max-width: 100%; max-height: 600px; height: auto;" />'
+                return match.group(0)
+
+            final_html = re.sub(
+                r'<img alt="([^"]+)" src="([^"]+)"\s*/?>',
+                replace_chart_placeholder,
+                html_report,
+            )
+
+            def replace_reference_placeholder(match):
+                filename = match.group(1)
+                link_text = match.group(3)
+
+                if filename in files_content:
+                    file_data = files_content[filename]
+                    if isinstance(file_data, bytes):
+                        encoded_data = base64.b64encode(file_data).decode("utf-8")
+                        return f'<a href="data:image/png;base64,{encoded_data}" download="{filename}" title="Download {filename}">{link_text}</a>'
+                return match.group(0)
+
+            final_html = re.sub(
+                r'<a href="\[([^\]]+)\]\(([^)]+)\)">([^<]+)</a>',
+                replace_reference_placeholder,
+                final_html,
+            )
+
+            return HTMLResponse(content=final_html, status_code=status.HTTP_200_OK)
+
+    except Exception as e:
+        error_content = {
+            "status": "error",
+            "error": str(e),
+        }
+        if thread_id:
+            error_content["thread_id"] = thread_id
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=error_content,
+        )
 
 
 @router.post("/deepresearch")
@@ -346,33 +554,3 @@ async def deepresearch_interactive_agent(
                 "error": str(e),
             },
         )
-
-
-@router.post("/compound")
-async def compound_agent(request: Request, api_key: str):
-    from agents.components.compound.agent import enhanced_agent
-
-    agent = enhanced_agent(
-        api_key=api_key,
-        provider="sambanova",
-        request_timeout=120,
-        redis_storage=request.app.state.redis_storage_service,
-        user_id=request.app.state.user_id,
-    )
-    return JSONResponse(
-        status_code=status.HTTP_200_OK, content={"message": "Hello, world!"}
-    )
-
-
-@router.post("/financialanalysis")
-async def financialanalysis_agent(request: Request, api_key: str):
-    agent = create_financial_analysis_graph(
-        api_key=api_key,
-        provider="sambanova",
-        request_timeout=120,
-        redis_storage=request.app.state.redis_storage_service,
-        user_id=request.app.state.user_id,
-    )
-    return JSONResponse(
-        status_code=status.HTTP_200_OK, content={"message": "Hello, world!"}
-    )
