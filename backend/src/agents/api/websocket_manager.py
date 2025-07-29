@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 import redis
 import structlog
 from agents.api.data_types import APIKeys
-from agents.api.utils import generate_deep_research_pdf, to_agent_thinking
+from agents.api.utils import to_agent_thinking
 from agents.api.websocket_interface import WebSocketInterface
 from agents.components.compound.code_execution_subgraph import (
     create_code_execution_graph,
@@ -693,7 +693,7 @@ CRITICAL: For file creation, NEVER show code in response text - write ALL code i
                     name="DeepResearch",
                     additional_kwargs={
                         "agent_type": "deep_research_end",
-                        "files": x["files"],
+                        "pdf_report": x["pdf_report"],
                     },
                 ),
             },

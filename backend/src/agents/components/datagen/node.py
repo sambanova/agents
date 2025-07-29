@@ -3,9 +3,12 @@ import os
 import re
 import time
 import uuid
+from datetime import datetime
+from io import BytesIO
 from typing import Any, Callable
 
 import structlog
+from agents.api.utils import generate_report_pdf, process_data_science_report
 from agents.components.datagen.manual_agent import ManualAgent
 from agents.components.datagen.message_capture_agent import MessageCaptureAgent
 from agents.components.datagen.state import Replace, State
@@ -15,6 +18,7 @@ from agents.storage.redis_storage import RedisStorage
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.types import interrupt
+from weasyprint import HTML
 
 # Set up logger
 logger = structlog.get_logger(__name__)
@@ -358,6 +362,8 @@ async def refiner_node(
     """
     logger.info(f"Processing refiner node: {name} for user {user_id}")
     files = []
+    pdf_report_file_id = None
+
     try:
         # Get storage path
         storage_path = await daytona_manager.list_files()
@@ -445,6 +451,44 @@ async def refiner_node(
                 )
                 logger.debug(f"Stored file {file_name} with ID {file_id}")
 
+            # Generate PDF report
+            html_result = await process_data_science_report(
+                drop_think_section(result.content),
+                files,
+                redis_storage,
+                user_id,
+            )
+
+            pdf_buffer = BytesIO()
+            HTML(string=html_result).write_pdf(pdf_buffer)
+            pdf_data = pdf_buffer.getvalue()
+            pdf_buffer.close()
+
+            # Generate unique file ID and filename
+            pdf_report_file_id = str(uuid.uuid4())
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"report_{timestamp}.pdf"
+
+            if pdf_data:
+                # Store the PDF file in Redis
+                await redis_storage.put_file(
+                    user_id=user_id,
+                    file_id=pdf_report_file_id,
+                    data=pdf_data,
+                    filename=filename,
+                    format="application/pdf",
+                    upload_timestamp=time.time(),
+                    indexed=False,
+                    source="data_science_pdf",
+                    vector_ids=[],
+                )
+
+                logger.info(
+                    "PDF generated and attached to data science message",
+                    file_id=pdf_report_file_id,
+                    filename=filename,
+                )
+
         # Update original state - result is now an AIMessage
         # Note: this will be mapped as the last state, we don't need to send this through messages
         state["internal_messages"].append(
@@ -454,7 +498,7 @@ async def refiner_node(
                 sender=name,
                 usage_metadata=result.usage_metadata,
                 response_metadata=result.response_metadata,
-                additional_kwargs={"files": files},
+                additional_kwargs={"files": files, "pdf_report": pdf_report_file_id},
             )
         )
         state["sender"] = name
@@ -469,7 +513,7 @@ async def refiner_node(
                 name=name,
                 id=str(uuid.uuid4()),
                 sender=name,
-                additional_kwargs={"files": files},
+                additional_kwargs={"files": files, "pdf_report": pdf_report_file_id},
             )
         )
         return state

@@ -6,16 +6,14 @@ from typing import List, Optional
 
 import markdown
 from agents.api.routers.upload import process_and_store_file, upload_document
-from agents.api.utils import replace_redis_chart
+from agents.api.utils import process_data_science_report
 from agents.components.compound.data_science_subgraph import (
     create_data_science_subgraph,
-)
-from agents.components.compound.financial_analysis_subgraph import (
-    create_financial_analysis_graph,
 )
 from agents.components.compound.xml_agent import get_global_checkpointer
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.components.open_deep_research.graph import create_deep_research_graph
+from agents.storage.redis_storage import RedisStorage
 from fastapi import (
     APIRouter,
     File,
@@ -125,25 +123,17 @@ async def datascience_agent_and_report(
             config={"configurable": {"thread_id": thread_id}},
         )
         markdown_report = result_step2["internal_messages"][-1].content
-        files = result_step2["internal_messages"][-1].additional_kwargs["files"]
-        files_content = {}
-        for file in files:
-            file_data, file_metadata = (
-                await request.app.state.redis_storage_service.get_file(api_key, file)
-            )
-            files_content[file] = file_data
-
-        # Find and replace redis-chart URLs in markdown
-        markdown_report = re.sub(
-            r"!\[(.*?)\]\(redis-chart:([^)]+)\)",
-            lambda match: replace_redis_chart(files_content, match),
+        files_from_report = result_step2["internal_messages"][-1].additional_kwargs.get(
+            "files", []
+        )
+        final_html = await process_data_science_report(
             markdown_report,
+            files_from_report,
+            request.app.state.redis_storage_service,
+            api_key,
         )
 
-        html_report = markdown.markdown(
-            markdown_report, extensions=["tables", "fenced_code"]
-        )
-        return HTMLResponse(content=html_report, status_code=status.HTTP_200_OK)
+        return HTMLResponse(content=final_html, status_code=status.HTTP_200_OK)
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -323,51 +313,12 @@ async def datascience_interactive(
             files_from_report = result_step2["internal_messages"][
                 -1
             ].additional_kwargs.get("files", [])
-            files_content = {}
-            for file_id in files_from_report:
-                file_data, metadata = (
-                    await request.app.state.redis_storage_service.get_file(
-                        api_key, file_id
-                    )
-                )
-                if metadata and "filename" in metadata:
-                    files_content[metadata["filename"]] = file_data
 
-            html_report = markdown.markdown(
-                markdown_report, extensions=["tables", "fenced_code"]
-            )
-
-            def replace_chart_placeholder(match):
-                alt_text = match.group(1)
-                filename = match.group(2)
-                if filename in files_content:
-                    file_data = files_content[filename]
-                    if isinstance(file_data, bytes):
-                        encoded_data = base64.b64encode(file_data).decode("utf-8")
-                        return f'<img src="data:image/png;base64,{encoded_data}" alt="{alt_text}" style="max-width: 100%; max-height: 600px; height: auto;" />'
-                return match.group(0)
-
-            final_html = re.sub(
-                r'<img alt="([^"]+)" src="([^"]+)"\s*/?>',
-                replace_chart_placeholder,
-                html_report,
-            )
-
-            def replace_reference_placeholder(match):
-                filename = match.group(1)
-                link_text = match.group(3)
-
-                if filename in files_content:
-                    file_data = files_content[filename]
-                    if isinstance(file_data, bytes):
-                        encoded_data = base64.b64encode(file_data).decode("utf-8")
-                        return f'<a href="data:image/png;base64,{encoded_data}" download="{filename}" title="Download {filename}">{link_text}</a>'
-                return match.group(0)
-
-            final_html = re.sub(
-                r'<a href="\[([^\]]+)\]\(([^)]+)\)">([^<]+)</a>',
-                replace_reference_placeholder,
-                final_html,
+            final_html = await process_data_science_report(
+                markdown_report,
+                files_from_report,
+                request.app.state.redis_storage_service,
+                api_key,
             )
 
             return HTMLResponse(content=final_html, status_code=status.HTTP_200_OK)
