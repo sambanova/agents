@@ -9,7 +9,7 @@ import structlog
 
 # We import our data models
 from agents.api.data_types import DeepCitation, DeepResearchSection
-from agents.api.utils import generate_deep_research_pdf
+from agents.api.utils import generate_report_pdf
 from agents.components.open_deep_research.configuration import Configuration, SearchAPI
 from agents.components.open_deep_research.prompts import (
     final_section_writer_instructions,
@@ -757,19 +757,18 @@ async def compile_final_report(
         num_sections=len(deep_sections),
         num_citations=len(all_citations),
     )
-    files = []
+    pdf_report_file_id = None
     try:
         # Generate PDF
         if final_text:
-            pdf_result = await generate_deep_research_pdf(final_text)
+            pdf_result = await generate_report_pdf(final_text)
             if pdf_result:
-                file_id, filename, pdf_data = pdf_result
+                pdf_report_file_id, filename, pdf_data = pdf_result
 
-                files.append(file_id)
                 # Store the PDF file in Redis
                 await redis_storage.put_file(
                     user_id=user_id,
-                    file_id=file_id,
+                    file_id=pdf_report_file_id,
                     data=pdf_data,
                     filename=filename,
                     format="application/pdf",
@@ -781,7 +780,7 @@ async def compile_final_report(
 
                 logger.info(
                     "PDF generated and attached to deep research message",
-                    file_id=file_id,
+                    file_id=pdf_report_file_id,
                     filename=filename,
                 )
 
@@ -791,7 +790,7 @@ async def compile_final_report(
             error=str(e),
         )
         # Continue without PDF - don't fail the message sending
-    return {"final_report": final_text, "files": files}
+    return {"final_report": final_text, "pdf_report": pdf_report_file_id}
 
 
 async def summarize_documents(

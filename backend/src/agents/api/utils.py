@@ -67,7 +67,7 @@ def load_documents(
     return documents
 
 
-async def generate_deep_research_pdf(content: str) -> Optional[str]:
+async def generate_report_pdf(content: str) -> Optional[str]:
     """
     Generate a PDF from deep research markdown content and return the file ID.
 
@@ -78,7 +78,7 @@ async def generate_deep_research_pdf(content: str) -> Optional[str]:
         Optional[str]: The file ID if successful, None if failed
     """
     try:
-        logger.info("Generating PDF from deep research content")
+        logger.info("Generating PDF from report content")
 
         # Convert markdown to HTML
         html_content = markdown.markdown(content, extensions=["tables", "fenced_code"])
@@ -215,7 +215,7 @@ async def generate_deep_research_pdf(content: str) -> Optional[str]:
         </head>
         <body>
             <div class="report-header">
-                <h1>Deep Research Report</h1>
+                <h1>Report</h1>
                 <p class="date">Generated on {datetime.now().strftime('%B %d, %Y')}</p>
             </div>
             <div class="report-content">
@@ -234,14 +234,14 @@ async def generate_deep_research_pdf(content: str) -> Optional[str]:
         # Generate unique file ID and filename
         file_id = str(uuid.uuid4())
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"deep_research_report_{timestamp}.pdf"
+        filename = f"report_{timestamp}.pdf"
 
         logger.info("PDF generated successfully", file_size=len(pdf_data))
 
         return file_id, filename, pdf_data
 
     except Exception as e:
-        logger.error("Failed to generate PDF from deep research content", error=str(e))
+        logger.error("Failed to generate PDF from report content", error=str(e))
         return None
 
 

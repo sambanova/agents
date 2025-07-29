@@ -693,7 +693,7 @@ CRITICAL: For file creation, NEVER show code in response text - write ALL code i
                     name="DeepResearch",
                     additional_kwargs={
                         "agent_type": "deep_research_end",
-                        "files": x["files"],
+                        "pdf_report": x["pdf_report"],
                     },
                 ),
             },

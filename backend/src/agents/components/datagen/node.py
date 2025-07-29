@@ -6,6 +6,7 @@ import uuid
 from typing import Any, Callable
 
 import structlog
+from agents.api.utils import generate_report_pdf
 from agents.components.datagen.manual_agent import ManualAgent
 from agents.components.datagen.message_capture_agent import MessageCaptureAgent
 from agents.components.datagen.state import Replace, State
@@ -358,6 +359,8 @@ async def refiner_node(
     """
     logger.info(f"Processing refiner node: {name} for user {user_id}")
     files = []
+    pdf_report_file_id = None
+
     try:
         # Get storage path
         storage_path = await daytona_manager.list_files()
@@ -445,6 +448,29 @@ async def refiner_node(
                 )
                 logger.debug(f"Stored file {file_name} with ID {file_id}")
 
+        pdf_result = await generate_report_pdf(result.content)
+        if pdf_result:
+            pdf_report_file_id, filename, pdf_data = pdf_result
+
+            # Store the PDF file in Redis
+            await redis_storage.put_file(
+                user_id=user_id,
+                file_id=pdf_report_file_id,
+                data=pdf_data,
+                filename=filename,
+                format="application/pdf",
+                upload_timestamp=time.time(),
+                indexed=False,
+                source="data_science_pdf",
+                vector_ids=[],
+            )
+
+            logger.info(
+                "PDF generated and attached to deep research message",
+                file_id=pdf_report_file_id,
+                filename=filename,
+            )
+
         # Update original state - result is now an AIMessage
         # Note: this will be mapped as the last state, we don't need to send this through messages
         state["internal_messages"].append(
@@ -454,7 +480,7 @@ async def refiner_node(
                 sender=name,
                 usage_metadata=result.usage_metadata,
                 response_metadata=result.response_metadata,
-                additional_kwargs={"files": files},
+                additional_kwargs={"files": files, "pdf_report": pdf_report_file_id},
             )
         )
         state["sender"] = name
@@ -469,7 +495,7 @@ async def refiner_node(
                 name=name,
                 id=str(uuid.uuid4()),
                 sender=name,
-                additional_kwargs={"files": files},
+                additional_kwargs={"files": files, "pdf_report": pdf_report_file_id},
             )
         )
         return state
