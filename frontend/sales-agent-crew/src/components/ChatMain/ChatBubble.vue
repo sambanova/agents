@@ -1785,10 +1785,10 @@ const deepResearchPdfFileId = computed(() => {
     const event = props.streamingEvents.find(e => 
       e.event === 'agent_completion' && 
       e.data?.additional_kwargs?.agent_type === 'deep_research_end' &&
-      e.data?.additional_kwargs?.files
+      e.data?.additional_kwargs?.pdf_report
     );
     if (event) {
-      return event.data.additional_kwargs.files[0];
+      return event.data.additional_kwargs.pdf_report;
     }
     else {
       return null;
@@ -1806,6 +1806,11 @@ async function downloadPdf(fileId, filename) {
       console.error('No authentication token found');
       return;
     }
+
+    // Create headers with authorization
+    const headers = {
+      'Authorization': `Bearer ${token}`
+    };
 
     // Make authenticated request to download the PDF
     const response = await fetch(`/api/files/${fileId}`, {

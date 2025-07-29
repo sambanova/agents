@@ -67,7 +67,7 @@ def load_documents(
     return documents
 
 
-async def generate_report_pdf(content: str) -> Optional[str]:
+async def generate_report_pdf(content: str, header: str) -> Optional[str]:
     """
     Generate a PDF from deep research markdown content and return the file ID.
 
@@ -215,7 +215,7 @@ async def generate_report_pdf(content: str) -> Optional[str]:
         </head>
         <body>
             <div class="report-header">
-                <h1>Report</h1>
+                <h1>{header}</h1>
                 <p class="date">Generated on {datetime.now().strftime('%B %d, %Y')}</p>
             </div>
             <div class="report-content">

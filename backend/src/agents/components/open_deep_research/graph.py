@@ -761,7 +761,7 @@ async def compile_final_report(
     try:
         # Generate PDF
         if final_text:
-            pdf_result = await generate_report_pdf(final_text)
+            pdf_result = await generate_report_pdf(final_text, "Deep Research Report")
             if pdf_result:
                 pdf_report_file_id, filename, pdf_data = pdf_result
 
