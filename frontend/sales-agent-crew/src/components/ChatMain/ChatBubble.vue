@@ -233,10 +233,10 @@
             </div>
           </div>
 
-          <!-- PDF Download Button for Deep Research - Moved to bottom -->
-          <div v-if="deepResearchPdfFileId" class="mt-4 flex justify-center">
+          <!-- PDF Download Button for Deep Research  - Moved to bottom -->
+          <div v-if="reportPdfFileId" class="mt-4 flex justify-center">
             <button 
-              @click="downloadPdf(deepResearchPdfFileId, 'deep_research_report.pdf')"
+              @click="downloadPdf(reportPdfFileId, 'report_'+new Date().getTime()+'.pdf')"
               class="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg text-sm text-white font-medium transition-colors shadow-sm hover:shadow-md"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1779,12 +1779,12 @@ const auditLogEvents = computed(() => {
 })
 
 // Check if there's an auto-generated PDF file for deep research
-const deepResearchPdfFileId = computed(() => {
+const reportPdfFileId = computed(() => {
   // Check streaming events first
   if (props.streamingEvents) {
     const event = props.streamingEvents.find(e => 
       e.event === 'agent_completion' && 
-      e.data?.additional_kwargs?.agent_type === 'deep_research_end' &&
+      ((e.data?.additional_kwargs?.agent_type === 'deep_research_end') || (e.data?.additional_kwargs?.agent_type === 'data_science_end')) &&
       e.data?.additional_kwargs?.pdf_report
     );
     if (event) {

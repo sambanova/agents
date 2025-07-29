@@ -6,6 +6,7 @@ from datetime import datetime
 from io import BytesIO
 from typing import List, Optional
 
+from agents.storage.redis_storage import RedisStorage
 import markdown
 import structlog
 from agents.api.session_state import SessionStateManager
@@ -338,3 +339,55 @@ def replace_redis_chart(files_content, match):
 
     # Return original markdown if file not found
     return f"![{alt_text}](redis-chart:{combined_id})"
+
+
+async def process_data_science_report(
+    markdown_report: str,
+    files_from_report: list[str],
+    redis_storage: RedisStorage,
+    user_id: str,
+):
+    files_content = {}
+    for file_id in files_from_report:
+        file_data, metadata = await redis_storage.get_file(user_id, file_id)
+        if metadata and "filename" in metadata:
+            files_content[metadata["filename"]] = file_data
+
+    html_report = markdown.markdown(
+        markdown_report, extensions=["tables", "fenced_code"]
+    )
+
+    def replace_chart_placeholder(match):
+        alt_text = match.group(1)
+        filename = match.group(2)
+        if filename in files_content:
+            file_data = files_content[filename]
+            if isinstance(file_data, bytes):
+                encoded_data = base64.b64encode(file_data).decode("utf-8")
+                return f'<img src="data:image/png;base64,{encoded_data}" alt="{alt_text}" style="max-width: 100%; max-height: 600px; height: auto;" />'
+        return match.group(0)
+
+    final_html = re.sub(
+        r'<img alt="([^"]+)" src="([^"]+)"\s*/?>',
+        replace_chart_placeholder,
+        html_report,
+    )
+
+    def replace_reference_placeholder(match):
+        filename = match.group(1)
+        link_text = match.group(3)
+
+        if filename in files_content:
+            file_data = files_content[filename]
+            if isinstance(file_data, bytes):
+                encoded_data = base64.b64encode(file_data).decode("utf-8")
+                return f'<a href="data:image/png;base64,{encoded_data}" download="{filename}" title="Download {filename}">{link_text}</a>'
+        return match.group(0)
+
+    final_html = re.sub(
+        r'<a href="\[([^\]]+)\]\(([^)]+)\)">([^<]+)</a>',
+        replace_reference_placeholder,
+        final_html,
+    )
+
+    return final_html
