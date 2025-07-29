@@ -1,3 +1,4 @@
+import base64
 import json
 import re
 import uuid
@@ -322,3 +323,18 @@ def to_agent_thinking(payload: dict) -> Optional[dict]:
         return None
 
     return None
+
+
+def replace_redis_chart(files_content, match):
+    alt_text = match.group(1)
+    combined_id = match.group(2)
+    file_id = combined_id.split(":")[0]
+
+    if file_id in files_content:
+        file_data = files_content[file_id]
+        if isinstance(file_data, bytes):
+            encoded_data = base64.b64encode(file_data).decode("utf-8")
+            return f'<img src="data:image/png;base64,{encoded_data}" alt="{alt_text}" style="max-width: 100%; max-height: 600px; height: auto;" />'
+
+    # Return original markdown if file not found
+    return f"![{alt_text}](redis-chart:{combined_id})"
