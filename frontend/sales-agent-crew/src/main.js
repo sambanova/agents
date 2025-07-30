@@ -37,3 +37,69 @@ app.use(createAuth0({
 app.use(pinia) // Register Pinia
 app.use(router)
 app.mount('#app')
+
+// Global code copy functionality
+function addCopyButtonsToCodeBlocks() {
+  const codeBlocks = document.querySelectorAll('.prose pre:not([data-copy-added])')
+  
+  codeBlocks.forEach(codeBlock => {
+    // Mark this code block as processed
+    codeBlock.setAttribute('data-copy-added', 'true')
+    
+    // Create copy button
+    const copyBtn = document.createElement('button')
+    copyBtn.className = 'code-copy-btn'
+    copyBtn.innerHTML = `
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+      </svg>
+      <span>Copy</span>
+    `
+    
+    // Add click handler
+    copyBtn.addEventListener('click', async () => {
+      const code = codeBlock.querySelector('code')
+      if (code) {
+        try {
+          await navigator.clipboard.writeText(code.textContent)
+          copyBtn.innerHTML = `
+            <svg class="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span>Copied!</span>
+          `
+          copyBtn.classList.add('bg-green-600')
+          copyBtn.classList.remove('bg-gray-600')
+          
+          setTimeout(() => {
+            copyBtn.innerHTML = `
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+              </svg>
+              <span>Copy</span>
+            `
+            copyBtn.classList.remove('bg-green-600')
+            copyBtn.classList.add('bg-gray-600')
+          }, 2000)
+        } catch (err) {
+          console.error('Failed to copy code:', err)
+        }
+      }
+    })
+    
+    codeBlock.appendChild(copyBtn)
+  })
+}
+
+// Run on initial load
+document.addEventListener('DOMContentLoaded', addCopyButtonsToCodeBlocks)
+
+// Also run when new content is added (for dynamic content)
+const observer = new MutationObserver(() => {
+  addCopyButtonsToCodeBlocks()
+})
+
+observer.observe(document.body, {
+  childList: true,
+  subtree: true
+})

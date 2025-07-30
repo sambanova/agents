@@ -71,4 +71,17 @@
   @apply text-green-600 bg-white;
 }
 
+/* Code block copy functionality */
+.prose pre {
+  @apply relative;
+}
+
+.prose pre:hover .code-copy-btn {
+  @apply opacity-100;
+}
+
+.code-copy-btn {
+  @apply absolute top-2 right-2 px-2 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded opacity-0 transition-opacity cursor-pointer z-10 flex items-center space-x-1;
+}
+
 

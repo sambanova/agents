@@ -610,10 +610,29 @@ class WebSocketConnectionManager(WebSocketInterface):
 
         data_analysis_prompt = ""
         if enable_data_science:
-            data_analysis_prompt = f"The following datasets are available to use in data science subgraph:\n\n"
+            data_analysis_prompt = (
+                f"The following datasets are available to analyze:\n\n"
+            )
             data_analysis_prompt += "\n".join(directory_content)
             data_analysis_prompt += (
-                "Use the data_science subgraph to analyze the data.\n\n"
+                "\n\nGUIDELINES FOR DATA ANALYSIS ROUTING:\n\n"
+                "Use the **data_science subgraph** for complex analysis requiring:\n"
+                "- Exploratory Data Analysis (EDA) and comprehensive data exploration\n"
+                "- Machine learning model development or training\n"
+                "- Predictive analytics and forecasting\n"
+                "- Statistical modeling and hypothesis testing\n"
+                "- Multi-step data science pipelines\n"
+                "- Advanced statistical analysis (regression, clustering, etc.)\n"
+                "- Feature engineering and model evaluation\n"
+                "- Complex data visualization\n"
+                "- Statistical visualization (correlation matrices, distribution analysis, etc.)\n"
+                "- Comprehensive analysis workflows with multiple visualization types\n\n"
+                "Use the **DaytonaCodeSandbox subgraph** for simpler tasks:\n"
+                "- Basic data exploration and summary statistics\n"
+                "- Simple data visualization (basic plots, histograms, scatter plots)\n"
+                "- Basic calculations and aggregations\n"
+                "- Quick data insights and descriptive analysis\n\n"
+                "CHOOSE the appropriate subgraph based on the complexity and requirements of the user's request.\n\n"
             )
 
         daytona_manager = self.daytona_managers.get(f"{user_id}:{thread_id}")
@@ -661,7 +680,7 @@ class WebSocketConnectionManager(WebSocketInterface):
             "type==default/system_message"
         ] = f"""
 You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {retrieval_prompt} {data_analysis_prompt} 
-CRITICAL: For file creation, NEVER show code in response text - write ALL code inside DaytonaCodeSandbox subgraph.
+CRITICAL: Use DaytonaCodeSandbox subgraph ONLY when code execution is required (running scripts, data processing, file operations, creating visualizations). For code explanations, examples, or discussions, respond directly without routing to subgraphs.
 """
 
         if multimodal_input:

@@ -492,7 +492,7 @@ def create_code_execution_graph(
                 continue
 
             # Ensure the "remove" string is unique to avoid ambiguous replacements.
-            if to_remove and updated_code.count(to_remove) > 1:
+            if to_remove and updated_code.count(to_remove.strip()) > 1:
                 logger.warning(
                     "Text to remove is not unique, skipping correction to avoid ambiguity.",
                     to_remove=to_remove[:100],  # Log a preview
