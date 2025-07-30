@@ -275,7 +275,7 @@ def create_code_execution_graph(
                         elif file.name.lower().endswith((".docx", ".doc")):
                             mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
-                    if file.name not in list_of_files:
+                    if file.name not in list_of_files and mime_type is not None:
                         file_id = str(uuid.uuid4())
                         try:
                             content = await daytona_manager.download_file(file_path)
