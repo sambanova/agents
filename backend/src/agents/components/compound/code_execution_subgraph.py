@@ -155,22 +155,6 @@ def create_code_execution_graph(
 ):
     logger.info("Creating code execution subgraph")
 
-    supported_extensions = [
-        "image/png",
-        "image/jpg",
-        "image/jpeg",
-        "image/gif",
-        "image/svg",
-        "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "application/vnd.ms-powerpoint",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "text/html",
-        "text/markdown",
-        "text/plain",
-        "text/csv",
-    ]
     images_formats = ["image/png", "image/jpg", "image/jpeg", "image/gif", "image/svg"]
 
     def fix_common_string_issues(code: str) -> str:
@@ -291,10 +275,7 @@ def create_code_execution_graph(
                         elif file.name.lower().endswith((".docx", ".doc")):
                             mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
-                    if (
-                        file.name not in list_of_files
-                        and mime_type in supported_extensions
-                    ):
+                    if file.name not in list_of_files:
                         file_id = str(uuid.uuid4())
                         try:
                             content = await daytona_manager.download_file(file_path)
