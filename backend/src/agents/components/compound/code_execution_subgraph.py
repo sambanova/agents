@@ -8,7 +8,9 @@ from datetime import datetime
 from operator import add
 from typing import Annotated, Dict, List, Optional, TypedDict
 
+import langsmith as ls
 import structlog
+from agents.components.compound.data_types import LLMType
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.components.open_deep_research.utils import APIKeyRotator
 from agents.storage.redis_storage import RedisStorage
@@ -359,6 +361,13 @@ def create_code_execution_graph(
 
         return result
 
+    @ls.traceable(
+        metadata={
+            "agent_type": "daytona_coding_agent",
+            "llm_type": LLMType.SN_DEEPSEEK_V3.value,
+        },
+        process_inputs=lambda x: None,
+    )
     async def analyze_error_and_decide(state: CorrectingExecutorState) -> Dict:
         """
         Analyzes the error and decides whether to propose a fix directly or to

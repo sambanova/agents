@@ -1,7 +1,9 @@
 import re
 import uuid
 
+import langsmith as ls
 import structlog
+from agents.components.compound.data_types import LLMType
 from agents.components.datagen.agent.code_agent import create_code_agent
 from agents.components.datagen.agent.hypothesis_agent import create_hypothesis_agent
 from agents.components.datagen.agent.note_agent import create_note_agent
@@ -153,11 +155,25 @@ class WorkflowManager:
         self.workflow = StateGraph(State)
 
         # Create async wrapper functions for agent nodes
+        @ls.traceable(
+            metadata={
+                "agent_type": "data_science_agent",
+                "llm_type": LLMType.SN_DEEPSEEK_V3.value,
+            },
+            process_inputs=lambda x: None,
+        )
         async def hypothesis_node(state):
             return await agent_node(
                 state, self.agents["hypothesis_agent"], "hypothesis_agent", "hypothesis"
             )
 
+        @ls.traceable(
+            metadata={
+                "agent_type": "data_science_agent",
+                "llm_type": LLMType.SN_QWEN3_3_72B.value,
+            },
+            process_inputs=lambda x: None,
+        )
         async def process_node(state):
             output_processor = {
                 "task": lambda x: re.search(r"Task:\s*(.*)", x).group(1)
@@ -170,6 +186,13 @@ class WorkflowManager:
                 output_processor=output_processor,
             )
 
+        @ls.traceable(
+            metadata={
+                "agent_type": "data_science_agent",
+                "llm_type": LLMType.SN_DEEPSEEK_V3.value,
+            },
+            process_inputs=lambda x: None,
+        )
         async def visualization_node(state):
             return await agent_node(
                 state,
@@ -178,21 +201,49 @@ class WorkflowManager:
                 "visualization_state",
             )
 
+        @ls.traceable(
+            metadata={
+                "agent_type": "data_science_agent",
+                "llm_type": LLMType.SN_DEEPSEEK_V3.value,
+            },
+            process_inputs=lambda x: None,
+        )
         async def search_node(state):
             return await agent_node(
                 state, self.agents["searcher_agent"], "searcher_agent", "searcher_state"
             )
 
+        @ls.traceable(
+            metadata={
+                "agent_type": "data_science_agent",
+                "llm_type": LLMType.SN_DEEPSEEK_V3.value,
+            },
+            process_inputs=lambda x: None,
+        )
         async def coder_node(state):
             return await agent_node(
                 state, self.agents["code_agent"], "code_agent", "code_state"
             )
 
+        @ls.traceable(
+            metadata={
+                "agent_type": "data_science_agent",
+                "llm_type": LLMType.SN_DEEPSEEK_V3.value,
+            },
+            process_inputs=lambda x: None,
+        )
         async def report_node(state):
             return await agent_node(
                 state, self.agents["report_agent"], "report_agent", "report_state"
             )
 
+        @ls.traceable(
+            metadata={
+                "agent_type": "data_science_agent",
+                "llm_type": LLMType.SN_LLAMA_MAVERICK.value,
+            },
+            process_inputs=lambda x: None,
+        )
         async def quality_review_node(state):
             name = "quality_review_agent"
             agent: MessageCaptureAgent = self.agents[name]
@@ -255,9 +306,23 @@ class WorkflowManager:
                     + 1,
                 }
 
+        @ls.traceable(
+            metadata={
+                "agent_type": "data_science_agent",
+                "llm_type": LLMType.SN_LLAMA_3_3_70B.value,
+            },
+            process_inputs=lambda x: None,
+        )
         async def note_taker_node(state):
             return await note_agent_node(state, self.agents["note_agent"], "note_agent")
 
+        @ls.traceable(
+            metadata={
+                "agent_type": "data_science_agent",
+                "llm_type": LLMType.SN_DEEPSEEK_R1.value,
+            },
+            process_inputs=lambda x: None,
+        )
         async def refiner_node_async(state):
             return await refiner_node(
                 state=state,
@@ -268,6 +333,13 @@ class WorkflowManager:
                 user_id=self.user_id,
             )
 
+        @ls.traceable(
+            metadata={
+                "agent_type": "data_science_agent",
+                "llm_type": LLMType.SN_DEEPSEEK_R1_DISTILL_LLAMA.value,
+            },
+            process_inputs=lambda x: None,
+        )
         async def human_choice_node_async(state):
             return await human_choice_node(
                 state, self.language_models["human_choice_llm"]

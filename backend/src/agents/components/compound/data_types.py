@@ -1,24 +1,27 @@
 from enum import Enum
 from typing import Any, ClassVar
 
+from langchain_core.load.serializable import Serializable
 from langchain_core.messages import (
+    AIMessage,
     FunctionMessage,
     MessageLikeRepresentation,
     ToolMessage,
     _message_from_dict,
-    AIMessage,
 )
 from langgraph.graph.message import Messages, add_messages
 from pydantic import Field
-from langchain_core.load.serializable import Serializable
 
 
 class LLMType(str, Enum):
     SN_LLAMA_3_3_70B = "Llama 3.3 70B"
-    SN_LLAMA_MAVERICK = "Llama Maverick"
+    SN_LLAMA_MAVERICK = "Llama 4 Maverick"
     SN_DEEPSEEK_V3 = "DeepSeek V3"
-    DEEPSEEK_R1_DISTILL_LLAMA = "DeepSeek R1 Distill Llama"
+    SN_DEEPSEEK_R1_DISTILL_LLAMA = "DeepSeek R1 Distill Llama"
+    SN_DEEPSEEK_R1 = "DeepSeek R1"
+    SN_QWEN3_3_72B = "Qwen3 32B"
     FIREWORKS_LLAMA_3_3_70B = "Fireworks Llama 3.3 70B"
+
 
 class LiberalToolMessage(ToolMessage):
     content: Any = Field(default="")

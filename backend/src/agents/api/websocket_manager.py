@@ -801,5 +801,6 @@ CRITICAL: Use DaytonaCodeSandbox subgraph ONLY when code execution is required (
 
         all_tools = await load_static_tools(tools_config)
         config["configurable"]["type==default/tools"] = all_tools
+        config["configurable"]["agent_type"] = "default"
 
         return config

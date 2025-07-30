@@ -1,6 +1,8 @@
+import os
 import time
 from datetime import datetime, timezone
 
+import langsmith as ls
 import structlog
 from agents.components.compound.data_types import LiberalAIMessage
 from agents.components.compound.util import extract_api_key
@@ -24,6 +26,10 @@ def create_financial_analysis_graph(redis_client: SecureRedisService):
     """Create a simple subgraph with just one node that greets the user."""
     logger.info("Creating financial analysis subgraph")
 
+    @ls.traceable(
+        metadata={"agent_type": "financial_analysis"},
+        process_inputs=lambda x: None,
+    )
     async def financial_analysis_node(messages, *, config: RunnableConfig = None):
         setup_logging_context(config, node="financial_analysis")
 

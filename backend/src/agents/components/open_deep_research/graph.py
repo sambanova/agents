@@ -4,12 +4,14 @@ import re
 import time
 from typing import Any, List, Literal, Optional, Tuple
 
+import langsmith as ls
 import requests
 import structlog
 
 # We import our data models
 from agents.api.data_types import DeepCitation, DeepResearchSection
 from agents.api.utils import generate_report_pdf
+from agents.components.compound.data_types import LLMType
 from agents.components.open_deep_research.configuration import Configuration, SearchAPI
 from agents.components.open_deep_research.prompts import (
     final_section_writer_instructions,
@@ -173,6 +175,13 @@ def get_session_id_from_config(config: Configuration) -> Optional[str]:
     return None
 
 
+@ls.traceable(
+    metadata={
+        "agent_type": "deep_research_agent",
+        "llm_type": LLMType.SN_LLAMA_MAVERICK.value,
+    },
+    process_inputs=lambda x: None,
+)
 async def generate_report_plan(
     writer_model, planner_model, state: ReportState, config: RunnableConfig
 ):
@@ -352,6 +361,13 @@ async def human_feedback(
         )
 
 
+@ls.traceable(
+    metadata={
+        "agent_type": "deep_research_agent",
+        "llm_type": LLMType.SN_LLAMA_MAVERICK.value,
+    },
+    process_inputs=lambda x: None,
+)
 async def generate_queries(writer_model, state: SectionState, config: RunnableConfig):
     configurable = Configuration.from_runnable_config(config)
     sec = state["section"]
@@ -497,6 +513,13 @@ async def invoke_llm_with_tracking(
     return response
 
 
+@ls.traceable(
+    metadata={
+        "agent_type": "deep_research_agent",
+        "llm_type": LLMType.SN_LLAMA_MAVERICK.value,
+    },
+    process_inputs=lambda x: None,
+)
 async def write_section(
     writer_model, state: SectionState, config: RunnableConfig
 ) -> Command[Literal["__end__", "search_web"]]:
@@ -612,6 +635,13 @@ async def write_section(
         )
 
 
+@ls.traceable(
+    metadata={
+        "agent_type": "deep_research_agent",
+        "llm_type": LLMType.SN_LLAMA_MAVERICK.value,
+    },
+    process_inputs=lambda x: None,
+)
 async def write_final_sections(
     writer_model, state: SectionState, config: RunnableConfig
 ):

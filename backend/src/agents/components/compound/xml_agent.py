@@ -4,6 +4,7 @@ import time
 from datetime import datetime, timezone
 from typing import Callable
 
+import langsmith as ls
 import structlog
 from agents.components.compound.data_types import LiberalFunctionMessage, LLMType
 from agents.components.compound.prompts import xml_template
@@ -195,9 +196,9 @@ class DynamicToolExecutor:
         tool = self.static_tools_by_name.get(action.tool)
         if tool:
             return await tool.ainvoke(action.tool_input)
-        
+
         return f"Tool {action.tool} not found"
-    
+
     async def get_all_tools(self):
         """Get all available tools for prompt generation."""
         return list(self.static_tools_by_name.values())
@@ -324,18 +325,25 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
                 lines.append("<tool_input>")
                 # Format JSON with proper indentation for readability
                 import json
+
                 try:
                     # Parse and reformat to ensure proper JSON structure
-                    parsed_example = json.loads(example_json) if isinstance(example_json, str) else example_json
+                    parsed_example = (
+                        json.loads(example_json)
+                        if isinstance(example_json, str)
+                        else example_json
+                    )
                     formatted_json = json.dumps(parsed_example, indent=2)
                     lines.append(formatted_json)
                 except (json.JSONDecodeError, TypeError):
                     # Fallback to original if parsing fails
                     lines.append(example_json)
                 lines.append("</tool_input>")
-                
+
                 # Add a format reminder for this specific tool
-                lines.append("⚠️  CRITICAL: Use exact JSON format above with proper { } structure")
+                lines.append(
+                    "⚠️  CRITICAL: Use exact JSON format above with proper { } structure"
+                )
 
             return textwrap.dedent("\n".join(lines)).strip()
 
@@ -366,6 +374,10 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
         tool_executor = ToolExecutor(tools)
 
     # Create agent node that extracts api_key from config
+    @ls.traceable(
+        metadata={"agent_type": "xml_agent", "llm_type": LLMType.SN_DEEPSEEK_V3.value},
+        process_inputs=lambda x: None,
+    )
     async def agent_node(messages, *, config: RunnableConfig = None):
         setup_logging_context(config, node="agent")
         logger.info("Agent node execution started", num_messages=len(messages))
@@ -586,39 +598,39 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                     # Remove any partial closing tags
                     _tool_input = tool_input_content.strip()
                     # Clean up partial XML tags that might be at the end
-                    _tool_input = re.sub(r'</?[^>]*$', '', _tool_input).strip()
+                    _tool_input = re.sub(r"</?[^>]*$", "", _tool_input).strip()
                     # Note: This allows processing even with malformed input
-                
+
                 # Smart JSON extraction and conversion for structured tools
                 _tool_input = _tool_input.strip()
-                
+
                 def smart_json_extract(text):
                     """Extract JSON from text using multiple strategies."""
                     import json
                     import re
 
                     # Strategy 1: Clean JSON (starts and ends with braces)
-                    if text.startswith('{') and text.endswith('}'):
+                    if text.startswith("{") and text.endswith("}"):
                         try:
                             return json.loads(text)
                         except json.JSONDecodeError:
                             pass
-                    
+
                     # Strategy 2: Find JSON pattern in mixed content
-                    json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+                    json_pattern = r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}"
                     json_matches = re.findall(json_pattern, text)
                     for match in json_matches:
                         try:
                             return json.loads(match)
                         except json.JSONDecodeError:
                             continue
-                    
+
                     # Strategy 3: Extract from partial/malformed JSON
                     # Fix common issues like missing quotes, trailing commas
-                    if '{' in text and '}' in text:
+                    if "{" in text and "}" in text:
                         # Extract content between first { and last }
-                        start = text.find('{')
-                        end = text.rfind('}') + 1
+                        start = text.find("{")
+                        end = text.rfind("}") + 1
                         if start < end:
                             json_candidate = text[start:end]
                             try:
@@ -627,23 +639,23 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                                 # Try fixing common JSON issues
                                 fixed_json = json_candidate
                                 # Remove trailing commas
-                                fixed_json = re.sub(r',(\s*[}\]])', r'\1', fixed_json)
+                                fixed_json = re.sub(r",(\s*[}\]])", r"\1", fixed_json)
                                 # Add missing quotes to keys
-                                fixed_json = re.sub(r'(\w+):', r'"\1":', fixed_json)
+                                fixed_json = re.sub(r"(\w+):", r'"\1":', fixed_json)
                                 try:
                                     return json.loads(fixed_json)
                                 except json.JSONDecodeError:
                                     pass
-                    
+
                     # Strategy 4: Key-value pair extraction
                     # For formats like: query: "SambaQA", cloudId: "abc123"
                     kv_pattern = r'(\w+):\s*["\']([^"\']*)["\']'
                     matches = re.findall(kv_pattern, text)
                     if matches:
                         return {key: value for key, value in matches}
-                    
+
                     return None
-                
+
                 if _tool_input:
                     extracted_json = smart_json_extract(_tool_input)
                     if extracted_json:
@@ -651,7 +663,11 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                         logger.debug(
                             "Smart extracted JSON for tool",
                             tool_name=_tool,
-                            original=str(_tool_input)[:100] if isinstance(_tool_input, str) else "dict",
+                            original=(
+                                str(_tool_input)[:100]
+                                if isinstance(_tool_input, str)
+                                else "dict"
+                            ),
                             extracted_type=type(_tool_input).__name__,
                         )
                     else:
