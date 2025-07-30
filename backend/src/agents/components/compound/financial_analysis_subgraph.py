@@ -27,7 +27,7 @@ def create_financial_analysis_graph(redis_client: SecureRedisService):
     logger.info("Creating financial analysis subgraph")
 
     @ls.traceable(
-        metadata={"agent_type": "financial_analysis"},
+        metadata={"agent_type": "financial_analysis_agent"},
         process_inputs=lambda x: None,
     )
     async def financial_analysis_node(messages, *, config: RunnableConfig = None):
