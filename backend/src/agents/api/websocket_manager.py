@@ -744,7 +744,7 @@ CRITICAL: Use DaytonaCodeSandbox subgraph ONLY when code execution is required (
                         "files": x["files"],
                     },
                     # TODO: Mesure latency for code execution
-                    result={"useage": {"total_latency": 0.0}},
+                    result={"usage": {"total_latency": 0.0}},
                 ),
             },
         }

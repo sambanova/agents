@@ -6,7 +6,10 @@ from typing import List, Optional
 
 import markdown
 from agents.api.routers.upload import process_and_store_file, upload_document
-from agents.api.utils import process_data_science_report
+from agents.api.utils import create_coding_agent_config, process_data_science_report
+from agents.components.compound.code_execution_subgraph import (
+    create_code_execution_graph,
+)
 from agents.components.compound.data_science_subgraph import (
     create_data_science_subgraph,
 )
@@ -50,7 +53,7 @@ class DataScienceInteractiveRequest(BaseModel):
     resume: bool = False
 
 
-@router.post("/datascience", tags=["Analysis"])
+@router.post("/datascience")
 async def datascience_agent_and_report(
     request: Request,
     prompt: str = Form(..., description="The main prompt for the data science agent."),
@@ -99,7 +102,7 @@ async def datascience_agent_and_report(
             directory_content=file_names,
             checkpointer=checkpointer,
         )
-        results = await agent.ainvoke(
+        await agent.ainvoke(
             {
                 "internal_messages": [
                     HumanMessage(content=prompt, id=str(uuid.uuid4()))
@@ -496,6 +499,71 @@ async def deepresearch_interactive_agent(
                 "result": "Unable to extract results from the graph",
             },
         )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "thread_id": thread_id,
+                "status": "error",
+                "error": str(e),
+            },
+        )
+
+
+@router.post("/daytonacode", tags=["Analysis"])
+async def datascience_agent_and_report(
+    request: Request,
+    prompt: str = Form(..., description="The main prompt for the data science agent."),
+    files: List[UploadFile] = File(
+        ..., description="One or more files to be analyzed."
+    ),
+    authorization: Optional[str] = Header(
+        None, description="Authorization header with Bearer token."
+    ),
+):
+    # Extract API key from Authorization header (Bearer token)
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header with Bearer token is required",
+        )
+
+    thread_id = str(uuid.uuid4())
+    api_key = authorization.replace("Bearer ", "")
+
+    try:
+        file_ids = []
+        file_names = []
+        for file in files:
+            file_info = await process_and_store_file(request, file, api_key)
+            file_ids.append(file_info["file_id"])
+            file_names.append(file_info["filename"])
+
+        daytona_manager = PersistentDaytonaManager(
+            user_id=api_key,
+            redis_storage=request.app.state.redis_storage_service,
+            snapshot="data-analysis:0.0.10",
+            file_ids=file_ids,
+        )
+
+        config = await create_coding_agent_config(
+            user_id=api_key,
+            thread_id=thread_id,
+            api_key=api_key,
+            message_id=str(uuid.uuid4()),
+            doc_ids=file_ids,
+            redis_storage=request.app.state.redis_storage_service,
+            daytona_manager=daytona_manager,
+        )
+
+        code_execution_agent = create_code_execution_graph(
+            user_id=api_key,
+            sambanova_api_key=api_key,
+            redis_storage=request.app.state.redis_storage_service,
+            daytona_manager=daytona_manager,
+        )
+
+        return HTMLResponse(content=final_html, status_code=status.HTTP_200_OK)
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

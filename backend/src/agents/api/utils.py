@@ -4,13 +4,20 @@ import re
 import uuid
 from datetime import datetime
 from io import BytesIO
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from agents.storage.redis_storage import RedisStorage
 import markdown
 import structlog
 from agents.api.session_state import SessionStateManager
+from agents.components.compound.code_execution_subgraph import (
+    create_code_execution_graph,
+)
+from agents.components.compound.data_types import LiberalFunctionMessage
+from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.storage.redis_service import SecureRedisService
+from agents.storage.redis_storage import RedisStorage
+from agents.tools.langgraph_tools import load_static_tools
+from requests_cache import Dict
 from weasyprint import HTML
 
 logger = structlog.get_logger(__name__)
@@ -391,3 +398,86 @@ async def process_data_science_report(
     )
 
     return final_html
+
+
+async def create_coding_agent_config(
+    user_id: str,
+    thread_id: str,
+    api_key: str,
+    message_id: str,
+    llm_type: str,
+    doc_ids: Dict[str, Any],
+    redis_storage: RedisStorage,
+    daytona_manager: PersistentDaytonaManager,
+):
+
+    data_analysis_doc_ids = []
+    directory_content = []
+    for doc_id in doc_ids:
+        if doc_id["format"] == "text/csv":
+            data_analysis_doc_ids.append(doc_id["id"])
+            directory_content.append(doc_id["filename"])
+
+    tools_config = [
+        {
+            "type": "search_tavily",
+            "config": {},
+        },
+    ]
+
+    config = {
+        "configurable": {
+            "type==default/user_id": user_id,
+            "type==default/llm_type": llm_type,
+            "thread_id": thread_id,
+            "user_id": user_id,
+            "api_key": api_key,
+            "message_id": message_id,
+        },
+        "recursion_limit": 50,
+    }
+
+    config["configurable"][
+        "type==default/system_message"
+    ] = f"""
+You are a helpful coding assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}.
+CRITICAL: Use DaytonaCodeSandbox subgraph ONLY when code execution is required (running scripts, data processing, file operations, creating visualizations). For code explanations, examples, or discussions, respond directly without routing to subgraphs.
+"""
+
+    config["configurable"]["type==default/subgraphs"] = {
+        "DaytonaCodeSandbox": {
+            "description": "This subgraph executes Python code in a secure sandbox environment. Use for: data exploration, basic analysis, code debugging, file operations, simple calculations, data visualization, and any general programming tasks. Perfect for examining datasets, creating plots, or running straightforward code snippets.",
+            "next_node": "agent",
+            "graph": create_code_execution_graph(
+                user_id=user_id,
+                sambanova_api_key=api_key,
+                redis_storage=redis_storage,
+                daytona_manager=daytona_manager,
+            ),
+            "state_input_mapper": lambda x: {
+                "code": x,
+                "current_retry": 0,
+                "max_retries": 5,
+                "steps_taken": [],
+                "error_detected": False,
+                "final_result": "",
+                "corrections_proposed": [],
+                "files": [],
+            },
+            "state_output_mapper": lambda x: LiberalFunctionMessage(
+                name="DaytonaCodeSandbox",
+                content="\n".join(x["steps_taken"]),
+                additional_kwargs={
+                    "agent_type": "tool_response",
+                    "timestamp": datetime.now().isoformat(),
+                    "files": x["files"],
+                },
+                result={"usage": {"total_latency": 0.0}},
+            ),
+        },
+    }
+    all_tools = await load_static_tools(tools_config)
+    config["configurable"]["type==default/tools"] = all_tools
+    config["configurable"]["agent_type"] = "default"
+
+    return config
