@@ -13,6 +13,7 @@ from agents.components.compound.code_execution_subgraph import (
 from agents.components.compound.data_science_subgraph import (
     create_data_science_subgraph,
 )
+from agents.components.compound.data_types import LLMType
 from agents.components.compound.xml_agent import get_global_checkpointer
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.components.open_deep_research.graph import create_deep_research_graph
@@ -510,7 +511,7 @@ async def deepresearch_interactive_agent(
         )
 
 
-@router.post("/daytonacode", tags=["Analysis"])
+@router.post("/coding")
 async def datascience_agent_and_report(
     request: Request,
     prompt: str = Form(..., description="The main prompt for the data science agent."),
@@ -533,11 +534,17 @@ async def datascience_agent_and_report(
 
     try:
         file_ids = []
-        file_names = []
+        file_info_list = []
         for file in files:
             file_info = await process_and_store_file(request, file, api_key)
             file_ids.append(file_info["file_id"])
-            file_names.append(file_info["filename"])
+            file_info_list.append(
+                {
+                    "id": file_info["file_id"],
+                    "filename": file_info["filename"],
+                    "format": file_info["type"],
+                }
+            )
 
         daytona_manager = PersistentDaytonaManager(
             user_id=api_key,
@@ -551,19 +558,17 @@ async def datascience_agent_and_report(
             thread_id=thread_id,
             api_key=api_key,
             message_id=str(uuid.uuid4()),
-            doc_ids=file_ids,
+            doc_ids=file_info_list,
             redis_storage=request.app.state.redis_storage_service,
             daytona_manager=daytona_manager,
+            llm_type=LLMType.SN_DEEPSEEK_V3,
         )
 
-        code_execution_agent = create_code_execution_graph(
-            user_id=api_key,
-            sambanova_api_key=api_key,
-            redis_storage=request.app.state.redis_storage_service,
-            daytona_manager=daytona_manager,
-        )
+        from agents.components.compound.agent import enhanced_agent
 
-        return HTMLResponse(content=final_html, status_code=status.HTTP_200_OK)
+        results = await enhanced_agent.ainvoke(prompt, config=config)
+
+        return HTMLResponse(content=results, status_code=status.HTTP_200_OK)
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
