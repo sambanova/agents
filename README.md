@@ -39,7 +39,10 @@ The basic process of the Agents application is described below.
    - Agent reasoning panel shows real-time thought processes.
    - Continuous learning from interactions to improve future responses.
 
-> **Note**: View the **Agent Reasoning** panel on the right side of the application to see the real-time thought output. The **Daytona Sidebar** automatically opens when code execution is detected.
+- **API Access**
+   - The application provides a REST API for programmatic access to its features such as deep research and data science workflows.
+
+> **Note**: View the **Agent Reasoning** panel on the right side of the application to see the real-time thought output. The **Daytona Sidebar** automatically opens when code execution is detected. 
 
 # Prerequisites
 
