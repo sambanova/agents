@@ -21,6 +21,47 @@ class ExportService:
     def __init__(self, redis_storage: RedisStorage):
         self.redis_storage = redis_storage
 
+    def _clean_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Clean and filter messages to remove redundant stream events and sensitive data"""
+        cleaned_messages = []
+        
+        for message in messages:
+            # Skip redundant stream events
+            if message.get("event") in ["stream_start", "stream_complete"]:
+                continue
+            
+            # Create cleaned message
+            cleaned_message = message.copy()
+            
+            # Remove sensitive IDs but keep message_id for tracking
+            cleaned_message.pop("user_id", None)
+            cleaned_message.pop("conversation_id", None)
+            
+            # Keep essential fields for meaningful export
+            cleaned_messages.append(cleaned_message)
+        
+        return cleaned_messages
+
+    def _clean_conversation_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Clean conversation metadata to remove sensitive data"""
+        cleaned_metadata = metadata.copy()
+        
+        # Remove sensitive IDs
+        cleaned_metadata.pop("conversation_id", None)
+        cleaned_metadata.pop("user_id", None)
+        
+        return cleaned_metadata
+
+    def _clean_file_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Clean file metadata to remove sensitive data"""
+        cleaned_metadata = metadata.copy()
+        
+        # Remove sensitive IDs
+        cleaned_metadata.pop("file_id", None)
+        cleaned_metadata.pop("user_id", None)
+        
+        return cleaned_metadata
+
     async def get_user_info_from_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Get user information including email from Auth0 using access token"""
         try:
@@ -62,13 +103,16 @@ class ExportService:
                         metadata = json.loads(metadata_raw)
                         
                         # Get all messages for this conversation
-                        messages = await self.redis_storage.get_messages(user_id, conv_id)
+                        raw_messages = await self.redis_storage.get_messages(user_id, conv_id)
+                        
+                        # Clean and filter messages
+                        cleaned_messages = self._clean_messages(raw_messages)
+                        cleaned_metadata = self._clean_conversation_metadata(metadata)
                         
                         conversation_export = {
-                            "conversation_id": conv_id,
-                            "metadata": metadata,
-                            "messages": messages,
-                            "message_count": len(messages)
+                            "metadata": cleaned_metadata,
+                            "messages": cleaned_messages,
+                            "message_count": len(cleaned_messages)
                         }
                         
                         conversations.append(conversation_export)
@@ -102,10 +146,10 @@ class ExportService:
                 if file_data_result:
                     file_data, _ = file_data_result
                     
-                    # Encode binary data as base64 for JSON serialization
+                    # Clean file metadata and encode binary data as base64 for JSON serialization
+                    cleaned_metadata = self._clean_file_metadata(file_metadata)
                     file_export = {
-                        "file_id": file_id,
-                        "metadata": file_metadata,
+                        "metadata": cleaned_metadata,
                         "data": base64.b64encode(file_data).decode('utf-8') if file_data else None,
                         "data_type": "base64"
                     }
@@ -127,14 +171,23 @@ class ExportService:
             
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                 
-                # Add export metadata
+                # Add export metadata (cleaned for privacy)
+                cleaned_user_info = None
+                if user_info:
+                    # Only keep non-sensitive user info
+                    cleaned_user_info = {
+                        "name": user_info.get("name"),
+                        "email": user_info.get("email"),
+                        "locale": user_info.get("locale")
+                    }
+                
                 export_metadata = {
                     "export_date": datetime.utcnow().isoformat(),
-                    "user_id": user_id,
-                    "user_info": user_info,
+                    "user_info": cleaned_user_info,
                     "total_conversations": len(conversations),
                     "total_files": len(files),
-                    "export_version": "1.0"
+                    "export_version": "2.0",  # Updated version for cleaned export
+                    "privacy_notes": "Sensitive IDs have been removed for privacy protection"
                 }
                 
                 zip_file.writestr("export_metadata.json", json.dumps(export_metadata, indent=2))
@@ -183,10 +236,10 @@ class ExportService:
                     
                     # Create files summary
                     files_summary = []
-                    for file_data in files:
+                    for i, file_data in enumerate(files):
                         metadata = file_data["metadata"]
                         summary = {
-                            "file_id": file_data["file_id"],
+                            "file_number": i + 1,  # Sequential number instead of file_id
                             "filename": metadata.get("filename", "unknown"),
                             "format": metadata.get("format", "unknown"),
                             "size_bytes": metadata.get("file_size", 0),
@@ -202,10 +255,9 @@ class ExportService:
                     )
                     
                     # Add individual files
-                    for file_data in files:
-                        file_id = file_data["file_id"]
+                    for i, file_data in enumerate(files):
                         metadata = file_data["metadata"]
-                        filename = metadata.get("filename", f"file_{file_id}")
+                        filename = metadata.get("filename", f"file_{i+1}")
                         
                         # Create safe filename
                         safe_filename = filename.replace("/", "_").replace("\\", "_")
@@ -221,7 +273,7 @@ class ExportService:
                                 zip_file.writestr(metadata_filename, json.dumps(metadata, indent=2))
                                 
                             except Exception as e:
-                                logger.error(f"Error adding file {file_id} to zip", error=str(e))
+                                logger.error(f"Error adding file {i+1} ({filename}) to zip", error=str(e))
                                 continue
                 
                 # Add README with instructions
@@ -245,17 +297,16 @@ Samba Co-Pilot Chat Export
 ==========================
 
 Export Date: {metadata['export_date']}
-User ID: {metadata['user_id']}
 Export Version: {metadata['export_version']}
 
 Contents:
 ---------
 - conversations/: Contains all your chat conversations
   - conversations_summary.json: Overview of all conversations
-  - Individual conversation files with date, name, and ID
+  - Individual conversation files with date and name
 
 - files/: Contains all uploaded files and generated artifacts
-  - files_summary.json: Overview of all files
+  - files_summary.json: Overview of all files (numbered for privacy)
   - Individual files with their original names
   - .metadata.json files with additional file information
 
@@ -268,10 +319,19 @@ Total Files: {metadata['total_files']}
 
 File Format Information:
 ------------------------
-- Conversations are stored as JSON files with message history
-- Files are stored in their original format
+- Conversations are cleaned JSON files with meaningful messages only
+- Redundant stream events have been filtered out for clarity
+- Sensitive IDs (user_id, conversation_id, file_id) have been removed for privacy
+- Message IDs are preserved for tracking conversation flow
+- Files are numbered sequentially instead of using internal IDs
 - All timestamps are in UTC
 - File metadata includes information about indexing and processing
+
+Privacy Notes:
+--------------
+- This export has been cleaned to remove sensitive internal identifiers
+- Only essential conversation data and file content is included
+- Your actual content and files remain complete and unmodified
 
 This export contains all your personal data from Samba Co-Pilot.
 Please keep this archive secure as it contains your private conversations and files.
