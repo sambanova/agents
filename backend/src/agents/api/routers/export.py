@@ -1,4 +1,5 @@
 import asyncio
+import json
 import smtplib
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
@@ -9,13 +10,27 @@ import structlog
 from agents.auth.auth0_config import get_current_user_id, get_token_payload
 from agents.services.export_service import ExportService
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(
     prefix="/export",
 )
+
+
+async def get_export_ttl_hours(request: Request, user_id: str) -> Optional[float]:
+    """Get the remaining TTL for export data in hours"""
+    try:
+        export_key = f"export:{user_id}:latest"
+        redis_client = request.app.state.redis_storage_service.redis_client
+        ttl_seconds = await super(type(redis_client), redis_client).ttl(export_key)
+        
+        if ttl_seconds > 0:
+            return round(ttl_seconds / 3600, 1)  # Convert to hours
+        return None
+    except Exception:
+        return None
 
 
 async def send_email_notification(user_email: str, user_id: str, export_size: int):
@@ -62,22 +77,16 @@ async def process_export_background(
         # Store the export temporarily in Redis for download
         # Using a TTL of 24 hours
         export_key = f"export:{user_id}:latest"
-        export_data = {
-            "filename": filename,
-            "size": len(zip_data),
-            "created_at": asyncio.get_event_loop().time(),
-            "data": zip_data
-        }
         
-        # Store with 24 hour expiration
-        await redis_storage_service.redis_client.setex(
-            export_key, 
-            24 * 60 * 60,  # 24 hours in seconds
-            zip_data
-        )
+        # Store binary data using the same pattern as existing file storage
+        # This handles encryption properly and works with binary data
+        redis_client = redis_storage_service.redis_client
+        
+        # Store export data with TTL (using encrypted storage like other files)
+        await redis_client.set(export_key, zip_data, user_id)
         
         # Store metadata separately
-        metadata_key = f"export_meta:{user_id}:latest"
+        metadata_key = f"export_meta:{user_id}:latest" 
         metadata = {
             "filename": filename,
             "size": len(zip_data),
@@ -86,13 +95,15 @@ async def process_export_background(
             "email_address": email_to_use
         }
         
-        await redis_storage_service.redis_client.setex(
-            metadata_key,
-            24 * 60 * 60,
-            str(metadata)
-        )
+        # Store metadata with encryption
+        await redis_client.set(metadata_key, json.dumps(metadata), user_id)
         
-        logger.info(f"Export completed and stored for user {user_id}")
+        # Set TTL for both keys to auto-delete after 24 hours
+        ttl_seconds = 24 * 60 * 60  # 24 hours
+        await super(type(redis_client), redis_client).expire(export_key, ttl_seconds)
+        await super(type(redis_client), redis_client).expire(metadata_key, ttl_seconds)
+        
+        logger.info(f"Export completed and stored for user {user_id} with 24-hour TTL for automatic cleanup")
         
     except Exception as e:
         logger.error("Error in background export processing", user_id=user_id, error=str(e))
@@ -155,7 +166,7 @@ async def get_export_status(
     """Get the status of the latest export request"""
     try:
         metadata_key = f"export_meta:{user_id}:latest"
-        metadata_raw = await request.app.state.redis_storage_service.redis_client.get(metadata_key)
+        metadata_raw = await request.app.state.redis_storage_service.redis_client.get(metadata_key, user_id)
         
         if not metadata_raw:
             return JSONResponse(
@@ -163,9 +174,10 @@ async def get_export_status(
                 content={"status": "no_export", "message": "No recent export found"}
             )
         
-        # Parse metadata (stored as string representation of dict)
+        # Parse metadata (stored as JSON string)
         try:
-            metadata = eval(metadata_raw.decode('utf-8') if isinstance(metadata_raw, bytes) else metadata_raw)
+            metadata_str = metadata_raw.decode('utf-8') if isinstance(metadata_raw, bytes) else metadata_raw
+            metadata = json.loads(metadata_str)
         except:
             metadata = {"status": "error", "message": "Could not parse export metadata"}
         
@@ -177,7 +189,8 @@ async def get_export_status(
                 "size": metadata.get("size"),
                 "created_at": metadata.get("created_at"),
                 "email_sent": metadata.get("email_sent", False),
-                "email_address": metadata.get("email_address")
+                "email_address": metadata.get("email_address"),
+                "ttl_hours": await get_export_ttl_hours(request, user_id)
             }
         )
         
@@ -199,9 +212,14 @@ async def download_export(
         export_key = f"export:{user_id}:latest"
         metadata_key = f"export_meta:{user_id}:latest"
         
-        # Get export data and metadata
-        export_data = await request.app.state.redis_storage_service.redis_client.get(export_key)
-        metadata_raw = await request.app.state.redis_storage_service.redis_client.get(metadata_key)
+        # Get export data and metadata using the same pattern as existing file retrieval
+        redis_client = request.app.state.redis_storage_service.redis_client
+        
+        # Get both encrypted export data and metadata 
+        export_data = await redis_client.get(export_key, user_id)
+        metadata_raw = await redis_client.get(metadata_key, user_id)
+        
+        logger.info(f"Retrieved export data: {len(export_data) if export_data else 0} bytes, metadata: {bool(metadata_raw)}")
         
         if not export_data or not metadata_raw:
             return JSONResponse(
@@ -209,19 +227,21 @@ async def download_export(
                 content={"error": "Export not found or expired"}
             )
         
+        # Handle binary data properly (same as existing file retrieval)
+        if isinstance(export_data, str):
+            export_data = export_data.encode("utf-8")
+        
         # Parse metadata
         try:
-            metadata = eval(metadata_raw.decode('utf-8') if isinstance(metadata_raw, bytes) else metadata_raw)
+            metadata_str = metadata_raw.decode('utf-8') if isinstance(metadata_raw, bytes) else metadata_raw
+            metadata = json.loads(metadata_str)
             filename = metadata.get("filename", "export.zip")
         except:
             filename = "samba_copilot_export.zip"
         
-        # Create streaming response
-        def iter_data():
-            yield export_data
-        
-        return StreamingResponse(
-            iter_data(),
+        # Return binary data directly (same pattern as existing file download)
+        return Response(
+            content=export_data,
             media_type="application/zip",
             headers={
                 "Content-Disposition": f'attachment; filename="{filename}"',
@@ -247,9 +267,10 @@ async def clear_export(
         export_key = f"export:{user_id}:latest"
         metadata_key = f"export_meta:{user_id}:latest"
         
-        # Delete both keys
-        await request.app.state.redis_storage_service.redis_client.delete(export_key)
-        await request.app.state.redis_storage_service.redis_client.delete(metadata_key)
+        # Delete both keys (delete doesn't require user_id as it's not overridden)
+        redis_client = request.app.state.redis_storage_service.redis_client
+        await redis_client.delete(export_key)
+        await redis_client.delete(metadata_key)
         
         return JSONResponse(
             status_code=200,
