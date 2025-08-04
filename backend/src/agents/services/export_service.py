@@ -112,7 +112,9 @@ class ExportService:
                         conversation_export = {
                             "metadata": cleaned_metadata,
                             "messages": cleaned_messages,
-                            "message_count": len(cleaned_messages)
+                            "message_count": len(cleaned_messages),
+                            "_temp_conversation_id": conv_id,  # Temporary for file naming
+                            "_temp_original_metadata": metadata  # Temporary for file naming
                         }
                         
                         conversations.append(conversation_export)
@@ -198,9 +200,9 @@ class ExportService:
                     
                     # Create a summary file
                     conversations_summary = []
-                    for conv in conversations:
+                    for i, conv in enumerate(conversations):
                         summary = {
-                            "conversation_id": conv["conversation_id"],
+                            "conversation_number": i + 1,  # Sequential number instead of ID
                             "name": conv["metadata"].get("name", "Untitled"),
                             "created_at": conv["metadata"].get("created_at"),
                             "updated_at": conv["metadata"].get("updated_at"),
@@ -214,17 +216,19 @@ class ExportService:
                     )
                     
                     # Add individual conversation files
-                    for conv in conversations:
-                        conv_id = conv["conversation_id"]
-                        conv_name = conv["metadata"].get("name", "Untitled").replace("/", "_")
-                        created_date = datetime.fromtimestamp(conv["metadata"].get("created_at", time.time())).strftime("%Y-%m-%d")
+                    for i, conv in enumerate(conversations):
+                        # Use temporary data for filename
+                        conv_id = conv["_temp_conversation_id"]
+                        original_metadata = conv["_temp_original_metadata"]
+                        conv_name = original_metadata.get("name", "Untitled").replace("/", "_")
+                        created_date = datetime.fromtimestamp(original_metadata.get("created_at", time.time())).strftime("%Y-%m-%d")
                         
-                        # Create readable filename
-                        filename = f"{conversations_folder}{created_date}_{conv_name}_{conv_id}.json"
+                        # Create readable filename without sensitive ID in the final name
+                        filename = f"{conversations_folder}{created_date}_{conv_name}_conversation_{i+1}.json"
                         
-                        # Format conversation for export
+                        # Format conversation for export (clean copy without temp fields)
                         conversation_export = {
-                            "conversation_info": conv["metadata"],
+                            "metadata": conv["metadata"],
                             "messages": conv["messages"]
                         }
                         
