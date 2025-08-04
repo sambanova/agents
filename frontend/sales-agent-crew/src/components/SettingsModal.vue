@@ -30,6 +30,18 @@
               >
                 API Keys
               </button>
+              
+              <button
+                @click="activeTab = 'export'"
+                :class="[
+                  'py-2 px-1 border-b-2 font-medium text-sm',
+                  activeTab === 'export'
+                    ? 'border-primary-brandColor text-primary-brandColor'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ]"
+              >
+                Export Data
+              </button>
 
             </nav>
           </div>
@@ -299,8 +311,150 @@
           </div>
           </div>
 
+          <!-- Export Data Tab -->
+          <div v-if="activeTab === 'export'" class="space-y-6">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 class="text-lg font-medium text-blue-900 mb-2">Export Your Data</h3>
+              <p class="text-sm text-blue-700 mb-4">
+                Download all your conversations, uploaded files, and generated artifacts in a convenient ZIP archive. 
+                This includes your complete chat history and all associated files.
+              </p>
+              
+              <!-- Export Status -->
+              <div v-if="exportStatus && exportStatus.status !== 'no_export'" class="mb-4 p-3 rounded-md" 
+                   :class="exportStatus.status === 'ready' ? 'bg-green-100 border border-green-200' : 'bg-yellow-100 border border-yellow-200'">
+                <div class="flex items-center">
+                  <svg v-if="exportStatus.status === 'ready'" class="w-5 h-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                  </svg>
+                  <svg v-else class="w-5 h-5 text-yellow-600 mr-2 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <div>
+                    <p class="font-medium" :class="exportStatus.status === 'ready' ? 'text-green-800' : 'text-yellow-800'">
+                      {{ exportStatus.status === 'ready' ? 'Export Ready!' : 'Export Processing...' }}
+                    </p>
+                    <p class="text-sm" :class="exportStatus.status === 'ready' ? 'text-green-600' : 'text-yellow-600'">
+                      {{ exportStatus.status === 'ready' 
+                          ? `File: ${exportStatus.filename} (${formatFileSize(exportStatus.size)})` 
+                          : 'This may take a few minutes depending on your data size.' }}
+                    </p>
+                  </div>
+                </div>
+                
+                <!-- Download button when ready -->
+                <div v-if="exportStatus.status === 'ready'" class="mt-3 flex space-x-2">
+                  <button 
+                    @click="downloadExport"
+                    class="inline-flex items-center px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none"
+                    :disabled="isDownloading"
+                  >
+                    <svg v-if="isDownloading" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <svg v-else class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    {{ isDownloading ? 'Downloading...' : 'Download Export' }}
+                  </button>
+                  <button 
+                    @click="clearExport"
+                    class="px-3 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Request Export Button -->
+              <div class="flex justify-between items-center">
+                <div>
+                  <button 
+                    @click="confirmExport"
+                    class="inline-flex items-center px-4 py-2 bg-primary-brandColor text-white text-sm font-medium rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                    :disabled="isExporting || (exportStatus && exportStatus.status === 'processing')"
+                  >
+                    <svg v-if="isExporting" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <svg v-else class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/>
+                    </svg>
+                    {{ isExporting ? 'Requesting Export...' : 'Request Export' }}
+                  </button>
+                </div>
+                
+                <div class="text-sm text-gray-600">
+                  <button 
+                    @click="checkExportStatus" 
+                    class="text-primary-brandColor hover:text-primary-700 underline"
+                    :disabled="isCheckingStatus"
+                  >
+                    {{ isCheckingStatus ? 'Checking...' : 'Check Status' }}
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Export Info -->
+              <div class="mt-4 text-xs text-gray-600">
+                <p>• Your export will include all conversations, messages, uploaded files, and generated artifacts</p>
+                <p>• Files are organized by type and include metadata</p>
+                <p>• Exports are available for download for 24 hours</p>
+                <p>• Large exports may take several minutes to process</p>
+              </div>
+            </div>
+          </div>
 
 
+
+        </div>
+
+        <!-- Export Confirmation Modal -->
+        <div v-if="showExportConfirmation" class="fixed inset-0 z-50 overflow-y-auto" style="background-color: rgba(0, 0, 0, 0.5);">
+          <div class="flex min-h-screen items-center justify-center p-4">
+            <div class="relative w-full max-w-md bg-white rounded-lg shadow-lg p-6">
+              <div class="text-center">
+                <svg class="mx-auto h-12 w-12 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/>
+                </svg>
+                <h3 class="mt-4 text-lg font-medium text-primary-brandTextPrimary">Confirm Data Export</h3>
+                <p class="mt-2 text-sm text-gray-500 text-left text-primary-brandTextSecondary">
+                  This will create a ZIP archive containing all your conversations, messages, uploaded files, and generated artifacts. 
+                  The export may take several minutes to process depending on the amount of data.
+                </p>
+                <p class="mt-2 text-sm text-blue-600 text-left">
+                  Your export will be available for download for 24 hours and will include:
+                </p>
+                <ul class="mt-1 text-sm text-gray-500 text-left list-disc list-inside">
+                  <li>All conversation history and metadata</li>
+                  <li>Uploaded files and generated artifacts</li>
+                  <li>Organized folder structure with README</li>
+                </ul>
+                <div class="mt-6 flex justify-center space-x-4">
+                  <button 
+                    @click="cancelExport" 
+                    class="px-3 py-1 text-sm border border-primary-brandBorder text-primary-brandColor text-sm rounded focus:outline-none"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    @click="executeExport" 
+                    class="inline-flex items-center px-3 py-1 text-sm bg-primary-brandColor text-white rounded focus:outline-none focus:outline-none"
+                    :disabled="isExporting"
+                  >
+                    <svg v-if="isExporting" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    {{ isExporting ? 'Requesting...' : 'Start Export' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Delete Account Confirmation Modal -->
@@ -694,6 +848,173 @@ defineExpose({
     serperKey: serperKey.value,
     fireworksKey: fireworksKey.value,
     selectedModel: selectedModel.value
+})
+
+// Export functionality
+const showExportConfirmation = ref(false)
+const isExporting = ref(false)
+const isDownloading = ref(false)
+const isCheckingStatus = ref(false)
+const exportStatus = ref(null)
+
+// Format file size for display
+const formatFileSize = (bytes) => {
+  if (bytes === 0) return '0 Bytes'
+  const k = 1024
+  const sizes = ['Bytes', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+// Check export status on mount if export tab is active
+const checkExportStatus = async () => {
+  if (isCheckingStatus.value) return
+  
+  try {
+    isCheckingStatus.value = true
+    const response = await axios.get(`${import.meta.env.VITE_API_URL}/export/status`, {
+      headers: {
+        'Authorization': `Bearer ${await getAccessTokenSilently()}`
+      }
+    })
+    
+    if (response.status === 200) {
+      exportStatus.value = response.data
+    } else if (response.status === 404) {
+      exportStatus.value = { status: 'no_export' }
+    }
+  } catch (error) {
+    if (error.response?.status === 404) {
+      exportStatus.value = { status: 'no_export' }
+    } else {
+      console.error('Error checking export status:', error)
+      errorMessage.value = 'Failed to check export status'
+    }
+  } finally {
+    isCheckingStatus.value = false
+  }
+}
+
+const confirmExport = () => {
+  showExportConfirmation.value = true
+}
+
+const cancelExport = () => {
+  showExportConfirmation.value = false
+}
+
+const executeExport = async () => {
+  try {
+    isExporting.value = true
+    showExportConfirmation.value = false
+    
+    const response = await axios.post(`${import.meta.env.VITE_API_URL}/export/request`, {}, {
+      headers: {
+        'Authorization': `Bearer ${await getAccessTokenSilently()}`
+      }
+    })
+    
+    if (response.status === 202) {
+      successMessage.value = 'Export request submitted! You will be notified when your export is ready.'
+      exportStatus.value = { status: 'processing' }
+      
+      // Start polling for status updates
+      setTimeout(() => {
+        pollExportStatus()
+      }, 5000) // Start checking after 5 seconds
+      
+    } else {
+      errorMessage.value = 'Failed to request export. Please try again.'
+    }
+  } catch (error) {
+    console.error('Error requesting export:', error)
+    errorMessage.value = error.response?.data?.error || 'Failed to request export. Please try again.'
+  } finally {
+    isExporting.value = false
+    clearMessagesAfterDelay()
+  }
+}
+
+const pollExportStatus = async () => {
+  try {
+    await checkExportStatus()
+    
+    // Continue polling if still processing
+    if (exportStatus.value?.status === 'processing') {
+      setTimeout(() => {
+        pollExportStatus()
+      }, 10000) // Check every 10 seconds
+    }
+  } catch (error) {
+    console.error('Error polling export status:', error)
+  }
+}
+
+const downloadExport = async () => {
+  if (isDownloading.value) return
+  
+  try {
+    isDownloading.value = true
+    
+    const response = await axios.get(`${import.meta.env.VITE_API_URL}/export/download`, {
+      headers: {
+        'Authorization': `Bearer ${await getAccessTokenSilently()}`
+      },
+      responseType: 'blob'
+    })
+    
+    if (response.status === 200) {
+      // Create download link
+      const blob = new Blob([response.data], { type: 'application/zip' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = exportStatus.value?.filename || 'samba_copilot_export.zip'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      
+      successMessage.value = 'Export downloaded successfully!'
+    } else {
+      errorMessage.value = 'Failed to download export'
+    }
+  } catch (error) {
+    console.error('Error downloading export:', error)
+    errorMessage.value = error.response?.data?.error || 'Failed to download export'
+  } finally {
+    isDownloading.value = false
+    clearMessagesAfterDelay()
+  }
+}
+
+const clearExport = async () => {
+  try {
+    const response = await axios.delete(`${import.meta.env.VITE_API_URL}/export/clear`, {
+      headers: {
+        'Authorization': `Bearer ${await getAccessTokenSilently()}`
+      }
+    })
+    
+    if (response.status === 200) {
+      exportStatus.value = { status: 'no_export' }
+      successMessage.value = 'Export data cleared successfully'
+    } else {
+      errorMessage.value = 'Failed to clear export data'
+    }
+  } catch (error) {
+    console.error('Error clearing export:', error)
+    errorMessage.value = 'Failed to clear export data'
+  } finally {
+    clearMessagesAfterDelay()
+  }
+}
+
+// Check export status when the export tab becomes active
+watch(activeTab, (newTab) => {
+  if (newTab === 'export') {
+    checkExportStatus()
+  }
 })
 
 // Delete account functionality
