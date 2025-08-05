@@ -1,34 +1,31 @@
-{{- if .Values.ingress.enabled -}}
+{{- range .Values.ingress.hosts }}
+{{- if .host }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ .Values.ingress.name }}
-  namespace: {{ .Values.global.namespace }}
+  name: agents-{{ .host | replace "." "-" }}
+  namespace: {{ $.Values.global.namespace }}
   annotations:
-    {{- range $key, $value := .Values.ingress.annotations }}
+    {{- range $key, $value := $.Values.ingress.annotations }}
     {{ $key }}: {{ $value | quote }}
     {{- end }}
-    {{- if .Values.ingress.stickySession }}
-    {{- if .Values.ingress.stickySession.enabled }}
+    {{- if $.Values.ingress.stickySession }}
+    {{- if $.Values.ingress.stickySession.enabled }}
     # Sticky session configuration
     nginx.ingress.kubernetes.io/affinity: "cookie"
     nginx.ingress.kubernetes.io/affinity-mode: "persistent"
-    nginx.ingress.kubernetes.io/session-cookie-name: "{{ .Values.ingress.stickySession.cookieName | default "AISKAGENTS_ROUTE" }}"
-    nginx.ingress.kubernetes.io/session-cookie-max-age: "{{ .Values.ingress.stickySession.maxAge | default "86400" }}"
-    nginx.ingress.kubernetes.io/session-cookie-path: "{{ .Values.ingress.stickySession.path | default "/api" }}"
+    nginx.ingress.kubernetes.io/session-cookie-name: "{{ $.Values.ingress.stickySession.cookieName | default "AISKAGENTS_ROUTE" }}"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "{{ $.Values.ingress.stickySession.maxAge | default "86400" }}"
+    nginx.ingress.kubernetes.io/session-cookie-path: "{{ $.Values.ingress.stickySession.path | default "/api" }}"
     {{- end }}
     {{- end }}
 spec:
-  ingressClassName: {{ .Values.ingress.className | quote }}
-  tls:
-  - hosts:
-    - {{ .Values.ingress.host }}
-    secretName: {{ .Values.ingress.tls.secretName }}
+  ingressClassName: {{ .className | quote }}
   rules:
-  - host: {{ .Values.ingress.host }}
+  - host: {{ .host }}
     http:
       paths:
-      {{- range .Values.ingress.paths }}
+      {{- range $.Values.ingress.paths }}
       - path: {{ .path }}
         pathType: {{ .pathType }}
         backend:
@@ -37,4 +34,18 @@ spec:
             port:
               number: {{ .port }}
       {{- end }}
-{{- end }} 
+  tls:
+  - hosts:
+    - {{ .host }}
+    {{- if .tlsSecretName }}
+    secretName: {{ .tlsSecretName }}
+    {{- end }}
+---
+{{- end }}
+{{- end }}
+
+
+
+
+
+
