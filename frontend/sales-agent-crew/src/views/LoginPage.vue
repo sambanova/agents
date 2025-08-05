@@ -56,6 +56,20 @@
                 </svg>
                 Continue with Google
               </button>
+<!--               
+              <button 
+                @click="loginWithMicrosoft"
+                :disabled="isLoading"
+                class="w-full flex items-center justify-center py-3 px-4 border border-gray-300 rounded-lg shadow-sm bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
+              >
+                <svg class="w-5 h-5 mr-3" viewBox="0 0 24 24">
+                  <path fill="#F25022" d="M11.4 11.4H2V2h9.4v9.4z"/>
+                  <path fill="#00A4EF" d="M22 11.4h-9.4V2H22v9.4z"/>
+                  <path fill="#7FBA00" d="M11.4 22H2v-9.4h9.4V22z"/>
+                  <path fill="#FFB900" d="M22 22h-9.4v-9.4H22V22z"/>
+                </svg>
+                Continue with Microsoft
+              </button> -->
             </div>
             
             <!-- Divider -->
@@ -172,6 +186,20 @@ const loginWithGoogle = async () => {
   } catch (error) {
     console.error('Google login error:', error)
     errorMessage.value = 'Failed to sign in with Google. Please try again.'
+  }
+}
+
+const loginWithMicrosoft = async () => {
+  try {
+    errorMessage.value = ''
+    await loginWithPopup({
+      authorizationParams: {
+        connection: 'windowslive'
+      }
+    })
+  } catch (error) {
+    console.error('Microsoft login error:', error)
+    errorMessage.value = 'Failed to sign in with Microsoft. Please try again.'
   }
 }
 
