@@ -217,22 +217,57 @@ class ExportService:
                     
                     # Add individual conversation files
                     for i, conv in enumerate(conversations):
-                        # Use temporary data for filename
-                        conv_id = conv["_temp_conversation_id"]
-                        original_metadata = conv["_temp_original_metadata"]
-                        conv_name = original_metadata.get("name", "Untitled").replace("/", "_")
-                        created_date = datetime.fromtimestamp(original_metadata.get("created_at", time.time())).strftime("%Y-%m-%d")
-                        
-                        # Create readable filename without sensitive ID in the final name
-                        filename = f"{conversations_folder}{created_date}_{conv_name}_conversation_{i+1}.json"
-                        
-                        # Format conversation for export (clean copy without temp fields)
-                        conversation_export = {
-                            "metadata": conv["metadata"],
-                            "messages": conv["messages"]
-                        }
-                        
-                        zip_file.writestr(filename, json.dumps(conversation_export, indent=2))
+                        try:
+                            # Use temporary data for filename
+                            conv_id = conv["_temp_conversation_id"]
+                            original_metadata = conv["_temp_original_metadata"]
+                            conv_name = original_metadata.get("name", "Untitled").replace("/", "_")
+                            
+                            # Handle potential issues with timestamp
+                            created_timestamp = original_metadata.get("created_at")
+                            if created_timestamp:
+                                try:
+                                    created_date = datetime.fromtimestamp(created_timestamp).strftime("%Y-%m-%d")
+                                except (ValueError, OSError):
+                                    # Handle invalid timestamps
+                                    created_date = datetime.utcnow().strftime("%Y-%m-%d")
+                            else:
+                                created_date = datetime.utcnow().strftime("%Y-%m-%d")
+                            
+                            # Truncate very long conversation names
+                            if len(conv_name) > 50:
+                                conv_name = conv_name[:50] + "..."
+                            
+                            # Create readable filename without sensitive ID in the final name
+                            filename = f"{conversations_folder}{created_date}_{conv_name}_conversation_{i+1}.json"
+                            
+                            # Format conversation for export (clean copy without temp fields)
+                            conversation_export = {
+                                "metadata": conv["metadata"],
+                                "messages": conv["messages"]
+                            }
+                            
+                            zip_file.writestr(filename, json.dumps(conversation_export, indent=2))
+                            logger.info(f"Added conversation {i+1} to export: {filename}")
+                            
+                        except Exception as e:
+                            logger.error(f"Error adding conversation {i+1} to zip", 
+                                       conv_id=conv.get("_temp_conversation_id", "unknown"),
+                                       error=str(e), exc_info=True)
+                            
+                            # Try to add with a fallback filename
+                            try:
+                                fallback_filename = f"{conversations_folder}conversation_{i+1}_error.json"
+                                fallback_export = {
+                                    "metadata": conv.get("metadata", {}),
+                                    "messages": conv.get("messages", []),
+                                    "export_error": f"Error processing: {str(e)}"
+                                }
+                                zip_file.writestr(fallback_filename, json.dumps(fallback_export, indent=2))
+                                logger.info(f"Added conversation {i+1} with fallback filename: {fallback_filename}")
+                            except Exception as fallback_error:
+                                logger.error(f"Failed to add conversation {i+1} even with fallback", 
+                                           error=str(fallback_error), exc_info=True)
                 
                 # Add files and artifacts
                 if files:
