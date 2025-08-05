@@ -81,7 +81,7 @@ class ExportService:
             logger.error("Error getting user info from Auth0", error=str(e))
             return None
 
-    async def gather_user_conversations(self, user_id: str) -> List[Dict[str, Any]]:
+    async def gather_user_conversations(self, user_id: str, files: List[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Gather all conversations for a user"""
         try:
             # Get user's conversation list from Redis
@@ -105,6 +105,43 @@ class ExportService:
                         # Get all messages for this conversation
                         raw_messages = await self.redis_storage.get_messages(user_id, conv_id)
                         
+                        # Find associated files for this conversation (like in delete_chat endpoint)
+                        conversation_file_ids = set()
+                        for message in raw_messages:
+                            files = message.get("additional_kwargs", {}).get("files", [])
+                            conversation_file_ids.update(files)
+                        
+                        # Debug logging for file associations
+                        if conversation_file_ids:
+                            logger.info(f"Conversation {conv_id} has {len(conversation_file_ids)} associated files: {list(conversation_file_ids)}")
+                        else:
+                            logger.info(f"Conversation {conv_id} has no associated files in message additional_kwargs")
+                            
+                            # Alternative association: Try to match files by timing and content clues
+                            conv_created = metadata.get("created_at", 0)
+                            conv_updated = metadata.get("updated_at", 0)
+                            conv_name = metadata.get("name", "").lower()
+                            
+                            # Look for files created during this conversation's timeframe
+                            timing_matched_files = []
+                            for file_data in files if files else []:
+                                file_metadata = file_data.get("metadata", {})
+                                file_created = file_metadata.get("created_at", 0)
+                                file_source = file_metadata.get("source", "")
+                                
+                                # Check if file was created within conversation timeframe (with some buffer)
+                                time_buffer = 3600  # 1 hour buffer
+                                if (conv_created - time_buffer) <= file_created <= (conv_updated + time_buffer):
+                                    # Additional heuristics based on conversation content and file source
+                                    if (("research" in conv_name or "report" in conv_name) and file_source == "deep_research_pdf") or \
+                                       (("data" in conv_name or "analysis" in conv_name) and file_source in ["data_science_agent", "upload"]) or \
+                                       (("dashboard" in conv_name or "visualization" in conv_name) and file_source in ["generated", "data_science_agent"]):
+                                        timing_matched_files.append(file_data.get("_temp_file_id"))
+                            
+                            if timing_matched_files:
+                                conversation_file_ids.update(timing_matched_files)
+                                logger.info(f"Added {len(timing_matched_files)} files to conversation {conv_id} based on timing/content matching: {timing_matched_files}")
+                        
                         # Clean and filter messages
                         cleaned_messages = self._clean_messages(raw_messages)
                         cleaned_metadata = self._clean_conversation_metadata(metadata)
@@ -113,6 +150,7 @@ class ExportService:
                             "metadata": cleaned_metadata,
                             "messages": cleaned_messages,
                             "message_count": len(cleaned_messages),
+                            "associated_file_ids": list(conversation_file_ids),  # Files associated with this conversation
                             "_temp_conversation_id": conv_id,  # Temporary for file naming
                             "_temp_original_metadata": metadata  # Temporary for file naming
                         }
@@ -153,7 +191,8 @@ class ExportService:
                     file_export = {
                         "metadata": cleaned_metadata,
                         "data": base64.b64encode(file_data).decode('utf-8') if file_data else None,
-                        "data_type": "base64"
+                        "data_type": "base64",
+                        "_temp_file_id": file_id  # Temporary for conversation association
                     }
                     
                     files_export.append(file_export)
@@ -167,11 +206,23 @@ class ExportService:
 
     def create_export_zip(self, user_id: str, conversations: List[Dict[str, Any]], 
                          files: List[Dict[str, Any]], user_info: Optional[Dict[str, Any]] = None) -> bytes:
-        """Create a ZIP archive containing all user data"""
+        """Create a ZIP archive containing all user data organized by conversation"""
         try:
             zip_buffer = BytesIO()
             
+            # Create a mapping of file_id to file_data for quick lookup
+            files_by_id = {}
+            if files:
+                for file_data in files:
+                    file_id = file_data.get("_temp_file_id")
+                    if file_id:
+                        files_by_id[file_id] = file_data
+            
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                
+                # Add README
+                readme_content = self._create_readme_content(conversations, files)
+                zip_file.writestr("README.txt", readme_content)
                 
                 # Add export metadata (cleaned for privacy)
                 cleaned_user_info = None
@@ -188,17 +239,14 @@ class ExportService:
                     "user_info": cleaned_user_info,
                     "total_conversations": len(conversations),
                     "total_files": len(files),
-                    "export_version": "2.0",  # Updated version for cleaned export
-                    "privacy_notes": "Sensitive IDs have been removed for privacy protection"
+                    "export_version": "3.0",  # Updated version for conversation-organized export
+                    "privacy_notes": "Sensitive IDs have been removed for privacy protection. Files are organized by conversation."
                 }
                 
                 zip_file.writestr("export_metadata.json", json.dumps(export_metadata, indent=2))
                 
-                # Add conversations
+                # Add conversations summary
                 if conversations:
-                    conversations_folder = "conversations/"
-                    
-                    # Create a summary file
                     conversations_summary = []
                     for i, conv in enumerate(conversations):
                         summary = {
@@ -206,118 +254,164 @@ class ExportService:
                             "name": conv["metadata"].get("name", "Untitled"),
                             "created_at": conv["metadata"].get("created_at"),
                             "updated_at": conv["metadata"].get("updated_at"),
-                            "message_count": conv["message_count"]
+                            "message_count": conv["message_count"],
+                            "associated_files_count": len(conv.get("associated_file_ids", []))
                         }
                         conversations_summary.append(summary)
                     
                     zip_file.writestr(
-                        f"{conversations_folder}conversations_summary.json",
+                        "conversations_summary.json",
                         json.dumps(conversations_summary, indent=2)
                     )
-                    
-                    # Add individual conversation files
-                    for i, conv in enumerate(conversations):
-                        try:
-                            # Use temporary data for filename
-                            conv_id = conv["_temp_conversation_id"]
-                            original_metadata = conv["_temp_original_metadata"]
-                            conv_name = original_metadata.get("name", "Untitled").replace("/", "_")
-                            
-                            # Handle potential issues with timestamp
-                            created_timestamp = original_metadata.get("created_at")
-                            if created_timestamp:
-                                try:
-                                    created_date = datetime.fromtimestamp(created_timestamp).strftime("%Y-%m-%d")
-                                except (ValueError, OSError):
-                                    # Handle invalid timestamps
-                                    created_date = datetime.utcnow().strftime("%Y-%m-%d")
-                            else:
+                
+                # Create individual conversation folders
+                for i, conv in enumerate(conversations):
+                    try:
+                        # Use temporary data for folder naming
+                        conv_id = conv["_temp_conversation_id"]
+                        original_metadata = conv["_temp_original_metadata"]
+                        conv_name = original_metadata.get("name", "Untitled").replace("/", "_")
+                        
+                        # Handle potential issues with timestamp
+                        created_timestamp = original_metadata.get("created_at")
+                        if created_timestamp:
+                            try:
+                                created_date = datetime.fromtimestamp(created_timestamp).strftime("%Y-%m-%d")
+                            except (ValueError, OSError):
                                 created_date = datetime.utcnow().strftime("%Y-%m-%d")
-                            
-                            # Truncate very long conversation names
-                            if len(conv_name) > 50:
-                                conv_name = conv_name[:50] + "..."
-                            
-                            # Create readable filename without sensitive ID in the final name
-                            filename = f"{conversations_folder}{created_date}_{conv_name}_conversation_{i+1}.json"
-                            
-                            # Format conversation for export (clean copy without temp fields)
-                            conversation_export = {
-                                "metadata": conv["metadata"],
-                                "messages": conv["messages"]
-                            }
-                            
-                            zip_file.writestr(filename, json.dumps(conversation_export, indent=2))
-                            logger.info(f"Added conversation {i+1} to export: {filename}")
-                            
-                        except Exception as e:
-                            logger.error(f"Error adding conversation {i+1} to zip", 
-                                       conv_id=conv.get("_temp_conversation_id", "unknown"),
-                                       error=str(e), exc_info=True)
-                            
-                            # Try to add with a fallback filename
-                            try:
-                                fallback_filename = f"{conversations_folder}conversation_{i+1}_error.json"
-                                fallback_export = {
-                                    "metadata": conv.get("metadata", {}),
-                                    "messages": conv.get("messages", []),
-                                    "export_error": f"Error processing: {str(e)}"
-                                }
-                                zip_file.writestr(fallback_filename, json.dumps(fallback_export, indent=2))
-                                logger.info(f"Added conversation {i+1} with fallback filename: {fallback_filename}")
-                            except Exception as fallback_error:
-                                logger.error(f"Failed to add conversation {i+1} even with fallback", 
-                                           error=str(fallback_error), exc_info=True)
-                
-                # Add files and artifacts
-                if files:
-                    files_folder = "files/"
-                    
-                    # Create files summary
-                    files_summary = []
-                    for i, file_data in enumerate(files):
-                        metadata = file_data["metadata"]
-                        summary = {
-                            "file_number": i + 1,  # Sequential number instead of file_id
-                            "filename": metadata.get("filename", "unknown"),
-                            "format": metadata.get("format", "unknown"),
-                            "size_bytes": metadata.get("file_size", 0),
-                            "created_at": metadata.get("upload_timestamp"),
-                            "source": metadata.get("source", "unknown"),
-                            "indexed": metadata.get("indexed", False)
+                        else:
+                            created_date = datetime.utcnow().strftime("%Y-%m-%d")
+                        
+                        # Truncate very long conversation names
+                        if len(conv_name) > 40:
+                            conv_name = conv_name[:40] + "..."
+                        
+                        # Create conversation folder name
+                        folder_name = f"conversation_{i+1}_{created_date}_{conv_name}/"
+                        
+                        # Add conversation JSON
+                        conversation_export = {
+                            "metadata": conv["metadata"],
+                            "messages": conv["messages"],
+                            "message_count": conv["message_count"]
                         }
-                        files_summary.append(summary)
-                    
-                    zip_file.writestr(
-                        f"{files_folder}files_summary.json",
-                        json.dumps(files_summary, indent=2)
-                    )
-                    
-                    # Add individual files
-                    for i, file_data in enumerate(files):
-                        metadata = file_data["metadata"]
-                        filename = metadata.get("filename", f"file_{i+1}")
                         
-                        # Create safe filename
-                        safe_filename = filename.replace("/", "_").replace("\\", "_")
+                        zip_file.writestr(f"{folder_name}conversation.json", json.dumps(conversation_export, indent=2))
+                        logger.info(f"Added conversation {i+1} to folder: {folder_name}")
                         
-                        # Decode base64 data back to bytes
-                        if file_data.get("data") and file_data.get("data_type") == "base64":
-                            try:
-                                file_bytes = base64.b64decode(file_data["data"])
-                                zip_file.writestr(f"{files_folder}{safe_filename}", file_bytes)
-                                
-                                # Also add metadata as separate JSON file
-                                metadata_filename = f"{files_folder}{safe_filename}.metadata.json"
-                                zip_file.writestr(metadata_filename, json.dumps(metadata, indent=2))
-                                
-                            except Exception as e:
-                                logger.error(f"Error adding file {i+1} ({filename}) to zip", error=str(e))
-                                continue
+                        # Add associated files to this conversation's folder
+                        associated_file_ids = conv.get("associated_file_ids", [])
+                        if associated_file_ids:
+                            files_added = 0
+                            for file_id in associated_file_ids:
+                                file_data = files_by_id.get(file_id)
+                                if file_data:
+                                    try:
+                                        metadata = file_data["metadata"]
+                                        filename = metadata.get("filename", f"file_{file_id}")
+                                        
+                                        # Create safe filename
+                                        safe_filename = filename.replace("/", "_").replace("\\", "_")
+                                        
+                                        # Decode base64 data back to bytes
+                                        if file_data.get("data") and file_data.get("data_type") == "base64":
+                                            file_bytes = base64.b64decode(file_data["data"])
+                                            zip_file.writestr(f"{folder_name}{safe_filename}", file_bytes)
+                                            
+                                            # Also add metadata as separate JSON file
+                                            metadata_filename = f"{folder_name}{safe_filename}.metadata.json"
+                                            zip_file.writestr(metadata_filename, json.dumps(metadata, indent=2))
+                                            
+                                            files_added += 1
+                                            logger.info(f"Added file to conversation {i+1}: {safe_filename}")
+                                        else:
+                                            logger.warning(f"No valid data found for file {filename} in conversation {i+1}")
+                                    except Exception as e:
+                                        logger.error(f"Error adding file {file_id} to conversation {i+1}", error=str(e))
+                            
+                            logger.info(f"Added {files_added} files to conversation {i+1}")
+                        
+                    except Exception as e:
+                        logger.error(f"Error creating folder for conversation {i+1}", 
+                                   conv_id=conv.get("_temp_conversation_id", "unknown"),
+                                   error=str(e), exc_info=True)
+                        
+                        # Try to add with a fallback folder
+                        try:
+                            fallback_folder = f"conversation_{i+1}_error/"
+                            fallback_export = {
+                                "metadata": conv.get("metadata", {}),
+                                "messages": conv.get("messages", []),
+                                "export_error": f"Error processing: {str(e)}"
+                            }
+                            zip_file.writestr(f"{fallback_folder}conversation.json", json.dumps(fallback_export, indent=2))
+                            logger.info(f"Added conversation {i+1} with fallback folder: {fallback_folder}")
+                        except Exception as fallback_error:
+                            logger.error(f"Failed to add conversation {i+1} even with fallback", 
+                                       error=str(fallback_error), exc_info=True)
                 
-                # Add README with instructions
-                readme_content = self._create_readme_content(export_metadata)
-                zip_file.writestr("README.txt", readme_content)
+                # Organize unassociated files by source instead of orphaned folder
+                unassociated_files = []
+                if files:
+                    all_associated_file_ids = set()
+                    for conv in conversations:
+                        all_associated_file_ids.update(conv.get("associated_file_ids", []))
+                    
+                    for file_data in files:
+                        file_id = file_data.get("_temp_file_id")
+                        if file_id and file_id not in all_associated_file_ids:
+                            unassociated_files.append(file_data)
+                
+                if unassociated_files:
+                    logger.info(f"Adding {len(unassociated_files)} unassociated files organized by source")
+                    
+                    # Group files by source
+                    files_by_source = {}
+                    for file_data in unassociated_files:
+                        source = file_data["metadata"].get("source", "unknown")
+                        if source not in files_by_source:
+                            files_by_source[source] = []
+                        files_by_source[source].append(file_data)
+                    
+                    # Create folders by source
+                    for source, source_files in files_by_source.items():
+                        # Create readable folder name based on source
+                        source_folder_map = {
+                            "upload": "uploaded_files/",
+                            "deep_research_pdf": "research_reports/", 
+                            "data_analysis": "data_analysis_outputs/",
+                            "visualization": "visualizations/",
+                            "generated": "generated_files/",
+                            "unknown": "other_files/"
+                        }
+                        
+                        folder_name = source_folder_map.get(source, f"{source}_files/")
+                        logger.info(f"Creating folder '{folder_name}' for {len(source_files)} files from source '{source}'")
+                        
+                        for file_data in source_files:
+                            try:
+                                metadata = file_data["metadata"]
+                                filename = metadata.get("filename", f"file_{file_data.get('_temp_file_id', 'unknown')}")
+                                
+                                # Create safe filename
+                                safe_filename = filename.replace("/", "_").replace("\\", "_")
+                                
+                                # Decode base64 data back to bytes
+                                if file_data.get("data") and file_data.get("data_type") == "base64":
+                                    file_bytes = base64.b64decode(file_data["data"])
+                                    zip_file.writestr(f"{folder_name}{safe_filename}", file_bytes)
+                                    
+                                    # Also add metadata as separate JSON file
+                                    metadata_filename = f"{folder_name}{safe_filename}.metadata.json"
+                                    zip_file.writestr(metadata_filename, json.dumps(metadata, indent=2))
+                                    
+                                    logger.info(f"Added {source} file: {safe_filename}")
+                                else:
+                                    logger.warning(f"No valid data found for {source} file {filename}")
+                            except Exception as e:
+                                logger.error(f"Error adding {source} file {filename}", error=str(e))
+                
+
             
             zip_data = zip_buffer.getvalue()
             zip_buffer.close()
@@ -329,48 +423,64 @@ class ExportService:
             logger.error("Error creating export zip", user_id=user_id, error=str(e))
             raise
 
-    def _create_readme_content(self, metadata: Dict[str, Any]) -> str:
+    def _create_readme_content(self, conversations: List[Dict[str, Any]], files: List[Dict[str, Any]]) -> str:
         """Create README content for the export"""
+        export_date = datetime.utcnow().isoformat()
+        
         return f"""
 Samba Co-Pilot Chat Export
 ==========================
 
-Export Date: {metadata['export_date']}
-Export Version: {metadata['export_version']}
+Export Date: {export_date}
+Export Version: 3.0
+Organization: Conversation-Based
 
 Contents:
 ---------
-- conversations/: Contains all your chat conversations
-  - conversations_summary.json: Overview of all conversations
-  - Individual conversation files with date and name
+- conversations_summary.json: Overview of all conversations with statistics
 
-- files/: Contains all uploaded files and generated artifacts
-  - files_summary.json: Overview of all files (numbered for privacy)
-  - Individual files with their original names
+- conversation_X_YYYY-MM-DD_Name/: Individual conversation folders
+  - conversation.json: Complete conversation data (messages, metadata)
+  - Associated files and artifacts generated in this conversation
   - .metadata.json files with additional file information
+
+- uploaded_files/: User-uploaded files not linked to specific conversations
+- research_reports/: Generated research reports and PDFs  
+- data_analysis_outputs/: Generated analysis files and results
+- visualizations/: Generated charts, graphs, and visual content
+- other_files/: Files from unknown or miscellaneous sources
 
 - export_metadata.json: Technical details about this export
 
 Statistics:
 -----------
-Total Conversations: {metadata['total_conversations']}
-Total Files: {metadata['total_files']}
+Total Conversations: {len(conversations)}
+Total Files: {len(files)}
 
-File Format Information:
+New Organization (v3.0):
 ------------------------
-- Conversations are cleaned JSON files with meaningful messages only
-- Redundant stream events have been filtered out for clarity
-- Sensitive IDs (user_id, conversation_id, file_id) have been removed for privacy
-- Message IDs are preserved for tracking conversation flow
-- Files are numbered sequentially instead of using internal IDs
-- All timestamps are in UTC
-- File metadata includes information about indexing and processing
+🎯 CONVERSATION-FOCUSED STRUCTURE:
+Each conversation now has its own folder containing:
+- The complete conversation history (conversation.json)
+- All files, reports, and artifacts generated within that conversation
+- This makes it easy to see what files belong to which discussion
 
-Privacy Notes:
---------------
-- This export has been cleaned to remove sensitive internal identifiers
-- Only essential conversation data and file content is included
-- Your actual content and files remain complete and unmodified
+📁 FOLDER NAMING:
+conversation_1_2025-01-15_Project Planning/
+conversation_2_2025-01-16_Data Analysis/
+...
+
+🔗 FILE ASSOCIATION:
+Files are automatically placed in the conversation folder where they were created or referenced.
+This provides clear context for each file and makes the export much more intuitive to navigate.
+
+Privacy & Cleaning:
+-------------------
+- Sensitive IDs (user_id, conversation_id, file_id) have been removed for privacy
+- Stream events (stream_start, stream_complete) filtered out for clarity
+- Message IDs preserved for tracking conversation flow
+- All timestamps are in UTC
+- Content and files remain complete and unmodified
 
 This export contains all your personal data from Samba Co-Pilot.
 Please keep this archive secure as it contains your private conversations and files.
@@ -390,11 +500,9 @@ Please keep this archive secure as it contains your private conversations and fi
             user_info = await self.get_user_info_from_token(token)
             user_email = user_info.get("email") if user_info else None
             
-            # Gather all user data concurrently
-            conversations_task = self.gather_user_conversations(user_id)
-            files_task = self.gather_user_files(user_id)
-            
-            conversations, files = await asyncio.gather(conversations_task, files_task)
+            # Gather files first, then conversations with file context for better association
+            files = await self.gather_user_files(user_id)
+            conversations = await self.gather_user_conversations(user_id, files)
             
             # Create zip file
             zip_data = self.create_export_zip(user_id, conversations, files, user_info)
