@@ -131,7 +131,16 @@ Follow the steps below to install the backend for the Agents application.
    source .venv/bin/activate
    ```
 
-1. Run the application.
+2. Run the application.
+
+   If you are running it on mac export the following variables
+
+   ```bash
+   export DYLD_LIBRARY_PATH="/opt/homebrew/lib:$DYLD_LIBRARY_PATH"
+   export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
+   ```
+
+   Run the Backend server with the following command
 
    ```bash
    uvicorn agents.api.main:app --reload --host 127.0.0.1 --port 8000 --no-access-log
