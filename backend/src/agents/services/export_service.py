@@ -447,7 +447,6 @@ Contents:
 - uploaded_files/: User-uploaded files not linked to specific conversations
 - research_reports/: Generated research reports and PDFs  
 - data_analysis_outputs/: Generated analysis files and results
-- visualizations/: Generated charts, graphs, and visual content
 - other_files/: Files from unknown or miscellaneous sources
 
 - export_metadata.json: Technical details about this export
