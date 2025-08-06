@@ -134,7 +134,7 @@ Follow the steps below to install the backend for the Agents application.
 1. Run the application.
 
    ```bash
-   uvicorn agents.api.main:app --reload --host 127.0.0.1 --port 8000
+   uvicorn agents.api.main:app --reload --host 127.0.0.1 --port 8000 --no-access-log
    ```
 
 ### Environment variables setup
@@ -194,7 +194,7 @@ Follow the steps below to install the backend for the Agents application.
    ```bash
    # From the project root
    cd backend
-   uvicorn api.main:app --reload
+   uvicorn agents.api.main:app --reload --host 127.0.0.1 --port 8000 --no-access-log
    ```
 
 1. Start the Vue.js frontend development server.
