@@ -58,8 +58,8 @@ Ensure to install the prerequisites.
       ```
       ```bash
       # Install Redis with Homebrew on macOS
-      brew install redis
-      brew services start redis
+      brew install redis-stack
+      brew services start redis-stack # or redis-stack-server
       ```
 
 Get the following API keys to setup the Agents application.
