@@ -899,7 +899,7 @@ def create_deep_research_graph(
         provider=provider,
         request_timeout=request_timeout,
     )
-    model_name = "llama-4-maverick"
+    model_name = "gpt-oss"
     planner_model_config: str = model_registry.get_model_info(
         model_key=model_name, provider=provider
     )

@@ -46,6 +46,10 @@ def get_llm(llm_type: LLMType, api_key: str):
         llm = get_fireworks_llm(
             model="accounts/fireworks/models/llama-v3p1-70b-instruct", api_key=api_key
         )
+    elif llm_type == LLMType.FIREWORKS_GPT_OSS:
+        llm = get_fireworks_llm(
+            model="accounts/fireworks/models/gpt-oss-120b", api_key=api_key
+        )
     else:
         raise ValueError("Unexpected agent type")
 
