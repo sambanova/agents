@@ -2,20 +2,22 @@
   <header class="bg-primary-bodyBg sticky top-0 z-50">
     <div class="h-[56px] mx-auto px-6 flex items-center justify-between">
       <!-- Left: Brand -->
-      <div class="flex items-center space-x-4">
-        <div class="flex-shrink-0">
-          <img
-            src="/Images/logo-nsai.svg"
-            alt="SambaNova Sales Agents Logo"
-            class="h-8 block"
-          />
+      <div class="flex items-center gap-3">
+        <img
+          src="/Images/logo-nsai.svg"
+          alt="SambaNova Sales Agents Logo"
+          class="h-8"
+        />
+        <div class="flex items-center gap-2">
+          <span class="text-base sm:text-lg font-semibold text-gray-500">
+            Agents
+          </span>
+          <span
+            class="px-2 py-[2px] text-[10px] font-semibold rounded-full bg-yellow-100 text-yellow-800 border border-yellow-300"
+          >
+            Preview
+          </span>
         </div>
-
-        <h1
-          class="text-xl font-bold text-primary-brandTextPrimary tracking-tight text-center"
-        >
-          
-        </h1>
       </div>
 
       <!-- Right: Chat mode toggle, settings, user -->

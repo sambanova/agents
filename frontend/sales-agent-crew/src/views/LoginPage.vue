@@ -26,7 +26,12 @@
               alt="SambaNova Logo" 
               class="h-[32px] mx-auto mb-4"
             />
-            <h1 class="text-3xl font-bold text-gray-900 mb-2">Agents</h1>
+            <h1 class="text-3xl font-bold text-gray-900 mb-2 flex items-center justify-center space-x-2">
+              <span>Agents</span>
+              <span class="ml-2 px-2 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800 border border-yellow-300">
+                Preview
+              </span>
+            </h1>
             <p class="text-lg text-gray-600">Agent Powered Intelligence</p>
           </div>
           
