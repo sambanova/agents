@@ -7,8 +7,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-import fitz  # PyMuPDF for PDF text extraction
-import camelot  # For PDF table extraction
+import pdfplumber  # Unified PDF parsing with inline tables
 import redis
 import structlog
 from agents.api.data_types import APIKeys
@@ -409,7 +408,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                     "resume": user_message_input["resume"],
                 },
             )
-            model = "Llama Maverick"
+            model = "Llama 4 Maverick"
         else:
             input_ = HumanMessage(
                 content=user_message_input["data"],
@@ -592,15 +591,11 @@ class WebSocketConnectionManager(WebSocketInterface):
                     
                     # Handle different file types
                     if file_format == "text/csv":
-                        # For CSV files, read the content directly
+                        # For CSV files, provide complete content for comprehensive analysis
                         try:
                             content = file_data.decode('utf-8')
-                            # Limit CSV content to first 50 lines for context
-                            lines = content.split('\n')
-                            preview_lines = lines[:50]
-                            if len(lines) > 50:
-                                preview_lines.append(f"... (truncated, {len(lines)} total lines)")
-                            file_context += f"```csv\n{chr(10).join(preview_lines)}\n```\n\n"
+                            # Provide complete CSV content - essential for accurate analysis
+                            file_context += f"```csv\n{content}\n```\n\n"
                         except UnicodeDecodeError:
                             file_context += "Binary CSV file content (use pandas to read in analysis)\n\n"
                     
@@ -672,74 +667,96 @@ class WebSocketConnectionManager(WebSocketInterface):
             raise
 
     def _extract_pdf_text_sync(self, file_path: str) -> str:
-        """Enhanced PDF text extraction with clean table detection and formatting."""
+        """Unified PDF extraction using pdfplumber with inline table formatting."""
         text = ""
         
         try:
-            # Step 1: Extract all high-quality tables from the entire document
-            all_tables = []
-            try:
-                # Try both camelot flavors to get best table extraction
-                for flavor in ['lattice', 'stream']:
-                    try:
-                        tables = camelot.read_pdf(file_path, pages='all', flavor=flavor)
-                        for table in tables:
-                            if (table.df is not None and 
-                                not table.df.empty and 
-                                table.parsing_report.get('accuracy', 0) > 80):  # High quality only
-                                
-                                all_tables.append({
-                                    'page': table.page,
-                                    'df': table.df,
-                                    'accuracy': table.parsing_report.get('accuracy', 0),
-                                    'flavor': flavor
-                                })
-                                
-                        # If we got good results with lattice, don't try stream
-                        if flavor == 'lattice' and len(all_tables) > 0:
-                            break
-                            
-                    except Exception as e:
-                        logger.debug(f"Camelot {flavor} failed: {str(e)}")
+            with pdfplumber.open(file_path) as pdf:
+                for page_num, page in enumerate(pdf.pages):
+                    text += f"--- Page {page_num + 1} ---\n"
+                    
+                    # Extract tables from this page
+                    tables = page.extract_tables()
+                    
+                    if tables:
+                        # Extract regular text first
+                        page_text = page.extract_text()
+                        if page_text:
+                            text += page_text + "\n\n"
                         
-            except Exception as e:
-                logger.warning(f"Table extraction failed: {str(e)}")
-            
-            # Step 2: Extract regular text and append clean tables at the end
-            with fitz.open(file_path) as doc:
-                for page_num, page in enumerate(doc):
-                    page_text = page.get_text()
-                    if page_text.strip():
-                        text += f"--- Page {page_num + 1} ---\n{page_text}\n\n"
-            
-            # Step 3: Append all extracted tables as clean HTML at the end
-            if all_tables:
-                text += "\n\n" + "="*50 + "\n"
-                text += "EXTRACTED STRUCTURED TABLES\n"
-                text += "="*50 + "\n\n"
-                
-                for i, table_info in enumerate(all_tables):
-                    # Convert to clean HTML table
-                    html_table = table_info['df'].to_html(
-                        index=False,
-                        na_rep='',
-                        classes="extracted-table",
-                        table_id=f"table-{i+1}",
-                        escape=False,
-                        border=1
-                    )
+                        # Add clean HTML tables inline for better LLM parsing
+                        for table_idx, table in enumerate(tables):
+                            if table and len(table) > 1:  # Valid table with data
+                                # Convert table to DataFrame for clean HTML output
+                                import pandas as pd
+                                
+                                # Use first row as headers if it looks like headers
+                                headers = table[0] if table[0] else [f"Column_{i}" for i in range(len(table[0]) if table[0] else 0)]
+                                data_rows = table[1:] if len(table) > 1 else []
+                                
+                                if data_rows:
+                                    # Clean headers and data
+                                    clean_headers = []
+                                    for i, h in enumerate(headers):
+                                        if h and str(h).strip():
+                                            clean_headers.append(str(h).strip())
+                                        else:
+                                            clean_headers.append(f"Column_{i}")
+                                    
+                                    # Create DataFrame with proper data cleaning
+                                    clean_data = []
+                                    for row in data_rows:
+                                        clean_row = []
+                                        for cell in row:
+                                            if cell:
+                                                cell_text = str(cell).strip().replace('\n', ' ').replace('\r', ' ')
+                                                cell_text = cell_text.replace('  ', ' ').strip()
+                                                clean_row.append(cell_text)
+                                            else:
+                                                clean_row.append("")
+                                        clean_data.append(clean_row)
+                                    
+                                    # Ensure data rows match header length
+                                    max_cols = len(clean_headers)
+                                    for row in clean_data:
+                                        while len(row) < max_cols:
+                                            row.append("")
+                                        if len(row) > max_cols:
+                                            row = row[:max_cols]
+                                    
+                                    df = pd.DataFrame(clean_data, columns=clean_headers)
+                                    
+                                    # Remove completely empty rows and columns
+                                    df = df.dropna(how='all').dropna(axis=1, how='all')
+                                    
+                                    if not df.empty:
+                                        # Convert to clean HTML
+                                        html_table = df.to_html(
+                                            index=False,
+                                            na_rep='',
+                                            classes="extracted-table",
+                                            escape=False,
+                                            border=1
+                                        )
+                                        
+                                        text += f"\n[TABLE {table_idx+1} - Page {page_num+1}]\n"
+                                        text += html_table + "\n"
+                                        text += f"[END TABLE {table_idx+1}]\n\n"
                     
-                    text += f"Table {i+1} (Page {table_info['page']}, {table_info['accuracy']:.1f}% accuracy, {table_info['flavor']} method):\n"
-                    text += html_table + "\n\n"
-                    
+                    else:
+                        # No tables, just extract text
+                        page_text = page.extract_text()
+                        if page_text:
+                            text += page_text + "\n\n"
+                            
         except Exception as e:
-            logger.error(f"Error in PDF extraction: {str(e)}")
-            # Fallback to simple text extraction
+            logger.error(f"Error in pdfplumber extraction: {str(e)}")
+            # Fallback to basic text extraction
             try:
-                with fitz.open(file_path) as doc:
-                    for page_num, page in enumerate(doc):
-                        page_text = page.get_text()
-                        if page_text.strip():
+                with pdfplumber.open(file_path) as pdf:
+                    for page_num, page in enumerate(pdf.pages):
+                        page_text = page.extract_text()
+                        if page_text:
                             text += f"--- Page {page_num + 1} ---\n{page_text}\n\n"
             except Exception as fallback_error:
                 logger.error(f"Fallback extraction failed: {str(fallback_error)}")
@@ -810,11 +827,11 @@ class WebSocketConnectionManager(WebSocketInterface):
                 "- Complex data visualization\n"
                 "- Statistical visualization (correlation matrices, distribution analysis, etc.)\n"
                 "- Comprehensive analysis workflows with multiple visualization types\n\n"
-                "Use the **DaytonaCodeSandbox subgraph** for simpler tasks:\n"
-                "- Basic data exploration and summary statistics\n"
-                "- Simple data visualization (basic plots, histograms, scatter plots)\n"
-                "- Basic calculations and aggregations\n"
-                "- Quick data insights and descriptive analysis\n\n"
+                "Use the **DaytonaCodeSandbox subgraph** for:\n"
+                "- Multi-file data analysis and processing\n"
+                "- Calculations and data manipulation\n"
+                "- Report and spreadsheet generation\n"
+                "- Any task requiring code execution\n\n"
                 "CHOOSE the appropriate subgraph based on the complexity and requirements of the user's request.\n\n"
             )
 
@@ -883,13 +900,60 @@ You have been provided with {len(doc_ids)} files for comprehensive analysis. For
 3. For general questions about specific document content → Use Retrieval tool
 4. For complex data science workflows → Use data_science subgraph (if available)
 
+**COMPLETE DATA PROVIDED FOR ANALYSIS:**
+
+When performing multi-file analysis:
+- Complete file contents are provided below (no truncation)
+- All data from every file is available for comprehensive analysis
+- DO NOT attempt to import, read, or load files - all data is already provided in context
+- Use the provided data directly in your code and analysis
+- Extract and use all relevant information to fully answer the user's question
+- Cross-reference data between files as needed
+
+**COMPREHENSIVE MULTI-FILE ANALYSIS METHODOLOGY:**
+
+**Data Extraction & Validation:**
+- Parse HTML tables systematically - they contain the most structured data
+- Extract ALL numerical data, currency amounts, percentages, and calculation formulas
+- Cross-reference data between files to identify relationships and dependencies
+- Validate data completeness by checking for missing values, gaps, or inconsistencies
+- Verify calculations using provided formulas, rates, and conversion factors
+
+**Analysis Depth Requirements:**
+- Perform percentage calculations and ratio analysis between data sources
+- Calculate totals, subtotals, and derived metrics from multiple file sources
+- Identify cost drivers, assumptions, and variable factors affecting outcomes
+- Apply all relevant fees, taxes, surcharges, and adjustment factors
+- Consider time-based changes (annual increases, contract terms, escalations)
+
+**Completeness Verification:**
+- Cross-check that all cost components from each file are included in final analysis
+- Verify that percentages add up correctly and relationships are maintained
+- Ensure no line items, fees, or cost elements are missed or double-counted
+- Validate that exchange rates, minimums, and calculation methods are properly applied
+- Perform sanity checks on final totals and breakdowns
+
+**Professional Analysis Standards:**
+- Categorize costs appropriately (one-time, recurring, variable, conditional)
+- Document all assumptions, exclusions, and calculation methodologies
+- Provide detailed line-item breakdowns with source references
+- Include sensitivity analysis for key variables and assumptions
+- Present comprehensive cost scenarios and total cost of ownership perspectives
+
 """
 
         config["configurable"][
             "type==default/system_message"
         ] = f"""
 You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {retrieval_prompt} {data_analysis_prompt} {multi_file_guidance}
-CRITICAL: Use DaytonaCodeSandbox subgraph ONLY when code execution is required (running scripts, data processing, file operations, creating visualizations). For code explanations, examples, or discussions, respond directly without routing to subgraphs.
+
+CRITICAL: Use DaytonaCodeSandbox subgraph when analysis requires code execution, data processing, multi-file synthesis, calculations, or file generation. For simple explanations or discussions, respond directly.
+
+IMPORTANT: When file data is provided in context, work directly with that data. Do not attempt to import, read, or load external files - use the provided context data in your analysis.
+
+ANALYSIS THOROUGHNESS: When performing multi-file analysis, conduct comprehensive calculations, cross-validation, and completeness checks. Apply all relevant percentages, fees, and formulas. Verify that no data is missed and all relationships between files are properly analyzed.
+
+DATA OUTPUT FORMATTING: When creating reports or analysis outputs, structure data in clean, professional HTML tables for better readability and machine processing. Use proper table headers, clear categorization, and precise numerical formatting.
 """
 
         if multimodal_input:
