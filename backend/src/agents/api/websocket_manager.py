@@ -1,11 +1,14 @@
 import asyncio
 import json
 import os
+import tempfile
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
+import fitz  # PyMuPDF for PDF text extraction
+import camelot  # For PDF table extraction
 import redis
 import structlog
 from agents.api.data_types import APIKeys
@@ -574,6 +577,176 @@ class WebSocketConnectionManager(WebSocketInterface):
             logger.error("Error sending WebSocket message", error=str(e))
             return False
 
+    async def _load_file_context_for_analysis(self, user_id: str, doc_ids: list) -> str:
+        """Load file contents to provide as context for multi-file analysis."""
+        file_context = "## UPLOADED FILES CONTEXT:\n\n"
+        
+        for doc_id in doc_ids:
+            try:
+                file_data, metadata = await self.message_storage.get_file(user_id, doc_id["id"])
+                if file_data and metadata:
+                    filename = metadata.get("filename", f"file_{doc_id['id']}")
+                    file_format = metadata.get("format", "unknown")
+                    
+                    file_context += f"### File: {filename} (Format: {file_format})\n"
+                    
+                    # Handle different file types
+                    if file_format == "text/csv":
+                        # For CSV files, read the content directly
+                        try:
+                            content = file_data.decode('utf-8')
+                            # Limit CSV content to first 50 lines for context
+                            lines = content.split('\n')
+                            preview_lines = lines[:50]
+                            if len(lines) > 50:
+                                preview_lines.append(f"... (truncated, {len(lines)} total lines)")
+                            file_context += f"```csv\n{chr(10).join(preview_lines)}\n```\n\n"
+                        except UnicodeDecodeError:
+                            file_context += "Binary CSV file content (use pandas to read in analysis)\n\n"
+                    
+                    elif file_format == "application/pdf":
+                        # For PDFs, extract and provide the actual text content
+                        try:
+                            pdf_text = await self._extract_pdf_text(file_data)
+                            if pdf_text.strip():
+                                # Provide complete PDF content for comprehensive analysis
+                                file_context += f"```\n{pdf_text}\n```\n\n"
+                            else:
+                                file_context += "PDF document - Could not extract readable text content.\n\n"
+                        except Exception as e:
+                            logger.warning(f"Could not extract PDF text for {filename}: {str(e)}")
+                            file_size = len(file_data)
+                            file_context += f"PDF document ({file_size} bytes) - Could not extract text, but file is available for analysis.\n\n"
+                    
+                    elif file_format in ["text/plain", "text/markdown"]:
+                        # For text files, show complete content
+                        try:
+                            content = file_data.decode('utf-8')
+                            file_context += f"```\n{content}\n```\n\n"
+                        except UnicodeDecodeError:
+                            file_context += "Binary text file content\n\n"
+                    
+                    elif file_format in ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"]:
+                        # For Word documents, provide basic info and note they're available
+                        file_size = len(file_data)
+                        file_context += f"Word document ({file_size} bytes) - Available for text extraction and analysis.\n"
+                        file_context += "Use document processing tools to extract content if needed.\n\n"
+                    
+                    elif file_format in ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel"]:
+                        # For Excel files, provide basic info
+                        file_size = len(file_data)
+                        file_context += f"Excel spreadsheet ({file_size} bytes) - Available for data analysis.\n"
+                        file_context += "Use pandas or similar tools to read and analyze the data.\n\n"
+                    
+                    else:
+                        # For other file types, provide basic info
+                        file_size = len(file_data)
+                        file_context += f"File format: {file_format}, Size: {file_size} bytes\n"
+                        file_context += "File is available for processing in the analysis environment.\n\n"
+                        
+            except Exception as e:
+                logger.warning(f"Could not load context for file {doc_id['id']}: {str(e)}")
+                file_context += f"### File: {doc_id.get('filename', 'unknown')} - Could not load content\n\n"
+        
+        return file_context
+
+    async def _extract_pdf_text(self, file_data: bytes) -> str:
+        """Extract text content from PDF file data using PyMuPDF."""
+        try:
+            # Create a temporary file to write the PDF data
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+                temp_file.write(file_data)
+                temp_path = temp_file.name
+
+            try:
+                # Extract text using PyMuPDF in a separate thread to avoid blocking
+                text = await asyncio.to_thread(self._extract_pdf_text_sync, temp_path)
+                return text
+            finally:
+                # Clean up the temporary file
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+                    
+        except Exception as e:
+            logger.error(f"Error extracting PDF text: {str(e)}")
+            raise
+
+    def _extract_pdf_text_sync(self, file_path: str) -> str:
+        """Enhanced PDF text extraction with clean table detection and formatting."""
+        text = ""
+        
+        try:
+            # Step 1: Extract all high-quality tables from the entire document
+            all_tables = []
+            try:
+                # Try both camelot flavors to get best table extraction
+                for flavor in ['lattice', 'stream']:
+                    try:
+                        tables = camelot.read_pdf(file_path, pages='all', flavor=flavor)
+                        for table in tables:
+                            if (table.df is not None and 
+                                not table.df.empty and 
+                                table.parsing_report.get('accuracy', 0) > 80):  # High quality only
+                                
+                                all_tables.append({
+                                    'page': table.page,
+                                    'df': table.df,
+                                    'accuracy': table.parsing_report.get('accuracy', 0),
+                                    'flavor': flavor
+                                })
+                                
+                        # If we got good results with lattice, don't try stream
+                        if flavor == 'lattice' and len(all_tables) > 0:
+                            break
+                            
+                    except Exception as e:
+                        logger.debug(f"Camelot {flavor} failed: {str(e)}")
+                        
+            except Exception as e:
+                logger.warning(f"Table extraction failed: {str(e)}")
+            
+            # Step 2: Extract regular text and append clean tables at the end
+            with fitz.open(file_path) as doc:
+                for page_num, page in enumerate(doc):
+                    page_text = page.get_text()
+                    if page_text.strip():
+                        text += f"--- Page {page_num + 1} ---\n{page_text}\n\n"
+            
+            # Step 3: Append all extracted tables as clean HTML at the end
+            if all_tables:
+                text += "\n\n" + "="*50 + "\n"
+                text += "EXTRACTED STRUCTURED TABLES\n"
+                text += "="*50 + "\n\n"
+                
+                for i, table_info in enumerate(all_tables):
+                    # Convert to clean HTML table
+                    html_table = table_info['df'].to_html(
+                        index=False,
+                        na_rep='',
+                        classes="extracted-table",
+                        table_id=f"table-{i+1}",
+                        escape=False,
+                        border=1
+                    )
+                    
+                    text += f"Table {i+1} (Page {table_info['page']}, {table_info['accuracy']:.1f}% accuracy, {table_info['flavor']} method):\n"
+                    text += html_table + "\n\n"
+                    
+        except Exception as e:
+            logger.error(f"Error in PDF extraction: {str(e)}")
+            # Fallback to simple text extraction
+            try:
+                with fitz.open(file_path) as doc:
+                    for page_num, page in enumerate(doc):
+                        page_text = page.get_text()
+                        if page_text.strip():
+                            text += f"--- Page {page_num + 1} ---\n{page_text}\n\n"
+            except Exception as fallback_error:
+                logger.error(f"Fallback extraction failed: {str(fallback_error)}")
+                raise
+                
+        return text.strip()
+    
     async def create_config(
         self,
         user_id: str,
@@ -590,8 +763,11 @@ class WebSocketConnectionManager(WebSocketInterface):
 
         indexed_doc_ids = []
         data_analysis_doc_ids = []
+        all_file_ids = []
         directory_content = []
+        
         for doc_id in doc_ids:
+            all_file_ids.append(doc_id["id"])
             if doc_id["indexed"]:
                 indexed_doc_ids.append(doc_id["id"])
             if doc_id["format"] == "text/csv":
@@ -601,6 +777,13 @@ class WebSocketConnectionManager(WebSocketInterface):
         enable_data_science = False
         if data_analysis_doc_ids:
             enable_data_science = True
+            
+        # Detect multi-file uploads that should bypass retrieval and go directly to sandbox
+        # This handles cases like CSV + PDF combinations for comprehensive analysis
+        multi_file_analysis = len(doc_ids) > 1 and any(
+            doc_id["format"] in ["text/csv", "application/pdf", "text/plain", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]
+            for doc_id in doc_ids
+        )
 
         retrieval_prompt = ""
         if indexed_doc_ids:
@@ -635,13 +818,21 @@ class WebSocketConnectionManager(WebSocketInterface):
                 "CHOOSE the appropriate subgraph based on the complexity and requirements of the user's request.\n\n"
             )
 
+        # For multi-file analysis, pass all files to the daytona manager, not just CSVs
+        daytona_file_ids = all_file_ids if multi_file_analysis else data_analysis_doc_ids
+        
+        # Load file context for multi-file analysis
+        file_context = ""
+        if multi_file_analysis:
+            file_context = await self._load_file_context_for_analysis(user_id, doc_ids)
+        
         daytona_manager = self.daytona_managers.get(f"{user_id}:{thread_id}")
         if not daytona_manager:
             daytona_manager = PersistentDaytonaManager(
                 user_id=user_id,
                 redis_storage=self.message_storage,
                 snapshot="data-analysis:0.0.10",
-                file_ids=data_analysis_doc_ids,
+                file_ids=daytona_file_ids,
             )
             self.daytona_managers[f"{user_id}:{thread_id}"] = daytona_manager
 
@@ -676,10 +867,28 @@ class WebSocketConnectionManager(WebSocketInterface):
             "recursion_limit": 50,
         }
 
+        # Construct system message with file context and routing guidance
+        multi_file_guidance = ""
+        if multi_file_analysis:
+            multi_file_guidance = f"""
+## MULTI-FILE ANALYSIS MODE ACTIVE
+
+You have been provided with {len(doc_ids)} files for comprehensive analysis. For queries that require analyzing, comparing, or combining data from multiple files, you should DIRECTLY use the DaytonaCodeSandbox subgraph rather than the Retrieval tool.
+
+{file_context}
+
+**ROUTING PRIORITY FOR MULTI-FILE ANALYSIS:**
+1. For comprehensive analysis involving multiple files → Use DaytonaCodeSandbox subgraph
+2. For creating reports/spreadsheets combining multiple data sources → Use DaytonaCodeSandbox subgraph  
+3. For general questions about specific document content → Use Retrieval tool
+4. For complex data science workflows → Use data_science subgraph (if available)
+
+"""
+
         config["configurable"][
             "type==default/system_message"
         ] = f"""
-You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {retrieval_prompt} {data_analysis_prompt} 
+You are a helpful assistant. Today's date is {datetime.now().strftime('%Y-%m-%d')}. {retrieval_prompt} {data_analysis_prompt} {multi_file_guidance}
 CRITICAL: Use DaytonaCodeSandbox subgraph ONLY when code execution is required (running scripts, data processing, file operations, creating visualizations). For code explanations, examples, or discussions, respond directly without routing to subgraphs.
 """
 
@@ -717,7 +926,7 @@ CRITICAL: Use DaytonaCodeSandbox subgraph ONLY when code execution is required (
                 ),
             },
             "DaytonaCodeSandbox": {
-                "description": "This subgraph executes Python code in a secure sandbox environment. Use for: data exploration, basic analysis, code debugging, file operations, simple calculations, data visualization, and any general programming tasks. Perfect for examining datasets, creating plots, or running straightforward code snippets.",
+                "description": "This subgraph executes Python code in a secure sandbox environment. Use for: data exploration, basic analysis, code debugging, file operations, simple calculations, data visualization, multi-file analysis, report generation, and any general programming tasks. Perfect for examining datasets, creating plots, running straightforward code snippets, and combining data from multiple uploaded files. PRIORITY CHOICE for multi-file analysis tasks.",
                 "next_node": "agent",
                 "graph": create_code_execution_graph(
                     user_id=user_id,
@@ -749,14 +958,20 @@ CRITICAL: Use DaytonaCodeSandbox subgraph ONLY when code execution is required (
             },
         }
 
+        # Add retrieval tool, but with modified description for multi-file scenarios
         if indexed_doc_ids:
+            retrieval_description = RETRIEVAL_DESCRIPTION
+            if multi_file_analysis:
+                retrieval_description = """Can be used to look up specific information from individual documents. 
+For comprehensive analysis combining multiple files, prefer using the DaytonaCodeSandbox subgraph instead."""
+            
             tools_config.append(
                 {
                     "type": "retrieval",
                     "config": {
                         "user_id": user_id,
                         "doc_ids": indexed_doc_ids,
-                        "description": RETRIEVAL_DESCRIPTION,
+                        "description": retrieval_description,
                         "api_key": api_keys.sambanova_key,
                         "redis_client": self.sync_redis_client,
                     },
