@@ -296,7 +296,11 @@ def _get_retrieval_tool(
 
     def retrieval_search(query: str) -> str:
         """Search uploaded documents for the given query."""
-        docs = retriever.get_relevant_documents(query)
+        # Validate that query is not empty
+        if not query or not query.strip():
+            return "Please provide a valid search query to search the uploaded documents."
+        
+        docs = retriever.get_relevant_documents(query.strip())
         if not docs:
             return "No relevant information found in the uploaded documents."
 
