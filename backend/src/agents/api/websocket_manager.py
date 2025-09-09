@@ -577,8 +577,12 @@ class WebSocketConnectionManager(WebSocketInterface):
             return False
 
     async def _load_file_context_for_analysis(self, user_id: str, doc_ids: list) -> str:
-        """Load file contents to provide as context for multi-file analysis."""
+        """Load file contents to provide as context for multi-file analysis with smart context management."""
         file_context = "## UPLOADED FILES CONTEXT:\n\n"
+        
+        # Context limits (approximate token estimation: ~4 chars per token for 32K context)
+        MAX_CONTEXT_LENGTH = 120000  # Leave room for system prompt and user message
+        current_context_length = len(file_context)
         
         for doc_id in doc_ids:
             try:
@@ -589,13 +593,24 @@ class WebSocketConnectionManager(WebSocketInterface):
                     
                     file_context += f"### File: {filename} (Format: {file_format})\n"
                     
-                    # Handle different file types
+                    # Handle different file types with smart context management
                     if file_format == "text/csv":
-                        # For CSV files, provide complete content for comprehensive analysis
+                        # For CSV files, check size first
                         try:
                             content = file_data.decode('utf-8')
-                            # Provide complete CSV content - essential for accurate analysis
-                            file_context += f"```csv\n{content}\n```\n\n"
+                            if current_context_length + len(content) < MAX_CONTEXT_LENGTH:
+                                # Provide complete CSV content for comprehensive analysis
+                                file_context += f"```csv\n{content}\n```\n\n"
+                                current_context_length += len(content)
+                            else:
+                                # CSV too large - provide sample and note file availability
+                                lines = content.split('\n')
+                                header = lines[0] if lines else ""
+                                sample_lines = lines[:5] if len(lines) > 5 else lines
+                                sample_content = '\n'.join(sample_lines)
+                                file_context += f"**Large CSV file - Sample content:**\n```csv\n{sample_content}\n```\n"
+                                file_context += f"**Full file available in sandbox as '{filename}' with {len(lines)} total rows.**\n\n"
+                                current_context_length += len(sample_content) + 200
                         except UnicodeDecodeError:
                             file_context += "Binary CSV file content (use pandas to read in analysis)\n\n"
                     
@@ -604,8 +619,16 @@ class WebSocketConnectionManager(WebSocketInterface):
                         try:
                             pdf_text = await self._extract_pdf_text(file_data)
                             if pdf_text.strip():
-                                # Provide complete PDF content for comprehensive analysis
-                                file_context += f"```\n{pdf_text}\n```\n\n"
+                                if current_context_length + len(pdf_text) < MAX_CONTEXT_LENGTH:
+                                    # Provide complete PDF content for comprehensive analysis
+                                    file_context += f"```\n{pdf_text}\n```\n\n"
+                                    current_context_length += len(pdf_text)
+                                else:
+                                    # PDF too large - provide summary
+                                    pdf_sample = pdf_text[:2000] + "..."
+                                    file_context += f"**Large PDF document - Content preview:**\n```\n{pdf_sample}\n```\n"
+                                    file_context += f"**Full document available in sandbox as '{filename}'.**\n\n"
+                                    current_context_length += 2500
                             else:
                                 file_context += "PDF document - Could not extract readable text content.\n\n"
                         except Exception as e:
@@ -614,10 +637,17 @@ class WebSocketConnectionManager(WebSocketInterface):
                             file_context += f"PDF document ({file_size} bytes) - Could not extract text, but file is available for analysis.\n\n"
                     
                     elif file_format in ["text/plain", "text/markdown"]:
-                        # For text files, show complete content
+                        # For text files, show content with size check
                         try:
                             content = file_data.decode('utf-8')
-                            file_context += f"```\n{content}\n```\n\n"
+                            if current_context_length + len(content) < MAX_CONTEXT_LENGTH:
+                                file_context += f"```\n{content}\n```\n\n"
+                                current_context_length += len(content)
+                            else:
+                                content_sample = content[:2000] + "..."
+                                file_context += f"**Large text file - Content preview:**\n```\n{content_sample}\n```\n"
+                                file_context += f"**Full file available in sandbox as '{filename}'.**\n\n"
+                                current_context_length += 2500
                         except UnicodeDecodeError:
                             file_context += "Binary text file content\n\n"
                     
@@ -628,10 +658,31 @@ class WebSocketConnectionManager(WebSocketInterface):
                         file_context += "Use document processing tools to extract content if needed.\n\n"
                     
                     elif file_format in ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel"]:
-                        # For Excel files, provide basic info
-                        file_size = len(file_data)
-                        file_context += f"Excel spreadsheet ({file_size} bytes) - Available for data analysis.\n"
-                        file_context += "Use pandas or similar tools to read and analyze the data.\n\n"
+                        # For XLSX files, use intelligent approach based on size
+                        try:
+                            # First try to get full content
+                            xlsx_content = await self._extract_xlsx_content(file_data)
+                            if xlsx_content.strip():
+                                # Check if full content fits in context
+                                if current_context_length + len(xlsx_content) < MAX_CONTEXT_LENGTH:
+                                    # Small enough - provide complete XLSX content
+                                    file_context += f"```xlsx\n{xlsx_content}\n```\n\n"
+                                    current_context_length += len(xlsx_content)
+                                else:
+                                    # Too large - provide intelligent summary instead
+                                    logger.info(f"XLSX file {filename} too large ({len(xlsx_content)} chars), creating summary")
+                                    xlsx_summary = await self._create_xlsx_summary(file_data, filename)
+                                    file_context += f"**XLSX File Analysis Summary (Large File):**\n```\n{xlsx_summary}\n```\n"
+                                    file_context += f"**Complete spreadsheet data available in sandbox as '{filename}' for detailed analysis.**\n\n"
+                                    current_context_length += len(xlsx_summary) + 200
+                            else:
+                                file_size = len(file_data)
+                                file_context += f"Excel spreadsheet ({file_size} bytes) - Available for data analysis.\n"
+                                file_context += "Use pandas or similar tools to read and analyze the data.\n\n"
+                        except Exception as e:
+                            logger.warning(f"Could not extract XLSX content for {filename}: {str(e)}")
+                            file_size = len(file_data)
+                            file_context += f"Excel spreadsheet ({file_size} bytes) - Could not extract content, but file is available for analysis.\n\n"
                     
                     else:
                         # For other file types, provide basic info
@@ -643,6 +694,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                 logger.warning(f"Could not load context for file {doc_id['id']}: {str(e)}")
                 file_context += f"### File: {doc_id.get('filename', 'unknown')} - Could not load content\n\n"
         
+        logger.info(f"Generated context with {current_context_length} characters for {len(doc_ids)} files")
         return file_context
 
     async def _extract_pdf_text(self, file_data: bytes) -> str:
@@ -763,6 +815,140 @@ class WebSocketConnectionManager(WebSocketInterface):
                 raise
                 
         return text.strip()
+
+    async def _extract_xlsx_content(self, file_data: bytes) -> str:
+        """Extract content from XLSX file data directly from bytes using pandas and openpyxl."""
+        try:
+            # Extract content using pandas in a separate thread to avoid blocking
+            content = await asyncio.to_thread(self._extract_xlsx_content_sync, file_data)
+            return content
+        except Exception as e:
+            logger.error(f"Error extracting XLSX content: {str(e)}")
+            raise
+
+    def _extract_xlsx_content_sync(self, file_data: bytes) -> str:
+        """Synchronous XLSX extraction using pandas directly from bytes."""
+        import pandas as pd
+        from io import BytesIO
+        
+        content = ""
+        
+        try:
+            # Create BytesIO object from file data - no temp file needed
+            bytes_io = BytesIO(file_data)
+            
+            # Read all sheets from the XLSX file
+            xlsx_file = pd.ExcelFile(bytes_io)
+            
+            for sheet_num, sheet_name in enumerate(xlsx_file.sheet_names):
+                content += f"--- Sheet: {sheet_name} ---\n"
+                
+                try:
+                    # Read the sheet data directly from BytesIO
+                    df = pd.read_excel(bytes_io, sheet_name=sheet_name)
+                    
+                    # Convert dataframe to string representation for context
+                    if not df.empty:
+                        # Provide complete sheet content for comprehensive analysis
+                        sheet_content = df.to_string(index=False, max_rows=None, max_cols=None)
+                        content += f"{sheet_content}\n\n"
+                    else:
+                        content += "Empty sheet\n\n"
+                        
+                except Exception as sheet_error:
+                    logger.warning(f"Could not read sheet '{sheet_name}': {str(sheet_error)}")
+                    content += f"Could not read sheet '{sheet_name}'\n\n"
+                    
+        except Exception as e:
+            logger.error(f"Error in XLSX extraction: {str(e)}")
+            raise
+            
+        return content.strip()
+
+    async def _create_xlsx_summary(self, file_data: bytes, filename: str) -> str:
+        """Create an intelligent summary of XLSX file content for large files."""
+        try:
+            content = await asyncio.to_thread(self._create_xlsx_summary_sync, file_data, filename)
+            return content
+        except Exception as e:
+            logger.error(f"Error creating XLSX summary: {str(e)}")
+            raise
+
+    def _create_xlsx_summary_sync(self, file_data: bytes, filename: str) -> str:
+        """Synchronous XLSX summarization for large files."""
+        import pandas as pd
+        from io import BytesIO
+        
+        summary = f"XLSX File Summary: {filename}\n\n"
+        
+        try:
+            # Create BytesIO object from file data
+            bytes_io = BytesIO(file_data)
+            
+            # Read all sheets from the XLSX file
+            xlsx_file = pd.ExcelFile(bytes_io)
+            
+            summary += f"Number of sheets: {len(xlsx_file.sheet_names)}\n"
+            summary += f"Sheet names: {', '.join(xlsx_file.sheet_names)}\n\n"
+            
+            for sheet_num, sheet_name in enumerate(xlsx_file.sheet_names):
+                summary += f"### Sheet: {sheet_name}\n"
+                
+                try:
+                    # Read the sheet data directly from BytesIO
+                    df = pd.read_excel(bytes_io, sheet_name=sheet_name)
+                    
+                    if not df.empty:
+                        # Basic statistics
+                        summary += f"- Dimensions: {df.shape[0]} rows × {df.shape[1]} columns\n"
+                        
+                        # Column information
+                        summary += f"- Columns: {', '.join(df.columns.tolist())}\n"
+                        
+                        # Data types
+                        dtype_summary = df.dtypes.value_counts().to_dict()
+                        summary += f"- Data types: {dtype_summary}\n"
+                        
+                        # Sample of first few rows for context
+                        if len(df) > 0:
+                            summary += f"- First 3 rows sample:\n"
+                            sample_df = df.head(3)
+                            summary += sample_df.to_string(index=False) + "\n"
+                        
+                        # Numeric column statistics
+                        numeric_cols = df.select_dtypes(include=['number']).columns
+                        if len(numeric_cols) > 0:
+                            summary += f"- Numeric columns ({len(numeric_cols)}): {', '.join(numeric_cols)}\n"
+                            desc = df[numeric_cols].describe()
+                            summary += f"- Key statistics:\n{desc.to_string()}\n"
+                        
+                        # Categorical columns info
+                        categorical_cols = df.select_dtypes(include=['object', 'category']).columns
+                        if len(categorical_cols) > 0:
+                            summary += f"- Text/Categorical columns ({len(categorical_cols)}): {', '.join(categorical_cols)}\n"
+                            for col in categorical_cols[:3]:  # Show unique values for first 3 categorical columns
+                                unique_vals = df[col].unique()[:10]  # First 10 unique values
+                                summary += f"  - {col}: {len(df[col].unique())} unique values, sample: {list(unique_vals)}\n"
+                        
+                        # Missing data info
+                        missing_data = df.isnull().sum()
+                        missing_cols = missing_data[missing_data > 0]
+                        if len(missing_cols) > 0:
+                            summary += f"- Missing data: {missing_cols.to_dict()}\n"
+                    else:
+                        summary += "- Empty sheet\n"
+                        
+                    summary += "\n"
+                        
+                except Exception as sheet_error:
+                    logger.warning(f"Could not analyze sheet '{sheet_name}': {str(sheet_error)}")
+                    summary += f"- Could not analyze sheet '{sheet_name}'\n\n"
+                    
+        except Exception as e:
+            logger.error(f"Error in XLSX summarization: {str(e)}")
+            raise
+            
+        return summary.strip()
     
     async def create_config(
         self,
@@ -787,7 +973,7 @@ class WebSocketConnectionManager(WebSocketInterface):
             all_file_ids.append(doc_id["id"])
             if doc_id["indexed"]:
                 indexed_doc_ids.append(doc_id["id"])
-            if doc_id["format"] == "text/csv":
+            if doc_id["format"] in ["text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel"]:
                 data_analysis_doc_ids.append(doc_id["id"])
                 directory_content.append(doc_id["filename"])
 
@@ -795,12 +981,15 @@ class WebSocketConnectionManager(WebSocketInterface):
         if data_analysis_doc_ids:
             enable_data_science = True
             
-        # Detect multi-file uploads that should bypass retrieval and go directly to sandbox
-        # This handles cases like CSV + PDF combinations for comprehensive analysis
-        multi_file_analysis = len(doc_ids) > 1 and any(
+        # Detect multi-file uploads OR single data files (XLSX/CSV) that should bypass retrieval and go directly to sandbox
+        # This handles cases like CSV + PDF combinations for comprehensive analysis, OR single XLSX/CSV files that need context
+        multi_file_analysis = (len(doc_ids) > 1 and any(
             doc_id["format"] in ["text/csv", "application/pdf", "text/plain", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]
             for doc_id in doc_ids
-        )
+        )) or (len(doc_ids) == 1 and any(
+            doc_id["format"] in ["text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel"]
+            for doc_id in doc_ids
+        ))
 
         retrieval_prompt = ""
         if indexed_doc_ids:
