@@ -1295,14 +1295,30 @@ const connectApp = async (providerId) => {
       `width=${width},height=${height},left=${left},top=${top}`
     )
     
-    // Check for OAuth completion
+    // Listen for message from OAuth callback window
+    const messageHandler = (event) => {
+      // Verify origin matches our frontend URL
+      if (event.origin !== window.location.origin) return
+      
+      if (event.data && event.data.type === 'oauth-complete') {
+        oauthInProgress.value = false
+        if (oauthWindow.value && !oauthWindow.value.closed) {
+          oauthWindow.value.close()
+        }
+        fetchConnectors() // Refresh connectors
+        window.removeEventListener('message', messageHandler)
+      }
+    }
+    window.addEventListener('message', messageHandler)
+    
+    // Also check for window close as fallback (might be blocked by COOP)
     const checkInterval = setInterval(() => {
       try {
-        // Just check if window is closed, don't access any properties
         if (oauthWindow.value && oauthWindow.value.closed) {
           clearInterval(checkInterval)
           oauthInProgress.value = false
           fetchConnectors() // Refresh connectors
+          window.removeEventListener('message', messageHandler)
         }
       } catch (e) {
         // Cross-origin error expected when checking closed status

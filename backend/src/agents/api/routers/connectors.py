@@ -211,10 +211,10 @@ async def oauth_callback(
                 error=error,
                 error_description=error_description
             )
-            # Redirect to frontend with error
+            # Redirect to OAuth callback page with error
             frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
             return RedirectResponse(
-                url=f"{frontend_url}/connectors?error={error}&provider={provider_id}"
+                url=f"{frontend_url}/oauth-callback?error={error}&provider={provider_id}"
             )
         
         manager = get_connector_manager()
@@ -261,10 +261,10 @@ async def oauth_callback(
         # Enable connector for user
         await manager.enable_user_connector(user_id, provider_id)
         
-        # Redirect to frontend success page
+        # Redirect to OAuth callback page which will close the popup
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         return RedirectResponse(
-            url=f"{frontend_url}/connectors?success=true&provider={provider_id}"
+            url=f"{frontend_url}/oauth-callback?success=true&provider={provider_id}"
         )
         
     except HTTPException:
@@ -275,10 +275,10 @@ async def oauth_callback(
             provider_id=provider_id,
             error=str(e)
         )
-        # Redirect to frontend with error
+        # Redirect to OAuth callback page with error
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         return RedirectResponse(
-            url=f"{frontend_url}/connectors?error=callback_failed&provider={provider_id}"
+            url=f"{frontend_url}/oauth-callback?error=callback_failed&provider={provider_id}"
         )
 
 
