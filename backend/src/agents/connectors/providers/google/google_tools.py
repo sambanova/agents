@@ -312,6 +312,138 @@ class GoogleDriveSearchTool(BaseTool):
             return error_msg
 
 
+class GoogleDriveReadInput(BaseModel):
+    """Input for Google Drive file reading."""
+    file_id: str = Field(description="The Google Drive file ID to read")
+
+
+class GoogleDriveReadTool(BaseTool):
+    """Tool for reading file contents from Google Drive."""
+    
+    name: str = "google_drive_read"
+    description: str = "Read the contents of a file from Google Drive. Supports text files, Google Docs, Sheets, and Slides."
+    args_schema: Type[BaseModel] = GoogleDriveReadInput
+    
+    access_token: str
+    refresh_token: Optional[str] = None
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    token_uri: Optional[str] = None
+    user_id: str
+    
+    def _run(
+        self,
+        file_id: str,
+        run_manager: Optional[CallbackManagerForToolRun] = None,
+    ) -> str:
+        """Read Google Drive file contents."""
+        try:
+            from google.auth.transport.requests import Request
+            from google.oauth2.credentials import Credentials
+            import io
+            
+            # Log credential details for debugging
+            logger.info(
+                f"GoogleDriveReadTool credentials - "
+                f"has_access_token: {bool(self.access_token)}, "
+                f"has_refresh_token: {bool(self.refresh_token)}, "
+                f"file_id: {file_id}"
+            )
+            
+            # Validate we have all required fields for refresh
+            if not all([self.refresh_token, self.client_id, self.client_secret]):
+                error_msg = (
+                    f"Missing OAuth credentials for auto-refresh. "
+                    f"refresh_token: {'present' if self.refresh_token else 'MISSING'}, "
+                    f"client_id: {'present' if self.client_id else 'MISSING'}, "
+                    f"client_secret: {'present' if self.client_secret else 'MISSING'}"
+                )
+                logger.error(error_msg)
+                return f"Error: {error_msg}. Please reconnect your Google account."
+            
+            # Create credentials with all required fields for auto-refresh
+            creds = Credentials(
+                token=self.access_token,
+                refresh_token=self.refresh_token,
+                token_uri=self.token_uri or "https://oauth2.googleapis.com/token",
+                client_id=self.client_id,
+                client_secret=self.client_secret
+            )
+            
+            # Refresh if needed
+            if creds.expired and creds.refresh_token:
+                logger.info("Token appears expired, refreshing")
+                creds.refresh(Request())
+                self.access_token = creds.token
+                logger.info("Token refreshed successfully")
+            
+            service = build('drive', 'v3', credentials=creds)
+            
+            # First, get file metadata to determine the type
+            file_metadata = service.files().get(
+                fileId=file_id,
+                fields='id, name, mimeType, size, modifiedTime'
+            ).execute()
+            
+            file_name = file_metadata.get('name', 'Unknown')
+            mime_type = file_metadata.get('mimeType', '')
+            
+            logger.info(f"Reading file: {file_name} (type: {mime_type})")
+            
+            # Determine export format based on Google Workspace file types
+            if mime_type == 'application/vnd.google-apps.document':
+                # Google Docs - export as plain text
+                export_mime_type = 'text/plain'
+                content = service.files().export(
+                    fileId=file_id,
+                    mimeType=export_mime_type
+                ).execute()
+                return f"Content of Google Doc '{file_name}':\n\n{content.decode('utf-8')}"
+                
+            elif mime_type == 'application/vnd.google-apps.spreadsheet':
+                # Google Sheets - export as CSV
+                export_mime_type = 'text/csv'
+                content = service.files().export(
+                    fileId=file_id,
+                    mimeType=export_mime_type
+                ).execute()
+                return f"Content of Google Sheet '{file_name}' (CSV format):\n\n{content.decode('utf-8')}"
+                
+            elif mime_type == 'application/vnd.google-apps.presentation':
+                # Google Slides - export as plain text
+                export_mime_type = 'text/plain'
+                content = service.files().export(
+                    fileId=file_id,
+                    mimeType=export_mime_type
+                ).execute()
+                return f"Content of Google Slides '{file_name}':\n\n{content.decode('utf-8')}"
+                
+            elif mime_type.startswith('text/') or mime_type in ['application/json', 'application/xml']:
+                # Regular text files - download directly
+                content = service.files().get_media(fileId=file_id).execute()
+                return f"Content of file '{file_name}':\n\n{content.decode('utf-8')}"
+                
+            else:
+                # For binary files or unsupported types
+                file_size = file_metadata.get('size', 'Unknown')
+                return (
+                    f"File '{file_name}' is a binary file (type: {mime_type}, size: {file_size} bytes). "
+                    f"Cannot display content as text. "
+                    f"Use the file ID '{file_id}' to download it if needed."
+                )
+                
+        except HttpError as e:
+            error_msg = f"Google Drive API error: {e}"
+            logger.error(error_msg)
+            return error_msg
+        except UnicodeDecodeError:
+            return f"File '{file_name}' contains binary data that cannot be displayed as text."
+        except Exception as e:
+            error_msg = f"Error reading file from Google Drive: {str(e)}"
+            logger.error(error_msg)
+            return error_msg
+
+
 class GoogleDriveUploadInput(BaseModel):
     """Input for Google Drive upload."""
     file_name: str = Field(description="Name for the file in Google Drive")
@@ -588,6 +720,7 @@ def create_google_langchain_tools(
         'gmail_search': GmailSearchTool,
         'gmail_send': GmailSendTool,
         'google_drive_search': GoogleDriveSearchTool,
+        'google_drive_read': GoogleDriveReadTool,
         'google_drive_upload': GoogleDriveUploadTool,
         'google_calendar_list': GoogleCalendarListTool,
         'google_calendar_create': GoogleCalendarCreateTool,

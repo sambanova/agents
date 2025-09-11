@@ -261,7 +261,7 @@ class GoogleConnector(BaseOAuthConnector):
             "gmail_send": "gmail_send",
             "gmail_draft": "gmail_send",  # Using send tool for drafts for now
             "drive_search": "google_drive_search",
-            "drive_read": "google_drive_search",  # Using search for read for now
+            "drive_read": "google_drive_read",  # Now properly mapped to read tool
             "drive_create": "google_drive_upload",
             "calendar_list": "google_calendar_list",
             "calendar_create": "google_calendar_create",
