@@ -5,7 +5,7 @@ Provides OAuth integration for Google services (Gmail, Drive, Calendar, etc.)
 with user-level management and tool selection.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 import structlog
@@ -188,6 +188,23 @@ class GoogleConnector(BaseOAuthConnector):
             )
             raise
     
+    async def get_authorization_url(self, user_id: str, state: Optional[str] = None, **kwargs) -> Tuple[str, str]:
+        """
+        Generate Google OAuth authorization URL with refresh token support
+        
+        Google requires access_type=offline and prompt=consent to get refresh tokens
+        """
+        # Add Google-specific parameters for refresh token
+        google_params = {
+            'access_type': 'offline',  # Required for refresh token
+            'prompt': 'consent',        # Force consent screen to get refresh token
+            'include_granted_scopes': 'true',  # Incremental auth
+            **kwargs
+        }
+        
+        # Call parent method with Google-specific parameters
+        return await super().get_authorization_url(user_id, state, **google_params)
+    
     async def create_langchain_tools(self, user_id: str, tool_ids: List[str]) -> List[BaseTool]:
         """
         Create LangChain tools for enabled Google services
@@ -196,11 +213,47 @@ class GoogleConnector(BaseOAuthConnector):
         """
         from .google_tools import create_google_langchain_tools
         
-        token = await self.get_user_token(user_id)
+        # Get token with auto-refresh enabled
+        token = await self.get_user_token(user_id, auto_refresh=True)
         
         if not token:
             logger.warning("No token found for user", user_id=user_id)
             return []
+        
+        # Double-check: if token is still expired after auto-refresh attempt, we have a problem
+        if token.is_expired:
+            logger.error(
+                "Token is still expired after auto-refresh attempt",
+                user_id=user_id,
+                has_refresh_token=bool(token.refresh_token)
+            )
+            # If we have a refresh token, try one more explicit refresh
+            if token.refresh_token:
+                try:
+                    logger.info("Attempting explicit token refresh", user_id=user_id)
+                    token = await self.refresh_user_token(user_id)
+                    logger.info("Explicit refresh successful", user_id=user_id)
+                except Exception as e:
+                    logger.error(
+                        "Explicit refresh also failed",
+                        user_id=user_id,
+                        error=str(e)
+                    )
+                    return []
+            else:
+                logger.error("No refresh token available, cannot refresh", user_id=user_id)
+                return []
+        
+        # Log token details for debugging
+        logger.info(
+            "Creating Google tools with token",
+            user_id=user_id,
+            has_access_token=bool(token.access_token),
+            has_refresh_token=bool(token.refresh_token),
+            token_expired=token.is_expired,
+            needs_refresh=token.needs_refresh,
+            expires_at=token.expires_at.isoformat() if token.expires_at else None
+        )
         
         # Map our tool IDs to the standardized ones in google_tools.py
         tool_id_mapping = {
@@ -222,9 +275,13 @@ class GoogleConnector(BaseOAuthConnector):
                 if mapped_id not in mapped_tool_ids:  # Avoid duplicates
                     mapped_tool_ids.append(mapped_id)
         
-        # Create and return the tools
+        # Create and return the tools with all OAuth credentials for auto-refresh
         return create_google_langchain_tools(
             access_token=token.access_token,
+            refresh_token=token.refresh_token,
+            client_id=self.config.client_id,
+            client_secret=self.config.client_secret,
+            token_uri=self.config.token_url,
             user_id=user_id,
             tool_ids=mapped_tool_ids
         )

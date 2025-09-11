@@ -456,8 +456,8 @@ class BaseOAuthConnector(ABC):
         """
         Refresh token for a specific user
         """
-        # Get existing token
-        token = await self.get_user_token(user_id)
+        # Get existing token WITHOUT auto-refresh to avoid recursion
+        token = await self.get_user_token(user_id, auto_refresh=False)
         if not token or not token.refresh_token:
             raise ValueError("No refresh token available")
         
@@ -509,15 +509,47 @@ class BaseOAuthConnector(ABC):
         
         logger.info("Token stored successfully", token_key=token_key)
     
-    async def get_user_token(self, user_id: str) -> Optional[UserOAuthToken]:
-        """Retrieve user token from Redis (decryption handled automatically)"""
+    async def get_user_token(self, user_id: str, auto_refresh: bool = True) -> Optional[UserOAuthToken]:
+        """
+        Retrieve user token from Redis with optional automatic refresh
+        
+        Args:
+            user_id: User ID
+            auto_refresh: Whether to automatically refresh expired tokens
+            
+        Returns:
+            Valid token or None
+        """
         token_key = f"user:{user_id}:connector:{self.config.provider_id}:token"
         token_data = await self.redis_storage.redis_client.hgetall(token_key, user_id)
         
         if not token_data:
             return None
         
-        return UserOAuthToken.from_redis_dict(token_data)
+        token = UserOAuthToken.from_redis_dict(token_data)
+        
+        # Check if token needs refresh and auto_refresh is enabled
+        if auto_refresh and token.needs_refresh and token.refresh_token:
+            try:
+                logger.info(
+                    "Auto-refreshing expired token",
+                    user_id=user_id,
+                    provider=self.config.provider_id
+                )
+                token = await self.refresh_user_token(user_id)
+            except Exception as e:
+                logger.error(
+                    "Failed to auto-refresh token",
+                    user_id=user_id,
+                    provider=self.config.provider_id,
+                    error=str(e)
+                )
+                # Return original token if still valid
+                if not token.is_expired:
+                    return token
+                return None
+        
+        return token
     
     async def revoke_user_token(self, user_id: str) -> bool:
         """

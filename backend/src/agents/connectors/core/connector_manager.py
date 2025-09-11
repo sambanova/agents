@@ -286,19 +286,15 @@ class ConnectorManager:
                 if not user_config.enabled:
                     continue
                 
-                # Check token status and refresh if needed
-                token = await connector.get_user_token(user_id)
-                if token and token.needs_refresh:
-                    try:
-                        await connector.refresh_user_token(user_id)
-                    except Exception as e:
-                        logger.error(
-                            "Failed to refresh token",
-                            user_id=user_id,
-                            provider=provider_id,
-                            error=str(e)
-                        )
-                        continue
+                # Get token with automatic refresh
+                token = await connector.get_user_token(user_id, auto_refresh=True)
+                if not token:
+                    logger.warning(
+                        "No valid token available for connector",
+                        user_id=user_id,
+                        provider=provider_id
+                    )
+                    continue
                 
                 # Get enabled tools for this connector
                 enabled_tools = await connector.get_user_enabled_tools(user_id)

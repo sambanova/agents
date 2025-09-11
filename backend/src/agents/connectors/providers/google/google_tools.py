@@ -32,6 +32,10 @@ class GmailSearchTool(BaseTool):
     args_schema: Type[BaseModel] = GmailSearchInput
     
     access_token: str
+    refresh_token: Optional[str] = None
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    token_uri: Optional[str] = None
     user_id: str
     
     def _run(
@@ -46,7 +50,21 @@ class GmailSearchTool(BaseTool):
             from google.auth.transport.requests import Request
             from google.oauth2.credentials import Credentials
             
-            creds = Credentials(token=self.access_token)
+            # Create credentials with all required fields for auto-refresh
+            creds = Credentials(
+                token=self.access_token,
+                refresh_token=self.refresh_token,
+                token_uri=self.token_uri or "https://oauth2.googleapis.com/token",
+                client_id=self.client_id,
+                client_secret=self.client_secret
+            )
+            
+            # Refresh if needed
+            if creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+                # Update our stored token for next time
+                self.access_token = creds.token
+            
             service = build('gmail', 'v1', credentials=creds)
             
             # Search for messages
@@ -124,6 +142,10 @@ class GmailSendTool(BaseTool):
     args_schema: Type[BaseModel] = GmailSendInput
     
     access_token: str
+    refresh_token: Optional[str] = None
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    token_uri: Optional[str] = None
     user_id: str
     
     def _run(
@@ -141,6 +163,20 @@ class GmailSendTool(BaseTool):
             from google.oauth2.credentials import Credentials
             from email.mime.text import MIMEText
             
+            # Create credentials with all required fields for auto-refresh
+            creds = Credentials(
+                token=self.access_token,
+                refresh_token=self.refresh_token,
+                token_uri=self.token_uri or "https://oauth2.googleapis.com/token",
+                client_id=self.client_id,
+                client_secret=self.client_secret
+            )
+            
+            # Refresh if needed
+            if creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+                self.access_token = creds.token
+            
             # Create message
             message = MIMEText(body)
             message['to'] = to
@@ -154,7 +190,6 @@ class GmailSendTool(BaseTool):
             raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
             
             # Build Gmail service
-            creds = Credentials(token=self.access_token)
             service = build('gmail', 'v1', credentials=creds)
             
             # Send message
@@ -185,6 +220,10 @@ class GoogleDriveSearchTool(BaseTool):
     args_schema: Type[BaseModel] = GoogleDriveSearchInput
     
     access_token: str
+    refresh_token: Optional[str] = None
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    token_uri: Optional[str] = None
     user_id: str
     
     def _run(
@@ -198,7 +237,43 @@ class GoogleDriveSearchTool(BaseTool):
             from google.auth.transport.requests import Request
             from google.oauth2.credentials import Credentials
             
-            creds = Credentials(token=self.access_token)
+            # Log credential details for debugging
+            logger.info(
+                f"GoogleDriveSearchTool credentials - "
+                f"has_access_token: {bool(self.access_token)}, "
+                f"has_refresh_token: {bool(self.refresh_token)}, "
+                f"has_client_id: {bool(self.client_id)}, "
+                f"has_client_secret: {bool(self.client_secret)}, "
+                f"token_uri: {self.token_uri or 'default'}"
+            )
+            
+            # Validate we have all required fields for refresh
+            if not all([self.refresh_token, self.client_id, self.client_secret]):
+                error_msg = (
+                    f"Missing OAuth credentials for auto-refresh. "
+                    f"refresh_token: {'present' if self.refresh_token else 'MISSING'}, "
+                    f"client_id: {'present' if self.client_id else 'MISSING'}, "
+                    f"client_secret: {'present' if self.client_secret else 'MISSING'}"
+                )
+                logger.error(error_msg)
+                return f"Error: {error_msg}. Please reconnect your Google account."
+            
+            # Create credentials with all required fields for auto-refresh
+            creds = Credentials(
+                token=self.access_token,
+                refresh_token=self.refresh_token,
+                token_uri=self.token_uri or "https://oauth2.googleapis.com/token",
+                client_id=self.client_id,
+                client_secret=self.client_secret
+            )
+            
+            # Refresh if needed (the library should handle this automatically on 401)
+            if creds.expired and creds.refresh_token:
+                logger.info("Token appears expired, will refresh on first API call")
+                creds.refresh(Request())
+                self.access_token = creds.token
+                logger.info("Token refreshed successfully")
+            
             service = build('drive', 'v3', credentials=creds)
             
             # Build search query
@@ -253,6 +328,10 @@ class GoogleDriveUploadTool(BaseTool):
     args_schema: Type[BaseModel] = GoogleDriveUploadInput
     
     access_token: str
+    refresh_token: Optional[str] = None
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    token_uri: Optional[str] = None
     user_id: str
     
     def _run(
@@ -269,7 +348,20 @@ class GoogleDriveUploadTool(BaseTool):
             from google.oauth2.credentials import Credentials
             from googleapiclient.http import MediaInMemoryUpload
             
-            creds = Credentials(token=self.access_token)
+            # Create credentials with all required fields for auto-refresh
+            creds = Credentials(
+                token=self.access_token,
+                refresh_token=self.refresh_token,
+                token_uri=self.token_uri or "https://oauth2.googleapis.com/token",
+                client_id=self.client_id,
+                client_secret=self.client_secret
+            )
+            
+            # Refresh if needed
+            if creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+                self.access_token = creds.token
+            
             service = build('drive', 'v3', credentials=creds)
             
             # Create file metadata
@@ -308,6 +400,10 @@ class GoogleCalendarListTool(BaseTool):
     args_schema: Type[BaseModel] = GoogleCalendarListInput
     
     access_token: str
+    refresh_token: Optional[str] = None
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    token_uri: Optional[str] = None
     user_id: str
     
     def _run(
@@ -323,7 +419,20 @@ class GoogleCalendarListTool(BaseTool):
             from google.oauth2.credentials import Credentials
             from datetime import datetime, timezone
             
-            creds = Credentials(token=self.access_token)
+            # Create credentials with all required fields for auto-refresh
+            creds = Credentials(
+                token=self.access_token,
+                refresh_token=self.refresh_token,
+                token_uri=self.token_uri or "https://oauth2.googleapis.com/token",
+                client_id=self.client_id,
+                client_secret=self.client_secret
+            )
+            
+            # Refresh if needed
+            if creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+                self.access_token = creds.token
+            
             service = build('calendar', 'v3', credentials=creds)
             
             # Default to current time if not specified
@@ -384,6 +493,10 @@ class GoogleCalendarCreateTool(BaseTool):
     args_schema: Type[BaseModel] = GoogleCalendarCreateInput
     
     access_token: str
+    refresh_token: Optional[str] = None
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    token_uri: Optional[str] = None
     user_id: str
     
     def _run(
@@ -401,7 +514,20 @@ class GoogleCalendarCreateTool(BaseTool):
             from google.auth.transport.requests import Request
             from google.oauth2.credentials import Credentials
             
-            creds = Credentials(token=self.access_token)
+            # Create credentials with all required fields for auto-refresh
+            creds = Credentials(
+                token=self.access_token,
+                refresh_token=self.refresh_token,
+                token_uri=self.token_uri or "https://oauth2.googleapis.com/token",
+                client_id=self.client_id,
+                client_secret=self.client_secret
+            )
+            
+            # Refresh if needed
+            if creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+                self.access_token = creds.token
+            
             service = build('calendar', 'v3', credentials=creds)
             
             # Build event
@@ -432,7 +558,15 @@ class GoogleCalendarCreateTool(BaseTool):
             return error_msg
 
 
-def create_google_langchain_tools(access_token: str, user_id: str, tool_ids: List[str]) -> List[BaseTool]:
+def create_google_langchain_tools(
+    access_token: str, 
+    user_id: str, 
+    tool_ids: List[str],
+    refresh_token: Optional[str] = None,
+    client_id: Optional[str] = None,
+    client_secret: Optional[str] = None,
+    token_uri: Optional[str] = None
+) -> List[BaseTool]:
     """
     Create LangChain tools for Google services.
     
@@ -440,6 +574,10 @@ def create_google_langchain_tools(access_token: str, user_id: str, tool_ids: Lis
         access_token: OAuth access token for Google APIs
         user_id: User ID for tracking
         tool_ids: List of tool IDs to create
+        refresh_token: OAuth refresh token for automatic token refresh
+        client_id: OAuth client ID
+        client_secret: OAuth client secret
+        token_uri: OAuth token endpoint URI
         
     Returns:
         List of LangChain tools
@@ -458,7 +596,24 @@ def create_google_langchain_tools(access_token: str, user_id: str, tool_ids: Lis
     for tool_id in tool_ids:
         if tool_id in tool_mapping:
             tool_class = tool_mapping[tool_id]
-            tool = tool_class(access_token=access_token, user_id=user_id)
+            
+            # Log what we're passing to the tool
+            logger.info(
+                f"Creating {tool_id} with credentials - "
+                f"has_refresh_token: {bool(refresh_token)}, "
+                f"has_client_id: {bool(client_id)}, "
+                f"has_client_secret: {bool(client_secret)}, "
+                f"token_uri: {token_uri}"
+            )
+            
+            tool = tool_class(
+                access_token=access_token,
+                refresh_token=refresh_token,
+                client_id=client_id,
+                client_secret=client_secret,
+                token_uri=token_uri,
+                user_id=user_id
+            )
             tools.append(tool)
             logger.info(f"Created Google tool: {tool_id} for user: {user_id}")
         else:
