@@ -40,8 +40,10 @@ def get_llm(llm_type: LLMType, api_key: str):
         )
     elif llm_type == LLMType.SN_DEEPSEEK_V3:
         llm = get_sambanova_llm(model="DeepSeek-V3-0324", api_key=api_key)
-    elif llm_type == LLMType.DEEPSEEK_R1_DISTILL_LLAMA:
+    elif llm_type == LLMType.SN_DEEPSEEK_R1_DISTILL_LLAMA:
         llm = get_sambanova_llm(model="DeepSeek-R1-Distill-Llama-70B", api_key=api_key)
+    elif llm_type == LLMType.SN_GPT_OSS:
+        llm = get_sambanova_llm(model="gpt-oss-120b", api_key=api_key)
     elif llm_type == LLMType.FIREWORKS_LLAMA_3_3_70B:
         llm = get_fireworks_llm(
             model="accounts/fireworks/models/llama-v3p1-70b-instruct", api_key=api_key

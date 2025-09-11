@@ -43,6 +43,12 @@
                     "crewai_prefix": "sambanova",
                     "url": "https://api.sambanova.ai/v1",
                     "long_url": "https://api.sambanova.ai/v1/chat/completions"
+                },
+                "gpt-oss": {
+                    "model": "gpt-oss-120b",
+                    "crewai_prefix": "sambanova",
+                    "url": "https://api.sambanova.ai/v1",
+                    "long_url": "https://api.sambanova.ai/v1/chat/completions"
                 }
             },
             "api_key_env": "sambanova_key"

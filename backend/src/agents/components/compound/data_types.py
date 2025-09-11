@@ -20,8 +20,9 @@ class LLMType(str, Enum):
     SN_DEEPSEEK_R1_DISTILL_LLAMA = "DeepSeek R1 Distill Llama"
     SN_DEEPSEEK_R1 = "DeepSeek R1"
     SN_QWEN3_3_72B = "Qwen3 32B"
+    SN_GPT_OSS = "GPT oss 120b"
     FIREWORKS_LLAMA_3_3_70B = "Fireworks Llama 3.3 70B"
-    FIREWORKS_GPT_OSS = "Fireworks GPT oss"
+    FIREWORKS_GPT_OSS = "Fireworks GPT oss 120b"
 
 
 class LiberalToolMessage(ToolMessage):
