@@ -1280,7 +1280,29 @@ For comprehensive analysis combining multiple files, prefer using the DaytonaCod
                 ),
             }
 
+        # Load static tools
         all_tools = await load_static_tools(tools_config)
+        
+        # Load connector tools for the user
+        try:
+            from agents.connectors.core.connector_manager import get_connector_manager
+            connector_manager = get_connector_manager()
+            if connector_manager:
+                connector_tools = await connector_manager.get_user_tools(user_id)
+                all_tools.extend(connector_tools)
+                logger.info(
+                    "Loaded connector tools for user",
+                    user_id=user_id,
+                    num_connector_tools=len(connector_tools),
+                    total_tools=len(all_tools)
+                )
+        except Exception as e:
+            logger.error(
+                "Failed to load connector tools",
+                user_id=user_id,
+                error=str(e)
+            )
+        
         config["configurable"]["type==default/tools"] = all_tools
         config["configurable"]["agent_type"] = "default"
 

@@ -10,7 +10,6 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 
 import structlog
 from agents.api.data_types import MCPServerConfig
-from agents.mcp.server_manager import MCPServerManager
 from agents.storage.redis_storage import RedisStorage
 from agents.tools.langgraph_tools import TOOL_REGISTRY, Tool as StaticToolConfig, validate_tool_config
 from langchain.tools import BaseTool

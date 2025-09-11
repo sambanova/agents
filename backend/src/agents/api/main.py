@@ -7,6 +7,7 @@ from agents.api.data_types import APIKeys
 from agents.api.middleware import LoggingMiddleware
 from agents.api.routers.agent import router as agent_router
 from agents.api.routers.chat import router as chat_router
+from agents.api.routers.connectors import router as connectors_router
 from agents.api.routers.export import router as export_router
 from agents.api.routers.files import router as files_router
 from agents.api.routers.share import router as share_router
@@ -76,6 +77,21 @@ async def lifespan(app: FastAPI):
 
     # Set global Redis storage service for tools
     set_global_redis_storage_service(app.state.redis_storage_service)
+    
+    # Initialize OAuth connectors
+    try:
+        from agents.connectors.runtime.integration import initialize_connectors
+        from agents.tools.dynamic_tool_loader import set_dynamic_tool_loader, DynamicToolLoader
+        
+        app.state.connector_manager = await initialize_connectors(app.state.redis_storage_service)
+        
+        # Initialize the dynamic tool loader with connector manager
+        dynamic_loader = DynamicToolLoader(app.state.redis_storage_service, app.state.connector_manager)
+        set_dynamic_tool_loader(dynamic_loader)
+        
+        logger.info("OAuth connector system and dynamic tool loader initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize OAuth connectors: {e}", exc_info=True)
 
     logger.info("Using Redis with shared connection pool")
 
@@ -148,6 +164,7 @@ app.include_router(share_router)
 app.include_router(user_router)
 app.include_router(agent_router)
 app.include_router(export_router)
+app.include_router(connectors_router)
 
 
 @app.get("/health")

@@ -42,6 +42,18 @@
               >
                 Export Data
               </button>
+              
+              <button
+                @click="activeTab = 'connectors'"
+                :class="[
+                  'py-2 px-1 border-b-2 font-medium text-sm',
+                  activeTab === 'connectors'
+                    ? 'border-primary-brandColor text-primary-brandColor'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ]"
+              >
+                Connected Apps
+              </button>
 
             </nav>
           </div>
@@ -408,7 +420,149 @@
             </div>
           </div>
 
+          <!-- Connected Apps Tab -->
+          <div v-if="activeTab === 'connectors'" class="space-y-4">
+            <div class="mb-4">
+              <p class="text-sm text-gray-600">
+                Connect your apps to enable AI-powered interactions with your data
+              </p>
+            </div>
 
+            <!-- Loading State -->
+            <div v-if="loadingConnectors" class="flex justify-center py-8">
+              <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+            
+            <!-- Empty State -->
+            <div v-else-if="!connectors || connectors.length === 0" class="text-center py-8">
+              <p class="text-gray-500">No apps available to connect</p>
+              <p class="text-sm text-gray-400 mt-2">Check back later for new integrations</p>
+            </div>
+            
+            <!-- Connectors Grid -->
+            <div v-else class="grid gap-4">
+              <div
+                v-for="connector in connectors"
+                :key="connector.provider_id || Math.random()"
+                class="border rounded-lg p-4"
+                :class="connector && connector.status === 'connected' ? 'border-green-500 bg-green-50' : 'border-gray-300'"
+              >
+                <div class="flex items-start justify-between">
+                  <div class="flex items-start space-x-3">
+                    <img 
+                      v-if="connector.icon_url" 
+                      :src="connector.icon_url" 
+                      :alt="connector.name"
+                      class="w-10 h-10 rounded"
+                    >
+                    <div v-else class="w-10 h-10 rounded bg-gray-200 flex items-center justify-center font-bold">
+                      {{ connector.name ? connector.name.charAt(0) : '?' }}
+                    </div>
+                    <div>
+                      <h4 class="font-medium text-gray-900">{{ connector.name }}</h4>
+                      <p class="text-sm text-gray-600">{{ connector.description }}</p>
+                      
+                      <!-- Status Badge -->
+                      <span 
+                        class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mt-2"
+                        :class="{
+                          'bg-green-100 text-green-800': connector.status === 'connected',
+                          'bg-gray-100 text-gray-800': connector.status === 'not_configured',
+                          'bg-red-100 text-red-800': connector.status === 'error',
+                          'bg-yellow-100 text-yellow-800': connector.status === 'expired'
+                        }"
+                      >
+                        {{ getConnectorStatusLabel(connector.status) }}
+                      </span>
+                      
+                      <!-- Connected info -->
+                      <div v-if="connector.connected_at" class="text-xs text-gray-500 mt-1">
+                        Connected {{ formatRelativeDate(connector.connected_at) }}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- Actions -->
+                  <div>
+                    <button
+                      v-if="connector.status === 'not_configured'"
+                      @click="connectApp(connector.provider_id)"
+                      class="px-3 py-1 bg-primary-brandColor text-white text-sm rounded hover:bg-primary-700"
+                    >
+                      Connect
+                    </button>
+                    
+                    <button
+                      v-else-if="connector.status === 'expired'"
+                      @click="refreshConnectorToken(connector.provider_id)"
+                      class="px-3 py-1 bg-yellow-500 text-white text-sm rounded hover:bg-yellow-600"
+                    >
+                      Reconnect
+                    </button>
+                    
+                    <button
+                      v-else-if="connector.status === 'connected'"
+                      @click="disconnectApp(connector.provider_id)"
+                      class="px-3 py-1 border border-red-500 text-red-500 text-sm rounded hover:bg-red-50"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                </div>
+                
+                <!-- Tools Section (for connected apps) -->
+                <div v-if="connector.status === 'connected' && connector.available_tools" class="mt-4 pt-4 border-t">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-700">Available Tools</span>
+                    <span class="text-xs text-gray-500">
+                      {{ connector.enabled_tools_count || 0 }} / {{ connector.total_tools_count || 0 }} enabled
+                    </span>
+                  </div>
+                  
+                  <div class="space-y-1 max-h-32 overflow-y-auto">
+                    <label 
+                      v-for="tool in connector.available_tools"
+                      :key="tool.id"
+                      class="flex items-start space-x-2 p-1 hover:bg-gray-50 rounded cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="tool.enabled"
+                        @change="toggleConnectorTool(connector.provider_id, tool.id, $event.target.checked)"
+                        class="mt-0.5 h-4 w-4 text-primary-brandColor rounded border-gray-300"
+                      >
+                      <div class="flex-1">
+                        <span class="text-sm text-gray-700">{{ tool.name }}</span>
+                        <span class="block text-xs text-gray-500">{{ tool.description }}</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Loading State -->
+            <div v-if="loadingConnectors" class="text-center py-4">
+              <svg class="animate-spin h-6 w-6 text-primary-brandColor mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <p class="text-sm text-gray-600 mt-2">Loading connectors...</p>
+            </div>
+            
+            <!-- OAuth Progress Modal -->
+            <div v-if="oauthInProgress" class="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center">
+              <div class="bg-white rounded-lg p-6 max-w-sm w-full">
+                <h3 class="text-lg font-medium mb-2">Connecting to {{ oauthProviderName }}...</h3>
+                <p class="text-sm text-gray-600 mb-4">
+                  Please complete the authorization in the popup window.
+                </p>
+                <button @click="cancelOAuth" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
 
         </div>
 
@@ -545,6 +699,13 @@ const missingKeys = ref({
   sambanovaKey: false,
   fireworksKey: false
 })
+
+// Connector-related state
+const connectors = ref([])
+const loadingConnectors = ref(false)
+const oauthInProgress = ref(false)
+const oauthProviderName = ref('')
+const oauthWindow = ref(null)
 
 
 const loadKeys = async () => {
@@ -1070,4 +1231,223 @@ const executeDeleteAccount = async () => {
     isDeleting.value = false
   }
 }
+
+// Connector Methods
+const fetchConnectors = async () => {
+  if (!userId.value) return
+  
+  loadingConnectors.value = true
+  try {
+    const token = await getAccessTokenSilently()
+    const response = await axios.get(
+      `${import.meta.env.VITE_API_URL}/connectors/user`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': userId.value
+        }
+      }
+    )
+    // Ensure response.data is an array and has valid structure
+    if (Array.isArray(response.data)) {
+      connectors.value = response.data.filter(c => c && c.name)
+    } else {
+      console.warn('Unexpected connector response format:', response.data)
+      connectors.value = []
+    }
+  } catch (error) {
+    console.error('Failed to fetch connectors:', error)
+    errorMessage.value = 'Failed to load connected apps'
+    connectors.value = []
+  } finally {
+    loadingConnectors.value = false
+  }
+}
+
+const connectApp = async (providerId) => {
+  try {
+    const token = await getAccessTokenSilently()
+    const response = await axios.post(
+      `${import.meta.env.VITE_API_URL}/connectors/${providerId}/auth/init`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': userId.value
+        }
+      }
+    )
+
+    const { authorization_url, state } = response.data
+    
+    // Open OAuth popup
+    oauthInProgress.value = true
+    oauthProviderName.value = providerId
+    
+    const width = 500
+    const height = 600
+    const left = window.screen.width / 2 - width / 2
+    const top = window.screen.height / 2 - height / 2
+    
+    oauthWindow.value = window.open(
+      authorization_url,
+      'oauth',
+      `width=${width},height=${height},left=${left},top=${top}`
+    )
+    
+    // Check for OAuth completion
+    const checkInterval = setInterval(() => {
+      try {
+        // Just check if window is closed, don't access any properties
+        if (oauthWindow.value && oauthWindow.value.closed) {
+          clearInterval(checkInterval)
+          oauthInProgress.value = false
+          fetchConnectors() // Refresh connectors
+        }
+      } catch (e) {
+        // Cross-origin error expected when checking closed status
+        // This is normal and can be ignored
+      }
+    }, 1000)
+    
+  } catch (error) {
+    console.error('Failed to initialize OAuth:', error)
+    errorMessage.value = 'Failed to connect app'
+    oauthInProgress.value = false
+  }
+}
+
+const disconnectApp = async (providerId) => {
+  if (!confirm('Are you sure you want to disconnect this app?')) {
+    return
+  }
+  
+  try {
+    const token = await getAccessTokenSilently()
+    await axios.delete(
+      `${import.meta.env.VITE_API_URL}/connectors/${providerId}/disconnect`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': userId.value
+        }
+      }
+    )
+    successMessage.value = 'App disconnected successfully'
+    await fetchConnectors()
+  } catch (error) {
+    console.error('Failed to disconnect app:', error)
+    errorMessage.value = 'Failed to disconnect app'
+  }
+}
+
+const refreshConnectorToken = async (providerId) => {
+  try {
+    const token = await getAccessTokenSilently()
+    await axios.post(
+      `${import.meta.env.VITE_API_URL}/connectors/${providerId}/refresh`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': userId.value
+        }
+      }
+    )
+    successMessage.value = 'Connection refreshed successfully'
+    await fetchConnectors()
+  } catch (error) {
+    console.error('Failed to refresh token:', error)
+    // If refresh fails, try to reconnect
+    connectApp(providerId)
+  }
+}
+
+const toggleConnectorTool = async (providerId, toolId, enabled) => {
+  try {
+    const token = await getAccessTokenSilently()
+    const connector = connectors.value.find(c => c.provider_id === providerId)
+    const enabledTools = new Set(
+      connector.available_tools
+        .filter(t => t.enabled || (t.id === toolId && enabled))
+        .filter(t => t.id !== toolId || enabled)
+        .map(t => t.id)
+    )
+    
+    await axios.post(
+      `${import.meta.env.VITE_API_URL}/connectors/${providerId}/tools/update`,
+      {
+        enabled_tool_ids: Array.from(enabledTools)
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': userId.value
+        }
+      }
+    )
+    await fetchConnectors()
+  } catch (error) {
+    console.error('Failed to update tools:', error)
+    errorMessage.value = 'Failed to update tool settings'
+  }
+}
+
+const cancelOAuth = () => {
+  if (oauthWindow.value && !oauthWindow.value.closed) {
+    oauthWindow.value.close()
+  }
+  oauthInProgress.value = false
+}
+
+const getConnectorStatusLabel = (status) => {
+  if (!status) return 'Unknown'
+  const labels = {
+    connected: 'Connected',
+    disconnected: 'Disconnected',
+    not_configured: 'Not Connected',
+    error: 'Error',
+    expired: 'Token Expired'
+  }
+  return labels[status] || status
+}
+
+const formatRelativeDate = (dateString) => {
+  const date = new Date(dateString)
+  const now = new Date()
+  const diffMs = now - date
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  
+  if (diffDays === 0) {
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+    if (diffHours === 0) {
+      const diffMinutes = Math.floor(diffMs / (1000 * 60))
+      return `${diffMinutes} minutes ago`
+    }
+    return `${diffHours} hours ago`
+  } else if (diffDays === 1) {
+    return 'yesterday'
+  } else if (diffDays < 30) {
+    return `${diffDays} days ago`
+  } else {
+    return date.toLocaleDateString()
+  }
+}
+
+// Watch for tab changes to load connectors when needed
+watch(activeTab, (newTab) => {
+  if (newTab === 'connectors' && connectors.value.length === 0) {
+    fetchConnectors()
+  }
+})
+
+// Listen for OAuth callback messages
+window.addEventListener('message', (event) => {
+  if (event.origin !== window.location.origin) return
+  
+  if (event.data.type === 'oauth-callback') {
+    oauthInProgress.value = false
+    fetchConnectors()
+  }
+})
 </script>
