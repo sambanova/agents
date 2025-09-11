@@ -107,41 +107,45 @@ ingress:
       pathType: Prefix
       service: aiskagents-backend
       port: 80
-
 # Redis configuration
 redis:
   enabled: true
-  namespace: redis
+  # Redis configuration
+  auth:
+    enabled: false
   image:
-    repository: redis/redis-stack
+    repository: redis/redis-stack-server
     tag: "7.4.0-v5"
     pullPolicy: IfNotPresent
-  replicas: 1
-  resources:
-    limits:
-      cpu: "500m"
-      memory: "256Mi"
-    requests:
-      cpu: "100m"
-      memory: "128Mi"
+  # Ensure Redis Stack modules are loaded
+  commonConfiguration: |-
+    loadmodule /opt/redis-stack/lib/redisearch.so
+    loadmodule /opt/redis-stack/lib/rejson.so
+    loadmodule /opt/redis-stack/lib/redistimeseries.so
+    loadmodule /opt/redis-stack/lib/redisbloom.so
+  master:
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: openebs-hostpath
+    resources:
+      limits:
+        cpu: "2000m"
+        memory: "2Gi"
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+    livenessProbe:
+      enabled: true
+      initialDelaySeconds: 30
+      periodSeconds: 60
+    readinessProbe:
+      enabled: true
+      initialDelaySeconds: 5
+      periodSeconds: 20
+  replica:
+    replicaCount: 0
   service:
     type: ClusterIP
-    port: 6379
-    targetPort: 6379
-  args:
-    - "redis-stack-server"
-    - "--appendonly"
-    - "yes"
-  volumes:
-    data:
-      hostPath: /data/redis
-      mountPath: /data
-  probes:
-    liveness:
-      port: 6379
-      initialDelaySeconds: 15
-      periodSeconds: 20
-    readiness:
-      port: 6379
-      initialDelaySeconds: 5
-      periodSeconds: 10 
+    ports:
+      redis: 6379 

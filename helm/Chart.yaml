@@ -1,0 +1,21 @@
+apiVersion: v2
+name: aiskagents
+description: A Helm chart for AISKAgents application
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+maintainers:
+  - name: Samba Team 
+dependencies:
+- name: redis
+  condition: redis.enabled
+  repository: https://charts.bitnami.com/bitnami
+  version: 20.0.3
+- name: openebs
+  condition: openebs.enabled
+  repository: https://openebs.github.io/openebs
+  version: 4.2.0
+- name: postgres
+  condition: postgres.enabled
+  repository: https://charts.bitnami.com/bitnami
+  version: 15.4.0
