@@ -296,6 +296,10 @@ class BaseOAuthConnector(ABC):
         else:
             config_dict = {}
         
+        # Remove user_id and provider_id from config_dict to avoid duplicate keyword arguments
+        config_dict.pop('user_id', None)
+        config_dict.pop('provider_id', None)
+        
         user_config = UserConnectorConfig(
             user_id=user_id,
             provider_id=self.config.provider_id,
@@ -304,9 +308,13 @@ class BaseOAuthConnector(ABC):
         user_config.enabled_tools = tool_ids
         user_config.last_used = datetime.utcnow()
         
+        # Serialize with JSON serializable conversion
+        config_data = user_config.model_dump(mode='json')
+        config_json = json.dumps(config_data)
+        
         await self.redis_storage.redis_client.set(
             config_key, 
-            json.dumps(user_config.model_dump()), 
+            config_json, 
             user_id
         )
     
@@ -597,6 +605,10 @@ class BaseOAuthConnector(ABC):
             config_dict = json.loads(config_data)
         else:
             config_dict = {}
+        
+        # Remove user_id and provider_id from config_dict to avoid duplicate keyword arguments
+        config_dict.pop('user_id', None)
+        config_dict.pop('provider_id', None)
         
         user_config = UserConnectorConfig(
             user_id=user_id,

@@ -127,6 +127,10 @@ class ConnectorManager:
         config_data = await self.redis_storage.redis_client.get(config_key, user_id)
         config_dict = json.loads(config_data) if config_data else {}
         
+        # Remove user_id and provider_id from config_dict to avoid duplicate keyword arguments
+        config_dict.pop('user_id', None)
+        config_dict.pop('provider_id', None)
+        
         user_config = UserConnectorConfig(
             user_id=user_id,
             provider_id=provider_id,
@@ -137,7 +141,7 @@ class ConnectorManager:
         
         await self.redis_storage.redis_client.set(
             config_key, 
-            json.dumps(user_config.model_dump()), 
+            json.dumps(user_config.model_dump(mode='json')), 
             user_id
         )
         
@@ -162,6 +166,10 @@ class ConnectorManager:
         config_data = await self.redis_storage.redis_client.get(config_key, user_id)
         config_dict = json.loads(config_data) if config_data else {}
         
+        # Remove user_id and provider_id from config_dict to avoid duplicate keyword arguments
+        config_dict.pop('user_id', None)
+        config_dict.pop('provider_id', None)
+        
         user_config = UserConnectorConfig(
             user_id=user_id,
             provider_id=provider_id,
@@ -171,7 +179,7 @@ class ConnectorManager:
         
         await self.redis_storage.redis_client.set(
             config_key, 
-            json.dumps(user_config.model_dump()), 
+            json.dumps(user_config.model_dump(mode='json')), 
             user_id
         )
         
