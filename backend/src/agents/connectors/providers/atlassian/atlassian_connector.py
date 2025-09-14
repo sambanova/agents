@@ -318,6 +318,7 @@ class AtlassianConnector(MCPConnector):
             "read:confluence-content.all",
             "write:confluence-content",
             "read:confluence-space.summary",
+            "search:confluence",  # REQUIRED for Confluence search API
             "offline_access"  # REQUIRED for refresh token support
         ]
         

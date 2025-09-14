@@ -206,6 +206,575 @@ class CreateJiraIssueTool(BaseTool):
         raise NotImplementedError("Use async execution")
 
 
+class JiraGetIssueTool(BaseTool):
+    """Tool for getting a Jira issue by key"""
+    
+    name: str = "jira_get_issue"
+    description: str = "Get details of a specific Jira issue"
+    
+    access_token: str
+    cloud_id: str
+    
+    class Args(BaseModel):
+        issue_key: str = Field(description="Issue key (e.g., PROJ-123)")
+        fields: List[str] = Field(
+            default_factory=lambda: ["summary", "status", "priority", "assignee", "description", "created", "updated"],
+            description="Fields to include"
+        )
+    
+    args_schema = Args
+    
+    async def _arun(
+        self,
+        issue_key: str,
+        fields: List[str] = None,
+        run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
+    ) -> str:
+        """Get Jira issue details"""
+        try:
+            if fields is None:
+                fields = ["summary", "status", "priority", "assignee", "description", "created", "updated"]
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"https://api.atlassian.com/ex/jira/{self.cloud_id}/rest/api/3/issue/{issue_key}",
+                    params={
+                        "fields": ",".join(fields)
+                    },
+                    headers={
+                        "Authorization": f"Bearer {self.access_token}",
+                        "Accept": "application/json"
+                    }
+                )
+                
+                if response.status_code == 200:
+                    issue = response.json()
+                    
+                    # Format the result
+                    issue_data = {
+                        "key": issue["key"],
+                        "summary": issue["fields"].get("summary", "No summary"),
+                        "status": issue["fields"].get("status", {}).get("name", "Unknown"),
+                        "priority": issue["fields"].get("priority", {}).get("name", "None") if issue["fields"].get("priority") else "None",
+                        "assignee": issue["fields"].get("assignee", {}).get("displayName", "Unassigned") if issue["fields"].get("assignee") else "Unassigned",
+                        "description": issue["fields"].get("description", "No description"),
+                        "created": issue["fields"].get("created"),
+                        "updated": issue["fields"].get("updated")
+                    }
+                    
+                    return json.dumps(issue_data, indent=2)
+                elif response.status_code == 404:
+                    return f"Issue not found: {issue_key}"
+                else:
+                    return f"Error getting issue: {response.status_code} - {response.text}"
+                    
+        except Exception as e:
+            logger.error("Failed to get Jira issue", error=str(e), exc_info=True)
+            return f"Error getting issue: {str(e)}"
+    
+    def _run(self, *args, **kwargs):
+        """Sync execution not supported"""
+        raise NotImplementedError("Use async execution")
+
+
+class JiraUpdateIssueTool(BaseTool):
+    """Tool for updating a Jira issue"""
+    
+    name: str = "jira_update_issue"
+    description: str = "Update an existing Jira issue"
+    
+    access_token: str
+    cloud_id: str
+    
+    class Args(BaseModel):
+        issue_key: str = Field(description="Issue key (e.g., PROJ-123)")
+        summary: Optional[str] = Field(default=None, description="New summary")
+        description: Optional[str] = Field(default=None, description="New description")
+        priority: Optional[str] = Field(default=None, description="New priority")
+        assignee: Optional[str] = Field(default=None, description="New assignee account ID")
+    
+    args_schema = Args
+    
+    async def _arun(
+        self,
+        issue_key: str,
+        summary: Optional[str] = None,
+        description: Optional[str] = None,
+        priority: Optional[str] = None,
+        assignee: Optional[str] = None,
+        run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
+    ) -> str:
+        """Update Jira issue"""
+        try:
+            # Build update payload
+            update_data = {"fields": {}}
+            
+            if summary:
+                update_data["fields"]["summary"] = summary
+            
+            if description:
+                update_data["fields"]["description"] = {
+                    "type": "doc",
+                    "version": 1,
+                    "content": [{
+                        "type": "paragraph",
+                        "content": [{
+                            "type": "text",
+                            "text": description
+                        }]
+                    }]
+                }
+            
+            if priority:
+                priority_map = {
+                    "Highest": "1",
+                    "High": "2",
+                    "Medium": "3",
+                    "Low": "4",
+                    "Lowest": "5"
+                }
+                update_data["fields"]["priority"] = {"id": priority_map.get(priority, "3")}
+            
+            if assignee:
+                update_data["fields"]["assignee"] = {"accountId": assignee}
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.put(
+                    f"https://api.atlassian.com/ex/jira/{self.cloud_id}/rest/api/3/issue/{issue_key}",
+                    json=update_data,
+                    headers={
+                        "Authorization": f"Bearer {self.access_token}",
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
+                    }
+                )
+                
+                if response.status_code in [200, 204]:
+                    return f"Successfully updated issue: {issue_key}"
+                elif response.status_code == 404:
+                    return f"Issue not found: {issue_key}"
+                else:
+                    return f"Error updating issue: {response.status_code} - {response.text}"
+                    
+        except Exception as e:
+            logger.error("Failed to update Jira issue", error=str(e), exc_info=True)
+            return f"Error updating issue: {str(e)}"
+    
+    def _run(self, *args, **kwargs):
+        """Sync execution not supported"""
+        raise NotImplementedError("Use async execution")
+
+
+class JiraAddCommentTool(BaseTool):
+    """Tool for adding a comment to a Jira issue"""
+    
+    name: str = "jira_add_comment"
+    description: str = "Add a comment to a Jira issue"
+    
+    access_token: str
+    cloud_id: str
+    
+    class Args(BaseModel):
+        issue_key: str = Field(description="Issue key (e.g., PROJ-123)")
+        comment: str = Field(description="Comment text")
+    
+    args_schema = Args
+    
+    async def _arun(
+        self,
+        issue_key: str,
+        comment: str,
+        run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
+    ) -> str:
+        """Add comment to Jira issue"""
+        try:
+            comment_data = {
+                "body": {
+                    "type": "doc",
+                    "version": 1,
+                    "content": [{
+                        "type": "paragraph",
+                        "content": [{
+                            "type": "text",
+                            "text": comment
+                        }]
+                    }]
+                }
+            }
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"https://api.atlassian.com/ex/jira/{self.cloud_id}/rest/api/3/issue/{issue_key}/comment",
+                    json=comment_data,
+                    headers={
+                        "Authorization": f"Bearer {self.access_token}",
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
+                    }
+                )
+                
+                if response.status_code in [200, 201]:
+                    return f"Successfully added comment to issue: {issue_key}"
+                elif response.status_code == 404:
+                    return f"Issue not found: {issue_key}"
+                else:
+                    return f"Error adding comment: {response.status_code} - {response.text}"
+                    
+        except Exception as e:
+            logger.error("Failed to add comment to Jira issue", error=str(e), exc_info=True)
+            return f"Error adding comment: {str(e)}"
+    
+    def _run(self, *args, **kwargs):
+        """Sync execution not supported"""
+        raise NotImplementedError("Use async execution")
+
+
+class ConfluenceSearchTool(BaseTool):
+    """Tool for searching Confluence content using REST API"""
+    
+    name: str = "confluence_search"
+    description: str = "Search for content in Confluence"
+    
+    access_token: str
+    cloud_id: str
+    
+    class Args(BaseModel):
+        query: str = Field(description="Search query")
+        space: Optional[str] = Field(default=None, description="Limit to specific space")
+        type: Optional[str] = Field(default=None, description="Content type filter (page, blogpost, etc.)")
+        max_results: int = Field(default=10, description="Maximum number of results")
+    
+    args_schema = Args
+    
+    async def _arun(
+        self,
+        query: str,
+        space: Optional[str] = None,
+        type: Optional[str] = None,
+        max_results: int = 10,
+        run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
+    ) -> str:
+        """Execute Confluence search"""
+        try:
+            # Build CQL query
+            cql = f'text ~ "{query}"'
+            if space:
+                cql += f' AND space = "{space}"'
+            if type:
+                cql += f' AND type = "{type}"'
+            
+            # Debug logging
+            logger.info(
+                "Confluence search request",
+                cloud_id=self.cloud_id,
+                cql=cql,
+                has_token=bool(self.access_token),
+                token_preview=self.access_token[:20] if self.access_token else None
+            )
+            
+            async with httpx.AsyncClient() as client:
+                # For OAuth 2.0 (3LO), we must use api.atlassian.com with cloud_id
+                # According to Atlassian docs, OAuth uses /rest/api without /wiki prefix
+                url = f"https://api.atlassian.com/ex/confluence/{self.cloud_id}/rest/api/search"
+                headers = {
+                    "Authorization": f"Bearer {self.access_token}",
+                    "Accept": "application/json"
+                }
+                params = {
+                    "cql": cql,
+                    "limit": max_results
+                }
+                
+                logger.debug(
+                    "Making Confluence API request",
+                    url=url,
+                    params=params,
+                    headers_keys=list(headers.keys())
+                )
+                
+                response = await client.get(url, params=params, headers=headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    results = data.get("results", [])
+                    
+                    if not results:
+                        return "No content found matching your query."
+                    
+                    # Log the first result to understand structure
+                    if results:
+                        logger.debug(
+                            "Confluence search result structure",
+                            first_result_keys=list(results[0].keys()) if results else [],
+                            first_result_sample=str(results[0])[:500] if results else None
+                        )
+                    
+                    # Format the results - handle different response structures
+                    formatted_results = []
+                    for item in results:
+                        # Different content types have different structures
+                        result_data = {
+                            "id": item.get("content", {}).get("id") or item.get("id", "unknown"),
+                            "title": item.get("title") or item.get("content", {}).get("title", "Untitled"),
+                            "type": item.get("content", {}).get("type") or item.get("type", "Unknown"),
+                            "space": item.get("space", {}).get("name") or item.get("content", {}).get("space", {}).get("name", "Unknown"),
+                            "url": item.get("url") or item.get("_links", {}).get("webui", "")
+                        }
+                        formatted_results.append(result_data)
+                    
+                    return json.dumps(formatted_results, indent=2)
+                elif response.status_code == 401:
+                    logger.error(
+                        "Confluence authentication failed",
+                        status_code=response.status_code,
+                        response_text=response.text[:500],
+                        response_headers={k: v for k, v in response.headers.items() if k.lower() in ['www-authenticate', 'x-failure-category']}
+                    )
+                    return "Authentication failed. The access token may be invalid or lack the required Confluence scopes."
+                elif response.status_code == 403:
+                    return "Permission denied. You don't have access to search Confluence content."
+                else:
+                    logger.error(
+                        "Confluence search error",
+                        status_code=response.status_code,
+                        response_text=response.text[:500]
+                    )
+                    return f"Error searching Confluence: {response.status_code} - {response.text}"
+                    
+        except Exception as e:
+            logger.error("Confluence search failed", error=str(e), exc_info=True)
+            return f"Error searching Confluence: {str(e)}"
+    
+    def _run(self, *args, **kwargs):
+        """Sync execution not supported"""
+        raise NotImplementedError("Use async execution")
+
+
+class ConfluenceGetPageTool(BaseTool):
+    """Tool for retrieving Confluence page content using REST API"""
+    
+    name: str = "confluence_get_page"
+    description: str = "Get content of a specific Confluence page"
+    
+    access_token: str
+    cloud_id: str
+    
+    class Args(BaseModel):
+        page_id: str = Field(description="Page ID")
+        expand: List[str] = Field(
+            default_factory=lambda: ["body.storage", "version"],
+            description="Additional data to expand"
+        )
+    
+    args_schema = Args
+    
+    async def _arun(
+        self,
+        page_id: str,
+        expand: List[str] = None,
+        run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
+    ) -> str:
+        """Get Confluence page content"""
+        try:
+            if expand is None:
+                expand = ["body.storage", "version"]
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"https://api.atlassian.com/ex/confluence/{self.cloud_id}/rest/api/content/{page_id}",
+                    params={
+                        "expand": ",".join(expand)
+                    },
+                    headers={
+                        "Authorization": f"Bearer {self.access_token}",
+                        "Accept": "application/json"
+                    }
+                )
+                
+                if response.status_code == 200:
+                    page = response.json()
+                    
+                    # Extract relevant information
+                    result = {
+                        "id": page["id"],
+                        "title": page.get("title", "Untitled"),
+                        "type": page.get("type", "Unknown"),
+                        "space": page.get("space", {}).get("name", "Unknown"),
+                        "version": page.get("version", {}).get("number", 0),
+                        "content": page.get("body", {}).get("storage", {}).get("value", ""),
+                        "url": page.get("_links", {}).get("webui", "")
+                    }
+                    
+                    return json.dumps(result, indent=2)
+                elif response.status_code == 404:
+                    return f"Page not found: {page_id}"
+                else:
+                    return f"Error getting page: {response.status_code} - {response.text}"
+                    
+        except Exception as e:
+            logger.error("Failed to get Confluence page", error=str(e), exc_info=True)
+            return f"Error getting page: {str(e)}"
+    
+    def _run(self, *args, **kwargs):
+        """Sync execution not supported"""
+        raise NotImplementedError("Use async execution")
+
+
+class ConfluenceCreatePageTool(BaseTool):
+    """Tool for creating a new Confluence page"""
+    
+    name: str = "confluence_create_page"
+    description: str = "Create a new page in Confluence"
+    
+    access_token: str
+    cloud_id: str
+    
+    class Args(BaseModel):
+        title: str = Field(description="Page title")
+        space_key: str = Field(description="Space key")
+        content: str = Field(description="Page content (HTML format)")
+        parent_id: Optional[str] = Field(default=None, description="Parent page ID (optional)")
+    
+    args_schema = Args
+    
+    async def _arun(
+        self,
+        title: str,
+        space_key: str,
+        content: str,
+        parent_id: Optional[str] = None,
+        run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
+    ) -> str:
+        """Create Confluence page"""
+        try:
+            page_data = {
+                "type": "page",
+                "title": title,
+                "space": {"key": space_key},
+                "body": {
+                    "storage": {
+                        "value": content,
+                        "representation": "storage"
+                    }
+                }
+            }
+            
+            if parent_id:
+                page_data["ancestors"] = [{"id": parent_id}]
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"https://api.atlassian.com/ex/confluence/{self.cloud_id}/rest/api/content",
+                    json=page_data,
+                    headers={
+                        "Authorization": f"Bearer {self.access_token}",
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
+                    }
+                )
+                
+                if response.status_code in [200, 201]:
+                    page = response.json()
+                    return f"Successfully created page: {page['id']} - {title}"
+                else:
+                    return f"Error creating page: {response.status_code} - {response.text}"
+                    
+        except Exception as e:
+            logger.error("Failed to create Confluence page", error=str(e), exc_info=True)
+            return f"Error creating page: {str(e)}"
+    
+    def _run(self, *args, **kwargs):
+        """Sync execution not supported"""
+        raise NotImplementedError("Use async execution")
+
+
+class ConfluenceUpdatePageTool(BaseTool):
+    """Tool for updating an existing Confluence page"""
+    
+    name: str = "confluence_update_page"
+    description: str = "Update an existing Confluence page"
+    
+    access_token: str
+    cloud_id: str
+    
+    class Args(BaseModel):
+        page_id: str = Field(description="Page ID")
+        title: Optional[str] = Field(default=None, description="New title (optional)")
+        content: str = Field(description="New content")
+        version_comment: Optional[str] = Field(default=None, description="Version comment")
+    
+    args_schema = Args
+    
+    async def _arun(
+        self,
+        page_id: str,
+        content: str,
+        title: Optional[str] = None,
+        version_comment: Optional[str] = None,
+        run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
+    ) -> str:
+        """Update Confluence page"""
+        try:
+            # First get the current page to get version number
+            async with httpx.AsyncClient() as client:
+                get_response = await client.get(
+                    f"https://api.atlassian.com/ex/confluence/{self.cloud_id}/rest/api/content/{page_id}",
+                    params={"expand": "version"},
+                    headers={
+                        "Authorization": f"Bearer {self.access_token}",
+                        "Accept": "application/json"
+                    }
+                )
+                
+                if get_response.status_code != 200:
+                    return f"Error getting page: {get_response.status_code} - {get_response.text}"
+                
+                current_page = get_response.json()
+                current_version = current_page["version"]["number"]
+                
+                # Prepare update data
+                update_data = {
+                    "type": "page",
+                    "title": title or current_page["title"],
+                    "body": {
+                        "storage": {
+                            "value": content,
+                            "representation": "storage"
+                        }
+                    },
+                    "version": {
+                        "number": current_version + 1
+                    }
+                }
+                
+                if version_comment:
+                    update_data["version"]["message"] = version_comment
+                
+                # Update the page
+                update_response = await client.put(
+                    f"https://api.atlassian.com/ex/confluence/{self.cloud_id}/rest/api/content/{page_id}",
+                    json=update_data,
+                    headers={
+                        "Authorization": f"Bearer {self.access_token}",
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
+                    }
+                )
+                
+                if update_response.status_code in [200, 201]:
+                    return f"Successfully updated page: {page_id}"
+                else:
+                    return f"Error updating page: {update_response.status_code} - {update_response.text}"
+                    
+        except Exception as e:
+            logger.error("Failed to update Confluence page", error=str(e), exc_info=True)
+            return f"Error updating page: {str(e)}"
+    
+    def _run(self, *args, **kwargs):
+        """Sync execution not supported"""
+        raise NotImplementedError("Use async execution")
+
+
 async def get_atlassian_cloud_id(access_token: str) -> Optional[str]:
     """Get the Atlassian Cloud ID for the user's instance"""
     try:
@@ -237,10 +806,34 @@ async def get_atlassian_cloud_id(access_token: str) -> Optional[str]:
             if response.status_code == 200:
                 resources = response.json()
                 if resources and len(resources) > 0:
-                    # Return the first cloud ID
+                    # Log all resources for debugging
+                    for resource in resources:
+                        logger.info(
+                            "Atlassian resource found",
+                            cloud_id=resource.get("id"),
+                            site_name=resource.get("name"),
+                            site_url=resource.get("url"),
+                            scopes=resource.get("scopes", [])
+                        )
+                    
+                    # Return the first cloud ID that has Confluence scopes
+                    for resource in resources:
+                        scopes = resource.get("scopes", [])
+                        if any("confluence" in scope.lower() for scope in scopes):
+                            cloud_id = resource.get("id")
+                            logger.info(
+                                "Using Atlassian Cloud ID with Confluence access",
+                                cloud_id=cloud_id,
+                                site_name=resource.get("name"),
+                                site_url=resource.get("url"),
+                                confluence_scopes=[s for s in scopes if "confluence" in s.lower()]
+                            )
+                            return cloud_id
+                    
+                    # If no Confluence scopes found, return first resource (for Jira)
                     cloud_id = resources[0].get("id")
                     logger.info(
-                        "Got Atlassian Cloud ID",
+                        "Using Atlassian Cloud ID (no Confluence scopes found)",
                         cloud_id=cloud_id,
                         site_name=resources[0].get("name"),
                         site_url=resources[0].get("url")
@@ -300,16 +893,32 @@ async def create_atlassian_direct_tools(
     """Create Atlassian tools using direct REST API"""
     tools = []
     
-    # Get Cloud ID first
+    # Get Cloud ID and site info
     cloud_id = await get_atlassian_cloud_id(access_token)
     if not cloud_id:
         logger.error("Could not get Atlassian Cloud ID")
         return []
     
+    # For debugging - let's check what accessible-resources actually returns
+    logger.info(
+        "Creating Atlassian tools",
+        cloud_id=cloud_id,
+        tool_ids=tool_ids
+    )
+    
     # Create requested tools
     tool_map = {
+        # Jira tools
         "jira_search_issues": JiraSearchTool,
         "jira_create_issue": CreateJiraIssueTool,
+        "jira_get_issue": JiraGetIssueTool,
+        "jira_update_issue": JiraUpdateIssueTool,
+        "jira_add_comment": JiraAddCommentTool,
+        # Confluence tools
+        "confluence_search": ConfluenceSearchTool,
+        "confluence_get_page": ConfluenceGetPageTool,
+        "confluence_create_page": ConfluenceCreatePageTool,
+        "confluence_update_page": ConfluenceUpdatePageTool,
     }
     
     for tool_id in tool_ids:
