@@ -14,7 +14,9 @@ from agents.connectors.core.connector_manager import (
     set_connector_manager,
 )
 from agents.connectors.core.base_connector import OAuthConfig, OAuthVersion
+from agents.connectors.core.mcp_connector import MCPConfig
 from agents.connectors.providers.google.google_connector import GoogleConnector
+from agents.connectors.providers.atlassian.atlassian_connector import AtlassianConnector
 from agents.storage.redis_storage import RedisStorage
 from agents.tools.dynamic_tool_loader import DynamicToolLoader
 from langchain.tools import BaseTool
@@ -70,10 +72,78 @@ async def initialize_connectors(redis_storage: RedisStorage) -> ConnectorManager
             )
             
             google_connector = GoogleConnector(google_config, redis_storage)
-            manager.register_connector(google_connector)
+            manager.register_connector("google", google_connector)
             logger.info("Registered Google OAuth connector")
         else:
             logger.warning("Google OAuth credentials not configured")
+        
+        # Initialize Atlassian MCP connector
+        atlassian_mcp_server = os.getenv("ATLASSIAN_MCP_SERVER_URL")
+        atlassian_client_id = os.getenv("ATLASSIAN_CLIENT_ID")
+        atlassian_client_secret = os.getenv("ATLASSIAN_CLIENT_SECRET")
+        
+        if atlassian_mcp_server:
+            # Atlassian's MCP server doesn't fully implement OAuth discovery
+            # So we need either OAuth app credentials OR use a community server
+            
+            if atlassian_client_id and atlassian_client_secret:
+                # Option 1: Using official Atlassian MCP with OAuth app
+                atlassian_config = MCPConfig(
+                    provider_id="atlassian",
+                    mcp_server_url=atlassian_mcp_server,
+                    transport_type="sse",
+                    use_discovery=False,  # Atlassian doesn't support discovery
+                    redirect_uri=os.getenv("ATLASSIAN_OAUTH_REDIRECT_URI", "http://localhost:8000/connectors/atlassian/callback"),
+                    oauth_version=OAuthVersion.OAUTH2_0,
+                    use_pkce=True,
+                    client_id=atlassian_client_id,
+                    client_secret=atlassian_client_secret,
+                    authorize_url="https://auth.atlassian.com/authorize",
+                    token_url="https://auth.atlassian.com/oauth/token",
+                    scopes=["read:jira-work", "write:jira-work", "read:confluence-content.all", "write:confluence-content"]
+                )
+            else:
+                # Option 2: Community MCP server or other implementation
+                logger.warning(
+                    "Atlassian MCP server configured but no OAuth credentials provided.",
+                    help="Either provide ATLASSIAN_CLIENT_ID/SECRET or use a community MCP server"
+                )
+                # Still create connector for community servers that might not need OAuth
+                atlassian_config = MCPConfig(
+                    provider_id="atlassian",
+                    mcp_server_url=atlassian_mcp_server,
+                    transport_type="sse",
+                    use_discovery=True,  # Try discovery for community servers
+                    redirect_uri=os.getenv("ATLASSIAN_OAUTH_REDIRECT_URI", "http://localhost:8000/connectors/atlassian/callback"),
+                    oauth_version=OAuthVersion.OAUTH2_0,
+                    use_pkce=True,
+                    client_id="",
+                    client_secret="",
+                    authorize_url="",
+                    token_url="",
+                    scopes=[]
+                )
+            
+            atlassian_connector = AtlassianConnector(atlassian_config, redis_storage)
+            
+            # Discover OAuth metadata from the MCP server
+            try:
+                import asyncio
+                metadata = asyncio.run(atlassian_connector.discover_oauth_metadata())
+                logger.info(
+                    "Discovered Atlassian MCP OAuth metadata",
+                    metadata=metadata
+                )
+            except Exception as e:
+                logger.warning(
+                    "Could not discover Atlassian MCP metadata (will retry on first use)",
+                    error=str(e)
+                )
+            
+            manager.register_connector("atlassian", atlassian_connector)
+            logger.info("Registered Atlassian MCP connector", server_url=atlassian_mcp_server)
+        else:
+            logger.info("Atlassian MCP server URL not configured")
         
         # Set global connector manager
         set_connector_manager(manager)

@@ -167,6 +167,14 @@ async def init_oauth_flow(
         # Generate authorization URL
         auth_url, state = await connector.get_authorization_url(user_id)
         
+        # Log the full authorization URL for debugging
+        logger.info(
+            "Generated full authorization URL",
+            provider_id=provider_id,
+            auth_url=auth_url,
+            user_id=user_id
+        )
+        
         # Store redirect URI in state if provided
         if redirect_uri:
             # This would be stored in Redis with the state

@@ -39,10 +39,11 @@ class ConnectorManager:
         self._user_tool_cache: Dict[str, List[BaseTool]] = {}  # user_id:provider -> tools
         self._cache_ttl = 300  # 5 minutes
         self._cache_expiry: Dict[str, datetime] = {}
+        # User-specific custom MCP connectors
+        self._user_custom_connectors: Dict[str, Dict[str, BaseOAuthConnector]] = {}  # user_id -> {provider_id: connector}
     
-    def register_connector(self, connector: BaseOAuthConnector) -> None:
+    def register_connector(self, provider_id: str, connector: BaseOAuthConnector) -> None:
         """Register a connector at the system level"""
-        provider_id = connector.config.provider_id
         self.connectors[provider_id] = connector
         logger.info(
             "Registered connector",
@@ -58,6 +59,10 @@ class ConnectorManager:
         """
         result = []
         
+        # Load user's custom MCP connectors first
+        await self.load_user_custom_mcp_connectors(user_id)
+        
+        # Get all system connectors
         for provider_id, connector in self.connectors.items():
             # Get user-specific configuration
             config_key = f"user:{user_id}:connector:{provider_id}:config"
@@ -99,6 +104,61 @@ class ConnectorManager:
                 "enabled_tools_count": len(enabled_tools),
                 "total_tools_count": len(connector.metadata.available_tools)
             })
+        
+        # Add user-specific custom MCP connectors
+        if user_id in self._user_custom_connectors:
+            for provider_id, connector in self._user_custom_connectors[user_id].items():
+                # Get user-specific configuration
+                config_key = f"user:{user_id}:connector:{provider_id}:config"
+                config_data = await self.redis_storage.redis_client.get(config_key, user_id)
+                
+                if config_data:
+                    user_config = UserConnectorConfig(**json.loads(config_data))
+                else:
+                    user_config = UserConnectorConfig(
+                        user_id=user_id,
+                        provider_id=provider_id,
+                        enabled=False,
+                        enabled_tools=[]
+                    )
+                
+                # Get OAuth status
+                status = await connector.get_user_connector_status(user_id)
+                token = await connector.get_user_token(user_id)
+                
+                # For custom MCP, discover tools dynamically if connected
+                available_tools = []
+                if status == ConnectorStatus.CONNECTED and hasattr(connector, 'discover_tools'):
+                    try:
+                        discovered = await connector.discover_tools()
+                        available_tools = discovered
+                    except:
+                        pass  # Tools will be empty if discovery fails
+                
+                enabled_tools = user_config.enabled_tools if user_config.enabled else []
+                
+                result.append({
+                    "provider_id": provider_id,
+                    "name": connector.metadata.name,
+                    "description": connector.metadata.description,
+                    "icon_url": connector.metadata.icon_url,
+                    "status": status.value,
+                    "enabled": user_config.enabled,
+                    "is_custom_mcp": True,  # Flag to indicate this is a user-added MCP connector
+                    "requires_auth": status != ConnectorStatus.CONNECTED,
+                    "has_refresh_token": token.refresh_token is not None if token else False,
+                    "tools": [
+                        {
+                            "id": tool.id,
+                            "name": tool.name,
+                            "description": tool.description,
+                            "enabled": tool.id in user_config.enabled_tools
+                        }
+                        for tool in available_tools
+                    ],
+                    "enabled_tools_count": len(enabled_tools),
+                    "total_tools_count": len(available_tools)
+                })
         
         return result
     
@@ -357,6 +417,75 @@ class ConnectorManager:
         
         return results
     
+    async def load_user_custom_mcp_connectors(self, user_id: str) -> None:
+        """
+        Load user-specific custom MCP connectors from Redis.
+        
+        This is called when a user's tools are requested to ensure
+        their custom MCP connectors are available.
+        """
+        try:
+            # Get all custom MCP connectors for this user
+            pattern = f"user:{user_id}:custom_mcp:*"
+            keys = await self.redis_storage.redis_client.keys(pattern)
+            
+            if user_id not in self._user_custom_connectors:
+                self._user_custom_connectors[user_id] = {}
+            
+            for key in keys:
+                data = await self.redis_storage.redis_client.get(key)
+                if data:
+                    connector_data = json.loads(data)
+                    provider_id = connector_data["provider_id"]
+                    
+                    # Check if we already have this connector loaded
+                    if provider_id not in self._user_custom_connectors[user_id]:
+                        # Import here to avoid circular dependency
+                        from agents.connectors.providers.generic_mcp import create_generic_mcp_connector
+                        
+                        # Create the connector instance
+                        connector = create_generic_mcp_connector(
+                            name=connector_data["name"],
+                            description=connector_data.get("description", ""),
+                            mcp_server_url=connector_data["mcp_server_url"],
+                            oauth_config=connector_data["oauth_config"],
+                            redis_storage=self.redis_storage,
+                            icon_url=connector_data.get("icon_url"),
+                            user_id=user_id
+                        )
+                        
+                        # Store in user-specific connector map
+                        self._user_custom_connectors[user_id][provider_id] = connector
+                        
+                        logger.info(
+                            "Loaded custom MCP connector",
+                            user_id=user_id,
+                            provider_id=provider_id,
+                            name=connector_data["name"]
+                        )
+            
+        except Exception as e:
+            logger.error(
+                "Failed to load custom MCP connectors",
+                user_id=user_id,
+                error=str(e),
+                exc_info=True
+            )
+    
+    def get_connector_for_user(self, user_id: str, provider_id: str) -> Optional[BaseOAuthConnector]:
+        """
+        Get a connector for a specific user.
+        
+        Checks both system-level and user-specific connectors.
+        """
+        # First check user-specific custom connectors
+        if user_id in self._user_custom_connectors:
+            if provider_id in self._user_custom_connectors[user_id]:
+                return self._user_custom_connectors[user_id][provider_id]
+        
+        # Fall back to system-level connectors
+        return self.connectors.get(provider_id)
+    
     async def _create_langchain_tool(
         self,
         user_id: str,
@@ -369,7 +498,8 @@ class ConnectorManager:
         This is where connector tools are converted to agent-usable tools
         """
         try:
-            connector = self.connectors.get(provider_id)
+            # Get connector (user-specific or system-level)
+            connector = self.get_connector_for_user(user_id, provider_id)
             if not connector:
                 return None
             

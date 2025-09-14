@@ -8,6 +8,7 @@ from agents.api.middleware import LoggingMiddleware
 from agents.api.routers.agent import router as agent_router
 from agents.api.routers.chat import router as chat_router
 from agents.api.routers.connectors import router as connectors_router
+from agents.api.routers.dynamic_mcp import router as dynamic_mcp_router
 from agents.api.routers.export import router as export_router
 from agents.api.routers.files import router as files_router
 from agents.api.routers.share import router as share_router
@@ -165,6 +166,7 @@ app.include_router(user_router)
 app.include_router(agent_router)
 app.include_router(export_router)
 app.include_router(connectors_router)
+app.include_router(dynamic_mcp_router)
 
 
 @app.get("/health")

@@ -138,27 +138,44 @@ class UserOAuthToken:
     @classmethod
     def from_redis_dict(cls, data: Dict[str, Any]) -> "UserOAuthToken":
         """Deserialize token from Redis storage (decryption handled by SecureRedisService)"""
+        # Helper function to convert bytes to string if needed
+        def to_str(value: Any) -> Optional[str]:
+            if value is None:
+                return None
+            if isinstance(value, bytes):
+                return value.decode('utf-8')
+            return str(value) if value else None
+        
         # Helper function to parse datetime safely
         def parse_datetime(value: Any) -> Optional[datetime]:
-            if value and isinstance(value, str) and value.strip():
+            value_str = to_str(value)
+            if value_str and value_str.strip():
                 try:
-                    return datetime.fromisoformat(value)
+                    return datetime.fromisoformat(value_str)
                 except (ValueError, TypeError):
                     return None
             return None
         
+        # Convert all bytes to strings first
+        clean_data = {}
+        for key, value in data.items():
+            if isinstance(value, bytes):
+                clean_data[key] = value.decode('utf-8')
+            else:
+                clean_data[key] = value
+        
         return cls(
-            user_id=data["user_id"],
-            provider_id=data["provider_id"],
-            access_token=data["access_token"],
-            token_type=data.get("token_type", "Bearer"),
-            refresh_token=data.get("refresh_token") or None,
-            expires_at=parse_datetime(data.get("expires_at")),
-            scope=data.get("scope") or None,
-            id_token=data.get("id_token") or None,
-            additional_data=json.loads(data.get("additional_data", "{}")) if data.get("additional_data") else {},
-            last_refreshed=parse_datetime(data.get("last_refreshed")),
-            created_at=parse_datetime(data.get("created_at")) or datetime.utcnow()
+            user_id=to_str(clean_data["user_id"]),
+            provider_id=to_str(clean_data["provider_id"]),
+            access_token=to_str(clean_data["access_token"]),
+            token_type=to_str(clean_data.get("token_type")) or "Bearer",
+            refresh_token=to_str(clean_data.get("refresh_token")) or None,
+            expires_at=parse_datetime(clean_data.get("expires_at")),
+            scope=to_str(clean_data.get("scope")) or None,
+            id_token=to_str(clean_data.get("id_token")) or None,
+            additional_data=json.loads(clean_data.get("additional_data", "{}")) if clean_data.get("additional_data") else {},
+            last_refreshed=parse_datetime(clean_data.get("last_refreshed")),
+            created_at=parse_datetime(clean_data.get("created_at")) or datetime.utcnow()
         )
 
 
@@ -489,13 +506,17 @@ class BaseOAuthConnector(ABC):
     
     async def store_user_token(self, token: UserOAuthToken) -> None:
         """Store user token in Redis (encryption handled automatically)"""
-        token_key = f"user:{token.user_id}:connector:{token.provider_id}:token"
+        # Ensure user_id and provider_id are strings, not bytes
+        user_id = token.user_id.decode() if isinstance(token.user_id, bytes) else token.user_id
+        provider_id = token.provider_id.decode() if isinstance(token.provider_id, bytes) else token.provider_id
+        
+        token_key = f"user:{user_id}:connector:{provider_id}:token"
         token_data = token.to_redis_dict()
         
         logger.info(
             "Storing user token",
             token_key=token_key,
-            user_id=token.user_id,
+            user_id=user_id,
             has_refresh_token=bool(token.refresh_token),
             token_fields=list(token_data.keys())
         )
@@ -504,7 +525,7 @@ class BaseOAuthConnector(ABC):
         await self.redis_storage.redis_client.hset(
             token_key,
             token_data,
-            token.user_id
+            user_id
         )
         
         logger.info("Token stored successfully", token_key=token_key)
