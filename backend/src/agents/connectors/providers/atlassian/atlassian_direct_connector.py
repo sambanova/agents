@@ -503,22 +503,38 @@ class ConfluenceSearchTool(BaseTool):
                     
                     # Log the first result to understand structure
                     if results:
-                        logger.debug(
+                        logger.info(
                             "Confluence search result structure",
                             first_result_keys=list(results[0].keys()) if results else [],
-                            first_result_sample=str(results[0])[:500] if results else None
+                            first_result_sample=str(results[0])[:1000] if results else None,
+                            content_id=results[0].get("content", {}).get("id") if results[0].get("content") else results[0].get("id")
                         )
                     
                     # Format the results - handle different response structures
                     formatted_results = []
                     for item in results:
-                        # Different content types have different structures
+                        # Search API may return content wrapped in a "content" object
+                        # or directly as top-level fields
+                        content = item.get("content", item)
+                        
+                        # Extract the actual page ID - it might be nested
+                        page_id = content.get("id", "unknown")
+                        
+                        # Log the actual ID being extracted
+                        logger.info(
+                            "Extracting page info from search result",
+                            raw_id=item.get("id"),
+                            content_id=item.get("content", {}).get("id"),
+                            final_id=page_id,
+                            title=content.get("title", "Untitled")
+                        )
+                        
                         result_data = {
-                            "id": item.get("content", {}).get("id") or item.get("id", "unknown"),
-                            "title": item.get("title") or item.get("content", {}).get("title", "Untitled"),
-                            "type": item.get("content", {}).get("type") or item.get("type", "Unknown"),
-                            "space": item.get("space", {}).get("name") or item.get("content", {}).get("space", {}).get("name", "Unknown"),
-                            "url": item.get("url") or item.get("_links", {}).get("webui", "")
+                            "id": page_id,
+                            "title": content.get("title", "Untitled"),
+                            "type": content.get("type", "Unknown"),
+                            "space": item.get("space", {}).get("name") or content.get("space", {}).get("name", "Unknown"),
+                            "url": item.get("url") or item.get("_links", {}).get("webui", "") or content.get("_links", {}).get("webui", "")
                         }
                         formatted_results.append(result_data)
                     
@@ -576,14 +592,13 @@ class ConfluenceGetPageTool(BaseTool):
     ) -> str:
         """Get Confluence page content"""
         try:
-            if expand is None:
-                expand = ["body.storage", "version"]
-            
+            # Use v2 API - v1 /rest/api/content has been deprecated and returns 410 Gone
+            # v2 API uses /wiki/api/v2/pages/{id} format
             async with httpx.AsyncClient() as client:
                 response = await client.get(
-                    f"https://api.atlassian.com/ex/confluence/{self.cloud_id}/rest/api/content/{page_id}",
+                    f"https://api.atlassian.com/ex/confluence/{self.cloud_id}/wiki/api/v2/pages/{page_id}",
                     params={
-                        "expand": ",".join(expand)
+                        "body-format": "storage",  # Get the storage format for raw content
                     },
                     headers={
                         "Authorization": f"Bearer {self.access_token}",
@@ -591,23 +606,51 @@ class ConfluenceGetPageTool(BaseTool):
                     }
                 )
                 
+                logger.info(
+                    "Confluence v2 API get page response",
+                    status_code=response.status_code,
+                    page_id=page_id,
+                    cloud_id=self.cloud_id,
+                    url=f"https://api.atlassian.com/ex/confluence/{self.cloud_id}/wiki/api/v2/pages/{page_id}"
+                )
+                
                 if response.status_code == 200:
                     page = response.json()
                     
-                    # Extract relevant information
+                    # v2 API has different structure
+                    # Extract body content - v2 returns body in a different format
+                    body_content = ""
+                    if "body" in page:
+                        body = page["body"]
+                        if "storage" in body:
+                            body_content = body["storage"].get("value", "")
+                        elif "view" in body:
+                            body_content = body["view"].get("value", "")
+                    
+                    # Build result matching expected structure
                     result = {
-                        "id": page["id"],
+                        "id": page.get("id", page_id),
                         "title": page.get("title", "Untitled"),
-                        "type": page.get("type", "Unknown"),
-                        "space": page.get("space", {}).get("name", "Unknown"),
+                        "type": page.get("type", "page"),
+                        "space": page.get("spaceId", "Unknown"),  # v2 uses spaceId
                         "version": page.get("version", {}).get("number", 0),
-                        "content": page.get("body", {}).get("storage", {}).get("value", ""),
-                        "url": page.get("_links", {}).get("webui", "")
+                        "content": body_content,
+                        "url": page.get("_links", {}).get("webui", f"/wiki/spaces/{page.get('spaceId')}/pages/{page_id}")
                     }
                     
                     return json.dumps(result, indent=2)
                 elif response.status_code == 404:
                     return f"Page not found: {page_id}"
+                elif response.status_code == 401:
+                    logger.error(
+                        "Confluence authentication failed",
+                        status_code=response.status_code,
+                        response_text=response.text[:500],
+                        page_id=page_id
+                    )
+                    return "Authentication failed. The access token may be invalid or you don't have permission to view this page."
+                elif response.status_code == 403:
+                    return "Permission denied. You don't have access to view this page."
                 else:
                     return f"Error getting page: {response.status_code} - {response.text}"
                     

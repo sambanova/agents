@@ -316,6 +316,10 @@ class AtlassianConnector(MCPConnector):
             "write:jira-work",
             "read:jira-user",
             "read:confluence-content.all",
+            "read:confluence-content.summary",  # For content summary
+            "read:confluence-content.permission",  # For permission checks
+            "read:confluence-user",  # For user information
+            "read:page:confluence",  # REQUIRED for v2 API page operations
             "write:confluence-content",
             "read:confluence-space.summary",
             "search:confluence",  # REQUIRED for Confluence search API
