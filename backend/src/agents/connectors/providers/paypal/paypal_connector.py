@@ -187,18 +187,16 @@ class PayPalConnector(MCPConnector):
                 ),
             ],
             required_scopes=[
-                # Based on PayPal API documentation
-                "openid",  # Required minimum scope
-                "profile",
-                "email",
-                "https://uri.paypal.com/services/invoicing",  # For invoice operations
-                "https://uri.paypal.com/services/disputes/read",  # For dispute read
-                "https://uri.paypal.com/services/disputes/update",  # For dispute updates
+                # For "Log in with PayPal" (Connect with PayPal), only OpenID Connect scopes work
+                # API access (invoicing, disputes) is granted via app permissions, not OAuth scopes
+                "openid",  # Required for OpenID Connect
+                "profile",  # For user's full name  
+                "email",  # For user's email
+                "address",  # For user's address (you have this enabled in PayPal)
             ],
             optional_scopes=[
-                "address",
-                "phone",
-                "https://uri.paypal.com/payments/payouts",  # For payouts if needed
+                # These are additional OpenID Connect scopes
+                "phone",  # Phone number (if you enable it in the UI)
             ]
         )
     
