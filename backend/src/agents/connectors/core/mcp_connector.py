@@ -101,9 +101,18 @@ class MCPConnector(BaseOAuthConnector):
                 
                 for url in test_urls:
                     try:
-                        response = await client.get(url, headers=headers)
-                        if response.status_code in [200, 204]:
-                            return True
+                        # For PayPal SSE endpoint, just check if we can connect
+                        if self.mcp_config.provider_id == "paypal" and url == self.mcp_config.mcp_server_url:
+                            # SSE endpoint - just check if we can connect
+                            response = await client.get(url, headers=headers, timeout=2.0)
+                            if response.status_code == 200:
+                                logger.info("PayPal MCP SSE endpoint accessible", user_id=user_id)
+                                return True
+                        else:
+                            # Regular endpoints - check for capabilities
+                            response = await client.get(url, headers=headers, timeout=5.0)
+                            if response.status_code in [200, 204]:
+                                return True
                         # If we get 401, token might be invalid
                         if response.status_code == 401:
                             logger.warning(

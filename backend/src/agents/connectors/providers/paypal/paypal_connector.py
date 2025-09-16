@@ -55,11 +55,11 @@ class PayPalConnector(MCPConnector):
             # Different URLs for different parts of OAuth flow
             oauth_authorize_url = "https://www.sandbox.paypal.com/connect"  # User authorization
             oauth_token_url = "https://api-m.sandbox.paypal.com/v1/oauth2/token"  # Token exchange
-            mcp_url = "https://mcp.sandbox.paypal.com/mcp"
+            mcp_url = "https://mcp.sandbox.paypal.com/sse"  # MCP server SSE endpoint
         else:
             oauth_authorize_url = "https://www.paypal.com/connect"  # User authorization
             oauth_token_url = "https://api-m.paypal.com/v1/oauth2/token"  # Token exchange
-            mcp_url = "https://mcp.paypal.com/mcp"
+            mcp_url = "https://mcp.paypal.com/sse"  # MCP server SSE endpoint
         
         # OAuth configuration for PayPal
         # Uses "Connect with PayPal" for multi-user authorization
@@ -248,15 +248,14 @@ class PayPalConnector(MCPConnector):
         
         PayPal uses standard OAuth 2.0 flow without PKCE.
         """
-        import aioredis
-        
         # Get state from Redis to validate
-        plain_redis = await aioredis.from_url(
-            self.redis_storage.redis_client.connection_url,
+        from redis.asyncio import Redis
+        plain_redis = Redis(
+            connection_pool=self.redis_storage.redis_client.connection_pool,
             decode_responses=True
         )
         
-        state_key = f"oauth_state:{self.mcp_config.provider_id}:{state}"
+        state_key = f"oauth:state:{state}"
         state_json = await plain_redis.get(state_key)
         
         if not state_json:
@@ -276,6 +275,9 @@ class PayPalConnector(MCPConnector):
             )
             raise ValueError("State does not match user")
         
+        # Get PKCE code_verifier from state data
+        code_verifier = state_data.get("code_verifier")
+        
         # Delete state from Redis
         await plain_redis.delete(state_key)
         await plain_redis.close()
@@ -289,11 +291,16 @@ class PayPalConnector(MCPConnector):
             "redirect_uri": self.mcp_config.redirect_uri
         }
         
+        # Add PKCE code_verifier if present (required for PayPal)
+        if code_verifier:
+            token_params["code_verifier"] = code_verifier
+        
         logger.info(
             "Exchanging code for PayPal token",
             user_id=user_id,
             redirect_uri=self.mcp_config.redirect_uri,
-            is_sandbox=self.is_sandbox
+            is_sandbox=self.is_sandbox,
+            has_code_verifier=bool(code_verifier)
         )
         
         async with httpx.AsyncClient() as client:
