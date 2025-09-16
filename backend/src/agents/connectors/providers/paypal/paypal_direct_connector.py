@@ -501,13 +501,35 @@ class ListInvoicesTool(PayPalDirectTool):
         if not invoices:
             return "No invoices found."
         
-        output = f"Found {len(invoices)} invoices:\n"
+        output = f"Found {len(invoices)} invoices:\n\n"
         for invoice in invoices:
             detail = invoice.get("detail", {})
             amount = invoice.get("amount", {})
-            output += f"- Invoice #{invoice.get('invoice_number', 'N/A')} "
-            output += f"(ID: {invoice['id']}, Status: {invoice.get('status', 'N/A')}, "
-            output += f"Amount: {amount.get('currency_code', '')} {amount.get('value', '0')})\n"
+            
+            # Extract recipient info if available
+            primary_recipients = invoice.get("primary_recipients", [])
+            recipient_name = "N/A"
+            recipient_email = "N/A"
+            if primary_recipients:
+                recipient = primary_recipients[0]
+                billing_info = recipient.get("billing_info", {})
+                recipient_email = billing_info.get("email_address", "N/A")
+                name_info = billing_info.get("name", {})
+                if name_info.get("full_name"):
+                    recipient_name = name_info["full_name"]
+                elif name_info.get("given_name") or name_info.get("surname"):
+                    recipient_name = f"{name_info.get('given_name', '')} {name_info.get('surname', '')}".strip()
+            
+            output += f"Invoice #{invoice.get('invoice_number', 'N/A')}\n"
+            output += f"  - ID: {invoice['id']}\n"
+            output += f"  - Status: {invoice.get('status', 'N/A')}\n"
+            output += f"  - Amount: {amount.get('currency_code', 'USD')} {amount.get('value', '0.00')}\n"
+            output += f"  - Recipient: {recipient_name} ({recipient_email})\n"
+            output += f"  - Invoice Date: {detail.get('invoice_date', 'N/A')}\n"
+            output += f"  - Due Date: {detail.get('payment_term', {}).get('due_date', 'N/A')}\n"
+            
+            # Note that items are not included in list view
+            output += f"  - Items: (Use 'get_invoice' with ID for full item details)\n\n"
         
         return output
     
