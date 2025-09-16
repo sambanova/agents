@@ -359,15 +359,46 @@ class ConnectorManager:
                 # Get enabled tools for this connector
                 enabled_tools = await connector.get_user_enabled_tools(user_id)
                 
-                # Convert to LangChain tools
-                for tool in enabled_tools:
-                    langchain_tool = await self._create_langchain_tool(
-                        user_id,
-                        provider_id,
-                        tool
-                    )
-                    if langchain_tool:
-                        all_tools.append(langchain_tool)
+                # Check if connector supports batch LangChain tool creation
+                if hasattr(connector, 'create_langchain_tools') and enabled_tools:
+                    # Batch create all tools at once for efficiency
+                    tool_ids = [tool.id for tool in enabled_tools]
+                    try:
+                        langchain_tools = await connector.create_langchain_tools(user_id, tool_ids)
+                        if langchain_tools:
+                            all_tools.extend(langchain_tools)
+                            logger.info(
+                                "Batch created LangChain tools",
+                                user_id=user_id,
+                                provider=provider_id,
+                                count=len(langchain_tools)
+                            )
+                    except Exception as e:
+                        logger.error(
+                            "Failed to batch create LangChain tools",
+                            user_id=user_id,
+                            provider=provider_id,
+                            error=str(e)
+                        )
+                        # Fall back to individual creation
+                        for tool in enabled_tools:
+                            langchain_tool = await self._create_langchain_tool(
+                                user_id,
+                                provider_id,
+                                tool
+                            )
+                            if langchain_tool:
+                                all_tools.append(langchain_tool)
+                else:
+                    # Convert to LangChain tools individually
+                    for tool in enabled_tools:
+                        langchain_tool = await self._create_langchain_tool(
+                            user_id,
+                            provider_id,
+                            tool
+                        )
+                        if langchain_tool:
+                            all_tools.append(langchain_tool)
                 
             except Exception as e:
                 logger.error(

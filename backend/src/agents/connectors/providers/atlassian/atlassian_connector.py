@@ -548,12 +548,14 @@ class AtlassianConnector(MCPConnector):
         
         Uses predefined tool wrappers for better type safety.
         """
+        # The base class get_user_token with auto_refresh=True already handles 
+        # token refresh if needed (checks needs_refresh property)
         token = await self.get_user_token(user_id, auto_refresh=True)
         if not token:
             logger.warning("No token found for user", user_id=user_id)
             return []
         
-        # Check if token is expired
+        # Check if token is expired and no refresh token available
         if token.is_expired and not token.refresh_token:
             logger.error(
                 "Token expired and no refresh token available",
@@ -570,51 +572,6 @@ class AtlassianConnector(MCPConnector):
             token_expired=token.is_expired if token else None,
             has_refresh_token=bool(token.refresh_token) if token else None
         )
-        
-        # Check if we should try to refresh the token
-        # Don't auto-refresh if we know the refresh token is invalid
-        should_refresh = (
-            token.refresh_token and 
-            not (token.additional_data and token.additional_data.get("refresh_invalid"))
-        )
-        
-        # Also check if we've already tried to refresh in this session
-        if should_refresh and token.additional_data:
-            # Check if we've marked this as needing re-auth
-            if token.additional_data.get("needs_reauth"):
-                logger.warning(
-                    "Token needs re-authentication, skipping refresh",
-                    user_id=user_id
-                )
-                should_refresh = False
-        
-        if should_refresh:
-            logger.info("Attempting to refresh Atlassian token", user_id=user_id)
-            try:
-                token = await self.refresh_user_token(user_id)
-                logger.info("Successfully refreshed Atlassian token", user_id=user_id)
-            except Exception as e:
-                error_str = str(e)
-                logger.error(
-                    "Failed to refresh Atlassian token",
-                    user_id=user_id,
-                    error=error_str
-                )
-                
-                # If refresh token is invalid, mark it so we don't keep trying
-                if "refresh_token is invalid" in error_str or "unauthorized_client" in error_str:
-                    logger.warning(
-                        "Refresh token is invalid - user needs to re-authenticate",
-                        user_id=user_id
-                    )
-                    # Mark the token as having an invalid refresh token
-                    if token.additional_data is None:
-                        token.additional_data = {}
-                    token.additional_data["refresh_invalid"] = True
-                    await self.store_user_token(token)
-                    
-                # Continue with existing token if refresh fails
-                pass
         
         # Import the direct API implementation
         from .atlassian_direct_connector import create_atlassian_direct_tools
