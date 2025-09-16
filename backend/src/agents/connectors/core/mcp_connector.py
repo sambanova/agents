@@ -101,10 +101,23 @@ class MCPConnector(BaseOAuthConnector):
                 
                 for url in test_urls:
                     try:
+                        logger.debug(
+                            "Testing MCP endpoint",
+                            provider=self.mcp_config.provider_id,
+                            url=url,
+                            is_base_url=(url == self.mcp_config.mcp_server_url)
+                        )
+                        
                         # For PayPal SSE endpoint, just check if we can connect
                         if self.mcp_config.provider_id == "paypal" and url == self.mcp_config.mcp_server_url:
                             # SSE endpoint - just check if we can connect
-                            response = await client.get(url, headers=headers, timeout=2.0)
+                            response = await client.get(url, headers=headers, timeout=3.0)
+                            logger.info(
+                                "PayPal MCP SSE endpoint test result",
+                                user_id=user_id,
+                                status_code=response.status_code,
+                                url=url
+                            )
                             if response.status_code == 200:
                                 logger.info("PayPal MCP SSE endpoint accessible", user_id=user_id)
                                 return True
@@ -120,7 +133,13 @@ class MCPConnector(BaseOAuthConnector):
                                 user_id=user_id,
                                 url=url
                             )
-                    except:
+                    except Exception as e:
+                        logger.debug(
+                            "MCP endpoint test failed",
+                            provider=self.mcp_config.provider_id,
+                            url=url,
+                            error=str(e)
+                        )
                         continue
                 
                 return False

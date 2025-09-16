@@ -447,6 +447,158 @@ class PayPalConnector(MCPConnector):
         
         return new_token
     
+    async def get_user_tools(self, user_id: str) -> List[ConnectorTool]:
+        """
+        Get available PayPal tools for a user.
+        
+        PayPal's MCP server uses SSE and doesn't have a standard capabilities endpoint,
+        so we return the predefined tools directly rather than querying the server.
+        """
+        # Check if user has a valid token
+        token = await self.get_user_token(user_id, auto_refresh=True)
+        if not token:
+            logger.warning(f"No token found for PayPal user {user_id}")
+            return []
+        
+        logger.info(
+            "Returning predefined PayPal tools",
+            user_id=user_id,
+            tool_count=len(self.metadata.available_tools)
+        )
+        
+        # Return all available tools - PayPal's SSE server handles them
+        return self.metadata.available_tools
+    
+    async def test_mcp_connection(self, user_id: str) -> bool:
+        """
+        Test MCP connection for PayPal.
+        
+        PayPal's SSE endpoint doesn't have a capabilities endpoint,
+        but we can test the SSE connection directly.
+        """
+        token = await self.get_user_token(user_id, auto_refresh=True)
+        if not token:
+            return False
+        
+        import httpx
+        
+        headers = {
+            "Authorization": f"Bearer {token.access_token}",
+            "Accept": "text/event-stream",
+            "Cache-Control": "no-cache"
+        }
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                # Test SSE connection with a short timeout
+                response = await client.get(
+                    self.mcp_config.mcp_server_url,
+                    headers=headers,
+                    timeout=httpx.Timeout(5.0)
+                )
+                
+                # For SSE, 200 OK means connection is good
+                if response.status_code == 200:
+                    logger.info(
+                        "PayPal MCP SSE connection successful",
+                        user_id=user_id,
+                        url=self.mcp_config.mcp_server_url
+                    )
+                    return True
+                else:
+                    logger.warning(
+                        "PayPal MCP SSE connection failed",
+                        user_id=user_id,
+                        status_code=response.status_code
+                    )
+                    return False
+        except Exception as e:
+            logger.error(
+                "PayPal MCP SSE connection error",
+                user_id=user_id,
+                error=str(e)
+            )
+            return False
+    
+    async def create_langchain_tools(
+        self,
+        user_id: str,
+        tool_ids: Optional[List[str]] = None
+    ) -> List[BaseTool]:
+        """
+        Create LangChain tools for PayPal.
+        
+        This uses the direct API implementation instead of MCP,
+        as PayPal's MCP server is designed for subprocess/proxy usage.
+        """
+        # Use the direct connector for tool creation
+        from agents.connectors.providers.paypal.paypal_direct_connector import PayPalDirectConnector
+        
+        # Create a direct connector instance with same config
+        direct_connector = PayPalDirectConnector(self.redis_storage)
+        direct_connector.oauth_config = self.oauth_config
+        direct_connector.mcp_config = self.mcp_config
+        direct_connector.is_sandbox = self.is_sandbox
+        
+        # Use the direct connector to create tools
+        return await direct_connector.create_langchain_tools(user_id, tool_ids)
+    
+    async def execute_mcp_tool(
+        self,
+        user_id: str,
+        tool_name: str,
+        arguments: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Execute a PayPal tool.
+        
+        This method is kept for compatibility but delegates to direct API.
+        PayPal's MCP server is designed for subprocess/proxy usage,
+        so we use direct API calls instead.
+        """
+        # Use the direct API implementation
+        from agents.connectors.providers.paypal.paypal_direct_connector import PayPalDirectConnector
+        
+        # Create a direct connector instance
+        direct_connector = PayPalDirectConnector(self.redis_storage)
+        direct_connector.oauth_config = self.oauth_config
+        direct_connector.mcp_config = self.mcp_config
+        direct_connector.is_sandbox = self.is_sandbox
+        
+        # Get the tool class and execute it
+        tool_class = direct_connector._get_tool_class(tool_name)
+        if not tool_class:
+            return {
+                "success": False,
+                "error": f"Unknown tool: {tool_name}"
+            }
+        
+        # Create and execute the tool
+        try:
+            tool_instance = tool_class(
+                connector=direct_connector,
+                user_id=user_id
+            )
+            
+            # Execute the tool with the provided arguments
+            result = await tool_instance._arun(**arguments)
+            
+            return {
+                "success": True,
+                "result": result
+            }
+        except Exception as e:
+            logger.error(
+                "PayPal tool execution failed",
+                user_id=user_id,
+                tool_name=tool_name,
+                error=str(e)
+            )
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
     async def get_user_info(self, user_id: str) -> Dict[str, Any]:
         """
         Get PayPal user information.
