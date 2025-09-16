@@ -59,6 +59,15 @@ class PayPalDirectConnector(PayPalConnector):
         if not token:
             return {"error": "No valid token found for user"}
         
+        # Debug log the token scopes
+        logger.info(
+            "PayPal API request with token",
+            method=method,
+            endpoint=endpoint,
+            token_scope=token.scope,
+            has_token=bool(token.access_token)
+        )
+        
         # Build full URL
         url = f"{self.api_base_url}{endpoint}"
         
