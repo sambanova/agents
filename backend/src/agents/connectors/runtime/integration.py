@@ -17,6 +17,7 @@ from agents.connectors.core.base_connector import OAuthConfig, OAuthVersion
 from agents.connectors.core.mcp_connector import MCPConfig
 from agents.connectors.providers.google.google_connector import GoogleConnector
 from agents.connectors.providers.atlassian.atlassian_connector import AtlassianConnector
+from agents.connectors.providers.paypal.paypal_connector import PayPalConnector
 from agents.storage.redis_storage import RedisStorage
 from agents.tools.dynamic_tool_loader import DynamicToolLoader
 from langchain.tools import BaseTool
@@ -144,6 +145,36 @@ async def initialize_connectors(redis_storage: RedisStorage) -> ConnectorManager
             logger.info("Registered Atlassian MCP connector", server_url=atlassian_mcp_server)
         else:
             logger.info("Atlassian MCP server URL not configured")
+        
+        # Initialize PayPal connector
+        paypal_client_id = os.getenv("PAYPAL_CLIENT_ID")
+        paypal_client_secret = os.getenv("PAYPAL_CLIENT_SECRET")
+        
+        logger.info(
+            "Checking PayPal OAuth credentials",
+            has_client_id=bool(paypal_client_id),
+            has_client_secret=bool(paypal_client_secret)
+        )
+        
+        if paypal_client_id and paypal_client_secret:
+            # Initialize PayPal connector (uses sandbox by default)
+            paypal_connector = PayPalConnector(redis_storage)
+            
+            # Initialize with OAuth credentials
+            await paypal_connector.initialize(
+                client_id=paypal_client_id,
+                client_secret=paypal_client_secret,
+                redirect_uri=os.getenv("PAYPAL_OAUTH_REDIRECT_URI", "http://localhost:8000/api/connectors/paypal/callback")
+            )
+            
+            manager.register_connector("paypal", paypal_connector)
+            logger.info(
+                "Registered PayPal connector",
+                is_sandbox=True,  # Always using sandbox for testing
+                mcp_url="https://mcp.sandbox.paypal.com/mcp"
+            )
+        else:
+            logger.info("PayPal OAuth credentials not configured")
         
         # Set global connector manager
         set_connector_manager(manager)

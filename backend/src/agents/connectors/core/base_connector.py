@@ -387,6 +387,17 @@ class BaseOAuthConnector(ABC):
         
         logger.info("OAuth state stored successfully", state_key=state_key)
         
+        # DEBUG: Log OAuth configuration details
+        logger.info(
+            "DEBUG: OAuth configuration for authorization",
+            provider=self.config.provider_id,
+            authorize_url=self.config.authorize_url,
+            redirect_uri=self.config.redirect_uri,
+            client_id=self.config.client_id[:20] + "..." if self.config.client_id else None,
+            scopes=self.config.scopes,
+            use_pkce=self.config.use_pkce
+        )
+        
         # Build authorization URL
         auth_url, _ = client.create_authorization_url(
             self.config.authorize_url,
@@ -394,6 +405,13 @@ class BaseOAuthConnector(ABC):
             code_challenge=code_challenge,
             code_challenge_method="S256" if code_challenge else None,
             **kwargs
+        )
+        
+        # DEBUG: Log the complete authorization URL
+        logger.info(
+            "DEBUG: Full authorization URL generated",
+            full_url=auth_url,
+            provider=self.config.provider_id
         )
         
         logger.info(
