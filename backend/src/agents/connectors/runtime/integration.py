@@ -18,6 +18,7 @@ from agents.connectors.core.mcp_connector import MCPConfig
 from agents.connectors.providers.google.google_connector import GoogleConnector
 from agents.connectors.providers.atlassian.atlassian_connector import AtlassianConnector
 from agents.connectors.providers.paypal.paypal_connector import PayPalConnector
+from agents.connectors.providers.notion.notion_connector import NotionConnector
 from agents.storage.redis_storage import RedisStorage
 from agents.tools.dynamic_tool_loader import DynamicToolLoader
 from langchain.tools import BaseTool
@@ -175,6 +176,38 @@ async def initialize_connectors(redis_storage: RedisStorage) -> ConnectorManager
             )
         else:
             logger.info("PayPal OAuth credentials not configured")
+        
+        # Initialize Notion connector
+        notion_client_id = os.getenv("NOTION_CLIENT_ID")
+        notion_client_secret = os.getenv("NOTION_CLIENT_SECRET")
+        
+        logger.info(
+            "Checking Notion OAuth credentials",
+            has_client_id=bool(notion_client_id),
+            has_client_secret=bool(notion_client_secret)
+        )
+        
+        if notion_client_id and notion_client_secret:
+            notion_config = OAuthConfig(
+                provider_id="notion",
+                client_id=notion_client_id,
+                client_secret=notion_client_secret,
+                authorize_url="https://api.notion.com/v1/oauth/authorize",
+                token_url="https://api.notion.com/v1/oauth/token",
+                redirect_uri=os.getenv("NOTION_OAUTH_REDIRECT_URI", "http://localhost:8000/api/connectors/notion/callback"),
+                scopes=[],  # Notion doesn't use scopes in the traditional OAuth sense
+                oauth_version=OAuthVersion.OAUTH2_0,
+                use_pkce=False,  # Notion doesn't require PKCE
+                additional_params={
+                    "owner": "user"  # Request access to user's resources
+                }
+            )
+            
+            notion_connector = NotionConnector(notion_config, redis_storage)
+            manager.register_connector("notion", notion_connector)
+            logger.info("Registered Notion OAuth connector")
+        else:
+            logger.info("Notion OAuth credentials not configured")
         
         # Set global connector manager
         set_connector_manager(manager)

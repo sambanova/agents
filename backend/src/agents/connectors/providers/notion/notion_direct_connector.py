@@ -1,0 +1,686 @@
+"""
+Notion Direct API Tools Implementation
+
+This module implements direct REST API calls to Notion without using MCP,
+providing reliable multi-user support through OAuth tokens.
+"""
+
+import json
+from typing import Any, Dict, List, Optional, Type
+from datetime import datetime
+
+import aiohttp
+import structlog
+from langchain.tools import BaseTool
+from pydantic import BaseModel, Field
+
+# No need for additional imports - token storage handled by main connector
+
+logger = structlog.get_logger(__name__)
+
+NOTION_API_VERSION = "2022-06-28"
+
+
+# Input schemas for each tool
+class SearchInput(BaseModel):
+    """Input for searching Notion."""
+    query: str = Field(description="Search query")
+    filter: Optional[str] = Field(None, description="Filter by object type: 'page' or 'database'")
+
+
+class QueryDatabaseInput(BaseModel):
+    """Input for querying a database."""
+    database_id: str = Field(description="Database ID to query")
+    filter: Optional[Dict[str, Any]] = Field(None, description="Filter conditions in Notion format")
+    sorts: Optional[List[Dict[str, Any]]] = Field(None, description="Sort conditions")
+    page_size: Optional[int] = Field(10, description="Number of results (max 100)")
+
+
+class CreatePageInput(BaseModel):
+    """Input for creating a page."""
+    parent_type: str = Field(description="Type of parent: 'database_id' or 'page_id'")
+    parent_id: str = Field(description="ID of the parent database or page")
+    title: str = Field(description="Page title")
+    properties: Optional[Dict[str, Any]] = Field(None, description="Database properties if parent is database")
+    content: Optional[List[Dict[str, Any]]] = Field(None, description="Initial page content blocks")
+
+
+class GetPageInput(BaseModel):
+    """Input for getting a page."""
+    page_id: str = Field(description="Page ID")
+
+
+class UpdatePageInput(BaseModel):
+    """Input for updating a page."""
+    page_id: str = Field(description="Page ID to update")
+    properties: Optional[Dict[str, Any]] = Field(None, description="Properties to update")
+    archived: Optional[bool] = Field(None, description="Whether to archive the page")
+
+
+class GetBlocksInput(BaseModel):
+    """Input for getting page blocks."""
+    page_id: str = Field(description="Page ID")
+
+
+class AppendBlocksInput(BaseModel):
+    """Input for appending blocks."""
+    page_id: str = Field(description="Page ID to append to")
+    children: List[Dict[str, Any]] = Field(description="Array of block objects to append")
+
+
+class CreateDatabaseInput(BaseModel):
+    """Input for creating a database."""
+    parent_type: str = Field(description="Type of parent: 'page_id' or 'workspace'")
+    parent_id: Optional[str] = Field(None, description="Parent page ID (if not workspace)")
+    title: str = Field(description="Database title")
+    properties: Dict[str, Any] = Field(description="Database schema properties")
+
+
+class NotionDirectConnector:
+    """
+    Direct API implementation for Notion.
+    """
+    
+    def __init__(self, redis_storage):
+        """Initialize the direct connector."""
+        self.redis_storage = redis_storage
+        self.config = None  # Will be set by the main connector
+        self.parent_connector = None  # Will be set by the main connector
+        self.api_base_url = "https://api.notion.com/v1"
+    
+    async def get_user_token(self, user_id: str, auto_refresh: bool = True):
+        """Get user token through parent connector."""
+        if self.parent_connector:
+            return await self.parent_connector.get_user_token(user_id, auto_refresh)
+        return None
+    
+    async def _make_api_request(
+        self,
+        method: str,
+        endpoint: str,
+        user_id: str,
+        data: Optional[Dict[str, Any]] = None,
+        params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Make an authenticated API request to Notion.
+        
+        Args:
+            method: HTTP method
+            endpoint: API endpoint (without base URL)
+            user_id: User ID for token retrieval
+            data: Request body data
+            params: Query parameters
+            
+        Returns:
+            API response as dictionary
+        """
+        try:
+            # Get user token
+            token = await self.get_user_token(user_id, auto_refresh=False)
+            if not token:
+                return {"error": "No authentication found. Please connect your Notion account."}
+            
+            # Prepare request
+            url = f"{self.api_base_url}{endpoint}"
+            headers = {
+                "Authorization": f"Bearer {token.access_token}",
+                "Notion-Version": NOTION_API_VERSION,
+                "Content-Type": "application/json"
+            }
+            
+            # Make request
+            async with aiohttp.ClientSession() as session:
+                async with session.request(
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    json=data,
+                    params=params
+                ) as response:
+                    response_text = await response.text()
+                    
+                    if response.status == 200:
+                        return json.loads(response_text) if response_text else {}
+                    else:
+                        logger.error(
+                            "Notion API request failed",
+                            status=response.status,
+                            endpoint=endpoint,
+                            response=response_text
+                        )
+                        return {"error": f"API request failed: {response_text}"}
+                        
+        except Exception as e:
+            logger.error(
+                "Failed to make Notion API request",
+                endpoint=endpoint,
+                error=str(e),
+                exc_info=True
+            )
+            return {"error": str(e)}
+    
+    async def create_langchain_tools(self, user_id: str, tool_ids: Optional[List[str]] = None) -> List[BaseTool]:
+        """
+        Create LangChain tools for Notion.
+        
+        Args:
+            user_id: User ID
+            tool_ids: Optional list of tool IDs to create (None = all tools)
+            
+        Returns:
+            List of LangChain tools
+        """
+        tools = []
+        
+        # Map of tool ID to tool class
+        tool_map = {
+            "notion_search": SearchTool,
+            "notion_list_databases": ListDatabasesTool,
+            "notion_query_database": QueryDatabaseTool,
+            "notion_create_page": CreatePageTool,
+            "notion_get_page": GetPageTool,
+            "notion_update_page": UpdatePageTool,
+            "notion_get_blocks": GetBlocksTool,
+            "notion_append_blocks": AppendBlocksTool,
+            "notion_create_database": CreateDatabaseTool
+        }
+        
+        # Filter tools if specific IDs provided
+        if tool_ids:
+            tool_map = {k: v for k, v in tool_map.items() if k in tool_ids}
+        
+        # Create tool instances
+        for tool_id, tool_class in tool_map.items():
+            tool = tool_class(connector=self, user_id=user_id)
+            tools.append(tool)
+        
+        logger.info(
+            "Created Notion tools",
+            user_id=user_id,
+            num_tools=len(tools),
+            tool_ids=list(tool_map.keys())
+        )
+        
+        return tools
+
+
+# Base class for Notion tools
+class NotionDirectTool(BaseTool):
+    """Base class for Notion direct API tools."""
+    connector: NotionDirectConnector
+    user_id: str
+    
+    class Config:
+        arbitrary_types_allowed = True
+
+
+# Tool implementations
+class SearchTool(NotionDirectTool):
+    """Search across Notion workspace."""
+    name: str = "notion_search"
+    description: str = "Search across all pages and databases in your Notion workspace"
+    args_schema: Type[BaseModel] = SearchInput
+    
+    async def _arun(self, **kwargs) -> str:
+        """Search Notion."""
+        data = {
+            "query": kwargs["query"]
+        }
+        
+        if kwargs.get("filter"):
+            data["filter"] = {"value": kwargs["filter"], "property": "object"}
+        
+        result = await self.connector._make_api_request(
+            method="POST",
+            endpoint="/search",
+            user_id=self.user_id,
+            data=data
+        )
+        
+        if "error" in result:
+            return f"Error searching: {result['error']}"
+        
+        results = result.get("results", [])
+        if not results:
+            return "No results found."
+        
+        output = f"Found {len(results)} results:\n\n"
+        for item in results:
+            obj_type = item.get("object", "unknown")
+            title = "Untitled"
+            
+            if obj_type == "page":
+                # Get page title
+                props = item.get("properties", {})
+                for prop in props.values():
+                    if prop.get("type") == "title" and prop.get("title"):
+                        title_parts = prop["title"]
+                        if title_parts:
+                            title = title_parts[0].get("plain_text", "Untitled")
+                        break
+            elif obj_type == "database":
+                # Get database title
+                title_parts = item.get("title", [])
+                if title_parts:
+                    title = title_parts[0].get("plain_text", "Untitled")
+            
+            output += f"- {obj_type.capitalize()}: {title}\n"
+            output += f"  ID: {item.get('id', 'N/A')}\n"
+            output += f"  URL: {item.get('url', 'N/A')}\n\n"
+        
+        return output
+    
+    def _run(self, **kwargs) -> str:
+        """Sync version."""
+        import asyncio
+        return asyncio.run(self._arun(**kwargs))
+
+
+class ListDatabasesTool(NotionDirectTool):
+    """List all databases."""
+    name: str = "notion_list_databases"
+    description: str = "List all databases in your Notion workspace"
+    args_schema: Type[BaseModel] = BaseModel
+    
+    async def _arun(self, **kwargs) -> str:
+        """List databases."""
+        result = await self.connector._make_api_request(
+            method="POST",
+            endpoint="/search",
+            user_id=self.user_id,
+            data={"filter": {"value": "database", "property": "object"}}
+        )
+        
+        if "error" in result:
+            return f"Error listing databases: {result['error']}"
+        
+        databases = result.get("results", [])
+        if not databases:
+            return "No databases found."
+        
+        output = f"Found {len(databases)} databases:\n\n"
+        for db in databases:
+            title_parts = db.get("title", [])
+            title = "Untitled"
+            if title_parts:
+                title = title_parts[0].get("plain_text", "Untitled")
+            
+            output += f"- {title}\n"
+            output += f"  ID: {db.get('id', 'N/A')}\n"
+            output += f"  URL: {db.get('url', 'N/A')}\n"
+            output += f"  Created: {db.get('created_time', 'N/A')}\n\n"
+        
+        return output
+    
+    def _run(self, **kwargs) -> str:
+        """Sync version."""
+        import asyncio
+        return asyncio.run(self._arun(**kwargs))
+
+
+class QueryDatabaseTool(NotionDirectTool):
+    """Query a database."""
+    name: str = "notion_query_database"
+    description: str = "Query a Notion database with filters and sorts"
+    args_schema: Type[BaseModel] = QueryDatabaseInput
+    
+    async def _arun(self, **kwargs) -> str:
+        """Query database."""
+        data = {
+            "page_size": min(kwargs.get("page_size", 10), 100)
+        }
+        
+        if kwargs.get("filter"):
+            data["filter"] = kwargs["filter"]
+        
+        if kwargs.get("sorts"):
+            data["sorts"] = kwargs["sorts"]
+        
+        result = await self.connector._make_api_request(
+            method="POST",
+            endpoint=f"/databases/{kwargs['database_id']}/query",
+            user_id=self.user_id,
+            data=data
+        )
+        
+        if "error" in result:
+            return f"Error querying database: {result['error']}"
+        
+        pages = result.get("results", [])
+        if not pages:
+            return "No pages found in database."
+        
+        output = f"Found {len(pages)} pages:\n\n"
+        for page in pages:
+            # Extract title
+            title = "Untitled"
+            props = page.get("properties", {})
+            for prop in props.values():
+                if prop.get("type") == "title" and prop.get("title"):
+                    title_parts = prop["title"]
+                    if title_parts:
+                        title = title_parts[0].get("plain_text", "Untitled")
+                    break
+            
+            output += f"- {title}\n"
+            output += f"  ID: {page.get('id', 'N/A')}\n"
+            output += f"  URL: {page.get('url', 'N/A')}\n"
+            output += f"  Created: {page.get('created_time', 'N/A')}\n\n"
+        
+        return output
+    
+    def _run(self, **kwargs) -> str:
+        """Sync version."""
+        import asyncio
+        return asyncio.run(self._arun(**kwargs))
+
+
+class CreatePageTool(NotionDirectTool):
+    """Create a new page."""
+    name: str = "notion_create_page"
+    description: str = "Create a new page in a database or as a child of another page"
+    args_schema: Type[BaseModel] = CreatePageInput
+    
+    async def _arun(self, **kwargs) -> str:
+        """Create page."""
+        # Prepare parent
+        parent = {kwargs["parent_type"]: kwargs["parent_id"]}
+        
+        # Prepare properties
+        properties = kwargs.get("properties", {})
+        
+        # If no properties provided but title given, create title property
+        if not properties and kwargs.get("title"):
+            properties = {
+                "title": {
+                    "title": [{
+                        "text": {
+                            "content": kwargs["title"]
+                        }
+                    }]
+                }
+            }
+        
+        data = {
+            "parent": parent,
+            "properties": properties
+        }
+        
+        # Add content blocks if provided
+        if kwargs.get("content"):
+            data["children"] = kwargs["content"]
+        
+        result = await self.connector._make_api_request(
+            method="POST",
+            endpoint="/pages",
+            user_id=self.user_id,
+            data=data
+        )
+        
+        if "error" in result:
+            return f"Error creating page: {result['error']}"
+        
+        return f"Page created successfully!\nID: {result.get('id', 'Unknown')}\nURL: {result.get('url', 'N/A')}"
+    
+    def _run(self, **kwargs) -> str:
+        """Sync version."""
+        import asyncio
+        return asyncio.run(self._arun(**kwargs))
+
+
+class GetPageTool(NotionDirectTool):
+    """Get page details."""
+    name: str = "notion_get_page"
+    description: str = "Get a page's properties and metadata"
+    args_schema: Type[BaseModel] = GetPageInput
+    
+    async def _arun(self, **kwargs) -> str:
+        """Get page."""
+        result = await self.connector._make_api_request(
+            method="GET",
+            endpoint=f"/pages/{kwargs['page_id']}",
+            user_id=self.user_id
+        )
+        
+        if "error" in result:
+            return f"Error getting page: {result['error']}"
+        
+        # Extract title
+        title = "Untitled"
+        props = result.get("properties", {})
+        for prop_name, prop in props.items():
+            if prop.get("type") == "title" and prop.get("title"):
+                title_parts = prop["title"]
+                if title_parts:
+                    title = title_parts[0].get("plain_text", "Untitled")
+                break
+        
+        output = f"Page: {title}\n"
+        output += f"ID: {result.get('id', 'N/A')}\n"
+        output += f"URL: {result.get('url', 'N/A')}\n"
+        output += f"Created: {result.get('created_time', 'N/A')}\n"
+        output += f"Last edited: {result.get('last_edited_time', 'N/A')}\n"
+        output += f"Archived: {result.get('archived', False)}\n\n"
+        
+        # Show properties
+        if props:
+            output += "Properties:\n"
+            for prop_name, prop in props.items():
+                prop_type = prop.get("type", "unknown")
+                output += f"- {prop_name} ({prop_type}): "
+                
+                # Extract property value based on type
+                if prop_type == "title" and prop.get("title"):
+                    texts = [t.get("plain_text", "") for t in prop["title"]]
+                    output += " ".join(texts)
+                elif prop_type == "rich_text" and prop.get("rich_text"):
+                    texts = [t.get("plain_text", "") for t in prop["rich_text"]]
+                    output += " ".join(texts)
+                elif prop_type == "number":
+                    output += str(prop.get("number", ""))
+                elif prop_type == "select" and prop.get("select"):
+                    output += prop["select"].get("name", "")
+                elif prop_type == "multi_select" and prop.get("multi_select"):
+                    names = [s.get("name", "") for s in prop["multi_select"]]
+                    output += ", ".join(names)
+                elif prop_type == "date" and prop.get("date"):
+                    output += prop["date"].get("start", "")
+                elif prop_type == "checkbox":
+                    output += str(prop.get("checkbox", False))
+                elif prop_type == "url":
+                    output += prop.get("url", "")
+                elif prop_type == "email":
+                    output += prop.get("email", "")
+                elif prop_type == "phone_number":
+                    output += prop.get("phone_number", "")
+                else:
+                    output += "(complex value)"
+                
+                output += "\n"
+        
+        return output
+    
+    def _run(self, **kwargs) -> str:
+        """Sync version."""
+        import asyncio
+        return asyncio.run(self._arun(**kwargs))
+
+
+class UpdatePageTool(NotionDirectTool):
+    """Update a page."""
+    name: str = "notion_update_page"
+    description: str = "Update a page's properties"
+    args_schema: Type[BaseModel] = UpdatePageInput
+    
+    async def _arun(self, **kwargs) -> str:
+        """Update page."""
+        data = {}
+        
+        if kwargs.get("properties"):
+            data["properties"] = kwargs["properties"]
+        
+        if kwargs.get("archived") is not None:
+            data["archived"] = kwargs["archived"]
+        
+        if not data:
+            return "No updates specified."
+        
+        result = await self.connector._make_api_request(
+            method="PATCH",
+            endpoint=f"/pages/{kwargs['page_id']}",
+            user_id=self.user_id,
+            data=data
+        )
+        
+        if "error" in result:
+            return f"Error updating page: {result['error']}"
+        
+        return f"Page updated successfully!\nID: {result.get('id', 'Unknown')}"
+    
+    def _run(self, **kwargs) -> str:
+        """Sync version."""
+        import asyncio
+        return asyncio.run(self._arun(**kwargs))
+
+
+class GetBlocksTool(NotionDirectTool):
+    """Get page blocks."""
+    name: str = "notion_get_blocks"
+    description: str = "Get all blocks (content) from a page"
+    args_schema: Type[BaseModel] = GetBlocksInput
+    
+    async def _arun(self, **kwargs) -> str:
+        """Get blocks."""
+        result = await self.connector._make_api_request(
+            method="GET",
+            endpoint=f"/blocks/{kwargs['page_id']}/children",
+            user_id=self.user_id,
+            params={"page_size": 100}
+        )
+        
+        if "error" in result:
+            return f"Error getting blocks: {result['error']}"
+        
+        blocks = result.get("results", [])
+        if not blocks:
+            return "No blocks found in page."
+        
+        output = f"Found {len(blocks)} blocks:\n\n"
+        
+        def format_block(block, indent=0):
+            """Format a block for display."""
+            prefix = "  " * indent
+            block_type = block.get("type", "unknown")
+            block_output = f"{prefix}- {block_type}: "
+            
+            # Extract text content based on block type
+            if block_type in ["paragraph", "heading_1", "heading_2", "heading_3", "bulleted_list_item", "numbered_list_item", "to_do", "toggle", "quote", "callout"]:
+                texts = block.get(block_type, {}).get("rich_text", [])
+                content = " ".join([t.get("plain_text", "") for t in texts])
+                block_output += content or "(empty)"
+            elif block_type == "code":
+                code_block = block.get("code", {})
+                texts = code_block.get("rich_text", [])
+                content = " ".join([t.get("plain_text", "") for t in texts])
+                language = code_block.get("language", "plain")
+                block_output += f"[{language}] {content}"
+            elif block_type == "image":
+                image = block.get("image", {})
+                if image.get("type") == "external":
+                    block_output += image.get("external", {}).get("url", "")
+                else:
+                    block_output += "(file)"
+            elif block_type == "divider":
+                block_output += "---"
+            else:
+                block_output += "(complex block)"
+            
+            return block_output + "\n"
+        
+        for block in blocks:
+            output += format_block(block)
+        
+        return output
+    
+    def _run(self, **kwargs) -> str:
+        """Sync version."""
+        import asyncio
+        return asyncio.run(self._arun(**kwargs))
+
+
+class AppendBlocksTool(NotionDirectTool):
+    """Append blocks to a page."""
+    name: str = "notion_append_blocks"
+    description: str = "Add new blocks to a page"
+    args_schema: Type[BaseModel] = AppendBlocksInput
+    
+    async def _arun(self, **kwargs) -> str:
+        """Append blocks."""
+        data = {
+            "children": kwargs["children"]
+        }
+        
+        result = await self.connector._make_api_request(
+            method="PATCH",
+            endpoint=f"/blocks/{kwargs['page_id']}/children",
+            user_id=self.user_id,
+            data=data
+        )
+        
+        if "error" in result:
+            return f"Error appending blocks: {result['error']}"
+        
+        results = result.get("results", [])
+        return f"Successfully appended {len(results)} blocks to the page."
+    
+    def _run(self, **kwargs) -> str:
+        """Sync version."""
+        import asyncio
+        return asyncio.run(self._arun(**kwargs))
+
+
+class CreateDatabaseTool(NotionDirectTool):
+    """Create a database."""
+    name: str = "notion_create_database"
+    description: str = "Create a new database"
+    args_schema: Type[BaseModel] = CreateDatabaseInput
+    
+    async def _arun(self, **kwargs) -> str:
+        """Create database."""
+        # Prepare parent
+        if kwargs["parent_type"] == "workspace":
+            parent = {"type": "workspace", "workspace": True}
+        else:
+            parent = {"type": "page_id", "page_id": kwargs.get("parent_id")}
+        
+        # Prepare title
+        title = [{
+            "type": "text",
+            "text": {
+                "content": kwargs["title"]
+            }
+        }]
+        
+        data = {
+            "parent": parent,
+            "title": title,
+            "properties": kwargs["properties"]
+        }
+        
+        result = await self.connector._make_api_request(
+            method="POST",
+            endpoint="/databases",
+            user_id=self.user_id,
+            data=data
+        )
+        
+        if "error" in result:
+            return f"Error creating database: {result['error']}"
+        
+        return f"Database created successfully!\nID: {result.get('id', 'Unknown')}\nURL: {result.get('url', 'N/A')}"
+    
+    def _run(self, **kwargs) -> str:
+        """Sync version."""
+        import asyncio
+        return asyncio.run(self._arun(**kwargs))
