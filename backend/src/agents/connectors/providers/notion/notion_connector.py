@@ -122,6 +122,21 @@ class NotionConnector(BaseOAuthConnector):
                 }
             ),
             ConnectorTool(
+                id="notion_get_database_schema",
+                name="Get Database Schema",
+                description="Get the schema of a database including all property names and types. Use this BEFORE creating pages to understand the database structure.",
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "database_id": {
+                            "type": "string",
+                            "description": "Database ID"
+                        }
+                    },
+                    "required": ["database_id"]
+                }
+            ),
+            ConnectorTool(
                 id="notion_create_page",
                 name="Create Page",
                 description="Create a new page in a database or as a child of another page",
@@ -228,18 +243,18 @@ class NotionConnector(BaseOAuthConnector):
             ConnectorTool(
                 id="notion_create_database",
                 name="Create Database",
-                description="Create a new database",
+                description="Create a new database as a child of a page (workspace-level databases not supported via API)",
                 parameters_schema={
                     "type": "object",
                     "properties": {
                         "parent_type": {
                             "type": "string",
-                            "enum": ["page_id", "workspace"],
-                            "description": "Type of parent"
+                            "enum": ["page_id"],
+                            "description": "Type of parent (must be page_id)"
                         },
                         "parent_id": {
                             "type": "string",
-                            "description": "Parent page ID (if not workspace)"
+                            "description": "Parent page ID"
                         },
                         "title": {
                             "type": "string",
@@ -250,7 +265,7 @@ class NotionConnector(BaseOAuthConnector):
                             "description": "Database schema properties"
                         }
                     },
-                    "required": ["parent_type", "title", "properties"]
+                    "required": ["parent_type", "parent_id", "title", "properties"]
                 }
             )
         ]

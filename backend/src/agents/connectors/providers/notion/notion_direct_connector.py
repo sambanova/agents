@@ -5,14 +5,14 @@ This module implements direct REST API calls to Notion without using MCP,
 providing reliable multi-user support through OAuth tokens.
 """
 
+import asyncio
 import json
-from typing import Any, Dict, List, Optional, Type
-from datetime import datetime
+from typing import Any, Dict, List, Optional, Type, Union
 
 import aiohttp
 import structlog
 from langchain.tools import BaseTool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # No need for additional imports - token storage handled by main connector
 
@@ -31,14 +31,56 @@ class SearchInput(BaseModel):
     """Input for searching Notion."""
     query: str = Field(description="Search query")
     filter: Optional[str] = Field(None, description="Filter by object type: 'page' or 'database'")
+    
+    @field_validator('query', mode='before')
+    @classmethod
+    def clean_query(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                raise ValueError("Search query cannot be empty")
+        return v
+    
+    @field_validator('filter', mode='before')
+    @classmethod
+    def validate_filter(cls, v):
+        if v and isinstance(v, str):
+            v = v.lower().strip()
+            if v not in ['page', 'database', '']:
+                return None  # Invalid filter, ignore it
+        return v
 
 
 class QueryDatabaseInput(BaseModel):
     """Input for querying a database."""
     database_id: str = Field(description="Database ID to query")
-    filter: Optional[Dict[str, Any]] = Field(None, description="Filter conditions in Notion format")
-    sorts: Optional[List[Dict[str, Any]]] = Field(None, description="Sort conditions")
+    filter: Optional[Union[Dict[str, Any], str]] = Field(None, description="Filter conditions in Notion format")
+    sorts: Optional[Union[List[Dict[str, Any]], str]] = Field(None, description="Sort conditions")
     page_size: Optional[int] = Field(10, description="Number of results (max 100)")
+    
+    @field_validator('filter', mode='before')
+    @classmethod
+    def parse_filter(cls, v):
+        if isinstance(v, str):
+            if not v or v == "{}":
+                return None
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return None
+        return v
+    
+    @field_validator('sorts', mode='before')
+    @classmethod
+    def parse_sorts(cls, v):
+        if isinstance(v, str):
+            if not v or v == "[]":
+                return None
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return None
+        return v
 
 
 class CreatePageInput(BaseModel):
@@ -46,39 +88,133 @@ class CreatePageInput(BaseModel):
     parent_type: str = Field(description="Type of parent: 'database_id' or 'page_id'")
     parent_id: str = Field(description="ID of the parent database or page")
     title: str = Field(description="Page title")
-    properties: Optional[Dict[str, Any]] = Field(None, description="Database properties if parent is database")
-    content: Optional[List[Dict[str, Any]]] = Field(None, description="Initial page content blocks")
+    properties: Optional[Union[Dict[str, Any], str]] = Field(None, description="Database properties if parent is database")
+    content: Optional[Union[List[Dict[str, Any]], str]] = Field(None, description="Initial page content blocks")
+    
+    @field_validator('properties', mode='before')
+    @classmethod
+    def parse_properties(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return {}
+        return v
+    
+    @field_validator('content', mode='before')
+    @classmethod
+    def parse_content(cls, v):
+        # Keep as string for now, will be converted to blocks in the tool
+        return v
 
 
 class GetPageInput(BaseModel):
     """Input for getting a page."""
     page_id: str = Field(description="Page ID")
+    
+    @field_validator('page_id', mode='before')
+    @classmethod
+    def clean_page_id(cls, v):
+        if isinstance(v, str):
+            # Remove any whitespace and handle UUID formatting
+            v = v.strip().replace(' ', '').replace('-', '')
+        return v
 
 
 class UpdatePageInput(BaseModel):
     """Input for updating a page."""
     page_id: str = Field(description="Page ID to update")
-    properties: Optional[Dict[str, Any]] = Field(None, description="Properties to update")
+    properties: Optional[Union[Dict[str, Any], str]] = Field(None, description="Properties to update")
     archived: Optional[bool] = Field(None, description="Whether to archive the page")
+    
+    @field_validator('properties', mode='before')
+    @classmethod
+    def parse_properties(cls, v):
+        if isinstance(v, str):
+            if not v or v == "{}":
+                return None
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return None
+        return v
 
 
 class GetBlocksInput(BaseModel):
     """Input for getting page blocks."""
     page_id: str = Field(description="Page ID")
+    
+    @field_validator('page_id', mode='before')
+    @classmethod
+    def clean_page_id(cls, v):
+        # Remove any whitespace and handle common formatting issues
+        if isinstance(v, str):
+            return v.strip().replace(' ', '')
+        return v
 
 
 class AppendBlocksInput(BaseModel):
     """Input for appending blocks."""
     page_id: str = Field(description="Page ID to append to")
-    children: List[Dict[str, Any]] = Field(description="Array of block objects to append")
+    children: Union[List[Dict[str, Any]], str] = Field(description="Array of block objects to append")
+    
+    @field_validator('page_id', mode='before')
+    @classmethod
+    def clean_page_id(cls, v):
+        if isinstance(v, str):
+            return v.strip().replace(' ', '')
+        return v
+    
+    @field_validator('children', mode='before')
+    @classmethod
+    def parse_children(cls, v):
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                return parsed if isinstance(parsed, list) else [parsed]
+            except json.JSONDecodeError:
+                # If not JSON, treat as plain text and create a paragraph block
+                return [{
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": v}
+                        }]
+                    }
+                }]
+        return v
 
 
 class CreateDatabaseInput(BaseModel):
     """Input for creating a database."""
-    parent_type: str = Field(description="Type of parent: 'page_id' or 'workspace'")
-    parent_id: Optional[str] = Field(None, description="Parent page ID (if not workspace)")
+    parent_type: str = Field(description="Type of parent: 'page_id' (workspace not supported via API)")
+    parent_id: str = Field(description="Parent page ID")
     title: str = Field(description="Database title")
-    properties: Dict[str, Any] = Field(description="Database schema properties")
+    properties: Union[Dict[str, Any], str] = Field(description="Database schema properties")
+    
+    @field_validator('properties', mode='before')
+    @classmethod
+    def parse_properties(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                # Return a basic schema if parsing fails
+                return {
+                    "Name": {"title": {}},
+                    "Status": {
+                        "select": {
+                            "options": [
+                                {"name": "To Do", "color": "red"},
+                                {"name": "In Progress", "color": "yellow"},
+                                {"name": "Done", "color": "green"}
+                            ]
+                        }
+                    }
+                }
+        return v
 
 
 class NotionDirectConnector:
@@ -183,6 +319,7 @@ class NotionDirectConnector:
             "notion_search": SearchTool,
             "notion_list_databases": ListDatabasesTool,
             "notion_query_database": QueryDatabaseTool,
+            "notion_get_database_schema": GetDatabaseSchemaTool,
             "notion_create_page": CreatePageTool,
             "notion_get_page": GetPageTool,
             "notion_update_page": UpdatePageTool,
@@ -196,7 +333,7 @@ class NotionDirectConnector:
             tool_map = {k: v for k, v in tool_map.items() if k in tool_ids}
         
         # Create tool instances
-        for tool_id, tool_class in tool_map.items():
+        for _, tool_class in tool_map.items():
             tool = tool_class(connector=self, user_id=user_id)
             tools.append(tool)
         
@@ -353,10 +490,12 @@ class QueryDatabaseTool(NotionDirectTool):
             return f"Error querying database: {result['error']}"
         
         pages = result.get("results", [])
+        
         if not pages:
             return "No pages found in database."
         
         output = f"Found {len(pages)} pages:\n\n"
+        
         for page in pages:
             # Extract title
             title = "Untitled"
@@ -384,19 +523,30 @@ class QueryDatabaseTool(NotionDirectTool):
 class CreatePageTool(NotionDirectTool):
     """Create a new page."""
     name: str = "notion_create_page"
-    description: str = "Create a new page in a database or as a child of another page"
+    description: str = "Create a new page in a database or as a child of another page. For database pages, first use notion_get_database_schema to understand the property types."
     args_schema: Type[BaseModel] = CreatePageInput
     
     async def _arun(self, **kwargs) -> str:
         """Create page."""
+        import json
+        
         # Prepare parent
         parent = {kwargs["parent_type"]: kwargs["parent_id"]}
         
         # Prepare properties
         properties = kwargs.get("properties", {})
         
-        # If no properties provided but title given, create title property
-        if not properties and kwargs.get("title"):
+        # Handle properties if it's a JSON string
+        if isinstance(properties, str):
+            try:
+                properties = json.loads(properties)
+            except json.JSONDecodeError:
+                # If JSON decode fails, treat as empty
+                properties = {}
+        
+        # For regular pages (not in a database), handle title
+        if kwargs["parent_type"] == "page_id" and kwargs.get("title"):
+            # For regular pages, title goes in properties
             properties = {
                 "title": {
                     "title": [{
@@ -406,6 +556,8 @@ class CreatePageTool(NotionDirectTool):
                     }]
                 }
             }
+        # For database pages, the LLM should provide properly formatted properties
+        # based on the schema retrieved from notion_get_database_schema
         
         data = {
             "parent": parent,
@@ -413,8 +565,27 @@ class CreatePageTool(NotionDirectTool):
         }
         
         # Add content blocks if provided
-        if kwargs.get("content"):
-            data["children"] = kwargs["content"]
+        content = kwargs.get("content")
+        if content:
+            # If content is a string, convert it to a paragraph block
+            if isinstance(content, str):
+                data["children"] = [{
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {
+                                "content": content
+                            }
+                        }]
+                    }
+                }]
+            elif isinstance(content, list):
+                data["children"] = content
+            # If content is a dict that looks like a single block, wrap it in a list
+            elif isinstance(content, dict):
+                data["children"] = [content]
         
         result = await self.connector._make_api_request(
             method="POST",
@@ -491,14 +662,16 @@ class GetPageTool(NotionDirectTool):
                     output += ", ".join(names)
                 elif prop_type == "date" and prop.get("date"):
                     output += prop["date"].get("start", "")
+                elif prop_type == "status" and prop.get("status"):
+                    output += prop["status"].get("name", "")
                 elif prop_type == "checkbox":
                     output += str(prop.get("checkbox", False))
                 elif prop_type == "url":
-                    output += prop.get("url", "")
+                    output += str(prop.get("url", ""))
                 elif prop_type == "email":
-                    output += prop.get("email", "")
+                    output += str(prop.get("email", ""))
                 elif prop_type == "phone_number":
-                    output += prop.get("phone_number", "")
+                    output += str(prop.get("phone_number", ""))
                 else:
                     output += "(complex value)"
                 
@@ -645,6 +818,88 @@ class AppendBlocksTool(NotionDirectTool):
         return asyncio.run(self._arun(**kwargs))
 
 
+class GetDatabaseSchemaTool(NotionDirectTool):
+    """Get database schema."""
+    name: str = "notion_get_database_schema"
+    description: str = "Get the schema of a database including all property names and types. Use this before creating pages to understand the database structure."
+    
+    class SchemaInput(BaseModel):
+        """Input for getting database schema."""
+        database_id: str = Field(description="Database ID")
+    
+    args_schema: Type[BaseModel] = SchemaInput
+    
+    async def _arun(self, **kwargs) -> str:
+        """Get database schema."""
+        result = await self.connector._make_api_request(
+            method="GET",
+            endpoint=f"/databases/{kwargs['database_id']}",
+            user_id=self.user_id
+        )
+        
+        if "error" in result:
+            return f"Error getting database schema: {result['error']}"
+        
+        # Extract and format the schema information
+        properties = result.get("properties", {})
+        title = result.get("title", [])
+        db_title = title[0].get("plain_text", "Untitled") if title else "Untitled"
+        
+        output = f"Database: {db_title}\n"
+        output += f"ID: {result.get('id', 'N/A')}\n\n"
+        output += "Properties Schema:\n"
+        output += "-" * 50 + "\n"
+        
+        # Identify the title property
+        title_property = None
+        
+        for prop_name, prop_config in properties.items():
+            prop_type = prop_config.get("type", "unknown")
+            prop_id = prop_config.get("id", "")
+            
+            output += f"\nProperty: {prop_name}\n"
+            output += f"  Type: {prop_type}\n"
+            output += f"  ID: {prop_id}\n"
+            
+            if prop_type == "title":
+                title_property = prop_name
+                output += "  (This is the TITLE property - required for all pages)\n"
+            elif prop_type == "select":
+                options = prop_config.get("select", {}).get("options", [])
+                if options:
+                    output += f"  Options: {', '.join([opt['name'] for opt in options])}\n"
+            elif prop_type == "multi_select":
+                options = prop_config.get("multi_select", {}).get("options", [])
+                if options:
+                    output += f"  Options: {', '.join([opt['name'] for opt in options])}\n"
+            elif prop_type == "status":
+                options = prop_config.get("status", {}).get("options", [])
+                if options:
+                    output += f"  Options: {', '.join([opt['name'] for opt in options])}\n"
+                groups = prop_config.get("status", {}).get("groups", [])
+                if groups:
+                    output += f"  Groups: {', '.join([g['name'] for g in groups])}\n"
+        
+        output += "\n" + "=" * 50 + "\n"
+        output += "IMPORTANT: When creating pages in this database:\n"
+        output += f"1. The title property is '{title_property}' (type: title)\n"
+        output += "2. Use the exact property names shown above\n"
+        output += "3. Format properties according to their types:\n"
+        output += "   - title/rich_text: {\"property_name\": {\"title/rich_text\": [{\"text\": {\"content\": \"value\"}}]}}\n"
+        output += "   - select: {\"property_name\": {\"select\": {\"name\": \"option_name\"}}}\n"
+        output += "   - multi_select: {\"property_name\": {\"multi_select\": [{\"name\": \"option1\"}, {\"name\": \"option2\"}]}}\n"
+        output += "   - status: {\"property_name\": {\"status\": {\"name\": \"status_name\"}}}\n"
+        output += "   - number: {\"property_name\": {\"number\": 123}}\n"
+        output += "   - checkbox: {\"property_name\": {\"checkbox\": true/false}}\n"
+        
+        return output
+    
+    def _run(self, **kwargs) -> str:
+        """Sync version."""
+        import asyncio
+        return asyncio.run(self._arun(**kwargs))
+
+
 class CreateDatabaseTool(NotionDirectTool):
     """Create a database."""
     name: str = "notion_create_database"
@@ -653,11 +908,14 @@ class CreateDatabaseTool(NotionDirectTool):
     
     async def _arun(self, **kwargs) -> str:
         """Create database."""
-        # Prepare parent
+        # Prepare parent - Notion expects page_id format
+        # Workspace-level databases aren't directly supported via API
+        # They need to be created as children of a page
         if kwargs["parent_type"] == "workspace":
-            parent = {"type": "workspace", "workspace": True}
+            # Can't create workspace-level databases via API
+            return "Error: Creating databases at workspace level is not supported via API. Please specify a page_id as parent."
         else:
-            parent = {"type": "page_id", "page_id": kwargs.get("parent_id")}
+            parent = {"page_id": kwargs.get("parent_id")}
         
         # Prepare title
         title = [{
@@ -667,10 +925,20 @@ class CreateDatabaseTool(NotionDirectTool):
             }
         }]
         
+        # Ensure properties has at least a title column
+        properties = kwargs.get("properties", {})
+        if not properties:
+            # Create a basic schema with a title property
+            properties = {
+                "Name": {
+                    "title": {}
+                }
+            }
+        
         data = {
             "parent": parent,
             "title": title,
-            "properties": kwargs["properties"]
+            "properties": properties
         }
         
         result = await self.connector._make_api_request(
