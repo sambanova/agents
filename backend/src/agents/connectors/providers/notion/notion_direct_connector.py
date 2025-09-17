@@ -22,6 +22,11 @@ NOTION_API_VERSION = "2022-06-28"
 
 
 # Input schemas for each tool
+class EmptyInput(BaseModel):
+    """Empty input for tools that don't require parameters."""
+    pass
+
+
 class SearchInput(BaseModel):
     """Input for searching Notion."""
     query: str = Field(description="Search query")
@@ -281,7 +286,7 @@ class ListDatabasesTool(NotionDirectTool):
     """List all databases."""
     name: str = "notion_list_databases"
     description: str = "List all databases in your Notion workspace"
-    args_schema: Type[BaseModel] = BaseModel
+    args_schema: Type[BaseModel] = EmptyInput
     
     async def _arun(self, **kwargs) -> str:
         """List databases."""
