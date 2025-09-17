@@ -881,16 +881,47 @@ class GetDatabaseSchemaTool(NotionDirectTool):
                     output += f"  Groups: {', '.join([g['name'] for g in groups])}\n"
         
         output += "\n" + "=" * 50 + "\n"
-        output += "IMPORTANT: When creating pages in this database:\n"
-        output += f"1. The title property is '{title_property}' (type: title)\n"
-        output += "2. Use the exact property names shown above\n"
-        output += "3. Format properties according to their types:\n"
-        output += "   - title/rich_text: {\"property_name\": {\"title/rich_text\": [{\"text\": {\"content\": \"value\"}}]}}\n"
-        output += "   - select: {\"property_name\": {\"select\": {\"name\": \"option_name\"}}}\n"
-        output += "   - multi_select: {\"property_name\": {\"multi_select\": [{\"name\": \"option1\"}, {\"name\": \"option2\"}]}}\n"
-        output += "   - status: {\"property_name\": {\"status\": {\"name\": \"status_name\"}}}\n"
-        output += "   - number: {\"property_name\": {\"number\": 123}}\n"
-        output += "   - checkbox: {\"property_name\": {\"checkbox\": true/false}}\n"
+        output += "INSTRUCTIONS FOR CREATING PAGES IN THIS DATABASE:\n"
+        output += "=" * 50 + "\n\n"
+        
+        # Build a complete example based on THIS database's actual schema
+        output += "When calling notion_create_page, your properties JSON should include:\n\n"
+        
+        example_props = {}
+        
+        for prop_name, prop_config in properties.items():
+            prop_type = prop_config.get("type", "unknown")
+            
+            if prop_type == "title":
+                output += f"REQUIRED - Title property '{prop_name}':\n"
+                output += f'  "{prop_name}": {{"title": [{{"text": {{"content": "YOUR TITLE HERE"}}}}]}}\n\n'
+                example_props[prop_name] = {"title": [{"text": {"content": "YOUR TITLE HERE"}}]}
+                
+            elif prop_type == "status":
+                options = prop_config.get("status", {}).get("options", [])
+                output += f"Status property '{prop_name}' - Valid options: {', '.join([opt['name'] for opt in options])}\n"
+                output += f'  "{prop_name}": {{"status": {{"name": "CHOOSE FROM VALID OPTIONS"}}}}\n\n'
+                
+            elif prop_type == "select": 
+                options = prop_config.get("select", {}).get("options", [])
+                if options:
+                    output += f"Select property '{prop_name}' - Valid options: {', '.join([opt['name'] for opt in options])}\n"
+                    output += f'  "{prop_name}": {{"select": {{"name": "CHOOSE FROM VALID OPTIONS"}}}}\n\n'
+                    
+            elif prop_type == "multi_select":
+                options = prop_config.get("multi_select", {}).get("options", [])
+                if options:
+                    output += f"Multi-select property '{prop_name}' - Valid options: {', '.join([opt['name'] for opt in options])}\n"
+                    output += f'  "{prop_name}": {{"multi_select": [{{"name": "OPTION1"}}, {{"name": "OPTION2"}}]}}\n\n'
+                    
+            elif prop_type == "rich_text":
+                output += f"Text property '{prop_name}':\n"
+                output += f'  "{prop_name}": {{"rich_text": [{{"text": {{"content": "YOUR TEXT"}}}}]}}\n\n'
+        
+        output += "\nREMEMBER:\n"
+        output += f"- The 'title' parameter in notion_create_page is ignored for database pages\n"
+        output += f"- You MUST set the page title in the '{title_property}' property\n"
+        output += "- Use ONLY the valid options shown above for select/status fields\n"
         
         return output
     
