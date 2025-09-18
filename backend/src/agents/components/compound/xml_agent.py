@@ -4,6 +4,7 @@ import time
 from datetime import datetime, timezone
 from typing import Callable
 
+import httpx
 import langsmith as ls
 import structlog
 from agents.components.compound.data_types import LiberalFunctionMessage, LLMType
@@ -17,6 +18,7 @@ from langchain_core.messages import (
     FunctionMessage,
     HumanMessage,
     SystemMessage,
+    ToolMessage,
 )
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.redis import AsyncRedisSaver
@@ -362,6 +364,111 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
             SystemMessage(content=dynamic_system_message)
         ] + await construct_chat_history(messages, llm_type)
 
+    async def _summarize_with_larger_model(messages, api_key, config):
+        """Summarize conversation using gpt-oss-120b when context exceeds limits."""
+        logger.info("Starting conversation summarization with gpt-oss-120b")
+
+        # Find the last human message to preserve as context
+        last_human_msg = None
+        for msg in reversed(messages):
+            if isinstance(msg, HumanMessage):
+                last_human_msg = msg
+                break
+
+        # Prepare the summarization prompt
+        summarization_prompt = {
+            "role": "system",
+            "content": (
+                "You are a helpful assistant that summarizes conversations. "
+                "Provide a VERY CONCISE summary (max 500 words) that captures only the most essential context. "
+                "Focus on: 1) What the user is trying to accomplish, 2) Key data/results obtained so far, "
+                "3) Current state of the task. Be extremely brief."
+            )
+        }
+
+        # Convert messages to a format suitable for the API
+        message_dicts = []
+        message_dicts.append(summarization_prompt)
+
+        # Add conversation history for summarization, but truncate large content
+        for msg in messages[1:-2]:  # Skip system message and last 2 messages
+            if isinstance(msg, SystemMessage):
+                continue  # Skip system messages in summary request
+            elif isinstance(msg, HumanMessage):
+                message_dicts.append({"role": "user", "content": msg.content[:1000]})
+            elif isinstance(msg, AIMessage):
+                # Truncate AI responses to avoid large content
+                content = msg.content[:1000] if len(msg.content) > 1000 else msg.content
+                message_dicts.append({"role": "assistant", "content": content})
+            elif isinstance(msg, (ToolMessage, FunctionMessage)):
+                # Heavily truncate tool results
+                message_dicts.append({
+                    "role": "assistant",
+                    "content": f"[Tool called: {msg.content[:200]}...]"
+                })
+
+        # Add instruction to summarize
+        message_dicts.append({
+            "role": "user",
+            "content": "Provide a VERY brief summary (max 500 words) of the conversation above. Focus only on essential context."
+        })
+
+        # Make the API call to gpt-oss-120b
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                "https://api.sambanova.ai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "gpt-oss-120b",
+                    "messages": message_dicts,
+                    "stream": False,
+                    "max_tokens": 1000,  # Reduced from 2000
+                    "temperature": 0
+                }
+            )
+
+            if response.status_code != 200:
+                raise Exception(f"Summarization API call failed: {response.text}")
+
+            result = response.json()
+            summary_content = result["choices"][0]["message"]["content"]
+
+        logger.info(
+            "Conversation summarized successfully",
+            summary_length=len(summary_content)
+        )
+
+        # Reconstruct messages with MINIMAL context
+        summarized_messages = []
+
+        # Keep system message if it exists
+        if messages and isinstance(messages[0], SystemMessage):
+            summarized_messages.append(messages[0])
+
+        # Add compact summary
+        summarized_messages.append(
+            AIMessage(content=f"[Context Summary]: {summary_content}")
+        )
+
+        # Only add the last human message and maybe last AI response
+        if last_human_msg:
+            summarized_messages.append(last_human_msg)
+
+        # If the very last message is a tool result, include it but truncated
+        if messages and isinstance(messages[-1], (ToolMessage, FunctionMessage)):
+            truncated_content = messages[-1].content[:2000] if len(messages[-1].content) > 2000 else messages[-1].content
+            summarized_messages.append(
+                ToolMessage(
+                    content=truncated_content + "..." if len(messages[-1].content) > 2000 else truncated_content,
+                    tool_call_id=messages[-1].tool_call_id if hasattr(messages[-1], 'tool_call_id') else "summary"
+                )
+            )
+
+        return summarized_messages
+
     # Use DynamicToolExecutor if user_id is provided for enhanced tool support
     if user_id:
         tool_executor = DynamicToolExecutor(tools, user_id)
@@ -446,6 +553,219 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                     response.content = content
 
             return response
+
+        except RuntimeError as e:
+            error_str = str(e)
+            # Check if it's a context length error
+            if "maximum context length" in error_str.lower() and "32768" in error_str:
+                logger.warning(
+                    "Context length exceeded for DeepSeek model, falling back to gpt-oss-120b",
+                    original_error=error_str
+                )
+
+                # Switch to using gpt-oss-120b directly with full context
+                logger.info("Switching to gpt-oss-120b for this response due to context length")
+
+                try:
+                    # Get ALL messages for context - gpt-oss-120b has 128k context window
+                    recent_messages = []
+
+                    # Keep FULL system message if it exists - include ALL tool definitions
+                    if processed_messages and isinstance(processed_messages[0], SystemMessage):
+                        system_content = processed_messages[0].content
+
+                        # Check what's in the system message for debugging
+                        logger.info(
+                            "System message for gpt-oss-120b",
+                            full_length=len(system_content),
+                            has_tools_section="You have access to the following tools:" in system_content,
+                            has_tool_tags="<tool>" in system_content,
+                            has_confluence="confluence" in system_content.lower(),
+                            first_500_chars=system_content[:500] if len(system_content) > 500 else system_content
+                        )
+
+                        recent_messages.append({
+                            "role": "system",
+                            "content": system_content  # Full system message, no truncation
+                        })
+
+                    # Include ALL messages in the conversation - no truncation or limiting
+                    for msg in processed_messages[1:] if processed_messages and isinstance(processed_messages[0], SystemMessage) else processed_messages:
+                        if isinstance(msg, HumanMessage):
+                            recent_messages.append({
+                                "role": "user",
+                                "content": msg.content if msg.content else "Continue with the task"
+                            })
+                        elif isinstance(msg, AIMessage):
+                            # Include FULL AI message content - no truncation
+                            content_text = msg.content if msg.content else ""
+                            if not content_text and hasattr(msg, "tool_calls"):
+                                content_text = f"[Tool calls: {msg.tool_calls}]"
+                            if content_text:  # Only add if there's actual content
+                                recent_messages.append({
+                                    "role": "assistant",
+                                    "content": content_text  # Full content, no truncation
+                                })
+                        elif isinstance(msg, (ToolMessage, FunctionMessage)):
+                            # Include FULL tool results - no truncation
+                            tool_content = msg.content if msg.content else "[Tool executed]"
+                            recent_messages.append({
+                                "role": "assistant",
+                                "content": f"[Tool result]: {tool_content}"  # Full tool result, no truncation
+                            })
+
+                    # Ensure we have at least a user message
+                    if not any(msg["role"] == "user" for msg in recent_messages):
+                        recent_messages.append({
+                            "role": "user",
+                            "content": "Please continue with the current task based on the context."
+                        })
+
+                    # Add explicit instruction for tool use if this is a continuation
+                    if len(recent_messages) > 1 and recent_messages[-1]["role"] == "assistant":
+                        # Add a user message to prompt continuation
+                        recent_messages.append({
+                            "role": "user",
+                            "content": (
+                                "Continue with the task. If you need to use tools, format them as:\n"
+                                "<tool>tool_name</tool>\n<tool_input>{parameters}</tool_input>\n\n"
+                                "Otherwise, provide your response directly."
+                            )
+                        })
+
+                    # Log what we're sending
+                    logger.info(
+                        "Sending FULL conversation context to gpt-oss-120b",
+                        num_messages=len(recent_messages),
+                        total_chars=sum(len(msg["content"]) for msg in recent_messages),
+                        message_roles=[msg["role"] for msg in recent_messages],
+                        has_full_system_message=any(msg["role"] == "system" and "<tool>" in msg["content"] for msg in recent_messages),
+                        messages_preview=[
+                            {"role": msg["role"], "content": msg["content"][:100] + "..." if len(msg["content"]) > 100 else msg["content"]}
+                            for msg in recent_messages[:5]  # Only preview first 5 messages for logging
+                        ]
+                    )
+
+                    # Make direct call to gpt-oss-120b
+                    async with httpx.AsyncClient(timeout=60.0) as client:
+                        response = await client.post(
+                            "https://api.sambanova.ai/v1/chat/completions",
+                            headers={
+                                "Authorization": f"Bearer {api_key}",
+                                "Content-Type": "application/json"
+                            },
+                            json={
+                                "model": "gpt-oss-120b",
+                                "messages": recent_messages,
+                                "stream": False,
+                                "max_tokens": 8192,
+                                "temperature": 0,
+                                "reasoning_effort": "medium"  # Set to medium for balanced reasoning and tool usage
+                            }
+                        )
+
+                        if response.status_code != 200:
+                            raise Exception(f"gpt-oss-120b call failed with status {response.status_code}: {response.text}")
+
+                        result = response.json()
+
+                        # Log the full response structure for debugging
+                        logger.info(
+                            "gpt-oss-120b response structure",
+                            has_choices="choices" in result,
+                            num_choices=len(result.get("choices", [])) if "choices" in result else 0,
+                            first_choice=result.get("choices", [{}])[0] if result.get("choices") else None
+                        )
+
+                        # Safely extract content
+                        content = None
+                        if "choices" in result and len(result["choices"]) > 0:
+                            choice = result["choices"][0]
+                            # Log the choice structure
+                            logger.info(
+                                "gpt-oss-120b choice structure",
+                                choice_keys=list(choice.keys()),
+                                has_message="message" in choice,
+                                message_content=choice.get("message", {}).get("content", "NO_CONTENT")[:200] if "message" in choice and choice.get("message", {}).get("content") else "NO_MESSAGE",
+                                message_reasoning=choice.get("message", {}).get("reasoning", "NO_REASONING")[:200] if "message" in choice and choice.get("message", {}).get("reasoning") else "NO_REASONING"
+                            )
+
+                            if "message" in choice and choice["message"] is not None:
+                                # Check for content first
+                                content = choice["message"].get("content")
+
+                                # If content is None but reasoning exists, extract next action from reasoning
+                                # This happens with reasoning_effort="medium" - the model provides reasoning separately
+                                if not content and "reasoning" in choice["message"]:
+                                    reasoning = choice["message"].get("reasoning", "")
+                                    logger.info(
+                                        "gpt-oss-120b provided reasoning, extracting next action",
+                                        reasoning=reasoning[:500]  # Log first 500 chars
+                                    )
+
+                                    # Parse the reasoning to extract what action to take
+                                    import re
+
+                                    # Look for page IDs to fetch (10-digit numbers)
+                                    page_ids = re.findall(r'\b(\d{10})\b', reasoning)
+
+                                    # Look for tool names mentioned
+                                    if page_ids and any(word in reasoning.lower() for word in ['fetch', 'get', 'retrieve', 'continue']):
+                                        # The model wants to fetch a specific page
+                                        content = f'<tool>confluence_get_page</tool>\n<tool_input>\n{{\n  "page_id": "{page_ids[0]}"\n}}\n</tool_input>'
+                                        logger.info(f"Extracted confluence_get_page action for page {page_ids[0]}")
+                                    elif 'search' in reasoning.lower():
+                                        # Extract search term from reasoning
+                                        # Look for quoted text or specific terms
+                                        search_match = re.search(r'search[^\'"]*[\'"]([^\'"]+)[\'"]', reasoning.lower())
+                                        if search_match:
+                                            search_term = search_match.group(1)
+                                        else:
+                                            # Default search term based on context
+                                            search_term = "documentation"
+                                        content = f'<tool>confluence_search</tool>\n<tool_input>\n{{\n  "query": "{search_term}"\n}}\n</tool_input>'
+                                        logger.info(f"Extracted confluence_search action for '{search_term}'")
+                                    else:
+                                        # Provide a generic continuation based on reasoning
+                                        content = (
+                                            f"Based on the analysis: {reasoning[:200]}...\n\n"
+                                            "Let me continue with the next step in the task."
+                                        )
+
+                            elif "text" in choice:
+                                content = choice["text"]
+
+                        # Fallback if no content
+                        if not content:
+                            logger.warning(
+                                "gpt-oss-120b returned empty content",
+                                response_keys=list(result.keys()) if result else None,
+                                choices_length=len(result.get("choices", [])),
+                                first_choice_keys=list(result["choices"][0].keys()) if result.get("choices") else None
+                            )
+                            content = "I need more context to continue. Please provide additional information or try a different query."
+
+                    duration = time.time() - start_time
+                    logger.info(
+                        "Successfully used gpt-oss-120b for full response",
+                        duration_ms=round(duration * 1000, 2),
+                        model="gpt-oss-120b"
+                    )
+
+                    return AIMessage(content=content)
+
+                except Exception as fallback_error:
+                    logger.error(
+                        "GPT-OSS-120b fallback failed",
+                        error_type=type(fallback_error).__name__,
+                        error_message=str(fallback_error),
+                        exc_info=True
+                    )
+                    # Re-raise the original error if fallback fails
+                    raise e
+            else:
+                # Not a context length error, re-raise
+                raise
 
         except Exception as e:
             logger.error(
