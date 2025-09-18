@@ -389,7 +389,7 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
         initialised_llm = llm(api_key=api_key)
 
         llm_with_stop = initialised_llm.bind(
-            stop=["</tool_input>", "</subgraph_input>", "<observation>"]
+            stop=["</subgraph_input>", "<observation>", "\n\nHuman:", "\n\nAssistant:"]
         )
 
         # Check if the last message indicates a malformed tool call that needs retry
@@ -740,6 +740,15 @@ Make sure to include both opening and closing tags for both tool and tool_input.
         last_message = messages[-1]
         content = last_message.content
 
+        # Check if there are multiple tool calls
+        tool_count = content.count("</tool>")
+
+        if tool_count > 1:
+            # Multiple tool calls detected - execute in parallel
+            logger.info(f"Detected {tool_count} tool calls, executing in parallel")
+            return await _execute_parallel_tools(content, tool_executor)
+
+        # Single tool call - continue with existing logic
         try:
             # Parse tool call with improved error handling
             if "</tool>" not in content:
@@ -989,6 +998,122 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                     "error_type": "unexpected_parse_error",
                 },
             )
+
+    # Function to execute multiple tools in parallel
+    async def _execute_parallel_tools(content, tool_executor):
+        """Execute multiple tool calls in parallel."""
+        import asyncio
+        import json
+
+        # Extract all tool calls
+        tool_calls = []
+        remaining_content = content
+
+        # Parse each tool call
+        while "</tool>" in remaining_content:
+            tool_parts = remaining_content.split("</tool>", 1)
+            tool_part, after_tool = tool_parts
+
+            # Extract tool name
+            if "<tool>" not in tool_part:
+                remaining_content = after_tool
+                continue
+
+            tool_name = tool_part.split("<tool>")[-1].strip()
+
+            # Extract tool input
+            tool_input = ""
+            if "<tool_input>" in after_tool:
+                input_parts = after_tool.split("<tool_input>", 1)
+                if len(input_parts) > 1:
+                    input_content = input_parts[1]
+                    if "</tool_input>" in input_content:
+                        tool_input = input_content.split("</tool_input>")[0].strip()
+                        # Move past this tool call
+                        remaining_content = input_content.split("</tool_input>", 1)[1]
+                    else:
+                        # Malformed, but try to extract what we can
+                        tool_input = input_content.strip()
+                        remaining_content = ""
+            else:
+                # No input for this tool
+                remaining_content = after_tool
+
+            # Smart JSON extraction (reuse the existing logic from single tool)
+            if tool_input:
+                # Try to parse as JSON if it looks like JSON
+                if tool_input.startswith("{") and tool_input.endswith("}"):
+                    try:
+                        tool_input = json.loads(tool_input)
+                    except json.JSONDecodeError:
+                        # Keep as string if not valid JSON
+                        pass
+
+            tool_calls.append((tool_name, tool_input))
+
+        if not tool_calls:
+            return LiberalFunctionMessage(
+                content="Error: Could not parse any tool calls",
+                name="system_error",
+                additional_kwargs={
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "agent_type": "tool_response",
+                    "error_type": "parse_error",
+                },
+            )
+
+        logger.info(
+            f"Executing {len(tool_calls)} tools in parallel",
+            tools=[t[0] for t in tool_calls]
+        )
+
+        # Create tasks for parallel execution
+        tasks = []
+        for tool_name, tool_input in tool_calls:
+            action = ToolInvocation(tool=tool_name, tool_input=tool_input)
+            tasks.append(tool_executor.ainvoke(action))
+
+        # Execute all tools in parallel
+        start_time = time.time()
+        try:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+        except Exception as e:
+            logger.error(f"Error during parallel tool execution: {e}")
+            results = [str(e) for _ in tasks]
+
+        duration = time.time() - start_time
+        logger.info(
+            f"Parallel tool execution completed",
+            duration_ms=round(duration * 1000, 2),
+            num_tools=len(tool_calls)
+        )
+
+        # Combine results into separate observation blocks for each tool
+        combined_results = []
+        for i, (tool_name, tool_input) in enumerate(tool_calls):
+            result = results[i]
+            if isinstance(result, Exception):
+                result_text = f"Error executing {tool_name}: {str(result)}"
+            else:
+                result_text = str(result) if result else "No response from tool"
+
+            # Format each result as a separate observation
+            combined_results.append(f"[Tool: {tool_name}]\n{result_text}")
+
+        # Create a combined function message with all results
+        combined_content = "\n\n".join(combined_results)
+
+        return LiberalFunctionMessage(
+            content=combined_content,
+            name="parallel_tools",
+            response_metadata={"usage": {"total_latency": duration}},
+            additional_kwargs={
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "agent_type": "tool_response",
+                "parallel_tools": [t[0] for t in tool_calls],
+                "num_tools": len(tool_calls),
+            },
+        )
 
     # Create subgraph entry nodes
     def create_subgraph_entry_node(
