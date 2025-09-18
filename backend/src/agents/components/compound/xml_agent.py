@@ -461,6 +461,40 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 # Switch to using gpt-oss-120b directly with full context
                 logger.info("Switching to gpt-oss-120b for this response due to context length")
 
+                # Create a traceable wrapper for the gpt-oss-120b call
+                @ls.traceable(
+                    name="gpt-oss-120b-fallback",
+                    run_type="llm",
+                    metadata={
+                        "model": "gpt-oss-120b",
+                        "fallback_reason": "context_length_exceeded",
+                        "original_model": "DeepSeek-V3-0324"
+                    }
+                )
+                async def call_gpt_oss_120b(messages_dict, api_key):
+                    """Traceable wrapper for gpt-oss-120b API call"""
+                    async with httpx.AsyncClient(timeout=60.0) as client:
+                        response = await client.post(
+                            "https://api.sambanova.ai/v1/chat/completions",
+                            headers={
+                                "Authorization": f"Bearer {api_key}",
+                                "Content-Type": "application/json"
+                            },
+                            json={
+                                "model": "gpt-oss-120b",
+                                "messages": messages_dict,
+                                "stream": False,
+                                "max_tokens": 16384,
+                                "temperature": 0,
+                                "reasoning_effort": "medium"
+                            }
+                        )
+
+                        if response.status_code != 200:
+                            raise Exception(f"gpt-oss-120b call failed with status {response.status_code}: {response.text}")
+
+                        return response.json()
+
                 try:
                     # Get ALL messages for context - gpt-oss-120b has 128k context window
                     recent_messages = []
@@ -541,91 +575,53 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                         ]
                     )
 
-                    # Make direct call to gpt-oss-120b
-                    async with httpx.AsyncClient(timeout=60.0) as client:
-                        response = await client.post(
-                            "https://api.sambanova.ai/v1/chat/completions",
-                            headers={
-                                "Authorization": f"Bearer {api_key}",
-                                "Content-Type": "application/json"
-                            },
-                            json={
-                                "model": "gpt-oss-120b",
-                                "messages": recent_messages,
-                                "stream": False,
-                                "max_tokens": 16384,  # Increased from 8192 for more comprehensive responses
-                                "temperature": 0,
-                                "reasoning_effort": "medium"  # Set to medium for balanced reasoning and tool usage
-                            }
-                        )
+                    # Make traceable call to gpt-oss-120b
+                    result = await call_gpt_oss_120b(recent_messages, api_key)
 
-                        if response.status_code != 200:
-                            raise Exception(f"gpt-oss-120b call failed with status {response.status_code}: {response.text}")
+                    # Log the full response structure for debugging
+                    logger.info(
+                        "gpt-oss-120b response structure",
+                        has_choices="choices" in result,
+                        num_choices=len(result.get("choices", [])) if "choices" in result else 0,
+                        first_choice=result.get("choices", [{}])[0] if result.get("choices") else None
+                    )
 
-                        result = response.json()
-
-                        # Log the full response structure for debugging
+                    # Safely extract content
+                    content = None
+                    if "choices" in result and len(result["choices"]) > 0:
+                        choice = result["choices"][0]
+                        # Log the choice structure
                         logger.info(
-                            "gpt-oss-120b response structure",
-                            has_choices="choices" in result,
-                            num_choices=len(result.get("choices", [])) if "choices" in result else 0,
-                            first_choice=result.get("choices", [{}])[0] if result.get("choices") else None
+                            "gpt-oss-120b choice structure",
+                            choice_keys=list(choice.keys()),
+                            has_message="message" in choice,
+                            message_content=choice.get("message", {}).get("content", "NO_CONTENT")[:200] if "message" in choice and choice.get("message", {}).get("content") else "NO_MESSAGE",
+                            message_reasoning=choice.get("message", {}).get("reasoning", "NO_REASONING")[:200] if "message" in choice and choice.get("message", {}).get("reasoning") else "NO_REASONING"
                         )
 
-                        # Safely extract content
-                        content = None
-                        if "choices" in result and len(result["choices"]) > 0:
-                            choice = result["choices"][0]
-                            # Log the choice structure
-                            logger.info(
-                                "gpt-oss-120b choice structure",
-                                choice_keys=list(choice.keys()),
-                                has_message="message" in choice,
-                                message_content=choice.get("message", {}).get("content", "NO_CONTENT")[:200] if "message" in choice and choice.get("message", {}).get("content") else "NO_MESSAGE",
-                                message_reasoning=choice.get("message", {}).get("reasoning", "NO_REASONING")[:200] if "message" in choice and choice.get("message", {}).get("reasoning") else "NO_REASONING"
-                            )
+                        if "message" in choice and choice["message"] is not None:
+                            # Check for content first
+                            content = choice["message"].get("content")
 
-                            if "message" in choice and choice["message"] is not None:
-                                # Check for content first
-                                content = choice["message"].get("content")
+                            # If content is None but reasoning exists, extract next action from reasoning
+                            # This happens with reasoning_effort="medium" - the model provides reasoning separately
+                            if not content and "reasoning" in choice["message"]:
+                                reasoning = choice["message"].get("reasoning", "")
+                                logger.info(
+                                    "gpt-oss-120b provided reasoning, extracting next action",
+                                    reasoning=reasoning[:500]  # Log first 500 chars
+                                )
 
-                                # If content is None but reasoning exists, extract next action from reasoning
-                                # This happens with reasoning_effort="medium" - the model provides reasoning separately
-                                if not content and "reasoning" in choice["message"]:
-                                    reasoning = choice["message"].get("reasoning", "")
-                                    logger.info(
-                                        "gpt-oss-120b provided reasoning, extracting next action",
-                                        reasoning=reasoning[:500]  # Log first 500 chars
-                                    )
-
-                                    # Parse the reasoning to extract what action to take
-                                    import re
-
-                                    # Look for page IDs to fetch (10-digit numbers)
-                                    page_ids = re.findall(r'\b(\d{10})\b', reasoning)
-
-                                    # Look for tool names mentioned
-                                    if page_ids and any(word in reasoning.lower() for word in ['fetch', 'get', 'retrieve', 'continue']):
-                                        # The model wants to fetch a specific page
-                                        content = f'<tool>confluence_get_page</tool>\n<tool_input>\n{{\n  "page_id": "{page_ids[0]}"\n}}\n</tool_input>'
-                                        logger.info(f"Extracted confluence_get_page action for page {page_ids[0]}")
-                                    elif 'search' in reasoning.lower():
-                                        # Extract search term from reasoning
-                                        # Look for quoted text or specific terms
-                                        search_match = re.search(r'search[^\'"]*[\'"]([^\'"]+)[\'"]', reasoning.lower())
-                                        if search_match:
-                                            search_term = search_match.group(1)
-                                        else:
-                                            # Default search term based on context
-                                            search_term = "documentation"
-                                        content = f'<tool>confluence_search</tool>\n<tool_input>\n{{\n  "query": "{search_term}"\n}}\n</tool_input>'
-                                        logger.info(f"Extracted confluence_search action for '{search_term}'")
-                                    else:
-                                        # Provide a generic continuation based on reasoning
-                                        content = (
-                                            f"Based on the analysis: {reasoning[:200]}...\n\n"
-                                            "Let me continue with the next step in the task."
-                                        )
+                                # When reasoning_effort="medium", the model may provide reasoning without content
+                                # In this case, we'll use the reasoning as the response
+                                logger.info(
+                                    "gpt-oss-120b provided reasoning without content, using reasoning as response"
+                                )
+                                # Truncate very long reasoning and format as a response
+                                if len(reasoning) > 2000:
+                                    content = reasoning[:2000] + "..."
+                                else:
+                                    content = reasoning
 
                             elif "text" in choice:
                                 content = choice["text"]
