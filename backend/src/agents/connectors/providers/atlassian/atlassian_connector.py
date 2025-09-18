@@ -30,7 +30,7 @@ class AtlassianConnector(MCPConnector):
         return ConnectorMetadata(
             provider_id="atlassian",
             name="Atlassian (Jira & Confluence)",
-            description="Connect to Jira and Confluence via Atlassian's official MCP server",
+            description="Connect to Jira and Confluence",
             icon_url="https://wac-cdn.atlassian.com/assets/img/favicons/atlassian/favicon.png",
             oauth_version=OAuthVersion.OAUTH2_0,
             available_tools=[
