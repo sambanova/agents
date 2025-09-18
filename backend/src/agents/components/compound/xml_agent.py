@@ -364,111 +364,6 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
             SystemMessage(content=dynamic_system_message)
         ] + await construct_chat_history(messages, llm_type)
 
-    async def _summarize_with_larger_model(messages, api_key, config):
-        """Summarize conversation using gpt-oss-120b when context exceeds limits."""
-        logger.info("Starting conversation summarization with gpt-oss-120b")
-
-        # Find the last human message to preserve as context
-        last_human_msg = None
-        for msg in reversed(messages):
-            if isinstance(msg, HumanMessage):
-                last_human_msg = msg
-                break
-
-        # Prepare the summarization prompt
-        summarization_prompt = {
-            "role": "system",
-            "content": (
-                "You are a helpful assistant that summarizes conversations. "
-                "Provide a VERY CONCISE summary (max 500 words) that captures only the most essential context. "
-                "Focus on: 1) What the user is trying to accomplish, 2) Key data/results obtained so far, "
-                "3) Current state of the task. Be extremely brief."
-            )
-        }
-
-        # Convert messages to a format suitable for the API
-        message_dicts = []
-        message_dicts.append(summarization_prompt)
-
-        # Add conversation history for summarization, but truncate large content
-        for msg in messages[1:-2]:  # Skip system message and last 2 messages
-            if isinstance(msg, SystemMessage):
-                continue  # Skip system messages in summary request
-            elif isinstance(msg, HumanMessage):
-                message_dicts.append({"role": "user", "content": msg.content[:1000]})
-            elif isinstance(msg, AIMessage):
-                # Truncate AI responses to avoid large content
-                content = msg.content[:1000] if len(msg.content) > 1000 else msg.content
-                message_dicts.append({"role": "assistant", "content": content})
-            elif isinstance(msg, (ToolMessage, FunctionMessage)):
-                # Heavily truncate tool results
-                message_dicts.append({
-                    "role": "assistant",
-                    "content": f"[Tool called: {msg.content[:200]}...]"
-                })
-
-        # Add instruction to summarize
-        message_dicts.append({
-            "role": "user",
-            "content": "Provide a VERY brief summary (max 500 words) of the conversation above. Focus only on essential context."
-        })
-
-        # Make the API call to gpt-oss-120b
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(
-                "https://api.sambanova.ai/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "gpt-oss-120b",
-                    "messages": message_dicts,
-                    "stream": False,
-                    "max_tokens": 1000,  # Reduced from 2000
-                    "temperature": 0
-                }
-            )
-
-            if response.status_code != 200:
-                raise Exception(f"Summarization API call failed: {response.text}")
-
-            result = response.json()
-            summary_content = result["choices"][0]["message"]["content"]
-
-        logger.info(
-            "Conversation summarized successfully",
-            summary_length=len(summary_content)
-        )
-
-        # Reconstruct messages with MINIMAL context
-        summarized_messages = []
-
-        # Keep system message if it exists
-        if messages and isinstance(messages[0], SystemMessage):
-            summarized_messages.append(messages[0])
-
-        # Add compact summary
-        summarized_messages.append(
-            AIMessage(content=f"[Context Summary]: {summary_content}")
-        )
-
-        # Only add the last human message and maybe last AI response
-        if last_human_msg:
-            summarized_messages.append(last_human_msg)
-
-        # If the very last message is a tool result, include it but truncated
-        if messages and isinstance(messages[-1], (ToolMessage, FunctionMessage)):
-            truncated_content = messages[-1].content[:2000] if len(messages[-1].content) > 2000 else messages[-1].content
-            summarized_messages.append(
-                ToolMessage(
-                    content=truncated_content + "..." if len(messages[-1].content) > 2000 else truncated_content,
-                    tool_call_id=messages[-1].tool_call_id if hasattr(messages[-1], 'tool_call_id') else "summary"
-                )
-            )
-
-        return summarized_messages
-
     # Use DynamicToolExecutor if user_id is provided for enhanced tool support
     if user_id:
         tool_executor = DynamicToolExecutor(tools, user_id)
@@ -658,7 +553,7 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                                 "model": "gpt-oss-120b",
                                 "messages": recent_messages,
                                 "stream": False,
-                                "max_tokens": 8192,
+                                "max_tokens": 16384,  # Increased from 8192 for more comprehensive responses
                                 "temperature": 0,
                                 "reasoning_effort": "medium"  # Set to medium for balanced reasoning and tool usage
                             }
