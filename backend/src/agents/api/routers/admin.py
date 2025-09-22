@@ -87,8 +87,7 @@ async def get_configuration(
     config_manager = get_config_manager()
 
     if user_id:
-
-        # Try to load persisted config from Redis
+        # First, check if singleton has stale config that doesn't exist in Redis
         if request and hasattr(request.app.state, 'redis_storage_service'):
             redis_storage = request.app.state.redis_storage_service
             config_key = f"llm_config:{user_id}"
@@ -98,6 +97,14 @@ async def get_configuration(
                     config_key,
                     user_id=user_id
                 )
+
+                # If Redis is empty but singleton has config, clear the singleton
+                if not stored_config and config_manager.has_user_override(user_id):
+                    logger.info(f"Found stale config override in singleton for user {user_id[:8]}..., clearing it")
+                    config_manager.clear_user_override(user_id)
+                elif not stored_config:
+                    logger.info(f"No config in Redis or singleton for user {user_id[:8]}...")
+
                 if stored_config:
                     overrides = json.loads(stored_config)
 
@@ -256,6 +263,9 @@ async def reset_configuration(
     # Clear in-memory override
     config_manager.clear_user_override(user_id)
 
+    # Reload config from file to fix any corruption from shallow copy bug
+    config_manager.reload_config()
+
     # Also clear from Redis
     if request and hasattr(request.app.state, 'redis_storage_service'):
         redis_storage = request.app.state.redis_storage_service
@@ -269,10 +279,23 @@ async def reset_configuration(
 
     logger.info("Reset configuration to defaults", user_id=user_id[:8] + "...")
 
+    # Get the default configuration
+    default_config = config_manager.get_full_config()  # Don't pass user_id here - we want the actual defaults
+
+    # Log what we're returning for debugging
+    task_models = default_config.get('task_models', {})
+    logger.info(f"Returning reset config with provider: {default_config.get('default_provider')}, "
+                f"num_task_models: {len(task_models)}")
+    # Log a sample of task models to verify they're correct
+    if task_models:
+        sample_tasks = list(task_models.keys())[:3]
+        for task in sample_tasks:
+            logger.info(f"  Task {task}: {task_models[task]}")
+
     return {
         "success": True,
         "message": "Configuration reset to defaults",
-        "config": config_manager.get_full_config()
+        "config": default_config
     }
 
 
@@ -325,15 +348,20 @@ async def list_provider_models(provider: str) -> ModelListResponse:
 
 
 @router.get("/tasks", dependencies=[Depends(check_admin_enabled)])
-async def list_tasks() -> List[Dict[str, Any]]:
+async def list_tasks(
+    user_id: str = Depends(get_current_user_id)
+) -> List[Dict[str, Any]]:
     """
     List all configurable tasks/agents with their current configurations.
+
+    Args:
+        user_id: The authenticated user ID
 
     Returns:
         List of tasks with their model assignments
     """
     config_manager = get_config_manager()
-    config = config_manager.get_full_config()
+    config = config_manager.get_full_config(user_id)
 
     tasks = []
     for task_id, task_config in config.get("task_models", {}).items():

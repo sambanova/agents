@@ -36,6 +36,10 @@ providers:
         name: "Qwen3 32B"
         context_window: 131072
         max_tokens: 8192
+      gpt-oss-120b:
+        name: "GPT OSS 120B"
+        context_window: 131072
+        max_tokens: 16384
 
   fireworks:
     name: "Fireworks AI"
@@ -53,7 +57,7 @@ providers:
         name: "Llama 3.3 70B"
         context_window: 131072
         max_tokens: 8192
-      accounts/fireworks/models/llama-v4-maverick:
+      accounts/fireworks/models/llama4-maverick-instruct-basic:
         name: "Llama 4 Maverick"
         context_window: 131072
         max_tokens: 8192
@@ -61,6 +65,10 @@ providers:
         name: "Llama 3.1 8B"
         context_window: 131072
         max_tokens: 8192
+      accounts/fireworks/models/gpt-oss-120b:
+        name: "GPT OSS 120B"
+        context_window: 131072
+        max_tokens: 16384
 
   together:
     name: "Together AI"
@@ -82,7 +90,7 @@ providers:
         name: "Llama 3.3 70B"
         context_window: 131072
         max_tokens: 8192
-      meta-llama/Llama-4-Maverick:
+      meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8:
         name: "Llama 4 Maverick"
         context_window: 131072
         max_tokens: 8192
@@ -94,6 +102,10 @@ providers:
         name: "Qwen 2.5 32B"
         context_window: 131072
         max_tokens: 8192
+      openai/gpt-oss-120b:
+        name: "GPT OSS 120B"
+        context_window: 131072
+        max_tokens: 16384
 
 # Model mappings for cross-provider equivalents
 # Maps logical model to actual model IDs for each provider
@@ -116,8 +128,8 @@ model_mappings:
     together: "meta-llama/Llama-3.3-70B-Instruct-Turbo"
   llama-4-maverick:
     sambanova: "Llama-4-Maverick-17B-128E-Instruct"
-    fireworks: "accounts/fireworks/models/llama-v4-maverick"
-    together: "meta-llama/Llama-4-Maverick"
+    fireworks: "accounts/fireworks/models/llama4-maverick-instruct-basic"
+    together: "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
   llama-3.1-8b:
     sambanova: "Meta-Llama-3.1-8B-Instruct"
     fireworks: "accounts/fireworks/models/llama-v3p1-8b-instruct"
@@ -126,6 +138,10 @@ model_mappings:
     sambanova: "Qwen3-32B"
     fireworks: "accounts/fireworks/models/qwen2.5-32b-instruct"
     together: "Qwen/Qwen2.5-32B-Instruct"
+  gpt-oss-120b:
+    sambanova: "gpt-oss-120b"
+    fireworks: "accounts/fireworks/models/gpt-oss-120b"
+    together: "openai/gpt-oss-120b"
 
 # Default configuration
 default_provider: sambanova

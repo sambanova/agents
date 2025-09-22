@@ -207,13 +207,17 @@ class LLMConfigManager:
         if user_id and user_id in self._user_overrides:
             user_config = self._user_overrides[user_id].get("task_models", {})
             if task in user_config:
-                return user_config[task]
+                result = user_config[task]
+                logger.debug(f"Task {task} for user {user_id[:8]}... using override: provider={result.get('provider')}, model={result.get('model')}")
+                return result
 
         # Fall back to default config
-        return self.config["task_models"].get(task, {
+        result = self.config["task_models"].get(task, {
             "provider": self.config["default_provider"],
             "model": list(self.config["providers"][self.config["default_provider"]]["models"].keys())[0]
         })
+        logger.debug(f"Task {task} for user {user_id[:8] if user_id else 'default'}... using default: provider={result.get('provider')}, model={result.get('model')}")
+        return result
 
     def set_user_override(self, user_id: str, overrides: Dict[str, Any]):
         """
@@ -239,8 +243,16 @@ class LLMConfigManager:
     def clear_user_override(self, user_id: str):
         """Clear user-specific overrides."""
         if user_id in self._user_overrides:
+            # Log what we're clearing for debugging
+            logger.info(f"Clearing config overrides for user {user_id[:8]}..., had provider: {self._user_overrides[user_id].get('default_provider', 'none')}")
             del self._user_overrides[user_id]
-            logger.info(f"Cleared config overrides for user {user_id[:8]}...")
+            logger.info(f"Successfully cleared config overrides for user {user_id[:8]}...")
+
+    def reload_config(self):
+        """Reload configuration from file to fix any corruption from shallow copy bug."""
+        logger.info("Reloading configuration from file to restore original values")
+        self.config = self._load_config()
+        self._load_model_mappings()
 
     def has_user_override(self, user_id: str) -> bool:
         """Check if user has overrides configured."""
@@ -271,7 +283,9 @@ class LLMConfigManager:
         Returns:
             The complete configuration
         """
-        config = self.config.copy()
+        # Deep copy to avoid modifying the original config
+        import copy
+        config = copy.deepcopy(self.config)
 
         # Apply user overrides if available
         if user_id and user_id in self._user_overrides:

@@ -20,26 +20,38 @@
                     "url": "https://api.sambanova.ai/v1",
                     "long_url": "https://api.sambanova.ai/v1/chat/completions"
                 },
+                "deepseek-v3-0324": {
+                    "model": "DeepSeek-V3-0324",
+                    "crewai_prefix": "sambanova",
+                    "url": "https://api.sambanova.ai/v1",
+                    "long_url": "https://api.sambanova.ai/v1/chat/completions"
+                },
                 "deepseek-r1-distill-llama-70b": {
                     "model": "DeepSeek-R1-Distill-Llama-70B",
                     "crewai_prefix": "sambanova",
                     "url": "https://api.sambanova.ai/v1",
                     "long_url": "https://api.sambanova.ai/v1/chat/completions"
                 },
-                "deepseek-r1": {
-                    "model": "DeepSeek-R1",
-                    "crewai_prefix": "sambanova",
-                    "url": "https://api.sambanova.ai/v1",
-                    "long_url": "https://api.sambanova.ai/v1/chat/completions"
-                },
-                "llama-3.1-405b": {
-                    "model": "Meta-Llama-3.1-405B-Instruct",
+                "deepseek-r1-0528": {
+                    "model": "DeepSeek-R1-0528",
                     "crewai_prefix": "sambanova",
                     "url": "https://api.sambanova.ai/v1",
                     "long_url": "https://api.sambanova.ai/v1/chat/completions"
                 },
                 "llama-4-maverick": {
                     "model": "Llama-4-Maverick-17B-128E-Instruct",
+                    "crewai_prefix": "sambanova",
+                    "url": "https://api.sambanova.ai/v1",
+                    "long_url": "https://api.sambanova.ai/v1/chat/completions"
+                },
+                "gpt-oss-120b": {
+                    "model": "gpt-oss-120b",
+                    "crewai_prefix": "sambanova",
+                    "url": "https://api.sambanova.ai/v1",
+                    "long_url": "https://api.sambanova.ai/v1/chat/completions"
+                },
+                "qwen3-32b": {
+                    "model": "Qwen3-32B",
                     "crewai_prefix": "sambanova",
                     "url": "https://api.sambanova.ai/v1",
                     "long_url": "https://api.sambanova.ai/v1/chat/completions"
@@ -67,8 +79,8 @@
                     "url": "https://api.fireworks.ai/inference/v1",
                     "long_url": "https://api.fireworks.ai/inference/v1/chat/completions"
                 },
-                "deepseek-r1-distill-llama-70b": {
-                    "model": "accounts/fireworks/models/deepseek-r1-distill-llama-70b",
+                "deepseek-v3-0324": {
+                    "model": "accounts/fireworks/models/deepseek-v3-0324",
                     "crewai_prefix": "fireworks_ai",
                     "url": "https://api.fireworks.ai/inference/v1",
                     "long_url": "https://api.fireworks.ai/inference/v1/chat/completions"
@@ -79,20 +91,85 @@
                     "url": "https://api.fireworks.ai/inference/v1",
                     "long_url": "https://api.fireworks.ai/inference/v1/chat/completions"
                 },
-                "llama-3.1-405b": {
-                    "model": "accounts/fireworks/models/llama-v3p1-405b-instruct",
+                "llama-4-maverick": {
+                    "model": "accounts/fireworks/models/llama4-maverick-instruct-basic",
                     "crewai_prefix": "fireworks_ai",
                     "url": "https://api.fireworks.ai/inference/v1",
                     "long_url": "https://api.fireworks.ai/inference/v1/chat/completions"
                 },
-                "llama-4-maverick": {
-                    "model": "accounts/fireworks/models/llama-v3p3-70b-instruct",
-                    "crewai_prefix": "sambanova",
-                    "url": "https://api.sambanova.ai/v1",
-                    "long_url": "https://api.sambanova.ai/v1/chat/completions"
+                "gpt-oss-120b": {
+                    "model": "accounts/fireworks/models/gpt-oss-120b",
+                    "crewai_prefix": "fireworks_ai",
+                    "url": "https://api.fireworks.ai/inference/v1",
+                    "long_url": "https://api.fireworks.ai/inference/v1/chat/completions"
+                },
+                "qwen2.5-32b": {
+                    "model": "accounts/fireworks/models/qwen2.5-32b-instruct",
+                    "crewai_prefix": "fireworks_ai",
+                    "url": "https://api.fireworks.ai/inference/v1",
+                    "long_url": "https://api.fireworks.ai/inference/v1/chat/completions"
                 }
             },
             "api_key_env": "fireworks_key"
+        },
+        "together": {
+            "model_mapping": {
+                "llama-3.1-70b": {
+                    "model": "meta-llama/Llama-3.1-70B-Instruct-Turbo",
+                    "crewai_prefix": "together",
+                    "url": "https://api.together.xyz/v1",
+                    "long_url": "https://api.together.xyz/v1/chat/completions"
+                },
+                "llama-3.3-70b": {
+                    "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+                    "crewai_prefix": "together",
+                    "url": "https://api.together.xyz/v1",
+                    "long_url": "https://api.together.xyz/v1/chat/completions"
+                },
+                "llama-3.1-8b": {
+                    "model": "meta-llama/Llama-3.1-8B-Instruct-Turbo",
+                    "crewai_prefix": "together",
+                    "url": "https://api.together.xyz/v1",
+                    "long_url": "https://api.together.xyz/v1/chat/completions"
+                },
+                "deepseek-v3": {
+                    "model": "deepseek-ai/DeepSeek-V3",
+                    "crewai_prefix": "together",
+                    "url": "https://api.together.xyz/v1",
+                    "long_url": "https://api.together.xyz/v1/chat/completions"
+                },
+                "deepseek-r1-distill-llama-70b": {
+                    "model": "deepseek-ai/DeepSeek-R1-Distill-Llama-70B",
+                    "crewai_prefix": "together",
+                    "url": "https://api.together.xyz/v1",
+                    "long_url": "https://api.together.xyz/v1/chat/completions"
+                },
+                "deepseek-r1": {
+                    "model": "deepseek-ai/DeepSeek-R1",
+                    "crewai_prefix": "together",
+                    "url": "https://api.together.xyz/v1",
+                    "long_url": "https://api.together.xyz/v1/chat/completions"
+                },
+                "llama-4-maverick": {
+                    "model": "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
+                    "crewai_prefix": "together",
+                    "url": "https://api.together.xyz/v1",
+                    "long_url": "https://api.together.xyz/v1/chat/completions"
+                },
+                "gpt-oss-120b": {
+                    "model": "openai/gpt-oss-120b",
+                    "crewai_prefix": "together",
+                    "url": "https://api.together.xyz/v1",
+                    "long_url": "https://api.together.xyz/v1/chat/completions"
+                },
+                "qwen2.5-32b": {
+                    "model": "Qwen/Qwen2.5-32B-Instruct",
+                    "crewai_prefix": "together",
+                    "url": "https://api.together.xyz/v1",
+                    "long_url": "https://api.together.xyz/v1/chat/completions"
+                }
+            },
+            "api_key_env": "together_key"
         }
     }
 }

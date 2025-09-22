@@ -1107,15 +1107,23 @@ class WebSocketConnectionManager(WebSocketInterface):
             },
         ]
 
-        # Determine the correct API key based on provider (if admin panel is enabled)
-        api_key_to_use = api_keys.sambanova_key  # Default
+        # Determine the correct API key based on provider
         admin_enabled = os.getenv("SHOW_ADMIN_PANEL", "false").lower() == "true"
+
+        # Set the correct API key based on the provider
+        if provider == "fireworks":
+            api_key_to_use = api_keys.fireworks_key
+        elif provider == "together":
+            api_key_to_use = getattr(api_keys, 'together_key', "")
+        else:
+            api_key_to_use = api_keys.sambanova_key  # Default to sambanova
 
         if admin_enabled:
             # Debug log API keys before creating config
             logger.info(f"Creating config with API keys - sambanova: {bool(api_keys.sambanova_key)}, "
                        f"fireworks: {bool(api_keys.fireworks_key)}, "
                        f"together: {bool(getattr(api_keys, 'together_key', ''))}")
+            logger.info(f"Using API key for provider {provider}: {bool(api_key_to_use)}")
 
             # When admin panel is enabled, pass all API keys
             config = {

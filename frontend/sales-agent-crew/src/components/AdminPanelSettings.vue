@@ -250,6 +250,7 @@ const checkAdminStatus = async () => {
 }
 
 const loadConfiguration = async () => {
+  console.log('loadConfiguration called - this might overwrite reset values!')
   try {
     const token = await getAccessTokenSilently()
 
@@ -262,6 +263,12 @@ const loadConfiguration = async () => {
 
     const config = response.data
     selectedProvider.value = config.default_provider || 'sambanova'
+
+    // Load model mappings from backend if available
+    if (config.model_mappings) {
+      modelMappings.value = config.model_mappings
+      console.log('Loaded model mappings from backend:', Object.keys(modelMappings.value))
+    }
 
     // Also update the injected selectedOption from MainLayout
     const selectedOption = inject('selectedOption')
@@ -481,9 +488,37 @@ const resetConfiguration = async () => {
     })
 
     if (response.data.success) {
-      await loadConfiguration()
+      // Use the config returned by the reset operation directly
+      const resetConfig = response.data.config
+      console.log('Reset response received:', response.data)
+      console.log('Reset config:', resetConfig)
 
-      // Update the injected selectedOption to reflect the default provider
+      // Update local state with the reset values
+      selectedProvider.value = resetConfig.default_provider || 'sambanova'
+
+      // Clear task models and reload from reset config
+      // Use a new object to ensure reactivity
+      const newTaskModels = {}
+      if (resetConfig.task_models) {
+        console.log('Reset config task_models:', resetConfig.task_models)
+        Object.entries(resetConfig.task_models).forEach(([taskId, taskConfig]) => {
+          if (taskConfig.provider && taskConfig.model) {
+            const modelValue = `${taskConfig.provider}:${taskConfig.model}`
+            newTaskModels[taskId] = modelValue
+            console.log(`Setting task ${taskId} to ${modelValue}`)
+          }
+        })
+      }
+      // Replace the entire object to trigger reactivity
+      taskModels.value = newTaskModels
+      console.log('Final taskModels after reset:', taskModels.value)
+
+      // Update model mappings if provided
+      if (resetConfig.model_mappings) {
+        modelMappings.value = resetConfig.model_mappings
+      }
+
+      // Update the injected selectedOption
       const selectedOption = inject('selectedOption')
       if (selectedOption) {
         const providerMapping = {
@@ -492,15 +527,26 @@ const resetConfiguration = async () => {
           'together': { label: 'Together AI', value: 'together' }
         }
 
-        // After reset, it should be back to sambanova (default)
-        selectedOption.value = providerMapping['sambanova']
-        console.log('Reset selectedOption to default:', selectedOption.value)
+        if (providerMapping[selectedProvider.value]) {
+          selectedOption.value = providerMapping[selectedProvider.value]
+          console.log('Reset selectedOption to:', selectedOption.value)
+        }
       }
+
+      // Clear API keys (they should also be reset)
+      apiKeys.value = {
+        sambanova: '',
+        fireworks: '',
+        together: ''
+      }
+
+      // Don't call loadConfiguration here - it would overwrite the reset values
+      // The reset response already contains the correct default configuration
 
       showStatus('Configuration reset to defaults', 'success')
 
-      // Emit configuration update to notify other components
-      emit('configuration-updated', response.data.config)
+      // Emit configuration update to notify other components with the actual reset config
+      emit('configuration-updated', resetConfig)
     }
   } catch (error) {
     console.error('Failed to reset configuration:', error)
@@ -523,45 +569,8 @@ const showStatus = (text, type) => {
   }, 3000)
 }
 
-// Model mapping for cross-provider switching
-// Based on actual models used in production
-const modelMappings = {
-  'deepseek-v3': {
-    'sambanova': 'DeepSeek-V3-0324',
-    'fireworks': 'accounts/fireworks/models/deepseek-v3-0324',
-    'together': 'deepseek-ai/DeepSeek-V3'
-  },
-  'deepseek-r1-distill-70b': {
-    'sambanova': 'DeepSeek-R1-Distill-Llama-70B',
-    'fireworks': 'accounts/fireworks/models/deepseek-r1',
-    'together': 'deepseek-ai/DeepSeek-R1-Distill-Llama-70B'
-  },
-  'deepseek-r1': {
-    'sambanova': 'DeepSeek-R1-0528',
-    'fireworks': 'accounts/fireworks/models/deepseek-r1',
-    'together': 'deepseek-ai/DeepSeek-R1'
-  },
-  'llama-3.3-70b': {
-    'sambanova': 'Meta-Llama-3.3-70B-Instruct',
-    'fireworks': 'accounts/fireworks/models/llama-v3p3-70b-instruct',
-    'together': 'meta-llama/Llama-3.3-70B-Instruct-Turbo'
-  },
-  'llama-4-maverick': {
-    'sambanova': 'Llama-4-Maverick-17B-128E-Instruct',
-    'fireworks': 'accounts/fireworks/models/llama-v4-maverick',
-    'together': 'meta-llama/Llama-4-Maverick'
-  },
-  'llama-3.1-8b': {
-    'sambanova': 'Meta-Llama-3.1-8B-Instruct',
-    'fireworks': 'accounts/fireworks/models/llama-v3p1-8b-instruct',
-    'together': 'meta-llama/Llama-3.1-8B-Instruct-Turbo'
-  },
-  'qwen3-32b': {
-    'sambanova': 'Qwen3-32B',
-    'fireworks': 'accounts/fireworks/models/qwen2.5-32b-instruct',
-    'together': 'Qwen/Qwen2.5-32B-Instruct'
-  }
-}
+// Model mappings will be loaded from backend
+const modelMappings = ref({})
 
 const mapModelsToProvider = (newProvider) => {
   // Map each task's model to the equivalent in the new provider
@@ -573,7 +582,7 @@ const mapModelsToProvider = (newProvider) => {
 
       // Find which model key this corresponds to
       let mappedModel = null
-      for (const [, mappings] of Object.entries(modelMappings)) {
+      for (const [, mappings] of Object.entries(modelMappings.value)) {
         if (mappings[currentProvider] === currentModel) {
           // Found the model key, now get the equivalent for new provider
           mappedModel = mappings[newProvider]

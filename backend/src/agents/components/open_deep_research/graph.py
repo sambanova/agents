@@ -46,6 +46,7 @@ from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig, RunnableLambda
 from langchain_fireworks import ChatFireworks
+from langchain_openai import ChatOpenAI
 from langgraph.constants import Send
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Checkpointer, Command, interrupt
@@ -956,6 +957,28 @@ def create_deep_research_graph(
             max_tokens=8192,
             sambanova_api_key=api_key,
             timeout=request_timeout,
+        )
+    elif provider == "together":
+        writer_model = ChatOpenAI(
+            base_url=writer_model_config["url"],
+            model=writer_model_config["model"],
+            temperature=0,
+            max_tokens=8192,
+            api_key=api_key,
+        )
+        planner_model = ChatOpenAI(
+            base_url=planner_model_config["url"],
+            model=planner_model_config["model"],
+            temperature=0,
+            max_tokens=8192,
+            api_key=api_key,
+        )
+        summary_model = ChatOpenAI(
+            base_url=summary_model_config["url"],
+            model=summary_model_config["model"],
+            temperature=0,
+            max_tokens=8192,
+            api_key=api_key,
         )
     else:
         raise ValueError(f"Unsupported provider: {provider}")
