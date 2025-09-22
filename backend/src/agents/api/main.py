@@ -5,6 +5,7 @@ import mlflow
 import structlog
 from agents.api.data_types import APIKeys
 from agents.api.middleware import LoggingMiddleware
+from agents.api.routers.admin import router as admin_router
 from agents.api.routers.agent import router as agent_router
 from agents.api.routers.chat import router as chat_router
 from agents.api.routers.connectors import router as connectors_router
@@ -158,6 +159,7 @@ app.add_middleware(
     expose_headers=["content-type", "content-length"],
 )
 
+app.include_router(admin_router)
 app.include_router(chat_router)
 app.include_router(upload_router)
 app.include_router(files_router)
@@ -193,12 +195,39 @@ async def set_api_keys(
     """
     Store API keys for a user in Redis.
 
+    When admin panel is enabled (SHOW_ADMIN_PANEL=true):
+    - This endpoint should only be called by non-admin components (for Serper/Exa keys)
+    - Preserves Fireworks/Together/SambaNova keys managed by admin panel
+    - Admin panel uses /admin/config endpoint for LLM provider keys
+
+    When admin panel is disabled:
+    - This endpoint manages all API keys as before
+
     Args:
         user_id (str): The ID of the user
         keys (APIKeys): The API keys to store
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
     try:
+        admin_enabled = os.getenv("SHOW_ADMIN_PANEL", "false").lower() == "true"
+
+        if admin_enabled:
+            # When admin panel is enabled, preserve LLM provider keys
+            # This endpoint should only update non-LLM keys (Serper, Exa)
+            existing_keys = await app.state.redis_storage_service.get_user_api_key(user_id)
+
+            # Preserve all LLM provider keys from admin panel
+            if existing_keys:
+                # Keep existing provider keys if not explicitly provided
+                if not keys.sambanova_key and existing_keys.sambanova_key:
+                    keys.sambanova_key = existing_keys.sambanova_key
+                if not keys.fireworks_key and existing_keys.fireworks_key:
+                    keys.fireworks_key = existing_keys.fireworks_key
+                if not getattr(keys, 'together_key', '') and getattr(existing_keys, 'together_key', ''):
+                    keys.together_key = existing_keys.together_key
+
+            logger.info(f"Preserving LLM keys while updating other keys for user {user_id[:8]}...")
+
         await app.state.redis_storage_service.set_user_api_key(user_id, keys)
 
         return JSONResponse(
@@ -225,10 +254,10 @@ async def get_api_keys(
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
     try:
-        key_prefix = f"api_keys:{user_id}"
-        stored_keys = await app.state.redis_client.hgetall(key_prefix, user_id)
+        # Use the redis_storage_service which properly handles the data
+        stored_keys = await app.state.redis_storage_service.get_user_api_key(user_id)
 
-        if not stored_keys:
+        if not stored_keys or not stored_keys.sambanova_key:
             return JSONResponse(
                 status_code=404,
                 content={"error": "No API keys found for this user"},
@@ -237,10 +266,11 @@ async def get_api_keys(
         return JSONResponse(
             status_code=200,
             content={
-                "sambanova_key": stored_keys.get("sambanova_key", ""),
-                "serper_key": stored_keys.get("serper_key", ""),
-                "exa_key": stored_keys.get("exa_key", ""),
-                "fireworks_key": stored_keys.get("fireworks_key", ""),
+                "sambanova_key": stored_keys.sambanova_key,
+                "serper_key": stored_keys.serper_key,
+                "exa_key": stored_keys.exa_key,
+                "fireworks_key": stored_keys.fireworks_key,
+                "together_key": stored_keys.together_key,
             },
         )
 

@@ -224,12 +224,27 @@ class WebSocketConnectionManager(WebSocketInterface):
                 api_keys = redis_api_keys
             else:
                 # Initialize API keys object
+                # When admin panel is enabled, use user's stored Fireworks key
+                admin_enabled = os.getenv("SHOW_ADMIN_PANEL", "false").lower() == "true"
+
+                # Log what we have in redis_api_keys
+                if admin_enabled:
+                    logger.info(f"Redis API keys: sambanova={bool(redis_api_keys.sambanova_key)}, "
+                              f"fireworks={bool(redis_api_keys.fireworks_key)}, "
+                              f"together={bool(redis_api_keys.together_key)}")
+
                 api_keys = APIKeys(
                     sambanova_key=redis_api_keys.sambanova_key,
-                    fireworks_key=os.getenv("FIREWORKS_KEY", ""),
-                    serper_key=os.getenv("SERPER_KEY", ""),
-                    exa_key=os.getenv("EXA_KEY", ""),
+                    fireworks_key=redis_api_keys.fireworks_key if admin_enabled else os.getenv("FIREWORKS_KEY", ""),
+                    together_key=redis_api_keys.together_key if admin_enabled else "",
+                    serper_key=redis_api_keys.serper_key or os.getenv("SERPER_KEY", ""),
+                    exa_key=redis_api_keys.exa_key or os.getenv("EXA_KEY", ""),
                 )
+
+                # Log the final api_keys object
+                logger.info(f"Final API keys after initialization: sambanova={bool(api_keys.sambanova_key)}, "
+                          f"fireworks={bool(api_keys.fireworks_key)}, "
+                          f"together={bool(api_keys.together_key)}")
 
             # Start background task for Redis messages if not restored
             if not background_task or background_task.done():
@@ -298,6 +313,11 @@ class WebSocketConnectionManager(WebSocketInterface):
 
                 # Check provider and validate corresponding API key
                 provider = user_message_input["provider"]
+                logger.info(f"Provider requested: {provider}, API keys available: "
+                          f"sambanova={bool(api_keys.sambanova_key)}, "
+                          f"fireworks={bool(api_keys.fireworks_key)}, "
+                          f"together={bool(api_keys.together_key)}")
+
                 if provider == "sambanova":
                     if api_keys.sambanova_key == "":
                         await websocket.close(
@@ -306,8 +326,15 @@ class WebSocketConnectionManager(WebSocketInterface):
                         return
                 elif provider == "fireworks":
                     if api_keys.fireworks_key == "":
+                        logger.error(f"Fireworks key is empty! Closing websocket.")
                         await websocket.close(
                             code=4008, reason="Fireworks API key required but not found"
+                        )
+                        return
+                elif provider == "together":
+                    if not hasattr(api_keys, 'together_key') or api_keys.together_key == "":
+                        await websocket.close(
+                            code=4010, reason="Together API key required but not found"
                         )
                         return
                 else:
@@ -323,6 +350,25 @@ class WebSocketConnectionManager(WebSocketInterface):
                 input_, model, multimodal_input = await self.create_user_message_input(
                     user_id, user_message_input
                 )
+
+                # Check if user has config in Redis - if not, clear any cached overrides
+                # This handles the case where config was reset but singleton still has old data
+                admin_enabled = os.getenv("SHOW_ADMIN_PANEL", "false").lower() == "true"
+                if admin_enabled:
+                    try:
+                        from agents.config.llm_config_manager import get_config_manager
+                        config_manager = get_config_manager()
+
+                        # Check if config exists in Redis
+                        config_key = f"llm_config:{user_id}"
+                        stored_config = await self.message_storage.redis_client.get(config_key, user_id=user_id)
+
+                        if not stored_config and config_manager.has_user_override(user_id):
+                            # Redis doesn't have config but singleton does - clear it
+                            logger.info(f"Clearing stale config override for user {user_id[:8]}...")
+                            config_manager.clear_user_override(user_id)
+                    except Exception as e:
+                        logger.error(f"Error checking config freshness: {e}")
 
                 config = await self.create_config(
                     user_id=user_id,
@@ -1061,17 +1107,53 @@ class WebSocketConnectionManager(WebSocketInterface):
             },
         ]
 
-        config = {
-            "configurable": {
-                "type==default/user_id": user_id,
-                "type==default/llm_type": llm_type,
-                "thread_id": thread_id,
-                "user_id": user_id,
-                "api_key": api_keys.sambanova_key,
-                "message_id": message_id,
-            },
-            "recursion_limit": 50,
-        }
+        # Determine the correct API key based on provider (if admin panel is enabled)
+        api_key_to_use = api_keys.sambanova_key  # Default
+        admin_enabled = os.getenv("SHOW_ADMIN_PANEL", "false").lower() == "true"
+
+        if admin_enabled:
+            # Debug log API keys before creating config
+            logger.info(f"Creating config with API keys - sambanova: {bool(api_keys.sambanova_key)}, "
+                       f"fireworks: {bool(api_keys.fireworks_key)}, "
+                       f"together: {bool(getattr(api_keys, 'together_key', ''))}")
+
+            # When admin panel is enabled, pass all API keys
+            config = {
+                "configurable": {
+                    "type==default/user_id": user_id,
+                    "type==default/llm_type": llm_type,
+                    "thread_id": thread_id,
+                    "user_id": user_id,
+                    "api_key": api_key_to_use,  # Keep for backward compatibility
+                    "api_keys": {
+                        "sambanova": api_keys.sambanova_key,
+                        "fireworks": api_keys.fireworks_key,
+                        "together": getattr(api_keys, 'together_key', ""),
+                    },
+                    "message_id": message_id,
+                },
+                "recursion_limit": 50,
+            }
+        else:
+            # Original behavior when admin panel is disabled
+            if provider == "fireworks":
+                api_key_to_use = api_keys.fireworks_key
+            elif provider == "together":
+                api_key_to_use = getattr(api_keys, 'together_key', "")
+            else:
+                api_key_to_use = api_keys.sambanova_key
+
+            config = {
+                "configurable": {
+                    "type==default/user_id": user_id,
+                    "type==default/llm_type": llm_type,
+                    "thread_id": thread_id,
+                    "user_id": user_id,
+                    "api_key": api_key_to_use,
+                    "message_id": message_id,
+                },
+                "recursion_limit": 50,
+            }
 
         # Construct system message with file context and routing guidance
         multi_file_guidance = ""
@@ -1175,8 +1257,8 @@ DATA OUTPUT FORMATTING: When creating reports or analysis outputs, structure dat
                 "description": "This subgraph generates comprehensive research reports with multiple perspectives, sources, and analysis. Use when the user requests: detailed research, in-depth analysis, comprehensive reports, market research, academic research, or thorough investigation of any topic. IMPORTANT: Pass the user's specific research question or topic as a clear, focused query. Extract the core research intent from the user's message and formulate it as a specific research question or topic statement. Examples: 'AI impact on healthcare industry', 'sustainable energy solutions for developing countries', 'cryptocurrency market trends 2024'.",
                 "next_node": END,
                 "graph": create_deep_research_graph(
-                    api_key=api_keys.sambanova_key,
-                    provider="sambanova",
+                    api_key=api_key_to_use,
+                    provider=provider,
                     request_timeout=120,
                     redis_storage=self.message_storage,
                     user_id=user_id,
@@ -1196,7 +1278,7 @@ DATA OUTPUT FORMATTING: When creating reports or analysis outputs, structure dat
                 "next_node": "agent",
                 "graph": create_code_execution_graph(
                     user_id=user_id,
-                    sambanova_api_key=api_keys.sambanova_key,
+                    sambanova_api_key=api_key_to_use,
                     redis_storage=self.message_storage,
                     daytona_manager=daytona_manager,
                 ),
@@ -1238,7 +1320,7 @@ For comprehensive analysis combining multiple files, prefer using the DaytonaCod
                         "user_id": user_id,
                         "doc_ids": indexed_doc_ids,
                         "description": retrieval_description,
-                        "api_key": api_keys.sambanova_key,
+                        "api_key": api_key_to_use,
                         "redis_client": self.sync_redis_client,
                     },
                 }
@@ -1250,7 +1332,7 @@ For comprehensive analysis combining multiple files, prefer using the DaytonaCod
                 "next_node": END,
                 "graph": create_data_science_subgraph(
                     user_id=user_id,
-                    sambanova_api_key=api_keys.sambanova_key,
+                    sambanova_api_key=api_key_to_use,
                     redis_storage=self.message_storage,
                     daytona_manager=daytona_manager,
                     directory_content=directory_content,

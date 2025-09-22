@@ -9,7 +9,7 @@ import langsmith as ls
 import structlog
 from agents.components.compound.data_types import LiberalFunctionMessage, LLMType
 from agents.components.compound.prompts import xml_template
-from agents.components.compound.util import extract_api_key
+from agents.components.compound.util import extract_api_key, extract_api_keys, extract_user_id
 from agents.utils.logging_utils import setup_logging_context
 from langchain.tools import BaseTool
 from langchain_core.language_models.base import LanguageModelLike
@@ -384,9 +384,15 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
         setup_logging_context(config, node="agent")
         logger.info("Agent node execution started", num_messages=len(messages))
         api_key = extract_api_key(config)
+        api_keys = extract_api_keys(config)  # Get all API keys if admin panel is enabled
+        user_id = extract_user_id(config)  # Get user_id for admin panel support
 
-        # Call your LLM partial with api_key
-        initialised_llm = llm(api_key=api_key)
+        # Call your LLM partial with api_key (and optionally api_keys and user_id)
+        # Pass api_keys and user_id if available for admin panel support
+        if api_keys:
+            initialised_llm = llm(api_key=api_key, api_keys=api_keys, user_id=user_id)
+        else:
+            initialised_llm = llm(api_key=api_key)
 
         llm_with_stop = initialised_llm.bind(
             stop=["</subgraph_input>", "<observation>", "\n\nHuman:", "\n\nAssistant:"]
@@ -427,10 +433,22 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             logger.info("Invoking LLM")
             response = await llm_with_stop.ainvoke(processed_messages, config)
             duration = time.time() - start_time
+
+            # Get model name - different providers store it differently
+            model_name = None
+            if hasattr(llm_with_stop, 'model'):
+                model_name = llm_with_stop.model
+            elif hasattr(llm_with_stop, 'model_name'):
+                model_name = llm_with_stop.model_name
+            elif hasattr(llm_with_stop, 'bound') and hasattr(llm_with_stop.bound, 'model'):
+                model_name = llm_with_stop.bound.model
+            elif hasattr(llm_with_stop, 'bound') and hasattr(llm_with_stop.bound, 'model_name'):
+                model_name = llm_with_stop.bound.model_name
+
             logger.info(
                 "LLM invocation completed",
                 duration_ms=round(duration * 1000, 2),
-                model=llm_with_stop.model,
+                model=model_name,
             )
 
             # Post-process response to catch potential formatting issues

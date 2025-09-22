@@ -2104,16 +2104,22 @@ async function connectWebSocket() {
     return;
   }
 
+  // Check if admin panel is enabled
+  const isAdminPanelEnabled = import.meta.env.VITE_SHOW_ADMIN_PANEL === 'true'
+
   try {
     await loadKeys();
 
-    await axios.post(
-      `${import.meta.env.VITE_API_URL}/set_api_keys`,
-      {
-        sambanova_key: sambanovaKey.value || '',
-        serper_key: serperKey.value || '',
-        exa_key: exaKey.value || '',
-        fireworks_key: fireworksKey.value || '',
+    // Only call /set_api_keys if admin panel is disabled
+    // When admin panel is enabled, keys are managed through /admin/config
+    if (!isAdminPanelEnabled) {
+      await axios.post(
+        `${import.meta.env.VITE_API_URL}/set_api_keys`,
+        {
+          sambanova_key: sambanovaKey.value || '',
+          serper_key: serperKey.value || '',
+          exa_key: exaKey.value || '',
+          fireworks_key: fireworksKey.value || '',
       },
       {
         headers: {
@@ -2121,6 +2127,7 @@ async function connectWebSocket() {
         },
       }
     );
+    }
 
     // Use the same proxy pattern as API calls - let Vite proxy handle it
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

@@ -183,6 +183,9 @@ import FullReportModal from '@/components/FullReportModal.vue';
 import ChatAgentSidebar from '@/components/ChatMain/ChatAgentSidebar.vue';
 import { useReportStore } from '@/stores/reportStore';
 import emitterMitt from '@/utils/eventBus.js';
+import axios from 'axios';
+
+const { getAccessTokenSilently } = useAuth0();
 
 const isSidebarCollapsed = ref(false);
 const isMobile = ref(false);
@@ -272,10 +275,39 @@ const currentRunId = ref('');
 // The sessionId that remains consistent for document uploads and searches
 const sessionId = ref('');
 
-onMounted(() => {
+onMounted(async () => {
   // Generate a new session ID
   sessionId.value = uuidv4();
   reportStore.loadSavedReports();
+
+  // Load admin panel configuration if enabled
+  const isAdminPanelEnabled = import.meta.env.VITE_SHOW_ADMIN_PANEL === 'true';
+  if (isAdminPanelEnabled) {
+    try {
+      const token = await getAccessTokenSilently();
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+      const response = await axios.get(`${apiBaseUrl}/admin/config`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.data && response.data.default_provider) {
+        const providerMapping = {
+          'sambanova': { label: 'SambaNova', value: 'sambanova' },
+          'fireworks': { label: 'Fireworks AI', value: 'fireworks' },
+          'together': { label: 'Together AI', value: 'together' }
+        };
+
+        if (providerMapping[response.data.default_provider]) {
+          selectedOption.value = providerMapping[response.data.default_provider];
+          console.log('Loaded provider from admin config:', selectedOption.value);
+        }
+      }
+    } catch (error) {
+      console.log('Could not load admin config, using default provider:', error.message);
+    }
+  }
 
   // Listen for new chat events
   emitterMitt.on('new-chat', handleNewChat);
