@@ -72,6 +72,8 @@ class CustomChatSambaNovaCloud(ChatSambaNovaCloud):
                 **kwargs,
                 **self.model_kwargs,
             }
+        if self.model == "gpt-oss-120b":
+            data["reasoning_effort"]="high"
         http_session = requests.Session()
         response = http_session.post(
             self.sambanova_url,
