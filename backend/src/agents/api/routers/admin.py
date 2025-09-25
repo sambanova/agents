@@ -41,7 +41,8 @@ class UserConfigUpdate(BaseModel):
     api_keys: Dict[str, str]  # Provider -> API key mapping
     provider_base_urls: Optional[Dict[str, str]] = None  # Provider -> base URL mapping
     task_base_urls: Optional[Dict[str, str]] = None  # Task -> base URL mapping
-    custom_models: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None  # Provider -> {model_id -> model_info}
+    custom_models: Optional[List[Dict[str, Any]]] = None  # List of custom models
+    custom_providers: Optional[List[Dict[str, Any]]] = None  # List of custom OpenAI-compatible providers
 
 
 class ModelListResponse(BaseModel):
@@ -180,10 +181,8 @@ async def update_configuration(
         overrides["default_provider"] = update.default_provider
     if update.task_models:
         overrides["task_models"] = update.task_models
-    if update.provider_base_urls:
-        overrides["provider_base_urls"] = update.provider_base_urls
-    if update.task_base_urls:
-        overrides["task_base_urls"] = update.task_base_urls
+    if update.custom_providers:
+        overrides["custom_providers"] = update.custom_providers
     if update.custom_models:
         overrides["custom_models"] = update.custom_models
 
@@ -198,6 +197,13 @@ async def update_configuration(
         try:
             # Store configuration in Redis using the redis_client directly
             import json
+
+            # Include custom API keys in the overrides if they exist
+            if update.api_keys:
+                custom_api_keys = {k: v for k, v in update.api_keys.items() if k.startswith("custom_")}
+                if custom_api_keys:
+                    overrides["custom_api_keys"] = custom_api_keys
+
             await redis_storage.redis_client.set(
                 config_key,
                 json.dumps(overrides),
@@ -218,6 +224,16 @@ async def update_configuration(
                 # Get existing keys to preserve non-LLM keys
                 existing_keys = await redis_storage.get_user_api_key(user_id)
 
+                # Extract custom provider API keys and store them separately
+                custom_api_keys = {}
+                for key, value in update.api_keys.items():
+                    if key.startswith("custom_"):
+                        custom_api_keys[key] = value
+
+                # Store custom provider API keys in the overrides
+                if custom_api_keys:
+                    overrides["custom_api_keys"] = custom_api_keys
+
                 api_keys_obj = APIKeys(
                     sambanova_key=update.api_keys.get("sambanova", ""),
                     fireworks_key=update.api_keys.get("fireworks", ""),
@@ -229,7 +245,8 @@ async def update_configuration(
                 # Debug log what we're storing
                 logger.info(f"Storing API keys: sambanova={bool(api_keys_obj.sambanova_key)}, "
                            f"fireworks={bool(api_keys_obj.fireworks_key)}, "
-                           f"together={bool(api_keys_obj.together_key)}")
+                           f"together={bool(api_keys_obj.together_key)}, "
+                           f"custom_providers={len(custom_api_keys)} keys")
 
                 await redis_storage.set_user_api_key(user_id, api_keys_obj)
                 logger.info(f"Updated API keys for user {user_id[:8]}...")

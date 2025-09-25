@@ -237,11 +237,18 @@ class LLMConfigManager:
             if task in user_config:
                 result = user_config[task].copy()
 
-                # Check for task-specific base URL override
-                task_base_urls = self._user_overrides[user_id].get("task_base_urls", {})
-                if task in task_base_urls:
-                    result["base_url"] = task_base_urls[task]
-                    logger.debug(f"Task {task} using custom base URL: {result['base_url']}")
+                # If this task uses a custom provider, get its configuration
+                if "custom_provider" in result:
+                    custom_providers = self._user_overrides[user_id].get("custom_providers", [])
+                    for custom_prov in custom_providers:
+                        if custom_prov.get("name") == result["custom_provider"]:
+                            # Use the custom provider's base URL
+                            result["base_url"] = custom_prov.get("baseUrl")
+                            # Get the API key for this custom provider
+                            result["api_key"] = custom_prov.get("apiKey")
+                            # Provider type is already set from frontend
+                            logger.debug(f"Task {task} using custom provider {result['custom_provider']} with type {result.get('provider')}")
+                            break
 
                 logger.debug(f"Task {task} for user {user_id[:8]}... using override: provider={result.get('provider')}, model={result.get('model')}")
                 return result
@@ -340,6 +347,14 @@ class LLMConfigManager:
                 config["task_models"].update(user_config["task_models"])
             if "default_provider" in user_config:
                 config["default_provider"] = user_config["default_provider"]
+
+            # Include custom providers and models
+            if "custom_providers" in user_config:
+                config["custom_providers"] = user_config["custom_providers"]
+            if "custom_models" in user_config:
+                config["custom_models"] = user_config["custom_models"]
+            if "custom_api_keys" in user_config:
+                config["custom_api_keys"] = user_config["custom_api_keys"]
 
         return config
 

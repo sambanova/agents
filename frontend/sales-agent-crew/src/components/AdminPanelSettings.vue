@@ -81,32 +81,92 @@
         </select>
       </div>
 
-        <!-- Provider Base URLs -->
+        <!-- Custom OpenAI-Compatible Providers -->
         <div v-if="viewMode === 'advanced'">
-          <h3 class="text-lg font-medium text-gray-900 mb-3">Provider Base URLs</h3>
-          <div class="space-y-4">
-            <div v-for="provider in providers" :key="provider">
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                {{ formatProviderName(provider) }} Base URL
-                <span v-if="provider === selectedProvider" class="text-xs text-green-600 ml-2">(Active)</span>
-              </label>
-              <div class="flex space-x-2">
-                <input
-                  v-model="providerBaseUrls[provider]"
-                  type="url"
-                  :placeholder="getDefaultBaseUrl(provider)"
-                  class="flex-1 block border border-gray-300 rounded-md shadow-sm p-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                />
+          <h3 class="text-lg font-medium text-gray-900 mb-3">Custom OpenAI-Compatible Providers</h3>
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+            <p class="text-sm text-blue-900">
+              <strong>How it works:</strong> Add any OpenAI-compatible API endpoint with its base URL and API key. When you assign a custom provider's model to a task, that provider's API key will automatically be used for authentication.
+            </p>
+          </div>
+
+          <!-- List existing custom providers -->
+          <div v-if="customProviders.length > 0" class="mb-4 space-y-2">
+            <div v-for="(provider, index) in customProviders" :key="index" class="border rounded-lg p-3">
+              <div class="flex justify-between items-start">
+                <div class="flex-1">
+                  <h4 class="font-medium">{{ provider.name }}
+                    <span class="text-xs text-gray-500 ml-2">({{ provider.type === 'openai' ? 'OpenAI' : provider.type === 'sambanova' ? 'SambaNova' : 'Fireworks' }} Compatible)</span>
+                  </h4>
+                  <p class="text-sm text-gray-600">{{ provider.baseUrl }}</p>
+                  <div v-if="provider.apiKey" class="flex items-center mt-1">
+                    <span class="text-xs text-gray-500">API Key: </span>
+                    <span v-if="customProviderVisibility[provider.name]" class="text-xs ml-1">{{ provider.apiKey }}</span>
+                    <span v-else class="text-xs ml-1">••••••••</span>
+                    <button
+                      @click="customProviderVisibility[provider.name] = !customProviderVisibility[provider.name]"
+                      class="ml-2 text-gray-400 hover:text-gray-600"
+                    >
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path v-if="customProviderVisibility[provider.name]" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.519 5 12 5c4.481 0 8.268 2.943 9.542 7-1.274 4.057-5.061 7-9.542 7-4.481 0-8.268-2.943-9.542-7z" />
+                        <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A9.952 9.952 0 0112 19.5c-5.247 0-9.645-4.028-9.985-9.227M9.642 9.642a3 3 0 104.715 4.715M3 3l18 18" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
                 <button
-                  @click="resetBaseUrl(provider)"
-                  class="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
-                  title="Reset to default"
+                  @click="removeCustomProvider(index)"
+                  class="text-red-600 hover:text-red-800"
                 >
                   <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
+            </div>
+          </div>
+
+          <!-- Add new provider form -->
+          <div class="border rounded-lg p-3 bg-gray-50">
+            <h4 class="text-sm font-medium mb-2">Add New Provider</h4>
+            <div class="space-y-2">
+              <input
+                v-model="newProvider.name"
+                placeholder="Provider Name (e.g., My Custom API)"
+                class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+              />
+              <input
+                v-model="newProvider.baseUrl"
+                type="url"
+                placeholder="Base URL (e.g., https://api.example.com/v1)"
+                class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+              />
+              <select
+                v-model="newProvider.type"
+                class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+              >
+                <option value="sambanova">SambaNova Compatible</option>
+                <option value="fireworks">Fireworks Compatible</option>
+                <option value="openai">OpenAI Compatible (Together/Custom)</option>
+              </select>
+              <input
+                v-model="newProvider.apiKey"
+                type="password"
+                placeholder="API Key (required for authentication)"
+                class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+              />
+              <input
+                v-model="newProvider.models"
+                placeholder="Model IDs (comma-separated, e.g., gpt-4, claude-3)"
+                class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+              />
+              <button
+                @click="addCustomProvider"
+                :disabled="!newProvider.name || !newProvider.baseUrl"
+                class="w-full px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm"
+              >
+                {{ !newProvider.apiKey ? 'Add Provider (API Key Required)' : 'Add Provider' }}
+              </button>
             </div>
           </div>
         </div>
@@ -164,45 +224,64 @@
         <!-- Custom Models -->
         <div v-if="viewMode === 'advanced'">
           <h3 class="text-lg font-medium text-gray-900 mb-3">Custom Models</h3>
-          <div class="space-y-4">
-            <div v-for="provider in providers" :key="provider" class="border rounded-lg p-4">
-              <h4 class="font-medium text-sm text-gray-700 mb-2">{{ formatProviderName(provider) }}</h4>
+          <p class="text-sm text-gray-600 mb-3">Add model IDs that can be used with any provider.</p>
 
-              <!-- List existing custom models -->
-              <div v-if="customModels[provider] && Object.keys(customModels[provider]).length > 0" class="mb-3 space-y-2">
-                <div v-for="(model, modelId) in customModels[provider]" :key="modelId" class="flex items-center justify-between bg-gray-50 p-2 rounded">
-                  <span class="text-sm">{{ model.name || modelId }}</span>
-                  <button
-                    @click="removeCustomModel(provider, modelId)"
-                    class="text-red-600 hover:text-red-800"
-                  >
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
+          <!-- List existing custom models -->
+          <div v-if="customModels.length > 0" class="mb-4 space-y-2">
+            <div v-for="(model, index) in customModels" :key="index" class="flex items-center justify-between bg-gray-50 p-2 rounded">
+              <div>
+                <span class="text-sm font-medium">{{ model.name || model.id }}</span>
+                <span class="text-xs text-gray-500 ml-2">({{ model.id }})</span>
+                <span v-if="model.provider" class="text-xs text-gray-500 ml-2">- {{ model.provider }}</span>
               </div>
+              <button
+                @click="removeCustomModel(index)"
+                class="text-red-600 hover:text-red-800"
+              >
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
 
-              <!-- Add new custom model -->
-              <div class="flex space-x-2">
-                <input
-                  v-model="newCustomModels[provider].id"
-                  placeholder="Model ID"
-                  class="flex-1 border border-gray-300 rounded-md shadow-sm p-2 text-sm"
-                />
-                <input
-                  v-model="newCustomModels[provider].name"
-                  placeholder="Display Name"
-                  class="flex-1 border border-gray-300 rounded-md shadow-sm p-2 text-sm"
-                />
-                <button
-                  @click="addCustomModel(provider)"
-                  :disabled="!newCustomModels[provider].id"
-                  class="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm"
-                >
-                  Add
-                </button>
-              </div>
+          <!-- Add new custom model -->
+          <div class="border rounded-lg p-3 bg-gray-50">
+            <h4 class="text-sm font-medium mb-2">Add New Model</h4>
+            <div class="space-y-2">
+              <input
+                v-model="newCustomModel.id"
+                placeholder="Model ID (required)"
+                class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+              />
+              <input
+                v-model="newCustomModel.name"
+                placeholder="Display Name (optional)"
+                class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+              />
+              <select
+                v-model="newCustomModel.provider"
+                class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+              >
+                <option value="">Available for all providers</option>
+                <optgroup label="Built-in Providers">
+                  <option v-for="provider in providers" :key="provider" :value="provider">
+                    {{ formatProviderName(provider) }}
+                  </option>
+                </optgroup>
+                <optgroup v-if="customProviders.length > 0" label="Custom Providers">
+                  <option v-for="provider in customProviders" :key="provider.name" :value="provider.name">
+                    {{ provider.name }}
+                  </option>
+                </optgroup>
+              </select>
+              <button
+                @click="addCustomModel"
+                :disabled="!newCustomModel.id"
+                class="w-full px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm"
+              >
+                Add Model
+              </button>
             </div>
           </div>
         </div>
@@ -212,6 +291,16 @@
       <div v-if="activeTab === 'tasks'" class="space-y-6">
         <div class="mb-4">
           <p class="text-sm text-gray-600">Configure models and base URLs for specific tasks. Grouped by agent type for better organization.</p>
+
+          <!-- Custom Provider Usage Summary -->
+          <div v-if="customProviderUsage.length > 0" class="mt-3 bg-green-50 border border-green-200 rounded-lg p-3">
+            <h4 class="text-sm font-medium text-green-900 mb-2">Custom Providers in Use:</h4>
+            <ul class="text-xs text-green-800 space-y-1">
+              <li v-for="usage in customProviderUsage" :key="usage.provider">
+                <strong>{{ usage.provider }}:</strong> {{ usage.tasks.join(', ') }}
+              </li>
+            </ul>
+          </div>
         </div>
 
         <!-- Main Agents -->
@@ -225,7 +314,10 @@
           <div class="space-y-3">
             <div v-for="task in mainAgentTasks" :key="task.id" class="task-row">
               <div class="task-config">
-                <label class="task-label">{{ task.name }}</label>
+                <label class="task-label">
+                  {{ task.name }}
+                  <span v-if="isUsingCustomProvider(task.id)" class="text-xs text-green-600 ml-1" title="Using custom provider">🔐</span>
+                </label>
                 <div class="task-controls">
                   <select
                     v-model="taskModels[task.id]"
@@ -238,15 +330,19 @@
                         {{ model.name }}
                       </option>
                     </optgroup>
+                    <optgroup v-if="customProviders.length > 0" label="Custom Providers">
+                      <template v-for="provider in customProviders" :key="`custom-${provider.name}`">
+                        <!-- Models from provider definition -->
+                        <option v-for="model in provider.models || []" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
+                          {{ model }} ({{ provider.name }})
+                        </option>
+                        <!-- Custom models added separately for this provider -->
+                        <option v-for="model in customModels.filter(m => m.provider === provider.name)" :key="`custom:${provider.name}:${model.id}`" :value="`custom:${provider.name}:${model.id}`">
+                          {{ model.name || model.id }} ({{ provider.name }})
+                        </option>
+                      </template>
+                    </optgroup>
                   </select>
-                  <div v-if="viewMode === 'advanced'" class="flex items-center space-x-2">
-                    <input
-                      v-model="taskBaseUrls[task.id]"
-                      type="url"
-                      placeholder="Custom Base URL (optional)"
-                      class="task-url-input"
-                    />
-                  </div>
                 </div>
               </div>
             </div>
@@ -264,7 +360,10 @@
           <div class="space-y-3">
             <div v-for="task in deepResearchTasks" :key="task.id" class="task-row">
               <div class="task-config">
-                <label class="task-label">{{ task.name }}</label>
+                <label class="task-label">
+                  {{ task.name }}
+                  <span v-if="isUsingCustomProvider(task.id)" class="text-xs text-green-600 ml-1" title="Using custom provider">🔐</span>
+                </label>
                 <div class="task-controls">
                   <select
                     v-model="taskModels[task.id]"
@@ -277,15 +376,19 @@
                         {{ model.name }}
                       </option>
                     </optgroup>
+                    <optgroup v-if="customProviders.length > 0" label="Custom Providers">
+                      <template v-for="provider in customProviders" :key="`custom-${provider.name}`">
+                        <!-- Models from provider definition -->
+                        <option v-for="model in provider.models || []" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
+                          {{ model }} ({{ provider.name }})
+                        </option>
+                        <!-- Custom models added separately for this provider -->
+                        <option v-for="model in customModels.filter(m => m.provider === provider.name)" :key="`custom:${provider.name}:${model.id}`" :value="`custom:${provider.name}:${model.id}`">
+                          {{ model.name || model.id }} ({{ provider.name }})
+                        </option>
+                      </template>
+                    </optgroup>
                   </select>
-                  <div v-if="viewMode === 'advanced'" class="flex items-center space-x-2">
-                    <input
-                      v-model="taskBaseUrls[task.id]"
-                      type="url"
-                      placeholder="Custom Base URL (optional)"
-                      class="task-url-input"
-                    />
-                  </div>
                 </div>
               </div>
             </div>
@@ -303,7 +406,10 @@
           <div class="space-y-3">
             <div v-for="task in dataScienceTasks" :key="task.id" class="task-row">
               <div class="task-config">
-                <label class="task-label">{{ task.name }}</label>
+                <label class="task-label">
+                  {{ task.name }}
+                  <span v-if="isUsingCustomProvider(task.id)" class="text-xs text-green-600 ml-1" title="Using custom provider">🔐</span>
+                </label>
                 <div class="task-controls">
                   <select
                     v-model="taskModels[task.id]"
@@ -316,14 +422,79 @@
                         {{ model.name }}
                       </option>
                     </optgroup>
+                    <optgroup v-if="customProviders.length > 0" label="Custom Providers">
+                      <template v-for="provider in customProviders" :key="`custom-${provider.name}`">
+                        <!-- Models from provider definition -->
+                        <option v-for="model in provider.models || []" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
+                          {{ model }} ({{ provider.name }})
+                        </option>
+                        <!-- Custom models added separately for this provider -->
+                        <option v-for="model in customModels.filter(m => m.provider === provider.name)" :key="`custom:${provider.name}:${model.id}`" :value="`custom:${provider.name}:${model.id}`">
+                          {{ model.name || model.id }} ({{ provider.name }})
+                        </option>
+                      </template>
+                    </optgroup>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Financial Analysis Agents -->
+        <div class="border rounded-lg p-4">
+          <h3 class="text-lg font-medium text-gray-900 mb-3 flex items-center">
+            <svg class="w-5 h-5 mr-2 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Financial Analysis Agents
+          </h3>
+          <div class="space-y-3">
+            <div v-for="task in financialAnalysisTasks" :key="task.id" class="task-row">
+              <div class="task-config">
+                <label class="task-label">
+                  {{ task.name }}
+                  <span v-if="isUsingCustomProvider(task.id)" class="text-xs text-green-600 ml-1" title="Using custom provider">🔐</span>
+                </label>
+                <div class="task-controls">
+                  <select
+                    v-model="taskModels[task.id]"
+                    @change="handleTaskModelChange(task.id)"
+                    class="task-select"
+                  >
+                    <option :value="null">Use Default</option>
+                    <optgroup v-for="provider in providers" :key="provider" :label="formatProviderName(provider)">
+                      <option v-for="model in getProviderModels(provider)" :key="`${provider}-${model.id}`" :value="`${provider}:${model.id}`">
+                        {{ model.name }}
+                      </option>
+                    </optgroup>
+                    <optgroup v-if="customProviders.length > 0" label="Custom Providers">
+                      <template v-for="provider in customProviders" :key="`custom-${provider.name}`">
+                        <!-- Models from provider definition -->
+                        <option v-for="model in provider.models || []" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
+                          {{ model }} ({{ provider.name }})
+                        </option>
+                        <!-- Custom models added separately for this provider -->
+                        <option v-for="model in customModels.filter(m => m.provider === provider.name)" :key="`custom:${provider.name}:${model.id}`" :value="`custom:${provider.name}:${model.id}`">
+                          {{ model.name || model.id }} ({{ provider.name }})
+                        </option>
+                      </template>
+                    </optgroup>
+                    <optgroup v-if="customProviders.length > 0" label="Custom Providers">
+                      <template v-for="provider in customProviders" :key="`custom-${provider.name}`">
+                        <!-- Models from provider definition -->
+                        <option v-for="model in provider.models || []" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
+                          {{ model }} ({{ provider.name }})
+                        </option>
+                        <!-- Custom models added separately for this provider -->
+                        <option v-for="model in customModels.filter(m => m.provider === provider.name)" :key="`custom:${provider.name}:${model.id}`" :value="`custom:${provider.name}:${model.id}`">
+                          {{ model.name || model.id }} ({{ provider.name }})
+                        </option>
+                      </template>
+                    </optgroup>
                   </select>
                   <div v-if="viewMode === 'advanced'" class="flex items-center space-x-2">
-                    <input
-                      v-model="taskBaseUrls[task.id]"
-                      type="url"
-                      placeholder="Custom Base URL (optional)"
-                      class="task-url-input"
-                    />
+                    <span class="text-xs text-gray-500">Provider-specific configuration</span>
                   </div>
                 </div>
               </div>
@@ -342,7 +513,10 @@
           <div class="space-y-3">
             <div v-for="task in otherTasks" :key="task.id" class="task-row">
               <div class="task-config">
-                <label class="task-label">{{ task.name }}</label>
+                <label class="task-label">
+                  {{ task.name }}
+                  <span v-if="isUsingCustomProvider(task.id)" class="text-xs text-green-600 ml-1" title="Using custom provider">🔐</span>
+                </label>
                 <div class="task-controls">
                   <select
                     v-model="taskModels[task.id]"
@@ -355,15 +529,19 @@
                         {{ model.name }}
                       </option>
                     </optgroup>
+                    <optgroup v-if="customProviders.length > 0" label="Custom Providers">
+                      <template v-for="provider in customProviders" :key="`custom-${provider.name}`">
+                        <!-- Models from provider definition -->
+                        <option v-for="model in provider.models || []" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
+                          {{ model }} ({{ provider.name }})
+                        </option>
+                        <!-- Custom models added separately for this provider -->
+                        <option v-for="model in customModels.filter(m => m.provider === provider.name)" :key="`custom:${provider.name}:${model.id}`" :value="`custom:${provider.name}:${model.id}`">
+                          {{ model.name || model.id }} ({{ provider.name }})
+                        </option>
+                      </template>
+                    </optgroup>
                   </select>
-                  <div v-if="viewMode === 'advanced'" class="flex items-center space-x-2">
-                    <input
-                      v-model="taskBaseUrls[task.id]"
-                      type="url"
-                      placeholder="Custom Base URL (optional)"
-                      class="task-url-input"
-                    />
-                  </div>
                 </div>
               </div>
             </div>
@@ -448,24 +626,45 @@ const apiKeyVisibility = ref({
   fireworks: false,
   together: false
 })
-const providerBaseUrls = ref({
-  sambanova: '',
-  fireworks: '',
-  together: ''
-})
+// Custom OpenAI-compatible providers
+const customProviders = ref([])
+const newProvider = ref({ name: '', baseUrl: '', apiKey: '', type: 'openai' })
+const customProviderVisibility = ref({})
+const showNewProviderApiKey = ref(false)
+// Task models and custom models
 const taskModels = ref({})
-const taskBaseUrls = ref({})
-const customModels = ref({
-  sambanova: {},
-  fireworks: {},
-  together: {}
-})
-const newCustomModels = ref({
-  sambanova: { id: '', name: '' },
-  fireworks: { id: '', name: '' },
-  together: { id: '', name: '' }
-})
+const customModels = ref([])
+const newCustomModel = ref({ id: '', name: '', provider: '' })
 const tasks = ref([])
+
+// Helper to check if a task is using a custom provider
+const isUsingCustomProvider = (taskId) => {
+  const modelValue = taskModels.value[taskId]
+  return modelValue && modelValue.startsWith('custom:')
+}
+
+// Computed property to show custom provider usage
+const customProviderUsage = computed(() => {
+  const usage = {}
+
+  Object.entries(taskModels.value).forEach(([taskId, modelValue]) => {
+    if (modelValue && modelValue.startsWith('custom:')) {
+      const parts = modelValue.split(':')
+      const providerName = parts[1]
+      const task = tasks.value.find(t => t.id === taskId)
+
+      if (!usage[providerName]) {
+        usage[providerName] = []
+      }
+      usage[providerName].push(task ? task.name : taskId)
+    }
+  })
+
+  return Object.entries(usage).map(([provider, taskList]) => ({
+    provider,
+    tasks: taskList
+  }))
+})
 const providerModels = ref({
   sambanova: [],
   fireworks: [],
@@ -477,16 +676,11 @@ const testResults = ref({})
 const isSaving = ref(false)
 const statusMessage = ref(null)
 
-// Default base URLs
-const defaultBaseUrls = {
-  sambanova: 'https://api.sambanova.ai/v1',
-  fireworks: 'https://api.fireworks.ai/inference/v1',
-  together: 'https://api.together.xyz/v1'
-}
+// Base URLs now handled by backend configuration
 
 // Computed task groups
 const mainAgentTasks = computed(() =>
-  tasks.value.filter(t => ['main_agent', 'code_execution_agent', 'vision_agent', 'daytona_agent'].includes(t.id))
+  tasks.value.filter(t => ['main_agent', 'code_execution_agent', 'daytona_agent', 'vision_agent'].includes(t.id))
 )
 
 const deepResearchTasks = computed(() =>
@@ -497,11 +691,16 @@ const dataScienceTasks = computed(() =>
   tasks.value.filter(t => t.id.includes('data_science'))
 )
 
+const financialAnalysisTasks = computed(() =>
+  tasks.value.filter(t => t.id.includes('financial') || t.id.includes('crewai'))
+)
+
 const otherTasks = computed(() =>
   tasks.value.filter(t =>
     !mainAgentTasks.value.includes(t) &&
     !deepResearchTasks.value.includes(t) &&
-    !dataScienceTasks.value.includes(t)
+    !dataScienceTasks.value.includes(t) &&
+    !financialAnalysisTasks.value.includes(t)
   )
 )
 
@@ -513,9 +712,8 @@ const hasUnsavedChanges = computed(() => {
     selectedProvider.value !== originalConfig.value.default_provider ||
     JSON.stringify(taskModels.value) !== JSON.stringify(originalConfig.value.task_models || {}) ||
     Object.keys(apiKeys.value).some(p => apiKeys.value[p] !== (originalConfig.value.api_keys?.[p] || '')) ||
-    JSON.stringify(providerBaseUrls.value) !== JSON.stringify(originalConfig.value.provider_base_urls || {}) ||
-    JSON.stringify(taskBaseUrls.value) !== JSON.stringify(originalConfig.value.task_base_urls || {}) ||
-    JSON.stringify(customModels.value) !== JSON.stringify(originalConfig.value.custom_models || {})
+    JSON.stringify(customProviders.value) !== JSON.stringify(originalConfig.value.custom_providers || []) ||
+    JSON.stringify(customModels.value) !== JSON.stringify(originalConfig.value.custom_models || [])
   )
 })
 
@@ -529,13 +727,6 @@ const formatProviderName = (provider) => {
   return names[provider] || provider
 }
 
-const getDefaultBaseUrl = (provider) => {
-  return defaultBaseUrls[provider] || ''
-}
-
-const resetBaseUrl = (provider) => {
-  providerBaseUrls.value[provider] = ''
-}
 
 const toggleKeyVisibility = (provider) => {
   apiKeyVisibility.value[provider] = !apiKeyVisibility.value[provider]
@@ -543,40 +734,75 @@ const toggleKeyVisibility = (provider) => {
 
 const getProviderModels = (provider) => {
   const baseModels = providerModels.value[provider] || []
-  const custom = customModels.value[provider] || {}
 
-  // Combine base models with custom models
-  const customModelList = Object.entries(custom).map(([id, info]) => ({
-    id,
-    name: info.name || id,
-    isCustom: true
-  }))
+  // Add custom models for this provider
+  const customModelsList = customModels.value
+    .filter(m => m.provider === provider || !m.provider)
+    .map(m => ({
+      id: m.id,
+      name: m.name || m.id,
+      isCustom: true
+    }))
 
-  return [...baseModels, ...customModelList]
+  return [...baseModels, ...customModelsList]
 }
 
-const addCustomModel = (provider) => {
-  const newModel = newCustomModels.value[provider]
-  if (!newModel.id) return
+// getAllModels function removed - not used
 
-  if (!customModels.value[provider]) {
-    customModels.value[provider] = {}
+const addCustomProvider = () => {
+  if (!newProvider.value.name) {
+    showStatus('Please enter a provider name', 'error')
+    return
+  }
+  if (!newProvider.value.baseUrl) {
+    showStatus('Please enter a base URL', 'error')
+    return
+  }
+  if (!newProvider.value.apiKey) {
+    showStatus('API key is required for authentication', 'error')
+    return
   }
 
-  customModels.value[provider][newModel.id] = {
-    name: newModel.name || newModel.id,
-    context_window: 32768,
-    max_tokens: 8192
-  }
+  customProviders.value.push({
+    name: newProvider.value.name,
+    baseUrl: newProvider.value.baseUrl,
+    apiKey: newProvider.value.apiKey,
+    type: newProvider.value.type || 'openai'
+  })
 
-  // Reset input
-  newCustomModels.value[provider] = { id: '', name: '' }
+  // Store visibility state
+  customProviderVisibility.value[newProvider.value.name] = false
+
+  // Reset form
+  newProvider.value = { name: '', baseUrl: '', apiKey: '', type: 'openai' }
+  showNewProviderApiKey.value = false
+  showStatus('Custom provider added with API key', 'success')
 }
 
-const removeCustomModel = (provider, modelId) => {
-  if (customModels.value[provider]) {
-    delete customModels.value[provider][modelId]
-  }
+const removeCustomProvider = (index) => {
+  const provider = customProviders.value[index]
+  // Remove associated models
+  customModels.value = customModels.value.filter(m => m.provider !== provider.name)
+  // Remove provider
+  customProviders.value.splice(index, 1)
+  delete customProviderVisibility.value[provider.name]
+}
+
+const addCustomModel = () => {
+  if (!newCustomModel.value.id) return
+
+  customModels.value.push({
+    id: newCustomModel.value.id,
+    name: newCustomModel.value.name || newCustomModel.value.id,
+    provider: newCustomModel.value.provider || ''
+  })
+
+  // Reset form
+  newCustomModel.value = { id: '', name: '', provider: '' }
+}
+
+const removeCustomModel = (index) => {
+  customModels.value.splice(index, 1)
 }
 
 const checkAdminStatus = async () => {
@@ -613,14 +839,13 @@ const loadConfiguration = async () => {
     const config = response.data
     selectedProvider.value = config.default_provider || 'sambanova'
 
-    // Load provider base URLs if present
-    if (config.provider_base_urls) {
-      providerBaseUrls.value = config.provider_base_urls
-    }
-
-    // Load task base URLs if present
-    if (config.task_base_urls) {
-      taskBaseUrls.value = config.task_base_urls
+    // Load custom providers if present
+    if (config.custom_providers) {
+      customProviders.value = config.custom_providers
+      // Initialize visibility states
+      config.custom_providers.forEach(provider => {
+        customProviderVisibility.value[provider.name] = false
+      })
     }
 
     // Load custom models if present
@@ -683,7 +908,11 @@ const loadConfiguration = async () => {
     // Then override with any user-specific configurations
     if (config.task_models) {
       Object.entries(config.task_models).forEach(([taskId, taskConfig]) => {
-        if (taskConfig.provider && taskConfig.model) {
+        if (taskConfig.custom_provider) {
+          // Handle custom provider format
+          taskModels.value[taskId] = `custom:${taskConfig.custom_provider}:${taskConfig.model}`
+        } else if (taskConfig.provider && taskConfig.model) {
+          // Handle regular provider format
           taskModels.value[taskId] = `${taskConfig.provider}:${taskConfig.model}`
         }
       })
@@ -694,8 +923,7 @@ const loadConfiguration = async () => {
       default_provider: selectedProvider.value,
       task_models: taskModels.value,
       api_keys: apiKeys.value,  // Now includes loaded API keys
-      provider_base_urls: providerBaseUrls.value,
-      task_base_urls: taskBaseUrls.value,
+      custom_providers: customProviders.value,
       custom_models: customModels.value
     }))
 
@@ -798,41 +1026,52 @@ const saveConfiguration = async () => {
     const formattedTaskModels = {}
     Object.entries(taskModels.value).forEach(([taskId, value]) => {
       if (value && value.includes(':')) {
-        const [provider, model] = value.split(':')
-        formattedTaskModels[taskId] = { provider, model }
-      }
-    })
+        // Handle custom provider format: custom:providerName:modelId
+        if (value.startsWith('custom:')) {
+          const parts = value.split(':')
+          const customProviderName = parts[1]
+          const customProvider = customProviders.value.find(p => p.name === customProviderName)
 
-    // Filter out empty base URLs
-    const filteredProviderBaseUrls = {}
-    Object.entries(providerBaseUrls.value).forEach(([provider, url]) => {
-      if (url) {
-        filteredProviderBaseUrls[provider] = url
-      }
-    })
-
-    const filteredTaskBaseUrls = {}
-    Object.entries(taskBaseUrls.value).forEach(([task, url]) => {
-      if (url) {
-        filteredTaskBaseUrls[task] = url
+          formattedTaskModels[taskId] = {
+            provider: customProvider?.type || 'openai',
+            custom_provider: customProviderName,
+            model: parts[2],
+            base_url: customProvider?.baseUrl,
+            api_key: customProvider?.apiKey  // Include the custom provider's API key
+          }
+        } else {
+          const [provider, model] = value.split(':')
+          formattedTaskModels[taskId] = { provider, model }
+        }
       }
     })
 
     const token = await getAccessTokenSilently()
 
+    // Prepare all API keys including custom providers
+    const allApiKeys = { ...apiKeys.value }
+
+    // Add custom provider API keys to the main API keys object
+    customProviders.value.forEach(provider => {
+      if (provider.apiKey) {
+        // Store custom provider API keys with a special prefix
+        allApiKeys[`custom_${provider.name}`] = provider.apiKey
+      }
+    })
+
     // Debug log what we're sending
     console.log('Saving configuration with API keys:', {
       sambanova: apiKeys.value.sambanova ? 'present' : 'empty',
       fireworks: apiKeys.value.fireworks ? 'present' : 'empty',
-      together: apiKeys.value.together ? 'present' : 'empty'
+      together: apiKeys.value.together ? 'present' : 'empty',
+      customProviders: customProviders.value.map(p => ({ name: p.name, hasKey: !!p.apiKey }))
     })
 
     const response = await axios.post(`${apiBaseUrl.value}/admin/config`, {
       default_provider: selectedProvider.value,
       task_models: formattedTaskModels,
-      api_keys: apiKeys.value,
-      provider_base_urls: filteredProviderBaseUrls,
-      task_base_urls: filteredTaskBaseUrls,
+      api_keys: allApiKeys,  // Use the combined API keys
+      custom_providers: customProviders.value,
       custom_models: customModels.value
     }, {
       headers: {
@@ -845,14 +1084,14 @@ const saveConfiguration = async () => {
         default_provider: selectedProvider.value,
         task_models: taskModels.value,
         api_keys: apiKeys.value,
-        provider_base_urls: providerBaseUrls.value,
-        task_base_urls: taskBaseUrls.value,
+        custom_providers: customProviders.value,
         custom_models: customModels.value
       }))
 
       showStatus('Configuration saved successfully', 'success')
-      emit('configuration-updated', response.data.config)
-      emit('api-keys-updated', apiKeys.value)
+      // Don't emit to close the modal, just show the success message
+      // emit('configuration-updated', response.data.config)
+      // emit('api-keys-updated', apiKeys.value)
     }
   } catch (error) {
     console.error('Failed to save configuration:', error)
@@ -922,17 +1161,8 @@ const resetConfiguration = async () => {
       }
 
       // Clear all custom configurations
-      providerBaseUrls.value = {
-        sambanova: '',
-        fireworks: '',
-        together: ''
-      }
-      taskBaseUrls.value = {}
-      customModels.value = {
-        sambanova: {},
-        fireworks: {},
-        together: {}
-      }
+      customProviders.value = []
+      customModels.value = []
 
       // Clear API keys (they should also be reset)
       apiKeys.value = {
@@ -961,9 +1191,8 @@ const cancelChanges = () => {
   selectedProvider.value = originalConfig.value.default_provider
   taskModels.value = { ...originalConfig.value.task_models }
   apiKeys.value = { ...originalConfig.value.api_keys }
-  providerBaseUrls.value = { ...originalConfig.value.provider_base_urls }
-  taskBaseUrls.value = { ...originalConfig.value.task_base_urls }
-  customModels.value = JSON.parse(JSON.stringify(originalConfig.value.custom_models))
+  customProviders.value = JSON.parse(JSON.stringify(originalConfig.value.custom_providers || []))
+  customModels.value = JSON.parse(JSON.stringify(originalConfig.value.custom_models || []))
 }
 
 const showStatus = (text, type) => {

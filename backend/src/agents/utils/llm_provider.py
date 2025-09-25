@@ -153,13 +153,20 @@ def get_llm_for_task(
     # Use task-specific base URL if available, otherwise use provider's base URL
     base_url = task_config.get("base_url") or provider_config.get("base_url")
 
+    # If task config has a specific API key (from custom provider), use it
+    task_specific_api_key = task_config.get("api_key")
+
     # Get model details
     model_info = config_manager.get_model_info(provider, model)
     max_tokens = model_info.get("max_tokens")
 
     # Get the appropriate API key
+    # If task has a specific API key (from custom provider), use it first
+    if task_specific_api_key:
+        api_key = task_specific_api_key
+        logger.info(f"Using task-specific API key for custom provider")
     # For backward compatibility, if only a string key is provided, assume it's for SambaNova
-    if isinstance(api_keys, str):
+    elif isinstance(api_keys, str):
         api_key = api_keys
         if provider != "sambanova":
             raise ValueError(f"Provider {provider} requires its own API key")
