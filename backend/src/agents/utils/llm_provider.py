@@ -149,8 +149,9 @@ def get_llm_for_task(
     logger.info(f"get_llm_for_task: task={task}, provider={provider}, model={model}, available_keys={list(api_keys.keys()) if isinstance(api_keys, dict) else 'string_key'}")
 
     # Get provider configuration
-    provider_config = config_manager.get_provider_config(provider)
-    base_url = provider_config.get("base_url")
+    provider_config = config_manager.get_provider_config(provider, user_id)
+    # Use task-specific base URL if available, otherwise use provider's base URL
+    base_url = task_config.get("base_url") or provider_config.get("base_url")
 
     # Get model details
     model_info = config_manager.get_model_info(provider, model)

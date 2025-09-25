@@ -39,6 +39,9 @@ class UserConfigUpdate(BaseModel):
     default_provider: Optional[str] = None
     task_models: Optional[Dict[str, Dict[str, str]]] = None
     api_keys: Dict[str, str]  # Provider -> API key mapping
+    provider_base_urls: Optional[Dict[str, str]] = None  # Provider -> base URL mapping
+    task_base_urls: Optional[Dict[str, str]] = None  # Task -> base URL mapping
+    custom_models: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None  # Provider -> {model_id -> model_info}
 
 
 class ModelListResponse(BaseModel):
@@ -177,6 +180,12 @@ async def update_configuration(
         overrides["default_provider"] = update.default_provider
     if update.task_models:
         overrides["task_models"] = update.task_models
+    if update.provider_base_urls:
+        overrides["provider_base_urls"] = update.provider_base_urls
+    if update.task_base_urls:
+        overrides["task_base_urls"] = update.task_base_urls
+    if update.custom_models:
+        overrides["custom_models"] = update.custom_models
 
     # Set user overrides in config manager (in-memory for current session)
     config_manager.set_user_override(user_id, overrides)
@@ -314,12 +323,16 @@ async def list_providers() -> List[str]:
 
 
 @router.get("/models/{provider}", dependencies=[Depends(check_admin_enabled)])
-async def list_provider_models(provider: str) -> ModelListResponse:
+async def list_provider_models(
+    provider: str,
+    user_id: str = Depends(get_current_user_id)
+) -> ModelListResponse:
     """
-    List all models available for a specific provider.
+    List all models available for a specific provider, including custom models.
 
     Args:
         provider: The provider name
+        user_id: The authenticated user ID
 
     Returns:
         List of models with their configurations
@@ -329,7 +342,7 @@ async def list_provider_models(provider: str) -> ModelListResponse:
     if provider not in config_manager.list_providers():
         raise HTTPException(status_code=404, detail=f"Provider '{provider}' not found")
 
-    models = config_manager.list_models(provider)
+    models = config_manager.list_models(provider, user_id)
 
     # Transform to list format
     model_list = []

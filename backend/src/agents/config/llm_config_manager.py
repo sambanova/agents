@@ -188,9 +188,37 @@ class LLMConfigManager:
 
         return mapped_models
 
-    def get_provider_config(self, provider: str) -> Dict[str, Any]:
-        """Get configuration for a specific provider."""
-        return self.config["providers"].get(provider, {})
+    def get_provider_config(self, provider: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get configuration for a specific provider, including user overrides.
+
+        Args:
+            provider: The provider name
+            user_id: Optional user ID for user-specific overrides
+
+        Returns:
+            Provider configuration with overrides applied
+        """
+        base_config = self.config["providers"].get(provider, {}).copy()
+
+        # Apply user-specific base URL override if present
+        if user_id and user_id in self._user_overrides:
+            user_config = self._user_overrides[user_id]
+
+            # Check for provider-specific base URL override
+            if "provider_base_urls" in user_config and provider in user_config["provider_base_urls"]:
+                base_config["base_url"] = user_config["provider_base_urls"][provider]
+                logger.debug(f"Using custom base URL for {provider}: {base_config['base_url']}")
+
+            # Check for custom models added by the user
+            if "custom_models" in user_config and provider in user_config["custom_models"]:
+                if "models" not in base_config:
+                    base_config["models"] = {}
+                # Merge custom models into the provider's model list
+                base_config["models"].update(user_config["custom_models"][provider])
+                logger.debug(f"Added custom models for {provider}: {list(user_config['custom_models'][provider].keys())}")
+
+        return base_config
 
     def get_task_model(self, task: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -201,13 +229,20 @@ class LLMConfigManager:
             user_id: Optional user ID for user-specific overrides
 
         Returns:
-            Dict with provider and model information
+            Dict with provider, model, and optionally base_url information
         """
         # Check user overrides first
         if user_id and user_id in self._user_overrides:
             user_config = self._user_overrides[user_id].get("task_models", {})
             if task in user_config:
-                result = user_config[task]
+                result = user_config[task].copy()
+
+                # Check for task-specific base URL override
+                task_base_urls = self._user_overrides[user_id].get("task_base_urls", {})
+                if task in task_base_urls:
+                    result["base_url"] = task_base_urls[task]
+                    logger.debug(f"Task {task} using custom base URL: {result['base_url']}")
+
                 logger.debug(f"Task {task} for user {user_id[:8]}... using override: provider={result.get('provider')}, model={result.get('model')}")
                 return result
 
@@ -215,7 +250,7 @@ class LLMConfigManager:
         result = self.config["task_models"].get(task, {
             "provider": self.config["default_provider"],
             "model": list(self.config["providers"][self.config["default_provider"]]["models"].keys())[0]
-        })
+        }).copy()
         logger.debug(f"Task {task} for user {user_id[:8] if user_id else 'default'}... using default: provider={result.get('provider')}, model={result.get('model')}")
         return result
 
@@ -226,6 +261,7 @@ class LLMConfigManager:
         Args:
             user_id: The user identifier
             overrides: Configuration overrides for this user
+                     Can include: default_provider, task_models, provider_base_urls, custom_models
         """
         # If provider changed, map models to new provider equivalents
         if "default_provider" in overrides and "task_models" in self.config:
@@ -268,9 +304,18 @@ class LLMConfigManager:
         """List all available providers."""
         return list(self.config["providers"].keys())
 
-    def list_models(self, provider: str) -> Dict[str, Any]:
-        """List all models available for a provider."""
-        provider_config = self.get_provider_config(provider)
+    def list_models(self, provider: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        List all models available for a provider, including custom models.
+
+        Args:
+            provider: The provider name
+            user_id: Optional user ID for user-specific custom models
+
+        Returns:
+            Dictionary of models with their configurations
+        """
+        provider_config = self.get_provider_config(provider, user_id)
         return provider_config.get("models", {})
 
     def get_full_config(self, user_id: Optional[str] = None) -> Dict[str, Any]:

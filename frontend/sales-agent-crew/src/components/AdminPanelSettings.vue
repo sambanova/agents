@@ -30,15 +30,44 @@
           </svg>
           LLM Provider Configuration
         </h2>
-        <div v-if="hasUnsavedChanges" class="text-sm text-orange-600">
-          <svg class="inline-block w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-          </svg>
-          You have unsaved changes
+        <div class="flex items-center space-x-2">
+          <button
+            @click="viewMode = viewMode === 'simple' ? 'advanced' : 'simple'"
+            class="text-sm text-blue-600 hover:text-blue-800"
+          >
+            {{ viewMode === 'simple' ? 'Advanced Mode' : 'Simple Mode' }}
+          </button>
+          <div v-if="hasUnsavedChanges" class="text-sm text-orange-600">
+            <svg class="inline-block w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+            </svg>
+            You have unsaved changes
+          </div>
         </div>
       </div>
 
-      <!-- Provider Selection -->
+      <!-- Tab Navigation -->
+      <div class="border-b border-gray-200 mb-6">
+        <nav class="-mb-px flex space-x-8">
+          <button
+            v-for="tab in tabs"
+            :key="tab.id"
+            @click="activeTab = tab.id"
+            :class="[
+              'py-2 px-1 border-b-2 font-medium text-sm',
+              activeTab === tab.id
+                ? 'border-primary-brandColor text-primary-brandColor'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            ]"
+          >
+            {{ tab.label }}
+          </button>
+        </nav>
+      </div>
+
+      <!-- Provider Configuration Tab -->
+      <div v-if="activeTab === 'providers'" class="space-y-6">
+        <!-- Provider Selection -->
       <div class="mb-6">
         <label class="block text-sm font-medium text-gray-700 mb-2">Default Provider</label>
         <select
@@ -51,6 +80,36 @@
           </option>
         </select>
       </div>
+
+        <!-- Provider Base URLs -->
+        <div v-if="viewMode === 'advanced'">
+          <h3 class="text-lg font-medium text-gray-900 mb-3">Provider Base URLs</h3>
+          <div class="space-y-4">
+            <div v-for="provider in providers" :key="provider">
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                {{ formatProviderName(provider) }} Base URL
+                <span v-if="provider === selectedProvider" class="text-xs text-green-600 ml-2">(Active)</span>
+              </label>
+              <div class="flex space-x-2">
+                <input
+                  v-model="providerBaseUrls[provider]"
+                  type="url"
+                  :placeholder="getDefaultBaseUrl(provider)"
+                  class="flex-1 block border border-gray-300 rounded-md shadow-sm p-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                />
+                <button
+                  @click="resetBaseUrl(provider)"
+                  class="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
+                  title="Reset to default"
+                >
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
 
       <!-- API Keys Management -->
       <div class="mb-6">
@@ -102,30 +161,219 @@
         </div>
       </div>
 
-      <!-- Model Configuration for Tasks -->
-      <div class="mb-6">
-        <h3 class="text-lg font-medium text-gray-900 mb-3">Task-Specific Models</h3>
-        <div class="space-y-3">
-          <div v-for="task in tasks" :key="task.id" class="flex items-center space-x-3">
-            <div class="flex-1">
-              <label class="block text-sm font-medium text-gray-700">{{ task.name }}</label>
-            </div>
-            <div class="flex-1">
-              <select
-                v-model="taskModels[task.id]"
-                @change="handleTaskModelChange(task.id)"
-                class="block w-full border border-gray-300 rounded-md shadow-sm p-1 text-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              >
-                <option :value="null">Use Default</option>
-                <optgroup v-for="provider in providers" :key="provider" :label="formatProviderName(provider)">
-                  <option v-for="model in providerModels[provider]" :key="`${provider}-${model.id}`" :value="`${provider}:${model.id}`">
-                    {{ model.name }}
-                  </option>
-                </optgroup>
-              </select>
+        <!-- Custom Models -->
+        <div v-if="viewMode === 'advanced'">
+          <h3 class="text-lg font-medium text-gray-900 mb-3">Custom Models</h3>
+          <div class="space-y-4">
+            <div v-for="provider in providers" :key="provider" class="border rounded-lg p-4">
+              <h4 class="font-medium text-sm text-gray-700 mb-2">{{ formatProviderName(provider) }}</h4>
+
+              <!-- List existing custom models -->
+              <div v-if="customModels[provider] && Object.keys(customModels[provider]).length > 0" class="mb-3 space-y-2">
+                <div v-for="(model, modelId) in customModels[provider]" :key="modelId" class="flex items-center justify-between bg-gray-50 p-2 rounded">
+                  <span class="text-sm">{{ model.name || modelId }}</span>
+                  <button
+                    @click="removeCustomModel(provider, modelId)"
+                    class="text-red-600 hover:text-red-800"
+                  >
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Add new custom model -->
+              <div class="flex space-x-2">
+                <input
+                  v-model="newCustomModels[provider].id"
+                  placeholder="Model ID"
+                  class="flex-1 border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                />
+                <input
+                  v-model="newCustomModels[provider].name"
+                  placeholder="Display Name"
+                  class="flex-1 border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                />
+                <button
+                  @click="addCustomModel(provider)"
+                  :disabled="!newCustomModels[provider].id"
+                  class="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm"
+                >
+                  Add
+                </button>
+              </div>
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Task Configuration Tab -->
+      <div v-if="activeTab === 'tasks'" class="space-y-6">
+        <div class="mb-4">
+          <p class="text-sm text-gray-600">Configure models and base URLs for specific tasks. Grouped by agent type for better organization.</p>
+        </div>
+
+        <!-- Main Agents -->
+        <div class="border rounded-lg p-4">
+          <h3 class="text-lg font-medium text-gray-900 mb-3 flex items-center">
+            <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Main Agents
+          </h3>
+          <div class="space-y-3">
+            <div v-for="task in mainAgentTasks" :key="task.id" class="task-row">
+              <div class="task-config">
+                <label class="task-label">{{ task.name }}</label>
+                <div class="task-controls">
+                  <select
+                    v-model="taskModels[task.id]"
+                    @change="handleTaskModelChange(task.id)"
+                    class="task-select"
+                  >
+                    <option :value="null">Use Default</option>
+                    <optgroup v-for="provider in providers" :key="provider" :label="formatProviderName(provider)">
+                      <option v-for="model in getProviderModels(provider)" :key="`${provider}-${model.id}`" :value="`${provider}:${model.id}`">
+                        {{ model.name }}
+                      </option>
+                    </optgroup>
+                  </select>
+                  <div v-if="viewMode === 'advanced'" class="flex items-center space-x-2">
+                    <input
+                      v-model="taskBaseUrls[task.id]"
+                      type="url"
+                      placeholder="Custom Base URL (optional)"
+                      class="task-url-input"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Deep Research Agents -->
+        <div class="border rounded-lg p-4">
+          <h3 class="text-lg font-medium text-gray-900 mb-3 flex items-center">
+            <svg class="w-5 h-5 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+            Deep Research Agents
+          </h3>
+          <div class="space-y-3">
+            <div v-for="task in deepResearchTasks" :key="task.id" class="task-row">
+              <div class="task-config">
+                <label class="task-label">{{ task.name }}</label>
+                <div class="task-controls">
+                  <select
+                    v-model="taskModels[task.id]"
+                    @change="handleTaskModelChange(task.id)"
+                    class="task-select"
+                  >
+                    <option :value="null">Use Default</option>
+                    <optgroup v-for="provider in providers" :key="provider" :label="formatProviderName(provider)">
+                      <option v-for="model in getProviderModels(provider)" :key="`${provider}-${model.id}`" :value="`${provider}:${model.id}`">
+                        {{ model.name }}
+                      </option>
+                    </optgroup>
+                  </select>
+                  <div v-if="viewMode === 'advanced'" class="flex items-center space-x-2">
+                    <input
+                      v-model="taskBaseUrls[task.id]"
+                      type="url"
+                      placeholder="Custom Base URL (optional)"
+                      class="task-url-input"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Data Science Agents -->
+        <div class="border rounded-lg p-4">
+          <h3 class="text-lg font-medium text-gray-900 mb-3 flex items-center">
+            <svg class="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            Data Science Agents
+          </h3>
+          <div class="space-y-3">
+            <div v-for="task in dataScienceTasks" :key="task.id" class="task-row">
+              <div class="task-config">
+                <label class="task-label">{{ task.name }}</label>
+                <div class="task-controls">
+                  <select
+                    v-model="taskModels[task.id]"
+                    @change="handleTaskModelChange(task.id)"
+                    class="task-select"
+                  >
+                    <option :value="null">Use Default</option>
+                    <optgroup v-for="provider in providers" :key="provider" :label="formatProviderName(provider)">
+                      <option v-for="model in getProviderModels(provider)" :key="`${provider}-${model.id}`" :value="`${provider}:${model.id}`">
+                        {{ model.name }}
+                      </option>
+                    </optgroup>
+                  </select>
+                  <div v-if="viewMode === 'advanced'" class="flex items-center space-x-2">
+                    <input
+                      v-model="taskBaseUrls[task.id]"
+                      type="url"
+                      placeholder="Custom Base URL (optional)"
+                      class="task-url-input"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Other Agents -->
+        <div class="border rounded-lg p-4">
+          <h3 class="text-lg font-medium text-gray-900 mb-3 flex items-center">
+            <svg class="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            Other Agents
+          </h3>
+          <div class="space-y-3">
+            <div v-for="task in otherTasks" :key="task.id" class="task-row">
+              <div class="task-config">
+                <label class="task-label">{{ task.name }}</label>
+                <div class="task-controls">
+                  <select
+                    v-model="taskModels[task.id]"
+                    @change="handleTaskModelChange(task.id)"
+                    class="task-select"
+                  >
+                    <option :value="null">Use Default</option>
+                    <optgroup v-for="provider in providers" :key="provider" :label="formatProviderName(provider)">
+                      <option v-for="model in getProviderModels(provider)" :key="`${provider}-${model.id}`" :value="`${provider}:${model.id}`">
+                        {{ model.name }}
+                      </option>
+                    </optgroup>
+                  </select>
+                  <div v-if="viewMode === 'advanced'" class="flex items-center space-x-2">
+                    <input
+                      v-model="taskBaseUrls[task.id]"
+                      type="url"
+                      placeholder="Custom Base URL (optional)"
+                      class="task-url-input"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Legacy task configuration (hidden, kept for backward compatibility) -->
+      <div v-if="false" class="mb-6">
+        <!-- Old task configuration kept hidden -->
       </div>
 
       <!-- Action Buttons -->
@@ -179,6 +427,14 @@ const isBackendEnabled = ref(false)
 // API Base URL
 const apiBaseUrl = computed(() => import.meta.env.VITE_API_URL || '/api')
 
+// View mode and tabs
+const viewMode = ref('simple')
+const activeTab = ref('providers')
+const tabs = [
+  { id: 'providers', label: 'Providers & API Keys' },
+  { id: 'tasks', label: 'Task Configuration' }
+]
+
 // State
 const providers = ref(['sambanova', 'fireworks', 'together'])
 const selectedProvider = ref('sambanova')
@@ -192,7 +448,23 @@ const apiKeyVisibility = ref({
   fireworks: false,
   together: false
 })
+const providerBaseUrls = ref({
+  sambanova: '',
+  fireworks: '',
+  together: ''
+})
 const taskModels = ref({})
+const taskBaseUrls = ref({})
+const customModels = ref({
+  sambanova: {},
+  fireworks: {},
+  together: {}
+})
+const newCustomModels = ref({
+  sambanova: { id: '', name: '' },
+  fireworks: { id: '', name: '' },
+  together: { id: '', name: '' }
+})
 const tasks = ref([])
 const providerModels = ref({
   sambanova: [],
@@ -205,6 +477,34 @@ const testResults = ref({})
 const isSaving = ref(false)
 const statusMessage = ref(null)
 
+// Default base URLs
+const defaultBaseUrls = {
+  sambanova: 'https://api.sambanova.ai/v1',
+  fireworks: 'https://api.fireworks.ai/inference/v1',
+  together: 'https://api.together.xyz/v1'
+}
+
+// Computed task groups
+const mainAgentTasks = computed(() =>
+  tasks.value.filter(t => ['main_agent', 'code_execution_agent', 'vision_agent', 'daytona_agent'].includes(t.id))
+)
+
+const deepResearchTasks = computed(() =>
+  tasks.value.filter(t => t.id.includes('deep_research'))
+)
+
+const dataScienceTasks = computed(() =>
+  tasks.value.filter(t => t.id.includes('data_science'))
+)
+
+const otherTasks = computed(() =>
+  tasks.value.filter(t =>
+    !mainAgentTasks.value.includes(t) &&
+    !deepResearchTasks.value.includes(t) &&
+    !dataScienceTasks.value.includes(t)
+  )
+)
+
 // Computed
 const hasUnsavedChanges = computed(() => {
   if (!originalConfig.value) return false
@@ -212,7 +512,10 @@ const hasUnsavedChanges = computed(() => {
   return (
     selectedProvider.value !== originalConfig.value.default_provider ||
     JSON.stringify(taskModels.value) !== JSON.stringify(originalConfig.value.task_models || {}) ||
-    Object.keys(apiKeys.value).some(p => apiKeys.value[p] !== (originalConfig.value.api_keys?.[p] || ''))
+    Object.keys(apiKeys.value).some(p => apiKeys.value[p] !== (originalConfig.value.api_keys?.[p] || '')) ||
+    JSON.stringify(providerBaseUrls.value) !== JSON.stringify(originalConfig.value.provider_base_urls || {}) ||
+    JSON.stringify(taskBaseUrls.value) !== JSON.stringify(originalConfig.value.task_base_urls || {}) ||
+    JSON.stringify(customModels.value) !== JSON.stringify(originalConfig.value.custom_models || {})
   )
 })
 
@@ -226,8 +529,54 @@ const formatProviderName = (provider) => {
   return names[provider] || provider
 }
 
+const getDefaultBaseUrl = (provider) => {
+  return defaultBaseUrls[provider] || ''
+}
+
+const resetBaseUrl = (provider) => {
+  providerBaseUrls.value[provider] = ''
+}
+
 const toggleKeyVisibility = (provider) => {
   apiKeyVisibility.value[provider] = !apiKeyVisibility.value[provider]
+}
+
+const getProviderModels = (provider) => {
+  const baseModels = providerModels.value[provider] || []
+  const custom = customModels.value[provider] || {}
+
+  // Combine base models with custom models
+  const customModelList = Object.entries(custom).map(([id, info]) => ({
+    id,
+    name: info.name || id,
+    isCustom: true
+  }))
+
+  return [...baseModels, ...customModelList]
+}
+
+const addCustomModel = (provider) => {
+  const newModel = newCustomModels.value[provider]
+  if (!newModel.id) return
+
+  if (!customModels.value[provider]) {
+    customModels.value[provider] = {}
+  }
+
+  customModels.value[provider][newModel.id] = {
+    name: newModel.name || newModel.id,
+    context_window: 32768,
+    max_tokens: 8192
+  }
+
+  // Reset input
+  newCustomModels.value[provider] = { id: '', name: '' }
+}
+
+const removeCustomModel = (provider, modelId) => {
+  if (customModels.value[provider]) {
+    delete customModels.value[provider][modelId]
+  }
 }
 
 const checkAdminStatus = async () => {
@@ -263,6 +612,21 @@ const loadConfiguration = async () => {
 
     const config = response.data
     selectedProvider.value = config.default_provider || 'sambanova'
+
+    // Load provider base URLs if present
+    if (config.provider_base_urls) {
+      providerBaseUrls.value = config.provider_base_urls
+    }
+
+    // Load task base URLs if present
+    if (config.task_base_urls) {
+      taskBaseUrls.value = config.task_base_urls
+    }
+
+    // Load custom models if present
+    if (config.custom_models) {
+      customModels.value = config.custom_models
+    }
 
     // Load model mappings from backend if available
     if (config.model_mappings) {
@@ -329,7 +693,10 @@ const loadConfiguration = async () => {
     originalConfig.value = JSON.parse(JSON.stringify({
       default_provider: selectedProvider.value,
       task_models: taskModels.value,
-      api_keys: apiKeys.value  // Now includes loaded API keys
+      api_keys: apiKeys.value,  // Now includes loaded API keys
+      provider_base_urls: providerBaseUrls.value,
+      task_base_urls: taskBaseUrls.value,
+      custom_models: customModels.value
     }))
 
   } catch (error) {
@@ -436,6 +803,21 @@ const saveConfiguration = async () => {
       }
     })
 
+    // Filter out empty base URLs
+    const filteredProviderBaseUrls = {}
+    Object.entries(providerBaseUrls.value).forEach(([provider, url]) => {
+      if (url) {
+        filteredProviderBaseUrls[provider] = url
+      }
+    })
+
+    const filteredTaskBaseUrls = {}
+    Object.entries(taskBaseUrls.value).forEach(([task, url]) => {
+      if (url) {
+        filteredTaskBaseUrls[task] = url
+      }
+    })
+
     const token = await getAccessTokenSilently()
 
     // Debug log what we're sending
@@ -448,7 +830,10 @@ const saveConfiguration = async () => {
     const response = await axios.post(`${apiBaseUrl.value}/admin/config`, {
       default_provider: selectedProvider.value,
       task_models: formattedTaskModels,
-      api_keys: apiKeys.value
+      api_keys: apiKeys.value,
+      provider_base_urls: filteredProviderBaseUrls,
+      task_base_urls: filteredTaskBaseUrls,
+      custom_models: customModels.value
     }, {
       headers: {
         'Authorization': `Bearer ${token}`
@@ -459,7 +844,10 @@ const saveConfiguration = async () => {
       originalConfig.value = JSON.parse(JSON.stringify({
         default_provider: selectedProvider.value,
         task_models: taskModels.value,
-        api_keys: apiKeys.value
+        api_keys: apiKeys.value,
+        provider_base_urls: providerBaseUrls.value,
+        task_base_urls: taskBaseUrls.value,
+        custom_models: customModels.value
       }))
 
       showStatus('Configuration saved successfully', 'success')
@@ -533,6 +921,19 @@ const resetConfiguration = async () => {
         }
       }
 
+      // Clear all custom configurations
+      providerBaseUrls.value = {
+        sambanova: '',
+        fireworks: '',
+        together: ''
+      }
+      taskBaseUrls.value = {}
+      customModels.value = {
+        sambanova: {},
+        fireworks: {},
+        together: {}
+      }
+
       // Clear API keys (they should also be reset)
       apiKeys.value = {
         sambanova: '',
@@ -560,6 +961,9 @@ const cancelChanges = () => {
   selectedProvider.value = originalConfig.value.default_provider
   taskModels.value = { ...originalConfig.value.task_models }
   apiKeys.value = { ...originalConfig.value.api_keys }
+  providerBaseUrls.value = { ...originalConfig.value.provider_base_urls }
+  taskBaseUrls.value = { ...originalConfig.value.task_base_urls }
+  customModels.value = JSON.parse(JSON.stringify(originalConfig.value.custom_models))
 }
 
 const showStatus = (text, type) => {
@@ -650,7 +1054,7 @@ onMounted(async () => {
 
 <style scoped>
 .admin-panel {
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -659,5 +1063,68 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.5rem;
+}
+
+.task-row {
+  padding: 0.75rem;
+  background-color: #f9fafb;
+  border-radius: 0.375rem;
+}
+
+.task-config {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.task-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.task-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.task-select {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.task-url-input {
+  flex: 1;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+  font-size: 0.875rem;
+}
+
+@media (min-width: 768px) {
+  .task-config {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .task-label {
+    flex: 0 0 250px;
+  }
+
+  .task-controls {
+    flex: 1;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .task-select {
+    max-width: 350px;
+  }
 }
 </style>
