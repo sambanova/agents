@@ -105,6 +105,17 @@
                 }
             },
             "api_key_env": "fireworks_key"
+        },
+        "groq": {
+            "model_mapping": {
+                 "gpt-oss": {
+                    "model": "openai/gpt-oss-120b",
+                    "crewai_prefix": "groq",
+                    "url": "https://api.groq.com",
+                    "long_url": "https://api.groq.com/openai/v1/chat/completions"
+                }
+            },
+            "api_key_env": "groq_key"
         }
     }
 }

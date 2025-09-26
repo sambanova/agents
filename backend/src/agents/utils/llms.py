@@ -6,6 +6,7 @@ import httpx
 import structlog
 from langchain_fireworks import ChatFireworks
 from langchain_sambanova import ChatSambaNovaCloud
+from langchain_groq import ChatGroq
 
 logger = structlog.get_logger(__name__)
 
@@ -63,6 +64,34 @@ def get_fireworks_llm(api_key: str, model: str = "fireworks-llama-3.3-70b"):
             "Failed to initialize Fireworks LLM",
             model=model,
             llm_provider="fireworks",
+            error={"type": type(e).__name__, "message": str(e)},
+            exc_info=True,
+        )
+        raise e
+    return llm
+
+@lru_cache(maxsize=4)
+def get_groq_llm(api_key: str, model: str = "llama-3.3-70b-versatile"):
+    logger.info("Initializing Groq LLM", model=model, llm_provider="groq")
+
+    try:
+        llm = ChatGroq(
+            model=model,
+            temperature=0,
+            api_key=api_key,
+        )
+
+        logger.info(
+            "Groq LLM initialized successfully",
+            model=model,
+            llm_provider="groq",
+        )
+
+    except Exception as e:
+        logger.error(
+            "Failed to initialize groq LLM",
+            model=model,
+            llm_provider="groq",
             error={"type": type(e).__name__, "message": str(e)},
             exc_info=True,
         )

@@ -46,6 +46,7 @@ from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig, RunnableLambda
 from langchain_fireworks import ChatFireworks
+from langchain_groq import ChatGroq
 from langgraph.constants import Send
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Checkpointer, Command, interrupt
@@ -917,6 +918,7 @@ def create_deep_research_graph(
             temperature=0,
             max_tokens=8192,
             api_key=api_key,
+            reasoning_effort="high"
         )
         planner_model = ChatFireworks(
             base_url=planner_model_config["url"],
@@ -924,6 +926,7 @@ def create_deep_research_graph(
             temperature=0,
             max_tokens=8192,
             api_key=api_key,
+            reasoning_effort="high"
         )
         summary_model = ChatFireworks(
             base_url=summary_model_config["url"],
@@ -931,6 +934,7 @@ def create_deep_research_graph(
             temperature=0,
             max_tokens=8192,
             api_key=api_key,
+            reasoning_effort="high"
         )
     elif provider == "sambanova":
         writer_model = CustomChatSambaNovaCloud(
@@ -939,7 +943,7 @@ def create_deep_research_graph(
             temperature=0,
             max_tokens=8192,
             sambanova_api_key=api_key,
-            timeout=request_timeout,
+            timeout=request_timeout, #reasoning effort set in CustomChatSambaNovaCloud
         )
         planner_model = CustomChatSambaNovaCloud(
             sambanova_url=planner_model_config["long_url"],
@@ -956,6 +960,31 @@ def create_deep_research_graph(
             max_tokens=8192,
             sambanova_api_key=api_key,
             timeout=request_timeout,
+        )
+    elif provider == "groq":
+        writer_model = ChatGroq(
+            base_url=writer_model_config["url"],
+            model=writer_model_config["model"],
+            temperature=0,
+            max_tokens=8192,
+            api_key=api_key,
+            reasoning_effort="high"
+        )
+        planner_model = ChatGroq(
+            base_url=planner_model_config["url"],
+            model=planner_model_config["model"],
+            temperature=0,
+            max_tokens=8192,
+            api_key=api_key,
+            reasoning_effort="high"
+        )
+        summary_model = ChatGroq(
+            base_url=summary_model_config["url"],
+            model=summary_model_config["model"],
+            temperature=0,
+            max_tokens=8192,
+            api_key=api_key,
+            reasoning_effort="high"
         )
     else:
         raise ValueError(f"Unsupported provider: {provider}")

@@ -30,7 +30,7 @@ DEFAULT_SYSTEM_MESSAGE = "You are a helpful assistant."
 # Local get_llm function to avoid circular imports
 def get_llm(llm_type: LLMType, api_key: str):
     """Get LLM instance based on type and API key."""
-    from agents.utils.llms import get_fireworks_llm, get_sambanova_llm
+    from agents.utils.llms import get_fireworks_llm, get_sambanova_llm, get_groq_llm
 
     if llm_type == LLMType.SN_LLAMA_3_3_70B:
         llm = get_sambanova_llm(model="Meta-Llama-3.3-70B-Instruct", api_key=api_key)
@@ -51,6 +51,10 @@ def get_llm(llm_type: LLMType, api_key: str):
     elif llm_type == LLMType.FIREWORKS_GPT_OSS:
         llm = get_fireworks_llm(
             model="accounts/fireworks/models/gpt-oss-120b", api_key=api_key
+        )
+    elif llm_type == LLMType.GROQ_GPT_OSS:
+        llm = get_groq_llm(
+            model="openai/gpt-oss-120b", api_key=api_key
         )
     else:
         raise ValueError("Unexpected agent type")

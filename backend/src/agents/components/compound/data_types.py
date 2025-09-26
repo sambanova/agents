@@ -23,6 +23,7 @@ class LLMType(str, Enum):
     SN_GPT_OSS = "GPT oss 120b"
     FIREWORKS_LLAMA_3_3_70B = "Fireworks Llama 3.3 70B"
     FIREWORKS_GPT_OSS = "Fireworks GPT oss 120b"
+    GROQ_GPT_OSS = "Groq GPT oss 120b" 
 
 
 class LiberalToolMessage(ToolMessage):

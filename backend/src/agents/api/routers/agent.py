@@ -360,7 +360,7 @@ async def deepresearch_agent(
     # Create and execute the deep research graph
     agent = create_deep_research_graph(
         api_key=api_key,
-        provider="sambanova",
+        provider="groq",
         request_timeout=120,
         redis_storage=redis_storage,
         user_id=api_key,
@@ -438,7 +438,7 @@ async def deepresearch_interactive_agent(
     # Create and execute the deep research graph
     agent = create_deep_research_graph(
         api_key=api_key,
-        provider="sambanova",
+        provider="groq",
         request_timeout=120,
         redis_storage=redis_storage,
         user_id=api_key,
