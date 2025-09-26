@@ -39,6 +39,8 @@ spec:
       - name: fix-permissions
         image: busybox
         command: ["sh", "-c", "chmod -R 777 /app/logs"]
+        securityContext:
+          privileged: true
         volumeMounts:
         - name: logs-volume
           mountPath: /app/logs
