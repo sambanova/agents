@@ -110,6 +110,10 @@ ingress:
 # Redis configuration
 redis:
   enabled: true
+  image:
+    registry: docker.io
+    repository: redis/redis-stack-server
+    tag: 7.4.0-v5
   # Redis configuration
   auth:
     enabled: false
@@ -146,7 +150,7 @@ redis:
     ports:
       redis: 6379 
 
-postgres:
+postgresql:
   enabled: true
   primary:
     initdb:
@@ -191,6 +195,10 @@ openebs:
     replicated:
       mayastor:
         enabled: false
+  loki:
+    enabled: false
+  alloy:
+    enabled: false
   # Mayastor configuration
   mayastor:
     nodeSelector:

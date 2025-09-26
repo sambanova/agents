@@ -14,8 +14,8 @@ dependencies:
 - name: openebs
   condition: openebs.enabled
   repository: https://openebs.github.io/openebs
-  version: 4.2.0
-- name: postgres
-  condition: postgres.enabled
+  version: 4.3.3
+- name: postgresql
+  condition: postgresql.enabled
   repository: https://charts.bitnami.com/bitnami
   version: 15.4.0
