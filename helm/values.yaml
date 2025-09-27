@@ -6,6 +6,7 @@ global:
 
 # Backend configuration
 backend:
+  enabled: false
   name: aiskagents-backend
   image:
     repository: your-docker-repository
@@ -64,6 +65,7 @@ backend:
 
 # Frontend configuration
 frontend:
+  enabled: false
   name: aiskagents-frontend
   image:
     repository: your-docker-repository
@@ -247,5 +249,3 @@ openebs:
       volumeSnapshots:
         enabled: true
         keep: true
-  loki:
-    enabled: false

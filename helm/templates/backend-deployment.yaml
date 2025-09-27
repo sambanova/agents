@@ -1,3 +1,4 @@
+{{- if .Values.backend.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -92,4 +93,5 @@ spec:
             secretKeyRef:
               name: {{ $.Values.backend.secrets.name }}
               key: {{ $key }}
-        {{- end }} 
+        {{- end }}
+{{- end }}
