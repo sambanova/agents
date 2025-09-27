@@ -299,8 +299,38 @@ onMounted(async () => {
           'together': { label: 'Together AI', value: 'together' }
         };
 
-        if (providerMapping[response.data.default_provider]) {
-          selectedOption.value = providerMapping[response.data.default_provider];
+        // Check if the user has API keys configured for the default provider
+        // First, get the API keys
+        const apiKeysResponse = await axios.get('/get_api_keys', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        const apiKeys = apiKeysResponse.data;
+        const selectedProvider = response.data.default_provider;
+
+        // Check if the selected provider has an API key
+        let hasApiKey = false;
+        if (selectedProvider === 'sambanova' && apiKeys.sambanova_key) {
+          hasApiKey = true;
+        } else if (selectedProvider === 'fireworks' && apiKeys.fireworks_key) {
+          hasApiKey = true;
+        } else if (selectedProvider === 'together' && apiKeys.together_key) {
+          hasApiKey = true;
+        }
+
+        if (hasApiKey && providerMapping[selectedProvider]) {
+          // Use the selected provider if it has an API key
+          selectedOption.value = providerMapping[selectedProvider];
+          console.log('Loaded provider from admin config:', selectedOption.value);
+        } else if (!hasApiKey && selectedProvider !== 'sambanova') {
+          // Fall back to SambaNova if the selected provider doesn't have an API key
+          console.warn(`Provider ${selectedProvider} doesn't have an API key, falling back to SambaNova`);
+          selectedOption.value = { label: 'SambaNova', value: 'sambanova' };
+        } else if (providerMapping[selectedProvider]) {
+          // Use the selected provider (this handles SambaNova without key)
+          selectedOption.value = providerMapping[selectedProvider];
           console.log('Loaded provider from admin config:', selectedOption.value);
         }
       }
