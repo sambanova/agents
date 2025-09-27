@@ -33,7 +33,6 @@ VITE_AUTH0_SCOPES = $(shell grep -A21 "frontend:" $(VALUES_FILE) | grep "VITE_AU
 # Common variables
 BACKEND_DOCKER_IMAGE = $(BACKEND_REPO)
 FRONTEND_DOCKER_IMAGE = $(FRONTEND_REPO)
-CHART_PATH = ./aiskagents
 
 # Extract base URL for docker login
 BACKEND_BASE_URL = $(shell echo $(BACKEND_REPO) | cut -d/ -f1)
@@ -102,7 +101,7 @@ upgrade:
 		--set backend.image.tag=$(TAG) \
 		--set frontend.image.tag=$(TAG) \
 		aiskagents-$(ENV) \
-		$(CHART_PATH)
+		.
 
 # Uninstall the Helm chart
 uninstall:
