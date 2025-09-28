@@ -125,6 +125,98 @@ class GmailSearchTool(BaseTool):
             return error_msg
 
 
+class GmailDraftInput(BaseModel):
+    """Input for creating Gmail draft."""
+    to: str = Field(description="Recipient email address")
+    subject: str = Field(description="Email subject")
+    body: str = Field(description="Email body (plain text)")
+    cc: Optional[str] = Field(None, description="CC recipients (comma-separated)")
+    bcc: Optional[str] = Field(None, description="BCC recipients (comma-separated)")
+
+
+class GmailDraftTool(BaseTool):
+    """Tool for creating Gmail draft messages."""
+
+    name: str = "gmail_draft"
+    description: str = "Create a draft email in Gmail (does not send)"
+    args_schema: Type[BaseModel] = GmailDraftInput
+
+    access_token: str
+    refresh_token: Optional[str] = None
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    token_uri: Optional[str] = None
+    user_id: str
+
+    def _run(
+        self,
+        to: str,
+        subject: str,
+        body: str,
+        cc: Optional[str] = None,
+        bcc: Optional[str] = None,
+        run_manager: Optional[CallbackManagerForToolRun] = None,
+    ) -> str:
+        """Create Gmail draft."""
+        try:
+            from email.mime.text import MIMEText
+            from google.auth.transport.requests import Request
+            from google.oauth2.credentials import Credentials
+
+            # Create credentials with all required fields for auto-refresh
+            creds = Credentials(
+                token=self.access_token,
+                refresh_token=self.refresh_token,
+                token_uri=self.token_uri or "https://oauth2.googleapis.com/token",
+                client_id=self.client_id,
+                client_secret=self.client_secret
+            )
+
+            # Refresh if needed
+            if creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+                self.access_token = creds.token
+
+            service = build('gmail', 'v1', credentials=creds)
+
+            # Create message
+            message = MIMEText(body)
+            message['to'] = to
+            message['subject'] = subject
+
+            if cc:
+                message['cc'] = cc
+            if bcc:
+                message['bcc'] = bcc
+
+            # Encode the message
+            raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
+
+            # Create draft
+            draft = service.users().drafts().create(
+                userId='me',
+                body={
+                    'message': {
+                        'raw': raw_message
+                    }
+                }
+            ).execute()
+
+            draft_id = draft.get('id', 'Unknown')
+            message_id = draft.get('message', {}).get('id', 'Unknown')
+
+            return f"Draft created successfully!\nDraft ID: {draft_id}\nMessage ID: {message_id}\nTo: {to}\nSubject: {subject}"
+
+        except HttpError as e:
+            error_msg = f"Gmail API error: {e}"
+            logger.error(error_msg)
+            return error_msg
+        except Exception as e:
+            error_msg = f"Error creating Gmail draft: {str(e)}"
+            logger.error(error_msg)
+            return error_msg
+
+
 class GmailSendInput(BaseModel):
     """Input for sending Gmail."""
     to: str = Field(description="Recipient email address")
@@ -719,6 +811,7 @@ def create_google_langchain_tools(
     tool_mapping = {
         'gmail_search': GmailSearchTool,
         'gmail_send': GmailSendTool,
+        'gmail_draft': GmailDraftTool,
         'google_drive_search': GoogleDriveSearchTool,
         'google_drive_read': GoogleDriveReadTool,
         'google_drive_upload': GoogleDriveUploadTool,

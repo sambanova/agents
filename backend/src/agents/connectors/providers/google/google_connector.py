@@ -259,7 +259,7 @@ class GoogleConnector(BaseOAuthConnector):
         tool_id_mapping = {
             "gmail_search": "gmail_search",
             "gmail_send": "gmail_send",
-            "gmail_draft": "gmail_send",  # Using send tool for drafts for now
+            "gmail_draft": "gmail_draft",  # Now using proper draft tool
             "drive_search": "google_drive_search",
             "drive_read": "google_drive_read",  # Now properly mapped to read tool
             "drive_create": "google_drive_upload",
