@@ -92,6 +92,14 @@ push: push-backend push-frontend
 
 # Upgrade the Helm chart
 upgrade:
+	@echo "Adding required Helm repositories..."
+	helm repo add openebs https://openebs.github.io/openebs
+	helm repo add postgresql https://charts.bitnami.com/bitnami
+	helm repo add redis https://charts.bitnami.com/bitnami
+
+	@echo "Building Helm chart dependencies..."
+	helm dep update
+
 	@echo "Upgrading Helm chart using $(VALUES_FILE) ($(ENV) environment)..."
 	helm upgrade \
 		--install \
@@ -100,7 +108,7 @@ upgrade:
 		--values $(VALUES_FILE) \
 		--set backend.image.tag=$(TAG) \
 		--set frontend.image.tag=$(TAG) \
-		aiskagents-$(ENV) \
+		aiskagents \
 		.
 
 # Uninstall the Helm chart
