@@ -292,6 +292,7 @@ class JiraUpdateIssueTool(BaseTool):
         description: Optional[str] = Field(default=None, description="New description")
         priority: Optional[str] = Field(default=None, description="New priority")
         assignee: Optional[str] = Field(default=None, description="New assignee account ID")
+        status: Optional[str] = Field(default=None, description="New status (e.g., Done, In Progress, Blocked)")
     
     args_schema = Args
     
@@ -302,11 +303,60 @@ class JiraUpdateIssueTool(BaseTool):
         description: Optional[str] = None,
         priority: Optional[str] = None,
         assignee: Optional[str] = None,
+        status: Optional[str] = None,
         run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
     ) -> str:
         """Update Jira issue"""
         try:
-            # Build update payload
+            # Handle status transitions first if requested
+            if status:
+                # Get available transitions for the issue
+                async with httpx.AsyncClient() as client:
+                    transitions_response = await client.get(
+                        f"https://api.atlassian.com/ex/jira/{self.cloud_id}/rest/api/3/issue/{issue_key}/transitions",
+                        headers={
+                            "Authorization": f"Bearer {self.access_token}",
+                            "Accept": "application/json"
+                        }
+                    )
+
+                    if transitions_response.status_code != 200:
+                        logger.error(f"Failed to get transitions: {transitions_response.status_code}")
+                        return f"Failed to get available transitions for issue {issue_key}"
+
+                    transitions = transitions_response.json().get("transitions", [])
+
+                    # Find the transition that matches the requested status
+                    transition_id = None
+                    for transition in transitions:
+                        if transition["to"]["name"].lower() == status.lower():
+                            transition_id = transition["id"]
+                            break
+
+                    if not transition_id:
+                        available_statuses = [t["to"]["name"] for t in transitions]
+                        return f"Status '{status}' not available. Available statuses: {', '.join(available_statuses)}"
+
+                    # Execute the transition
+                    transition_data = {
+                        "transition": {"id": transition_id}
+                    }
+
+                    transition_response = await client.post(
+                        f"https://api.atlassian.com/ex/jira/{self.cloud_id}/rest/api/3/issue/{issue_key}/transitions",
+                        json=transition_data,
+                        headers={
+                            "Authorization": f"Bearer {self.access_token}",
+                            "Accept": "application/json",
+                            "Content-Type": "application/json"
+                        }
+                    )
+
+                    if transition_response.status_code not in [200, 204]:
+                        logger.error(f"Failed to transition status: {transition_response.status_code} - {transition_response.text}")
+                        return f"Failed to update status to '{status}': {transition_response.text}"
+
+            # Build update payload for other fields
             update_data = {"fields": {}}
             
             if summary:
@@ -337,24 +387,43 @@ class JiraUpdateIssueTool(BaseTool):
             
             if assignee:
                 update_data["fields"]["assignee"] = {"accountId": assignee}
-            
-            async with httpx.AsyncClient() as client:
-                response = await client.put(
-                    f"https://api.atlassian.com/ex/jira/{self.cloud_id}/rest/api/3/issue/{issue_key}",
-                    json=update_data,
-                    headers={
-                        "Authorization": f"Bearer {self.access_token}",
-                        "Accept": "application/json",
-                        "Content-Type": "application/json"
-                    }
-                )
-                
-                if response.status_code in [200, 204]:
-                    return f"Successfully updated issue: {issue_key}"
-                elif response.status_code == 404:
-                    return f"Issue not found: {issue_key}"
-                else:
-                    return f"Error updating issue: {response.status_code} - {response.text}"
+
+            # Only make the update call if there are fields to update
+            if update_data["fields"]:
+                async with httpx.AsyncClient() as client:
+                    response = await client.put(
+                        f"https://api.atlassian.com/ex/jira/{self.cloud_id}/rest/api/3/issue/{issue_key}",
+                        json=update_data,
+                        headers={
+                            "Authorization": f"Bearer {self.access_token}",
+                            "Accept": "application/json",
+                            "Content-Type": "application/json"
+                        }
+                    )
+
+                    if response.status_code not in [200, 204]:
+                        if response.status_code == 404:
+                            return f"Issue not found: {issue_key}"
+                        else:
+                            return f"Error updating issue fields: {response.status_code} - {response.text}"
+
+            # Build success message
+            updated_items = []
+            if status:
+                updated_items.append(f"status to '{status}'")
+            if summary:
+                updated_items.append("summary")
+            if description:
+                updated_items.append("description")
+            if priority:
+                updated_items.append(f"priority to '{priority}'")
+            if assignee:
+                updated_items.append("assignee")
+
+            if updated_items:
+                return f"Successfully updated issue {issue_key}: {', '.join(updated_items)}"
+            else:
+                return f"No fields to update for issue {issue_key}"
                     
         except Exception as e:
             logger.error("Failed to update Jira issue", error=str(e), exc_info=True)
