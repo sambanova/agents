@@ -274,7 +274,23 @@ async def oauth_callback(
         
         # Enable connector for user
         await manager.enable_user_connector(user_id, provider_id)
-        
+
+        # Automatically enable ALL tools for the newly connected connector
+        connector_info = await manager.get_user_connector(user_id, provider_id)
+        if connector_info and connector_info.get("available_tools"):
+            # Get all available tool IDs
+            all_tool_ids = {tool["id"] for tool in connector_info["available_tools"]}
+
+            # Enable all tools for this connector
+            logger.info(
+                "Auto-enabling all tools after OAuth",
+                user_id=user_id,
+                provider_id=provider_id,
+                num_tools=len(all_tool_ids)
+            )
+
+            await manager.update_user_tools(user_id, provider_id, all_tool_ids)
+
         # Redirect to OAuth callback page which will close the popup
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         return RedirectResponse(
