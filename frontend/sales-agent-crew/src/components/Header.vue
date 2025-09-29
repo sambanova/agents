@@ -32,7 +32,7 @@
         </div>
 
         <button
-          @click="openSettings"
+          @click="openSettings()"
           class="p-2 text-gray-600 hover:text-primary-brandTextPrimary transition-colors"
         >
           <svg
@@ -108,7 +108,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, inject, onMounted } from 'vue';
+import { ref, computed, watch, inject, onMounted, nextTick } from 'vue';
 import { useAuth0 } from '@auth0/auth0-vue';
 import SettingsModal from './SettingsModal.vue';
 import ToggleSwitch from '@/components/Common/UIComponents/ToggleSwitch.vue';
@@ -174,17 +174,20 @@ onMounted(async () => {
 });
 
 const settingsModalRef = ref(null);
-function openSettings(tab = null) {
+function openSettings(tabOrEvent = null) {
   showUserMenu.value = false; // Close user menu
-  settingsModalRef.value?.openModal();
-  if (tab) {
-    // Set the active tab if specified
-    setTimeout(() => {
-      if (settingsModalRef.value) {
-        settingsModalRef.value.activeTab = tab;
-      }
-    }, 100);
+
+  // Check if it's an event object (from direct @click) or a tab name string
+  let tab = null;
+  if (typeof tabOrEvent === 'string') {
+    tab = tabOrEvent;
+  } else if (tabOrEvent && typeof tabOrEvent === 'object' && tabOrEvent.type) {
+    // It's an event object, ignore it
+    tab = null;
   }
+
+  // Pass the tab directly to openModal
+  settingsModalRef.value?.openModal(tab);
 }
 
 function onKeysUpdated() {

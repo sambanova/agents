@@ -544,6 +544,9 @@ async def toggle_connector_chat(
             user_id
         )
 
+        # Invalidate the tool cache so changes take effect immediately
+        manager._invalidate_user_cache(user_id, provider_id)
+
         logger.info(
             "Toggled connector chat availability",
             user_id=user_id,

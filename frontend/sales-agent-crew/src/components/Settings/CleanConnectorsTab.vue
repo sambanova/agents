@@ -162,8 +162,8 @@
             >
               <input
                 type="checkbox"
-                :checked="tool.enabled"
-                @change="toggleTool(selectedConnector.provider_id, tool.id, $event.target.checked)"
+                :checked="selectedTools.has(tool.id)"
+                @change="toggleToolSelection(tool.id)"
                 class="mt-0.5 h-4 w-4 text-primary-brandColor rounded border-gray-300 focus:ring-primary-brandColor"
               >
               <div class="flex-1">
@@ -196,10 +196,11 @@
                 Deselect all
               </button>
               <button
-                @click="closeToolModal"
-                class="px-4 py-1.5 text-sm bg-primary-brandColor text-white rounded-md hover:bg-primary-700"
+                @click="saveToolSelection"
+                :disabled="savingTools"
+                class="px-4 py-1.5 text-sm bg-primary-brandColor text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Done
+                {{ savingTools ? 'Saving...' : 'Done' }}
               </button>
             </div>
           </div>
@@ -236,8 +237,11 @@ const openMenuId = ref(null)
 const showToolModal = ref(false)
 const selectedConnector = ref(null)
 const toolSearchQuery = ref('')
+const selectedTools = ref(new Set())
+const savingTools = ref(false)
 const oauthInProgress = ref(false)
 const oauthProviderName = ref('')
+const oauthProviderId = ref('')  // Store the actual provider ID
 const oauthWindow = ref(null)
 
 const connectorIcons = {
@@ -268,8 +272,7 @@ const filteredTools = computed(() => {
 })
 
 const enabledToolsCount = computed(() => {
-  if (!selectedConnector.value?.available_tools) return 0
-  return selectedConnector.value.available_tools.filter(t => t.enabled).length
+  return selectedTools.value.size
 })
 
 const toggleMenu = (providerId) => {
@@ -281,30 +284,42 @@ const openToolSelection = (connector) => {
   showToolModal.value = true
   openMenuId.value = null
   toolSearchQuery.value = ''
+
+  // Initialize selectedTools with currently enabled tools
+  selectedTools.value = new Set()
+  if (connector.available_tools) {
+    connector.available_tools.forEach(tool => {
+      if (tool.enabled) {
+        selectedTools.value.add(tool.id)
+      }
+    })
+
+    // If no tools are selected, select all by default
+    if (selectedTools.value.size === 0) {
+      connector.available_tools.forEach(tool => {
+        selectedTools.value.add(tool.id)
+      })
+    }
+  }
 }
 
 const closeToolModal = () => {
   showToolModal.value = false
   selectedConnector.value = null
   toolSearchQuery.value = ''
+  selectedTools.value.clear()
 }
 
 const selectAllTools = () => {
   if (selectedConnector.value?.available_tools) {
     selectedConnector.value.available_tools.forEach(tool => {
-      tool.enabled = true
-      toggleTool(selectedConnector.value.provider_id, tool.id, true)
+      selectedTools.value.add(tool.id)
     })
   }
 }
 
 const deselectAllTools = () => {
-  if (selectedConnector.value?.available_tools) {
-    selectedConnector.value.available_tools.forEach(tool => {
-      tool.enabled = false
-      toggleTool(selectedConnector.value.provider_id, tool.id, false)
-    })
-  }
+  selectedTools.value.clear()
 }
 
 const fetchConnectors = async () => {
@@ -333,6 +348,7 @@ const fetchConnectors = async () => {
 const connectApp = async (providerId) => {
   const connector = connectors.value.find(c => c.provider_id === providerId)
   oauthProviderName.value = connector?.name || providerId
+  oauthProviderId.value = providerId  // Store the provider ID
   oauthInProgress.value = true
 
   try {
@@ -363,15 +379,24 @@ const connectApp = async (providerId) => {
       `width=${width},height=${height},left=${left},top=${top}`
     )
 
+    // Store provider ID to enable tools after OAuth
+    window.__pending_oauth_provider = providerId
+
     // Poll for window closure
     const pollTimer = setInterval(() => {
       if (oauthWindow.value && oauthWindow.value.closed) {
         clearInterval(pollTimer)
         oauthInProgress.value = false
-        // Refresh connectors after OAuth completes
-        setTimeout(() => {
-          fetchConnectors()
-        }, 1000)
+        // Wait longer for OAuth to complete on backend
+        setTimeout(async () => {
+          console.log('OAuth window closed, refreshing connectors for:', providerId)
+          await fetchConnectors()
+          // After fetchConnectors completes, wait a bit more then enable all tools
+          setTimeout(async () => {
+            console.log('Enabling all tools for newly connected:', providerId)
+            await enableAllToolsForNewConnector(providerId)
+          }, 1500)
+        }, 2000)  // Wait 2 seconds for OAuth to complete on backend
       }
     }, 500)
 
@@ -391,7 +416,7 @@ const disconnectApp = async (providerId) => {
   try {
     const token = await getAccessTokenSilently()
     const response = await fetch(`${import.meta.env.VITE_API_URL}/connectors/${providerId}/disconnect`, {
-      method: 'POST',
+      method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -407,19 +432,44 @@ const disconnectApp = async (providerId) => {
   }
 }
 
-const toggleTool = async (providerId, toolId, enabled) => {
+const toggleToolSelection = (toolId) => {
+  if (selectedTools.value.has(toolId)) {
+    selectedTools.value.delete(toolId)
+  } else {
+    selectedTools.value.add(toolId)
+  }
+}
+
+const saveToolSelection = async () => {
+  if (!selectedConnector.value) return
+
+  savingTools.value = true
   try {
     const token = await getAccessTokenSilently()
-    await fetch(`${import.meta.env.VITE_API_URL}/connectors/${providerId}/tools/${toolId}`, {
-      method: 'PUT',
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/connectors/${selectedConnector.value.provider_id}/tools/update`, {
+      method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ enabled })
+      body: JSON.stringify({
+        enabled_tool_ids: Array.from(selectedTools.value)
+      })
     })
+
+    if (response.ok) {
+      // Update local state to reflect the saved tools
+      selectedConnector.value.available_tools.forEach(tool => {
+        tool.enabled = selectedTools.value.has(tool.id)
+      })
+      await fetchConnectors()
+      closeToolModal()
+      emit('connector-updated')
+    }
   } catch (error) {
-    console.error('Error toggling tool:', error)
+    console.error('Error saving tool selection:', error)
+  } finally {
+    savingTools.value = false
   }
 }
 
@@ -428,6 +478,8 @@ const cancelOAuth = () => {
     oauthWindow.value.close()
   }
   oauthInProgress.value = false
+  oauthProviderName.value = ''
+  oauthProviderId.value = ''
 }
 
 // Click outside handler for menu
@@ -437,18 +489,112 @@ const handleClickOutside = (event) => {
   }
 }
 
+const enableAllToolsForNewConnector = async (providerId) => {
+  console.log('enableAllToolsForNewConnector called for:', providerId)
+  try {
+    const token = await getAccessTokenSilently()
+
+    // First enable the connector
+    const enableResponse = await fetch(`${import.meta.env.VITE_API_URL}/connectors/${providerId}/enable`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!enableResponse.ok) {
+      console.error('Failed to enable connector:', await enableResponse.text())
+      return
+    }
+
+    console.log('Connector enabled, now fetching latest connector data')
+
+    // Fetch the latest connector data to ensure we have the available tools
+    const connectorsResponse = await fetch(`${import.meta.env.VITE_API_URL}/connectors/user`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (connectorsResponse.ok) {
+      const latestConnectors = await connectorsResponse.json()
+      const connector = latestConnectors.find(c => c.provider_id === providerId)
+      console.log('Found connector with latest data:', connector)
+
+      if (connector && connector.available_tools && connector.available_tools.length > 0) {
+        const allToolIds = connector.available_tools.map(tool => tool.id)
+        console.log('Enabling tools:', allToolIds)
+
+        // Enable all tools
+        const toolsResponse = await fetch(`${import.meta.env.VITE_API_URL}/connectors/${providerId}/tools/update`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            enabled_tool_ids: allToolIds
+          })
+        })
+
+        if (!toolsResponse.ok) {
+          console.error('Failed to enable tools:', await toolsResponse.text())
+        } else {
+          console.log('Tools enabled successfully for', providerId)
+        }
+      } else {
+        console.log('No available tools found for connector', providerId)
+      }
+    }
+
+    // Refresh connectors to show updated state
+    await fetchConnectors()
+    emit('connector-updated')
+  } catch (error) {
+    console.error('Error enabling tools for new connector:', error)
+  }
+}
+
 onMounted(() => {
   fetchConnectors()
   document.addEventListener('click', handleClickOutside)
 
   // Listen for OAuth completion
-  window.addEventListener('message', (event) => {
+  window.addEventListener('message', async (event) => {
     if (event.data.type === 'oauth-complete') {
       if (oauthWindow.value) {
         oauthWindow.value.close()
       }
       oauthInProgress.value = false
-      fetchConnectors()
+
+      // Get the provider ID from the OAuth data or from the stored value
+      let providerId = event.data.provider_id || window.__pending_oauth_provider || oauthProviderId.value
+
+      // If still no provider ID, try to infer from the OAuth provider name
+      if (!providerId && oauthProviderName.value) {
+        // Convert provider name to provider ID (e.g., "Atlassian" -> "atlassian")
+        providerId = oauthProviderName.value.toLowerCase().replace(/\s+/g, '_')
+      }
+
+      console.log('OAuth complete message received, provider:', providerId, 'stored provider ID:', oauthProviderId.value, 'provider name:', oauthProviderName.value)
+
+      // Wait for OAuth to complete on backend
+      setTimeout(async () => {
+        console.log('Fetching connectors after OAuth completion')
+        await fetchConnectors()
+
+        // Wait a bit more to ensure connectors are fully loaded
+        setTimeout(async () => {
+          if (providerId) {
+            console.log('Now enabling all tools for:', providerId)
+            await enableAllToolsForNewConnector(providerId)
+          } else {
+            console.error('Could not determine provider ID after OAuth completion')
+          }
+        }, 1500)
+      }, 2000)  // Wait 2 seconds for backend to process OAuth
     }
   })
 })

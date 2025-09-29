@@ -345,21 +345,58 @@ class ConnectorManager:
                 return cached_tools
         
         all_tools = []
-        
+
+        logger.info(
+            "Getting user tools - starting",
+            user_id=user_id,
+            num_connectors=len(self.connectors)
+        )
+
         # Iterate through all connectors
         for provider_id, connector in self.connectors.items():
             try:
                 # Check if connector is enabled for user
                 config_key = f"user:{user_id}:connector:{provider_id}:config"
                 config_data = await self.redis_storage.redis_client.get(config_key, user_id)
-                
+
                 if not config_data:
+                    logger.info(
+                        "No config found for connector",
+                        user_id=user_id,
+                        provider=provider_id
+                    )
                     continue
-                
-                user_config = UserConnectorConfig(**json.loads(config_data))
+
+                config_dict = json.loads(config_data)
+
+                # Log the raw config to see what's stored
+                logger.info(
+                    "Raw connector config",
+                    user_id=user_id,
+                    provider=provider_id,
+                    config=config_dict
+                )
+
+                user_config = UserConnectorConfig(**config_dict)
+
                 if not user_config.enabled:
+                    logger.info(
+                        "Connector not enabled",
+                        user_id=user_id,
+                        provider=provider_id
+                    )
                     continue
-                
+
+                # Check if connector is enabled in chat context
+                enabled_in_chat = config_dict.get("enabled_in_chat", True)
+                if not enabled_in_chat:
+                    logger.info(
+                        "Connector disabled in chat context",
+                        user_id=user_id,
+                        provider=provider_id
+                    )
+                    continue
+
                 # Get token with automatic refresh
                 token = await connector.get_user_token(user_id, auto_refresh=True)
                 if not token:
@@ -369,9 +406,23 @@ class ConnectorManager:
                         provider=provider_id
                     )
                     continue
-                
+
+                logger.info(
+                    "Token available for connector",
+                    user_id=user_id,
+                    provider=provider_id
+                )
+
                 # Get enabled tools for this connector
                 enabled_tools = await connector.get_user_enabled_tools(user_id)
+
+                logger.info(
+                    "Enabled tools for connector",
+                    user_id=user_id,
+                    provider=provider_id,
+                    num_enabled_tools=len(enabled_tools) if enabled_tools else 0,
+                    tool_ids=[tool.id for tool in enabled_tools] if enabled_tools else []
+                )
                 
                 # Check if connector supports batch LangChain tool creation
                 if hasattr(connector, 'create_langchain_tools') and enabled_tools:

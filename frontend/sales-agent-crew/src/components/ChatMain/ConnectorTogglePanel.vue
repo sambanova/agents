@@ -21,11 +21,11 @@
         </div>
 
         <!-- Connected: Show Toggle -->
-        <label v-if="connector.status === 'connected'" class="relative inline-flex items-center cursor-pointer">
+        <label v-if="connector.status === 'connected'" @click.stop class="relative inline-flex items-center cursor-pointer">
           <input
             type="checkbox"
             :checked="connector.enabled_in_chat !== false"
-            @change.stop="toggleConnector(connector.provider_id, $event.target.checked)"
+            @change="toggleConnector(connector.provider_id, $event.target.checked)"
             class="sr-only peer"
           >
           <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-brandColor"></div>
@@ -62,7 +62,7 @@
 
     <!-- Manage connectors button -->
     <button
-      @click.stop="$emit('manage-connectors')"
+      @click.stop="() => { console.log('Manage button clicked'); $emit('manage-connectors') }"
       class="flex items-center space-x-2 w-full py-2 px-2 text-sm text-gray-600 hover:bg-gray-50 rounded-md transition-colors"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -129,16 +129,18 @@ const fetchConnectors = async () => {
 }
 
 const toggleConnector = async (providerId, enabled) => {
+  console.log('toggleConnector called:', providerId, enabled)
   // Update local state immediately for responsive UI
   const connector = connectors.value.find(c => c.provider_id === providerId)
   if (connector) {
     connector.enabled_in_chat = enabled
+    console.log('Updated connector state:', connector)
   }
 
   // Send update to backend
   try {
     const token = await getAccessTokenSilently()
-    await fetch(`${import.meta.env.VITE_API_URL}/connectors/${providerId}/toggle-chat`, {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/connectors/${providerId}/toggle-chat`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -146,6 +148,7 @@ const toggleConnector = async (providerId, enabled) => {
       },
       body: JSON.stringify({ enabled })
     })
+    console.log('Toggle response:', response.status)
   } catch (error) {
     console.error('Error toggling connector:', error)
     // Revert on error
@@ -203,6 +206,8 @@ const connectApp = async (providerId) => {
 }
 
 onMounted(() => {
+  console.log('ConnectorTogglePanel mounted')
+  console.log('Initial connectors:', connectors.value)
   fetchConnectors()
 
   // Listen for OAuth completion messages

@@ -85,6 +85,7 @@
 
         <!-- Tab Content -->
         <div class="tab-content">
+
           <!-- API Keys Tab -->
           <div v-if="activeTab === 'api-keys'" class="space-y-6">
             <!-- Show different UI based on admin panel status -->
@@ -553,7 +554,7 @@
   </div>
 </template>
 <script setup>
-import { ref, watch, defineProps, defineExpose, defineEmits, onMounted, computed,inject } from 'vue'
+import { ref, watch, defineProps, defineExpose, defineEmits, onMounted, computed, inject, nextTick } from 'vue'
 import { useAuth0 } from '@auth0/auth0-vue'
 import { encryptKey, decryptKey } from '../utils/encryption'
 import axios from 'axios'
@@ -586,7 +587,7 @@ const { user, getAccessTokenSilently, logout } = useAuth0()
 const userId = computed(() => user.value?.sub)
 
 const isOpen = ref(false)
-const activeTab = ref('api-keys')
+const activeTab = ref('api-keys')  // Default to api-keys tab
 const sambanovaKey = ref('')
 const exaKey = ref('')
 const serperKey = ref('')
@@ -715,14 +716,22 @@ const handleModelSelection = () => {
 }
 
 // ✅ Function to manually open modal
-const openModal = () => {
+const openModal = (tabName = null) => {
+  // Ensure tabName is a string or null, not an event object
+  if (tabName && typeof tabName === 'string') {
+    activeTab.value = tabName
+  } else {
+    // Ensure we always have a default tab
+    activeTab.value = 'api-keys'
+  }
+
   isOpen.value = true
 }
 
 // ✅ Function to manually close modal
 const close = () => {
   isOpen.value = false
-  activeTab.value = 'api-keys'
+  // Don't reset activeTab here - keep the last selected tab
   errorMessage.value = ''
   successMessage.value = ''
 }
@@ -946,6 +955,7 @@ const handleConnectorUpdate = () => {
 defineExpose({
   openModal,
   checkRequiredKeys,
+  activeTab,  // Expose activeTab so parent can set it
   exaKey: exaKey.value,
     serperKey: serperKey.value,
     fireworksKey: fireworksKey.value,

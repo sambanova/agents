@@ -342,10 +342,14 @@ onMounted(async () => {
   // Listen for new chat events
   emitterMitt.on('new-chat', handleNewChat);
   emitterMitt.on('open-settings', (data) => {
+    console.log('MainLayout received open-settings event:', data);
     if (headerRef.value) {
-      // Pass the tab name if specified
-      const tabName = data?.tab === 'connectors' ? 'Connected Apps' : null;
+      // Pass the tab key directly
+      const tabName = data?.tab || null;
+      console.log('Calling headerRef.openSettings with tab:', tabName);
       headerRef.value.openSettings(tabName);
+    } else {
+      console.log('headerRef not available');
     }
   });
   window.addEventListener('resize', handleResize);

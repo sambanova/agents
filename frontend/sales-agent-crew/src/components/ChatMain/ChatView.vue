@@ -467,7 +467,8 @@
                     <!-- Connector Toggle Button -->
                     <div class="relative">
                       <button
-                        @click="toggleConnectorPanel"
+                        ref="connectorButtonElement"
+                        @click.stop="toggleConnectorPanel"
                         type="button"
                         :disabled="isLoading"
                         data-connector-button
@@ -477,30 +478,6 @@
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
                         </svg>
                       </button>
-
-                      <!-- Connector Panel Dropdown -->
-                      <div
-                        v-if="showConnectorPanel"
-                        data-connector-panel
-                        class="absolute bottom-10 left-0 z-50 w-72 bg-white border border-gray-200 rounded-lg shadow-lg p-3"
-                      >
-                        <div class="flex items-center justify-between mb-3">
-                          <h3 class="text-sm font-semibold text-gray-800">Connected Apps</h3>
-                          <button
-                            @click="showConnectorPanel = false"
-                            class="text-gray-400 hover:text-gray-600"
-                          >
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </div>
-                        <ConnectorTogglePanel
-                          ref="connectorPanelRef"
-                          @manage-connectors="openSettingsForConnectors"
-                          @add-connectors="openSettingsForConnectors"
-                        />
-                      </div>
                     </div>
                     <!-- End Connector Toggle Button -->
 
@@ -653,6 +630,31 @@
           </div>
           <!-- End Textarea -->
         </div>
+      </div>
+
+      <!-- Connector Panel Dropdown (outside of pointer-events-none container) -->
+      <div
+        v-if="showConnectorPanel"
+        ref="connectorPanelElement"
+        data-connector-panel
+        class="absolute bottom-20 left-4 z-[9999] w-72 bg-white border border-gray-200 rounded-lg shadow-lg p-3"
+      >
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-gray-800">Connected Apps</h3>
+          <button
+            @click.stop="showConnectorPanel = false"
+            class="text-gray-400 hover:text-gray-600"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <ConnectorTogglePanel
+          ref="connectorPanelRef"
+          @manage-connectors="openSettingsForConnectors"
+          @add-connectors="openSettingsForConnectors"
+        />
       </div>
     </div>
   </div>
@@ -902,7 +904,10 @@ const props = defineProps({
 const isLoading = ref(false);
 const initialLoading = ref(false);
 const showConnectorPanel = ref(false);
+const justOpenedConnectorPanel = ref(false);
 const connectorPanelRef = ref(null);
+const connectorPanelElement = ref(null);
+const connectorButtonElement = ref(null);
 
 // Conversation change watcher:
 watch(
@@ -1703,22 +1708,39 @@ onMounted(async () => {
   emitterMitt.on('new-chat', handleButtonClick);
   emitterMitt.on('reload-user-documents', loadUserDocuments);
 
-  // Click outside handler for connector panel
-  document.addEventListener('click', handleClickOutside);
+  // Click outside handler for connector panel - TEMPORARILY DISABLED FOR TESTING
+  // document.addEventListener('click', handleClickOutside);
 });
 
 onUnmounted(() => {
   emitterMitt.off('new-chat', handleButtonClick);
   emitterMitt.off('reload-user-documents', loadUserDocuments);
-  document.removeEventListener('click', handleClickOutside);
+  // document.removeEventListener('click', handleClickOutside);
 });
 
 // Handle click outside to close connector panel
 function handleClickOutside(event) {
-  const connectorButton = event.target.closest('[data-connector-button]');
-  const connectorPanel = event.target.closest('[data-connector-panel]');
+  // Don't close if we just opened the panel
+  if (justOpenedConnectorPanel.value) {
+    console.log('Ignoring click - panel just opened');
+    return;
+  }
 
-  if (!connectorButton && !connectorPanel && showConnectorPanel.value) {
+  // Check if click is on the button or panel using refs
+  const isButtonClick = connectorButtonElement.value?.contains(event.target);
+  const isPanelClick = connectorPanelElement.value?.contains(event.target);
+
+  console.log('handleClickOutside called', {
+    isButtonClick,
+    isPanelClick,
+    showConnectorPanel: showConnectorPanel.value,
+    target: event.target,
+    panelElement: connectorPanelElement.value
+  });
+
+  // Only close if clicking outside both button and panel
+  if (!isButtonClick && !isPanelClick && showConnectorPanel.value) {
+    console.log('Closing connector panel');
     showConnectorPanel.value = false;
   }
 }
@@ -1770,12 +1792,26 @@ function toggleRecording() {
 
 // Connector panel methods
 function toggleConnectorPanel() {
-  showConnectorPanel.value = !showConnectorPanel.value;
+  if (!showConnectorPanel.value) {
+    showConnectorPanel.value = true;
+    justOpenedConnectorPanel.value = true;
+    // Reset the flag after event propagation completes
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        justOpenedConnectorPanel.value = false;
+      }, 0);
+    });
+    console.log('Connector panel opened');
+  } else {
+    showConnectorPanel.value = false;
+  }
 }
 
 function openSettingsForConnectors() {
+  console.log('openSettingsForConnectors called');
   showConnectorPanel.value = false;
   // Open settings modal to connectors tab
+  console.log('Emitting open-settings event with tab: connectors');
   emitterMitt.emit('open-settings', { tab: 'connectors' });
 }
 
