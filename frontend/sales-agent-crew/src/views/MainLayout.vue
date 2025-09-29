@@ -341,6 +341,13 @@ onMounted(async () => {
 
   // Listen for new chat events
   emitterMitt.on('new-chat', handleNewChat);
+  emitterMitt.on('open-settings', (data) => {
+    if (headerRef.value) {
+      // Pass the tab name if specified
+      const tabName = data?.tab === 'connectors' ? 'Connected Apps' : null;
+      headerRef.value.openSettings(tabName);
+    }
+  });
   window.addEventListener('resize', handleResize);
   handleResize(); // Initial check
 });
@@ -348,6 +355,7 @@ onMounted(async () => {
 onUnmounted(() => {
   // Remove the listener
   emitterMitt.off('new-chat', handleNewChat);
+  emitterMitt.off('open-settings');
   window.removeEventListener('resize', handleResize);
 });
 

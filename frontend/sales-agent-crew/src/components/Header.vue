@@ -174,9 +174,17 @@ onMounted(async () => {
 });
 
 const settingsModalRef = ref(null);
-function openSettings() {
+function openSettings(tab = null) {
   showUserMenu.value = false; // Close user menu
   settingsModalRef.value?.openModal();
+  if (tab) {
+    // Set the active tab if specified
+    setTimeout(() => {
+      if (settingsModalRef.value) {
+        settingsModalRef.value.activeTab = tab;
+      }
+    }, 100);
+  }
 }
 
 function onKeysUpdated() {

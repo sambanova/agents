@@ -29,6 +29,7 @@ class ConnectorStatusResponse(BaseModel):
     icon_url: Optional[str]
     status: str
     enabled: bool
+    enabled_in_chat: bool = True  # Whether connector is enabled for chat context
     connected_at: Optional[str]
     last_used: Optional[str]
     available_tools: List[Dict[str, Any]]
@@ -39,6 +40,11 @@ class ConnectorStatusResponse(BaseModel):
 class UpdateToolsRequest(BaseModel):
     """Request to update enabled tools for a connector"""
     enabled_tool_ids: Set[str] = Field(default_factory=set)
+
+
+class ToggleChatRequest(BaseModel):
+    """Request to toggle connector availability in chat"""
+    enabled: bool
 
 
 class OAuthCallbackResponse(BaseModel):
@@ -483,18 +489,78 @@ async def disable_connector(
         manager = get_connector_manager()
         if not manager:
             raise HTTPException(status_code=500, detail="Connector manager not initialized")
-        
+
         success = await manager.disable_user_connector(user_id, provider_id)
-        
+
         return {
             "success": success,
             "provider_id": provider_id,
             "message": "Connector disabled successfully"
         }
-        
+
     except Exception as e:
         logger.error(
             "Failed to disable connector",
+            user_id=user_id,
+            provider_id=provider_id,
+            error=str(e)
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{provider_id}/toggle-chat")
+async def toggle_connector_chat(
+    provider_id: str,
+    request: ToggleChatRequest,
+    user_id: str = Depends(get_current_user_id)
+):
+    """Toggle whether a connector is available in chat context"""
+    try:
+        manager = get_connector_manager()
+        if not manager:
+            raise HTTPException(status_code=500, detail="Connector manager not initialized")
+
+        if provider_id not in manager.connectors:
+            raise HTTPException(status_code=404, detail=f"Connector {provider_id} not found")
+
+        connector = manager.connectors[provider_id]
+
+        # Get current user config
+        config_key = f"user:{user_id}:connector:{provider_id}:config"
+        config_data = await connector.redis_storage.redis_client.get(config_key, user_id)
+
+        if config_data:
+            config_dict = json.loads(config_data)
+        else:
+            config_dict = {}
+
+        # Update enabled_in_chat setting
+        config_dict["enabled_in_chat"] = request.enabled
+
+        # Save updated config
+        await connector.redis_storage.redis_client.set(
+            config_key,
+            json.dumps(config_dict),
+            user_id
+        )
+
+        logger.info(
+            "Toggled connector chat availability",
+            user_id=user_id,
+            provider_id=provider_id,
+            enabled=request.enabled
+        )
+
+        return {
+            "success": True,
+            "provider_id": provider_id,
+            "enabled_in_chat": request.enabled,
+            "message": f"Connector {'enabled' if request.enabled else 'disabled'} in chat"
+        }
+
+    except Exception as e:
+        logger.error(
+            "Failed to toggle connector chat availability",
             user_id=user_id,
             provider_id=provider_id,
             error=str(e)

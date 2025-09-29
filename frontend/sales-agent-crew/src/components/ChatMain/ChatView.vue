@@ -463,6 +463,47 @@
                       </svg>
                     </button>
                     <!-- End Attach Button -->
+
+                    <!-- Connector Toggle Button -->
+                    <div class="relative">
+                      <button
+                        @click="toggleConnectorPanel"
+                        type="button"
+                        :disabled="isLoading"
+                        data-connector-button
+                        class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100 pointer-events-auto"
+                      >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                        </svg>
+                      </button>
+
+                      <!-- Connector Panel Dropdown -->
+                      <div
+                        v-if="showConnectorPanel"
+                        data-connector-panel
+                        class="absolute bottom-10 left-0 z-50 w-72 bg-white border border-gray-200 rounded-lg shadow-lg p-3"
+                      >
+                        <div class="flex items-center justify-between mb-3">
+                          <h3 class="text-sm font-semibold text-gray-800">Connected Apps</h3>
+                          <button
+                            @click="showConnectorPanel = false"
+                            class="text-gray-400 hover:text-gray-600"
+                          >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                        <ConnectorTogglePanel
+                          ref="connectorPanelRef"
+                          @manage-connectors="openSettingsForConnectors"
+                          @add-connectors="openSettingsForConnectors"
+                        />
+                      </div>
+                    </div>
+                    <!-- End Connector Toggle Button -->
+
                     <!-- Mic Button -->
                     <button
                       type="button"
@@ -633,6 +674,7 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import ChatBubble from '@/components/ChatMain/ChatBubble.vue';
 import ChatLoaderBubble from '@/components/ChatMain/ChatLoaderBubble.vue';
+import ConnectorTogglePanel from '@/components/ChatMain/ConnectorTogglePanel.vue';
 const router = useRouter();
 const route = useRoute();
 import { useAuth0 } from '@auth0/auth0-vue';
@@ -859,6 +901,8 @@ const props = defineProps({
 
 const isLoading = ref(false);
 const initialLoading = ref(false);
+const showConnectorPanel = ref(false);
+const connectorPanelRef = ref(null);
 
 // Conversation change watcher:
 watch(
@@ -1658,12 +1702,26 @@ onMounted(async () => {
 
   emitterMitt.on('new-chat', handleButtonClick);
   emitterMitt.on('reload-user-documents', loadUserDocuments);
+
+  // Click outside handler for connector panel
+  document.addEventListener('click', handleClickOutside);
 });
 
 onUnmounted(() => {
   emitterMitt.off('new-chat', handleButtonClick);
   emitterMitt.off('reload-user-documents', loadUserDocuments);
+  document.removeEventListener('click', handleClickOutside);
 });
+
+// Handle click outside to close connector panel
+function handleClickOutside(event) {
+  const connectorButton = event.target.closest('[data-connector-button]');
+  const connectorPanel = event.target.closest('[data-connector-panel]');
+
+  if (!connectorButton && !connectorPanel && showConnectorPanel.value) {
+    showConnectorPanel.value = false;
+  }
+}
 
 watch(
   () => props.keysUpdated,
@@ -1708,6 +1766,17 @@ function toggleRecording() {
   } else {
     startRecordingFlow();
   }
+}
+
+// Connector panel methods
+function toggleConnectorPanel() {
+  showConnectorPanel.value = !showConnectorPanel.value;
+}
+
+function openSettingsForConnectors() {
+  showConnectorPanel.value = false;
+  // Open settings modal to connectors tab
+  emitterMitt.emit('open-settings', { tab: 'connectors' });
 }
 
 async function startRecordingFlow() {

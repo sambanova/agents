@@ -268,7 +268,8 @@ class BaseOAuthConnector(ABC):
             token = UserOAuthToken.from_redis_dict(token_data)
             if token.is_expired:
                 if token.refresh_token:
-                    return ConnectorStatus.EXPIRED
+                    # We have a refresh token, so we can auto-refresh - treat as connected
+                    return ConnectorStatus.CONNECTED
                 else:
                     return ConnectorStatus.ERROR
             return ConnectorStatus.CONNECTED

@@ -83,6 +83,12 @@ class ConnectorManager:
             # Get enabled tools for this user
             enabled_tools = await connector.get_user_enabled_tools(user_id)
             
+            # Get enabled_in_chat setting from config
+            enabled_in_chat = True  # Default to enabled
+            if config_data:
+                config_dict = json.loads(config_data)
+                enabled_in_chat = config_dict.get("enabled_in_chat", True)
+
             result.append({
                 "provider_id": provider_id,
                 "name": connector.metadata.name,
@@ -90,6 +96,7 @@ class ConnectorManager:
                 "icon_url": connector.metadata.icon_url,
                 "status": status.value,
                 "enabled": user_config.enabled,
+                "enabled_in_chat": enabled_in_chat,
                 "connected_at": user_config.connected_at.isoformat() if user_config.connected_at else None,
                 "last_used": user_config.last_used.isoformat() if user_config.last_used else None,
                 "available_tools": [
@@ -136,7 +143,13 @@ class ConnectorManager:
                         pass  # Tools will be empty if discovery fails
                 
                 enabled_tools = user_config.enabled_tools if user_config.enabled else []
-                
+
+                # Get enabled_in_chat setting from config
+                enabled_in_chat = True  # Default to enabled
+                if config_data:
+                    config_dict = json.loads(config_data)
+                    enabled_in_chat = config_dict.get("enabled_in_chat", True)
+
                 result.append({
                     "provider_id": provider_id,
                     "name": connector.metadata.name,
@@ -144,6 +157,7 @@ class ConnectorManager:
                     "icon_url": connector.metadata.icon_url,
                     "status": status.value,
                     "enabled": user_config.enabled,
+                    "enabled_in_chat": enabled_in_chat,
                     "is_custom_mcp": True,  # Flag to indicate this is a user-added MCP connector
                     "requires_auth": status != ConnectorStatus.CONNECTED,
                     "has_refresh_token": token.refresh_token is not None if token else False,
