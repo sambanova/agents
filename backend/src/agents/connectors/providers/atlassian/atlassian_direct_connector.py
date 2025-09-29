@@ -733,22 +733,22 @@ class ConfluenceGetPageTool(BaseTool):
 
 
 class ConfluenceCreatePageTool(BaseTool):
-    """Tool for creating a new Confluence page"""
-    
+    """Tool for creating a new Confluence page using v2 API"""
+
     name: str = "confluence_create_page"
     description: str = "Create a new page in Confluence"
-    
+
     access_token: str
     cloud_id: str
-    
+
     class Args(BaseModel):
         title: str = Field(description="Page title")
         space_key: str = Field(description="Space key")
         content: str = Field(description="Page content (HTML format)")
         parent_id: Optional[str] = Field(default=None, description="Parent page ID (optional)")
-    
+
     args_schema = Args
-    
+
     async def _arun(
         self,
         title: str,
@@ -757,26 +757,53 @@ class ConfluenceCreatePageTool(BaseTool):
         parent_id: Optional[str] = None,
         run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
     ) -> str:
-        """Create Confluence page"""
+        """Create Confluence page using v2 API"""
         try:
-            page_data = {
-                "type": "page",
-                "title": title,
-                "space": {"key": space_key},
-                "body": {
-                    "storage": {
-                        "value": content,
-                        "representation": "storage"
+            # First, we need to get the space ID from the space key
+            # The v2 API requires space ID, not space key
+            async with httpx.AsyncClient() as client:
+                # Search for the space to get its ID
+                space_response = await client.get(
+                    f"https://api.atlassian.com/ex/confluence/{self.cloud_id}/wiki/api/v2/spaces",
+                    params={"keys": space_key},
+                    headers={
+                        "Authorization": f"Bearer {self.access_token}",
+                        "Accept": "application/json"
+                    }
+                )
+
+                if space_response.status_code != 200:
+                    logger.error(f"Failed to get space info: {space_response.status_code} - {space_response.text}")
+                    return f"Error getting space info for key '{space_key}': {space_response.status_code}"
+
+                spaces_data = space_response.json()
+                results = spaces_data.get("results", [])
+
+                if not results:
+                    return f"Space with key '{space_key}' not found"
+
+                space_id = results[0].get("id")
+
+                # Build the page data for v2 API
+                page_data = {
+                    "spaceId": space_id,
+                    "status": "current",
+                    "title": title,
+                    "body": {
+                        "storage": {
+                            "value": content,
+                            "representation": "storage"
+                        }
                     }
                 }
-            }
-            
-            if parent_id:
-                page_data["ancestors"] = [{"id": parent_id}]
-            
-            async with httpx.AsyncClient() as client:
+
+                # If parent_id is provided, add it to the page data
+                if parent_id:
+                    page_data["parentId"] = parent_id
+
+                # Create the page using v2 API
                 response = await client.post(
-                    f"https://api.atlassian.com/ex/confluence/{self.cloud_id}/rest/api/content",
+                    f"https://api.atlassian.com/ex/confluence/{self.cloud_id}/wiki/api/v2/pages",
                     json=page_data,
                     headers={
                         "Authorization": f"Bearer {self.access_token}",
@@ -784,17 +811,38 @@ class ConfluenceCreatePageTool(BaseTool):
                         "Content-Type": "application/json"
                     }
                 )
-                
+
+                logger.info(
+                    "Confluence v2 API create page response",
+                    status_code=response.status_code,
+                    cloud_id=self.cloud_id,
+                    space_key=space_key,
+                    space_id=space_id,
+                    title=title
+                )
+
                 if response.status_code in [200, 201]:
                     page = response.json()
-                    return f"Successfully created page: {page['id']} - {title}"
+                    page_id = page.get("id", "unknown")
+                    return f"Successfully created page: {page_id} - {title}"
+                elif response.status_code == 400:
+                    error_detail = response.json()
+                    error_messages = []
+                    if "errors" in error_detail:
+                        for error in error_detail["errors"]:
+                            error_messages.append(f"{error.get('title', '')}: {error.get('detail', '')}")
+                    return f"Bad request: {', '.join(error_messages) if error_messages else response.text}"
+                elif response.status_code == 403:
+                    return "Permission denied. You don't have permission to create pages in this space."
+                elif response.status_code == 404:
+                    return f"Space not found or you don't have access to space '{space_key}'"
                 else:
                     return f"Error creating page: {response.status_code} - {response.text}"
-                    
+
         except Exception as e:
             logger.error("Failed to create Confluence page", error=str(e), exc_info=True)
             return f"Error creating page: {str(e)}"
-    
+
     def _run(self, *args, **kwargs):
         """Sync execution not supported"""
         raise NotImplementedError("Use async execution")
