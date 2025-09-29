@@ -319,9 +319,11 @@ class AtlassianConnector(MCPConnector):
             "read:confluence-content.summary",  # For content summary
             "read:confluence-content.permission",  # For permission checks
             "read:confluence-user",  # For user information
-            "read:page:confluence",  # REQUIRED for v2 API page operations
-            "write:confluence-content",
-            "read:confluence-space.summary",
+            "read:page:confluence",  # REQUIRED for v2 API page read operations
+            "write:page:confluence",  # REQUIRED for v2 API page write operations (create/update)
+            "read:space:confluence",  # REQUIRED for v2 API /wiki/api/v2/spaces endpoint
+            "write:confluence-content",  # For v1 API compatibility
+            "read:confluence-space.summary",  # For v1 API compatibility
             "search:confluence",  # REQUIRED for Confluence search API
             "offline_access"  # REQUIRED for refresh token support
         ]
