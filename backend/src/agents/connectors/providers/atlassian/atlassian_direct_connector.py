@@ -849,22 +849,22 @@ class ConfluenceCreatePageTool(BaseTool):
 
 
 class ConfluenceUpdatePageTool(BaseTool):
-    """Tool for updating an existing Confluence page"""
-    
+    """Tool for updating an existing Confluence page using v2 API"""
+
     name: str = "confluence_update_page"
     description: str = "Update an existing Confluence page"
-    
+
     access_token: str
     cloud_id: str
-    
+
     class Args(BaseModel):
         page_id: str = Field(description="Page ID")
         title: Optional[str] = Field(default=None, description="New title (optional)")
         content: str = Field(description="New content")
         version_comment: Optional[str] = Field(default=None, description="Version comment")
-    
+
     args_schema = Args
-    
+
     async def _arun(
         self,
         page_id: str,
@@ -873,29 +873,44 @@ class ConfluenceUpdatePageTool(BaseTool):
         version_comment: Optional[str] = None,
         run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
     ) -> str:
-        """Update Confluence page"""
+        """Update Confluence page using v2 API"""
         try:
-            # First get the current page to get version number
             async with httpx.AsyncClient() as client:
+                # First get the current page using v2 API to get version number
                 get_response = await client.get(
-                    f"https://api.atlassian.com/ex/confluence/{self.cloud_id}/rest/api/content/{page_id}",
-                    params={"expand": "version"},
+                    f"https://api.atlassian.com/ex/confluence/{self.cloud_id}/wiki/api/v2/pages/{page_id}",
                     headers={
                         "Authorization": f"Bearer {self.access_token}",
                         "Accept": "application/json"
                     }
                 )
-                
-                if get_response.status_code != 200:
+
+                logger.info(
+                    "Confluence v2 API get page for update",
+                    status_code=get_response.status_code,
+                    page_id=page_id,
+                    cloud_id=self.cloud_id
+                )
+
+                if get_response.status_code == 404:
+                    return f"Page not found: {page_id}"
+                elif get_response.status_code == 401:
+                    return "Authentication failed. The access token may be invalid or you don't have permission to update this page."
+                elif get_response.status_code == 403:
+                    return "Permission denied. You don't have access to update this page."
+                elif get_response.status_code != 200:
                     return f"Error getting page: {get_response.status_code} - {get_response.text}"
-                
+
                 current_page = get_response.json()
-                current_version = current_page["version"]["number"]
-                
-                # Prepare update data
+                current_version = current_page.get("version", {}).get("number", 0)
+                current_title = current_page.get("title", "")
+
+                # Prepare update data for v2 API
+                # The v2 API requires different structure
                 update_data = {
-                    "type": "page",
-                    "title": title or current_page["title"],
+                    "id": page_id,
+                    "status": "current",
+                    "title": title or current_title,
                     "body": {
                         "storage": {
                             "value": content,
@@ -906,13 +921,14 @@ class ConfluenceUpdatePageTool(BaseTool):
                         "number": current_version + 1
                     }
                 }
-                
+
+                # Add version message if provided
                 if version_comment:
                     update_data["version"]["message"] = version_comment
-                
-                # Update the page
+
+                # Update the page using v2 API
                 update_response = await client.put(
-                    f"https://api.atlassian.com/ex/confluence/{self.cloud_id}/rest/api/content/{page_id}",
+                    f"https://api.atlassian.com/ex/confluence/{self.cloud_id}/wiki/api/v2/pages/{page_id}",
                     json=update_data,
                     headers={
                         "Authorization": f"Bearer {self.access_token}",
@@ -920,16 +936,43 @@ class ConfluenceUpdatePageTool(BaseTool):
                         "Content-Type": "application/json"
                     }
                 )
-                
+
+                logger.info(
+                    "Confluence v2 API update page response",
+                    status_code=update_response.status_code,
+                    page_id=page_id,
+                    cloud_id=self.cloud_id,
+                    title=title or current_title,
+                    version=current_version + 1
+                )
+
                 if update_response.status_code in [200, 201]:
-                    return f"Successfully updated page: {page_id}"
+                    updated_page = update_response.json()
+                    updated_title = updated_page.get("title", title or current_title)
+                    updated_version = updated_page.get("version", {}).get("number", current_version + 1)
+                    return f"Successfully updated page: {page_id} - {updated_title} (version {updated_version})"
+                elif update_response.status_code == 400:
+                    error_detail = update_response.json()
+                    error_messages = []
+                    if "errors" in error_detail:
+                        for error in error_detail["errors"]:
+                            error_messages.append(f"{error.get('title', '')}: {error.get('detail', '')}")
+                    return f"Bad request: {', '.join(error_messages) if error_messages else update_response.text}"
+                elif update_response.status_code == 401:
+                    return "Authentication failed. Please reconnect your Confluence account with proper scopes."
+                elif update_response.status_code == 403:
+                    return "Permission denied. You don't have permission to update this page."
+                elif update_response.status_code == 404:
+                    return f"Page not found: {page_id}"
+                elif update_response.status_code == 409:
+                    return f"Version conflict. The page was updated by another user. Please try again."
                 else:
                     return f"Error updating page: {update_response.status_code} - {update_response.text}"
-                    
+
         except Exception as e:
             logger.error("Failed to update Confluence page", error=str(e), exc_info=True)
             return f"Error updating page: {str(e)}"
-    
+
     def _run(self, *args, **kwargs):
         """Sync execution not supported"""
         raise NotImplementedError("Use async execution")
