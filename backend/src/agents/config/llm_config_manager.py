@@ -29,7 +29,7 @@ class LLMConfigManager:
                     "Meta-Llama-3.3-70B-Instruct": {"name": "Llama 3.3 70B", "context_window": 32768, "max_tokens": 8192},
                     "Meta-Llama-3.1-70B-Instruct": {"name": "Llama 3.1 70B", "context_window": 32768, "max_tokens": 8192},
                     "Meta-Llama-3.1-8B-Instruct": {"name": "Llama 3.1 8B", "context_window": 32768, "max_tokens": 8192},
-                    "DeepSeek-V3-0324": {"name": "DeepSeek V3", "context_window": 32768, "max_tokens": 8192},
+                    "DeepSeek-V3-0324": {"name": "DeepSeek V3", "context_window": 32768, "max_tokens": 16384},
                     "DeepSeek-R1-Distill-Llama-70B": {"name": "DeepSeek R1 Distill", "context_window": 32768, "max_tokens": 8192},
                     "DeepSeek-R1-0528": {"name": "DeepSeek R1", "context_window": 32768, "max_tokens": 8192},
                     "Meta-Llama-3.1-405B-Instruct": {"name": "Llama 3.1 405B", "context_window": 32768, "max_tokens": 8192},
