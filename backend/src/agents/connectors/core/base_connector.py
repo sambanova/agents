@@ -595,7 +595,7 @@ class BaseOAuthConnector(ABC):
         """
         Revoke token for a specific user
         """
-        token = await self.get_user_token(user_id)
+        token = await self.get_user_token(user_id, auto_refresh=False)
         if not token:
             return False
         
