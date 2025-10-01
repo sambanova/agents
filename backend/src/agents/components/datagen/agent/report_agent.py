@@ -31,6 +31,13 @@ def create_report_agent(
     4. Synthesizing information from various sources into a unified narrative.
     5. Integrating relevant data visualizations and ensuring they are appropriately referenced and explained.
 
+    **CRITICAL - Image Embedding Instructions:**
+    When creating HTML reports, you MUST embed all images/visualizations directly into the HTML document using base64 data URLs.
+    - DO NOT use file path references like <img src="filename.png">
+    - Instead, read the image file, convert it to base64, and embed it as: <img src="data:image/png;base64,{base64_string}">
+    - This ensures all visualizations are self-contained within the HTML report and display properly
+    - Use the daytona_read_document tool to read image files and convert them to base64 format
+
     Constraints:
     - Focus solely on report writing; do not perform data analysis or create visualizations.
     - Maintain an objective, academic tone throughout the report.
