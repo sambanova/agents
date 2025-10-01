@@ -93,12 +93,14 @@
           <!-- List existing custom providers -->
           <div v-if="customProviders.length > 0" class="mb-4 space-y-2">
             <div v-for="(provider, index) in customProviders" :key="index" class="border rounded-lg p-3">
-              <div class="flex justify-between items-start">
+              <!-- View Mode -->
+              <div v-if="editingProviderIndex !== index" class="flex justify-between items-start">
                 <div class="flex-1">
                   <h4 class="font-medium">{{ provider.name }}
                     <span class="text-xs text-gray-500 ml-2">({{ provider.providerType === 'openai' ? 'OpenAI' : provider.providerType === 'sambanova' ? 'SambaNova' : 'Fireworks' }} Compatible)</span>
                   </h4>
                   <p class="text-sm text-gray-600">{{ provider.baseUrl }}</p>
+                  <p class="text-sm text-gray-600 mt-1">Models: {{ provider.models }}</p>
                   <div v-if="provider.apiKey" class="flex items-center mt-1">
                     <span class="text-xs text-gray-500">API Key: </span>
                     <span v-if="customProviderVisibility[provider.name]" class="text-xs ml-1">{{ provider.apiKey }}</span>
@@ -114,14 +116,72 @@
                     </button>
                   </div>
                 </div>
-                <button
-                  @click="removeCustomProvider(index)"
-                  class="text-red-600 hover:text-red-800"
+                <div class="flex gap-2">
+                  <button
+                    @click="startEditingProvider(index)"
+                    class="text-blue-600 hover:text-blue-800"
+                  >
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  <button
+                    @click="removeCustomProvider(index)"
+                    class="text-red-600 hover:text-red-800"
+                  >
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Edit Mode -->
+              <div v-else class="space-y-2">
+                <input
+                  v-model="editingProvider.name"
+                  placeholder="Provider Name"
+                  class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                />
+                <input
+                  v-model="editingProvider.baseUrl"
+                  type="url"
+                  placeholder="Base URL"
+                  class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                />
+                <select
+                  v-model="editingProvider.providerType"
+                  class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
                 >
-                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                  <option value="sambanova">SambaNova Compatible</option>
+                  <option value="fireworks">Fireworks Compatible</option>
+                  <option value="openai">OpenAI Compatible (Together/Custom)</option>
+                </select>
+                <input
+                  v-model="editingProvider.apiKey"
+                  type="password"
+                  placeholder="API Key"
+                  class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                />
+                <input
+                  v-model="editingProvider.models"
+                  placeholder="Model IDs (comma-separated)"
+                  class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
+                />
+                <div class="flex gap-2">
+                  <button
+                    @click="saveEditedProvider(index)"
+                    class="flex-1 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                  >
+                    Save Changes
+                  </button>
+                  <button
+                    @click="cancelEditingProvider"
+                    class="flex-1 px-3 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -619,6 +679,9 @@ const customProviders = ref([])
 const newProvider = ref({ name: '', baseUrl: '', apiKey: '', type: 'openai', models: '' })
 const customProviderVisibility = ref({})
 const showNewProviderApiKey = ref(false)
+// Edit mode state
+const editingProviderIndex = ref(null)
+const editingProvider = ref({})
 // Task models and custom models
 const taskModels = ref({})
 const customModels = ref([])
@@ -814,6 +877,47 @@ const removeCustomProvider = (index) => {
   // Remove provider
   customProviders.value.splice(index, 1)
   delete customProviderVisibility.value[provider.name]
+}
+
+const startEditingProvider = (index) => {
+  // Copy provider data to editingProvider
+  editingProviderIndex.value = index
+  editingProvider.value = {
+    name: customProviders.value[index].name,
+    baseUrl: customProviders.value[index].baseUrl,
+    apiKey: customProviders.value[index].apiKey,
+    providerType: customProviders.value[index].providerType,
+    models: customProviders.value[index].models
+  }
+}
+
+const saveEditedProvider = (index) => {
+  // Validate inputs
+  if (!editingProvider.value.name || !editingProvider.value.baseUrl || !editingProvider.value.apiKey) {
+    showStatus('Please fill in all required fields', 'error')
+    return
+  }
+
+  // Update the provider in the array
+  customProviders.value[index] = {
+    name: editingProvider.value.name,
+    baseUrl: editingProvider.value.baseUrl,
+    apiKey: editingProvider.value.apiKey,
+    providerType: editingProvider.value.providerType,
+    models: editingProvider.value.models
+  }
+
+  // Exit edit mode
+  editingProviderIndex.value = null
+  editingProvider.value = {}
+
+  showStatus('Custom provider updated', 'success')
+}
+
+const cancelEditingProvider = () => {
+  // Reset edit mode
+  editingProviderIndex.value = null
+  editingProvider.value = {}
 }
 
 const addCustomModel = () => {
