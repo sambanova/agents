@@ -131,12 +131,9 @@ def get_llm(
             llm = ChatOpenAI(
                 model=model,
                 temperature=temperature,
-                max_tokens=max_tokens,  # Use max_tokens parameter directly
+                max_tokens=max_tokens,
                 api_key=api_key,
                 base_url=base_url,
-                timeout=60.0,  # Set explicit timeout
-                max_retries=2,  # Limit retries
-                disabled_params={"tools": None, "tool_choice": None}  # Disable OpenAI function calling for custom endpoints
             )
 
             logger.info(f"[CUSTOM_OPENAI] ChatOpenAI initialized successfully")

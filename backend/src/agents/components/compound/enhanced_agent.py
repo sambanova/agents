@@ -206,5 +206,9 @@ class EnhancedConfigurableAgent(RunnableBinding):
                 message_id=message_id,
             )
         except Exception as e:
-            logger.error(f"Error in astream_websocket: {str(e)}")
+            logger.error(
+                f"Error in astream_websocket: {str(e)}",
+                exc_info=True,
+                error_type=type(e).__name__
+            )
             raise e
