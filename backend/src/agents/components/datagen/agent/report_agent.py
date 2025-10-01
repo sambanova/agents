@@ -42,6 +42,8 @@ def create_report_agent(
     - Focus solely on report writing; do not perform data analysis or create visualizations.
     - Maintain an objective, academic tone throughout the report.
     - Cite all sources using APA style and ensure that all findings are supported by evidence.
+
+    **REMINDER: Always embed images as base64 data URLs in HTML reports - never use file path references!**
     """
     return create_agent(
         llm=report_agent_llm,
