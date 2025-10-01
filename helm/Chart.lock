@@ -1,0 +1,12 @@
+dependencies:
+- name: redis
+  repository: https://charts.bitnami.com/bitnami
+  version: 20.0.3
+- name: openebs
+  repository: https://openebs.github.io/openebs
+  version: 4.3.3
+- name: postgresql
+  repository: https://charts.bitnami.com/bitnami
+  version: 15.4.0
+digest: sha256:a292abc8522999ac1717e41639b80cb3b3fd61dc3eb379121ec66104425cb46c
+generated: "2025-09-30T19:18:26.194282-07:00"

@@ -128,18 +128,15 @@ def get_llm(
                 api_key_preview=f"{api_key[:8]}...{api_key[-4:]}"
             )
 
-            # Don't use max_completion_tokens for custom providers
-            # Use model_kwargs to pass max_tokens directly in the request body
             llm = ChatOpenAI(
                 model=model,
                 temperature=temperature,
+                max_tokens=max_tokens,  # Use max_tokens parameter directly
                 api_key=api_key,
                 base_url=base_url,
                 timeout=60.0,  # Set explicit timeout
                 max_retries=2,  # Limit retries
-                model_kwargs={
-                    "max_tokens": max_tokens,  # Pass max_tokens directly, not max_completion_tokens
-                }
+                disabled_params={"tools": None, "tool_choice": None}  # Disable OpenAI function calling for custom endpoints
             )
 
             logger.info(f"[CUSTOM_OPENAI] ChatOpenAI initialized successfully")
