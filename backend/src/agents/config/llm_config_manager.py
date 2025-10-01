@@ -140,22 +140,41 @@ class LLMConfigManager:
         """Load model mappings from configuration."""
         self.model_mappings = self.config.get("model_mappings", {})
 
-    def _map_models_to_provider(self, task_models: Dict[str, Any], new_provider: str) -> Dict[str, Any]:
+    def _map_models_to_provider(self, task_models: Dict[str, Any], new_provider: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Map task models to equivalent models for a new provider.
+        IMPORTANT: Skips mapping for tasks using custom providers.
 
         Args:
             task_models: Current task model configuration
             new_provider: The new provider to map to
+            user_id: Optional user ID to check for custom providers
 
         Returns:
             Updated task models with mapped model IDs
         """
+        # Get list of custom provider names if user_id provided
+        custom_provider_names = []
+        if user_id and user_id in self._user_overrides:
+            custom_providers = self._user_overrides[user_id].get("custom_providers", [])
+            custom_provider_names = [cp.get("name") for cp in custom_providers if cp.get("name")]
+
+        logger.info(f"[MODEL_MAPPING] new_provider={new_provider}, user_id={user_id[:8] if user_id else None}, custom_providers={custom_provider_names}")
+
         mapped_models = {}
 
         for task, model_config in task_models.items():
             if isinstance(model_config, dict):
+                current_provider = model_config.get("provider")
                 current_model = model_config.get("model")
+
+                # IMPORTANT: If this task is using a custom provider, DON'T map it
+                if current_provider in custom_provider_names:
+                    logger.info(f"[MODEL_MAPPING] Skipping model mapping for task {task} - using custom provider {current_provider}")
+                    mapped_models[task] = model_config.copy()
+                    continue
+
+                # Only map if the current provider is a built-in provider
                 mapped = False
 
                 # Find which logical model this actual model ID corresponds to
@@ -190,7 +209,7 @@ class LLMConfigManager:
 
     def get_provider_config(self, provider: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         """
-        Get configuration for a specific provider, including user overrides.
+        Get configuration for a specific provider, including user overrides and custom providers.
 
         Args:
             provider: The provider name
@@ -199,6 +218,54 @@ class LLMConfigManager:
         Returns:
             Provider configuration with overrides applied
         """
+        # First check if this is a custom provider
+        if user_id and user_id in self._user_overrides:
+            user_config = self._user_overrides[user_id]
+            custom_providers = user_config.get("custom_providers", [])
+
+            for custom_prov in custom_providers:
+                if custom_prov.get("name") == provider:
+                    # Build config from custom provider definition
+                    models_dict = {}
+                    models_list = custom_prov.get("models", [])
+
+                    # Handle both array of model objects and comma-separated string
+                    if isinstance(models_list, str):
+                        # Comma-separated list of model names
+                        for model_name in [m.strip() for m in models_list.split(",") if m.strip()]:
+                            models_dict[model_name] = {
+                                "name": model_name,
+                                "context_window": 32768,
+                                "max_tokens": 8192
+                            }
+                    elif isinstance(models_list, list):
+                        # Array of model objects
+                        for model in models_list:
+                            if isinstance(model, dict):
+                                model_id = model.get("id") or model.get("name")
+                                models_dict[model_id] = {
+                                    "name": model.get("name", model_id),
+                                    "context_window": model.get("context_window", 32768),
+                                    "max_tokens": model.get("max_tokens", 8192)
+                                }
+                            elif isinstance(model, str):
+                                # Simple string model name
+                                models_dict[model] = {
+                                    "name": model,
+                                    "context_window": 32768,
+                                    "max_tokens": 8192
+                                }
+
+                    logger.info(f"Custom provider {provider}: parsed {len(models_dict)} models from {type(models_list).__name__}: {list(models_dict.keys())}")
+
+                    return {
+                        "base_url": custom_prov.get("baseUrl"),
+                        "models": models_dict,
+                        "provider_type": custom_prov.get("providerType", "openai"),
+                        "api_key": custom_prov.get("apiKey")
+                    }
+
+        # Not a custom provider, get from base config
         base_config = self.config["providers"].get(provider, {}).copy()
 
         # Apply user-specific base URL override if present
@@ -237,18 +304,37 @@ class LLMConfigManager:
             if task in user_config:
                 result = user_config[task].copy()
 
-                # If this task uses a custom provider, get its configuration
-                if "custom_provider" in result:
-                    custom_providers = self._user_overrides[user_id].get("custom_providers", [])
-                    for custom_prov in custom_providers:
-                        if custom_prov.get("name") == result["custom_provider"]:
-                            # Use the custom provider's base URL
-                            result["base_url"] = custom_prov.get("baseUrl")
-                            # Get the API key for this custom provider
-                            result["api_key"] = custom_prov.get("apiKey")
-                            # Provider type is already set from frontend
-                            logger.debug(f"Task {task} using custom provider {result['custom_provider']} with type {result.get('provider')}")
-                            break
+                # Check if the provider is a custom provider (either via custom_provider field or by checking the provider name)
+                provider_name = result.get("custom_provider") or result.get("provider")
+                custom_providers = self._user_overrides[user_id].get("custom_providers", [])
+
+                for custom_prov in custom_providers:
+                    if custom_prov.get("name") == provider_name:
+                        # This is a custom provider - inject its configuration
+                        result["base_url"] = custom_prov.get("baseUrl")
+
+                        # Get API key from custom provider object or from custom_api_keys dict
+                        api_key_from_provider = custom_prov.get("apiKey")
+                        custom_api_keys = self._user_overrides[user_id].get("custom_api_keys", {})
+                        api_key_from_dict = custom_api_keys.get(f"custom_{provider_name}")
+
+                        result["api_key"] = api_key_from_provider or api_key_from_dict
+
+                        logger.info(f"[API_KEY_DEBUG] Task {task}, Provider {provider_name}")
+                        logger.info(f"[API_KEY_DEBUG]   apiKey from provider object: {bool(api_key_from_provider)}")
+                        if api_key_from_provider:
+                            logger.info(f"[API_KEY_DEBUG]   provider object key preview: {api_key_from_provider[:8]}...{api_key_from_provider[-4:]}")
+                        logger.info(f"[API_KEY_DEBUG]   apiKey from custom_api_keys: {bool(api_key_from_dict)}")
+                        if api_key_from_dict:
+                            logger.info(f"[API_KEY_DEBUG]   custom_api_keys key preview: {api_key_from_dict[:8]}...{api_key_from_dict[-4:]}")
+                        logger.info(f"[API_KEY_DEBUG]   final api_key: {bool(result.get('api_key'))}")
+                        if result.get('api_key'):
+                            logger.info(f"[API_KEY_DEBUG]   final key preview: {result.get('api_key')[:8]}...{result.get('api_key')[-4:]}")
+
+                        result["provider"] = provider_name  # Set provider to the custom provider name
+                        result["provider_type"] = custom_prov.get("providerType", "openai")
+                        logger.debug(f"Task {task} using custom provider {provider_name} with type {result.get('provider_type')}, base_url={result.get('base_url')}")
+                        break
 
                 logger.debug(f"Task {task} for user {user_id[:8]}... using override: provider={result.get('provider')}, model={result.get('model')}")
                 return result
@@ -270,17 +356,22 @@ class LLMConfigManager:
             overrides: Configuration overrides for this user
                      Can include: default_provider, task_models, provider_base_urls, custom_models
         """
+        # Store overrides FIRST so custom_providers are available for mapping check
+        self._user_overrides[user_id] = overrides
+
         # If provider changed, map models to new provider equivalents
+        # BUT: Do NOT map tasks that are using custom providers
         if "default_provider" in overrides and "task_models" in self.config:
             new_provider = overrides["default_provider"]
             # Only map if we have model mappings configured
             if hasattr(self, 'model_mappings') and self.model_mappings:
                 current_task_models = overrides.get("task_models", self.config.get("task_models", {}))
-                overrides["task_models"] = self._map_models_to_provider(
-                    current_task_models, new_provider
+                mapped_task_models = self._map_models_to_provider(
+                    current_task_models, new_provider, user_id  # Pass user_id to check custom providers
                 )
+                # Update the stored overrides with mapped models
+                self._user_overrides[user_id]["task_models"] = mapped_task_models
 
-        self._user_overrides[user_id] = overrides
         logger.info(f"Set config overrides for user {user_id[:8]}...")
 
     def clear_user_override(self, user_id: str):
@@ -301,15 +392,33 @@ class LLMConfigManager:
         """Check if user has overrides configured."""
         return user_id in self._user_overrides and bool(self._user_overrides[user_id])
 
-    def get_model_info(self, provider: str, model_id: str) -> Dict[str, Any]:
+    def get_model_info(self, provider: str, model_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         """Get detailed information about a specific model."""
-        provider_config = self.get_provider_config(provider)
+        provider_config = self.get_provider_config(provider, user_id)
         models = provider_config.get("models", {})
         return models.get(model_id, {})
 
-    def list_providers(self) -> list:
-        """List all available providers."""
-        return list(self.config["providers"].keys())
+    def list_providers(self, user_id: Optional[str] = None) -> list:
+        """
+        List all available providers, including custom providers.
+
+        Args:
+            user_id: Optional user ID to include their custom providers
+
+        Returns:
+            List of provider names
+        """
+        providers = list(self.config["providers"].keys())
+
+        # Add custom providers if user has any
+        if user_id and user_id in self._user_overrides:
+            custom_providers = self._user_overrides[user_id].get("custom_providers", [])
+            for custom_prov in custom_providers:
+                provider_name = custom_prov.get("name")
+                if provider_name and provider_name not in providers:
+                    providers.append(provider_name)
+
+        return providers
 
     def list_models(self, provider: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         """

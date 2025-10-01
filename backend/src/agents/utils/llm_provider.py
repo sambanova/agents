@@ -53,12 +53,24 @@ def get_llm(
                 else:
                     max_tokens = 8192  # Default
 
-            llm = ChatSambaNovaCloud(
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                sambanova_api_key=api_key,
-            )
+            # Build kwargs for ChatSambaNovaCloud
+            sambanova_kwargs = {
+                "model": model,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "sambanova_api_key": api_key,
+            }
+
+            # If custom base_url provided, use sambanova_url parameter
+            if base_url:
+                sambanova_kwargs["sambanova_url"] = base_url
+                logger.info(f"[SAMBANOVA_INIT] Using custom SambaNova URL: {base_url}")
+            else:
+                logger.info(f"[SAMBANOVA_INIT] Using default SambaNova URL (no base_url provided)")
+
+            logger.info(f"[SAMBANOVA_INIT] Initializing with kwargs: model={sambanova_kwargs.get('model')}, has_custom_url={bool(base_url)}, api_key_preview={api_key[:8]}...{api_key[-4:]}")
+
+            llm = ChatSambaNovaCloud(**sambanova_kwargs)
 
         elif provider == "fireworks":
             from langchain_fireworks import ChatFireworks
@@ -97,7 +109,40 @@ def get_llm(
             )
 
         else:
-            raise ValueError(f"Unsupported provider: {provider}")
+            # Assume it's a custom OpenAI-compatible provider
+            from langchain_openai import ChatOpenAI
+
+            if max_tokens is None:
+                max_tokens = 8192
+
+            if not base_url:
+                raise ValueError(f"Custom provider {provider} requires a base_url")
+
+            logger.info(
+                f"[CUSTOM_OPENAI] Using custom OpenAI-compatible provider",
+                provider=provider,
+                base_url=base_url,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                api_key_preview=f"{api_key[:8]}...{api_key[-4:]}"
+            )
+
+            # Don't use max_completion_tokens for custom providers
+            # Use model_kwargs to pass max_tokens directly in the request body
+            llm = ChatOpenAI(
+                model=model,
+                temperature=temperature,
+                api_key=api_key,
+                base_url=base_url,
+                timeout=60.0,  # Set explicit timeout
+                max_retries=2,  # Limit retries
+                model_kwargs={
+                    "max_tokens": max_tokens,  # Pass max_tokens directly, not max_completion_tokens
+                }
+            )
+
+            logger.info(f"[CUSTOM_OPENAI] ChatOpenAI initialized successfully")
 
         logger.info(
             "LLM initialized successfully",
@@ -157,14 +202,32 @@ def get_llm_for_task(
     task_specific_api_key = task_config.get("api_key")
 
     # Get model details
-    model_info = config_manager.get_model_info(provider, model)
+    model_info = config_manager.get_model_info(provider, model, user_id)
     max_tokens = model_info.get("max_tokens")
 
+    # For custom providers, use the provider_type to determine which LLM client to use
+    # This allows custom SambaNova/Fireworks endpoints with different base URLs
+    # Check task_config first (set by get_task_model for custom providers), then provider_config
+    provider_type = task_config.get("provider_type") or provider_config.get("provider_type")
+    actual_provider = provider_type if provider_type else provider
+
+    logger.info(f"Provider: {provider}, Provider Type: {provider_type}, Actual Provider for LLM: {actual_provider}, Base URL: {base_url}")
+
     # Get the appropriate API key
+    logger.info(f"[API_KEY_DEBUG] api_keys dict type: {type(api_keys)}")
+    if isinstance(api_keys, dict):
+        logger.info(f"[API_KEY_DEBUG] api_keys dict keys: {list(api_keys.keys())}")
+        for key in api_keys:
+            if api_keys[key]:
+                logger.info(f"[API_KEY_DEBUG] api_keys[{key}] preview: {api_keys[key][:8]}...{api_keys[key][-4:]}")
+
     # If task has a specific API key (from custom provider), use it first
     if task_specific_api_key:
         api_key = task_specific_api_key
-        logger.info(f"Using task-specific API key for custom provider")
+        logger.info(f"[API_KEY_DEBUG] Using task-specific API key for custom provider")
+        logger.info(f"[API_KEY_DEBUG] API key value present: {bool(api_key)}")
+        logger.info(f"[API_KEY_DEBUG] API key length: {len(api_key) if api_key else 0}")
+        logger.info(f"[API_KEY_DEBUG] API key preview: {api_key[:8]}...{api_key[-4:] if len(api_key) > 12 else ''}")
     # For backward compatibility, if only a string key is provided, assume it's for SambaNova
     elif isinstance(api_keys, str):
         api_key = api_keys
@@ -180,7 +243,7 @@ def get_llm_for_task(
                 raise ValueError(f"No API key provided for provider {provider}")
 
     return get_llm(
-        provider=provider,
+        provider=actual_provider,  # Use provider_type for custom providers
         model=model,
         api_key=api_key,
         base_url=base_url,

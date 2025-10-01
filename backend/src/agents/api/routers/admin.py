@@ -112,33 +112,39 @@ async def get_configuration(
                 if stored_config:
                     overrides = json.loads(stored_config)
 
-                    # Validate and correct task models to ensure they exist in current config
-                    if "task_models" in overrides and "default_provider" in overrides:
-                        provider = overrides["default_provider"]
-                        provider_models = config_manager.list_models(provider)
+                    # Apply stored overrides FIRST so custom providers are available for validation
+                    config_manager.set_user_override(user_id, overrides)
 
+                    # Validate and correct task models to ensure they exist in current config
+                    # Skip validation for custom providers as they might have any models
+                    if "task_models" in overrides:
                         for task, task_config in overrides["task_models"].items():
-                            if isinstance(task_config, dict) and "model" in task_config:
+                            if isinstance(task_config, dict) and "model" in task_config and "provider" in task_config:
+                                task_provider = task_config["provider"]
                                 model_id = task_config["model"]
-                                # If model doesn't exist in provider, try to map it
-                                if model_id not in provider_models:
-                                    # Try to find a mapping
+
+                                # Get models for this task's specific provider (passing user_id to include custom providers)
+                                provider_models = config_manager.list_models(task_provider, user_id)
+
+                                # Only try to map if model doesn't exist and this is NOT a custom provider
+                                is_custom_provider = False
+                                if "custom_providers" in overrides:
+                                    custom_provider_names = [cp.get("name") for cp in overrides["custom_providers"]]
+                                    is_custom_provider = task_provider in custom_provider_names
+
+                                if model_id not in provider_models and not is_custom_provider:
+                                    # Try to find a mapping for built-in providers
                                     mapped = False
                                     for logical_model, mappings in config_manager.model_mappings.items():
-                                        # Check if this model ID matches any provider's mapping
                                         for prov, prov_model in mappings.items():
-                                            if prov_model == model_id and provider in mappings:
-                                                # Found a match, use the correct model for this provider
-                                                task_config["model"] = mappings[provider]
-                                                task_config["provider"] = provider
-                                                logger.info(f"Corrected model for task {task}: {model_id} -> {mappings[provider]}")
+                                            if prov_model == model_id and task_provider in mappings:
+                                                task_config["model"] = mappings[task_provider]
+                                                logger.info(f"Corrected model for task {task}: {model_id} -> {mappings[task_provider]}")
                                                 mapped = True
                                                 break
                                         if mapped:
                                             break
 
-                    # Apply stored overrides to config manager
-                    config_manager.set_user_override(user_id, overrides)
                     logger.info(f"Loaded persisted config from Redis for user {user_id[:8]}...")
             except Exception as e:
                 logger.error(f"Failed to load config from Redis: {e}")
@@ -150,6 +156,18 @@ async def get_configuration(
         "user_has_override": user_id in config_manager._user_overrides if user_id else False,
         "config_source": "user_override" if user_id and user_id in config_manager._user_overrides else "default"
     }
+
+    # Debug: log what we're returning for task_models
+    if user_id and "task_models" in config:
+        task_models = config["task_models"]
+        if "main_agent" in task_models:
+            logger.info(f"GET /admin/config returning main_agent: {task_models['main_agent']}")
+
+        # Also check what's in the singleton
+        if user_id in config_manager._user_overrides:
+            user_override = config_manager._user_overrides[user_id]
+            if "task_models" in user_override and "main_agent" in user_override["task_models"]:
+                logger.info(f"GET /admin/config - singleton has main_agent: {user_override['task_models']['main_agent']}")
 
     logger.info("Retrieved configuration", user_id=user_id[:8] + "..." if user_id else None)
     return config
@@ -185,6 +203,27 @@ async def update_configuration(
         overrides["custom_providers"] = update.custom_providers
     if update.custom_models:
         overrides["custom_models"] = update.custom_models
+
+    # Log what we're saving for debugging
+    logger.info(f"=== RECEIVED CONFIG UPDATE for user {user_id[:8]}... ===")
+    logger.info(f"default_provider: {overrides.get('default_provider')}")
+    logger.info(f"num_custom_providers: {len(overrides.get('custom_providers', []))}")
+    logger.info(f"num_task_models: {len(overrides.get('task_models', {}))}")
+
+    if overrides.get("custom_providers"):
+        for cp in overrides["custom_providers"]:
+            logger.info(f"Custom Provider Details:")
+            logger.info(f"  name: {cp.get('name')}")
+            logger.info(f"  providerType: {cp.get('providerType')}")
+            logger.info(f"  baseUrl: {cp.get('baseUrl')}")
+            logger.info(f"  models type: {type(cp.get('models'))}")
+            logger.info(f"  models value: {cp.get('models')}")
+            logger.info(f"  apiKey present: {bool(cp.get('apiKey'))}")
+
+    if overrides.get("task_models"):
+        logger.info("Task Models (showing all):")
+        for task, config in overrides["task_models"].items():
+            logger.info(f"  {task}: provider={config.get('provider')}, model={config.get('model')}")
 
     # Set user overrides in config manager (in-memory for current session)
     config_manager.set_user_override(user_id, overrides)
@@ -326,15 +365,20 @@ async def reset_configuration(
 
 
 @router.get("/providers", dependencies=[Depends(check_admin_enabled)])
-async def list_providers() -> List[str]:
+async def list_providers(
+    user_id: str = Depends(get_current_user_id)
+) -> List[str]:
     """
-    List all available LLM providers.
+    List all available LLM providers, including custom providers.
+
+    Args:
+        user_id: The authenticated user ID
 
     Returns:
         List of provider names
     """
     config_manager = get_config_manager()
-    providers = config_manager.list_providers()
+    providers = config_manager.list_providers(user_id)
 
     return providers
 
@@ -410,13 +454,15 @@ async def list_tasks(
 
 @router.post("/test-connection", dependencies=[Depends(check_admin_enabled)])
 async def test_provider_connection(
-    provider_config: ProviderConfig
+    provider_config: ProviderConfig,
+    user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     Test connection to a provider with given API key.
 
     Args:
         provider_config: Provider name and API key
+        user_id: The authenticated user ID
 
     Returns:
         Connection test result
@@ -424,8 +470,8 @@ async def test_provider_connection(
     try:
         config_manager = get_config_manager()
 
-        # Get a simple model from the provider to test
-        models = config_manager.list_models(provider_config.provider)
+        # Get a simple model from the provider to test (pass user_id for custom providers)
+        models = config_manager.list_models(provider_config.provider, user_id)
         if not models:
             raise HTTPException(
                 status_code=400,
@@ -435,11 +481,20 @@ async def test_provider_connection(
         # Use the first available model for testing
         test_model = list(models.keys())[0]
 
+        # Get provider config to get base_url and provider_type for custom providers
+        provider_config_dict = config_manager.get_provider_config(provider_config.provider, user_id)
+        base_url = provider_config_dict.get("base_url")
+        provider_type = provider_config_dict.get("provider_type")
+
+        # Determine which provider client to use
+        actual_provider = provider_type if provider_type else provider_config.provider
+
         # Try to initialize the LLM
         llm = get_llm(
-            provider=provider_config.provider,
+            provider=actual_provider,
             model=test_model,
-            api_key=provider_config.api_key
+            api_key=provider_config.api_key,
+            base_url=base_url
         )
 
         # Try a simple completion to verify the connection

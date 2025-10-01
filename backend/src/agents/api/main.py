@@ -263,15 +263,32 @@ async def get_api_keys(
                 content={"error": "No API keys found for this user"},
             )
 
+        response_data = {
+            "sambanova_key": stored_keys.sambanova_key,
+            "serper_key": stored_keys.serper_key,
+            "exa_key": stored_keys.exa_key,
+            "fireworks_key": stored_keys.fireworks_key,
+            "together_key": stored_keys.together_key,
+        }
+
+        # Also include custom provider API keys from LLM config
+        config_key = f"llm_config:{user_id}"
+        stored_config = await app.state.redis_storage_service.redis_client.get(
+            config_key,
+            user_id=user_id
+        )
+
+        if stored_config:
+            import json
+            overrides = json.loads(stored_config)
+
+            # Add custom provider API keys if they exist
+            if "custom_api_keys" in overrides:
+                response_data.update(overrides["custom_api_keys"])
+
         return JSONResponse(
             status_code=200,
-            content={
-                "sambanova_key": stored_keys.sambanova_key,
-                "serper_key": stored_keys.serper_key,
-                "exa_key": stored_keys.exa_key,
-                "fireworks_key": stored_keys.fireworks_key,
-                "together_key": stored_keys.together_key,
-            },
+            content=response_data,
         )
 
     except Exception as e:

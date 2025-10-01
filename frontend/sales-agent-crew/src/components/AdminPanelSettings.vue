@@ -96,7 +96,7 @@
               <div class="flex justify-between items-start">
                 <div class="flex-1">
                   <h4 class="font-medium">{{ provider.name }}
-                    <span class="text-xs text-gray-500 ml-2">({{ provider.type === 'openai' ? 'OpenAI' : provider.type === 'sambanova' ? 'SambaNova' : 'Fireworks' }} Compatible)</span>
+                    <span class="text-xs text-gray-500 ml-2">({{ provider.providerType === 'openai' ? 'OpenAI' : provider.providerType === 'sambanova' ? 'SambaNova' : 'Fireworks' }} Compatible)</span>
                   </h4>
                   <p class="text-sm text-gray-600">{{ provider.baseUrl }}</p>
                   <div v-if="provider.apiKey" class="flex items-center mt-1">
@@ -182,7 +182,7 @@
             </label>
             <div class="relative">
               <input
-                v-model="apiKeys[provider]"
+                v-model="apiKeys[getApiKeyName(provider)]"
                 :type="apiKeyVisibility[provider] ? 'text' : 'password'"
                 :placeholder="`Enter ${formatProviderName(provider)} API key`"
                 class="block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500 pr-20"
@@ -201,7 +201,7 @@
                   </svg>
                 </button>
                 <button
-                  v-if="apiKeys[provider]"
+                  v-if="apiKeys[getApiKeyName(provider)]"
                   @click="testProvider(provider)"
                   :disabled="testingProvider === provider"
                   class="px-3 text-blue-600 hover:text-blue-800 disabled:opacity-50"
@@ -333,7 +333,7 @@
                     <optgroup v-if="customProviders.length > 0" label="Custom Providers">
                       <template v-for="provider in customProviders" :key="`custom-${provider.name}`">
                         <!-- Models from provider definition -->
-                        <option v-for="model in provider.models || []" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
+                        <option v-for="model in getProviderModels(provider)" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
                           {{ model }} ({{ provider.name }})
                         </option>
                         <!-- Custom models added separately for this provider -->
@@ -379,7 +379,7 @@
                     <optgroup v-if="customProviders.length > 0" label="Custom Providers">
                       <template v-for="provider in customProviders" :key="`custom-${provider.name}`">
                         <!-- Models from provider definition -->
-                        <option v-for="model in provider.models || []" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
+                        <option v-for="model in getProviderModels(provider)" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
                           {{ model }} ({{ provider.name }})
                         </option>
                         <!-- Custom models added separately for this provider -->
@@ -425,7 +425,7 @@
                     <optgroup v-if="customProviders.length > 0" label="Custom Providers">
                       <template v-for="provider in customProviders" :key="`custom-${provider.name}`">
                         <!-- Models from provider definition -->
-                        <option v-for="model in provider.models || []" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
+                        <option v-for="model in getProviderModels(provider)" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
                           {{ model }} ({{ provider.name }})
                         </option>
                         <!-- Custom models added separately for this provider -->
@@ -471,19 +471,7 @@
                     <optgroup v-if="customProviders.length > 0" label="Custom Providers">
                       <template v-for="provider in customProviders" :key="`custom-${provider.name}`">
                         <!-- Models from provider definition -->
-                        <option v-for="model in provider.models || []" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
-                          {{ model }} ({{ provider.name }})
-                        </option>
-                        <!-- Custom models added separately for this provider -->
-                        <option v-for="model in customModels.filter(m => m.provider === provider.name)" :key="`custom:${provider.name}:${model.id}`" :value="`custom:${provider.name}:${model.id}`">
-                          {{ model.name || model.id }} ({{ provider.name }})
-                        </option>
-                      </template>
-                    </optgroup>
-                    <optgroup v-if="customProviders.length > 0" label="Custom Providers">
-                      <template v-for="provider in customProviders" :key="`custom-${provider.name}`">
-                        <!-- Models from provider definition -->
-                        <option v-for="model in provider.models || []" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
+                        <option v-for="model in getProviderModels(provider)" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
                           {{ model }} ({{ provider.name }})
                         </option>
                         <!-- Custom models added separately for this provider -->
@@ -532,7 +520,7 @@
                     <optgroup v-if="customProviders.length > 0" label="Custom Providers">
                       <template v-for="provider in customProviders" :key="`custom-${provider.name}`">
                         <!-- Models from provider definition -->
-                        <option v-for="model in provider.models || []" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
+                        <option v-for="model in getProviderModels(provider)" :key="`custom:${provider.name}:${model}`" :value="`custom:${provider.name}:${model}`">
                           {{ model }} ({{ provider.name }})
                         </option>
                         <!-- Custom models added separately for this provider -->
@@ -628,7 +616,7 @@ const apiKeyVisibility = ref({
 })
 // Custom OpenAI-compatible providers
 const customProviders = ref([])
-const newProvider = ref({ name: '', baseUrl: '', apiKey: '', type: 'openai' })
+const newProvider = ref({ name: '', baseUrl: '', apiKey: '', type: 'openai', models: '' })
 const customProviderVisibility = ref({})
 const showNewProviderApiKey = ref(false)
 // Task models and custom models
@@ -676,6 +664,44 @@ const testResults = ref({})
 const isSaving = ref(false)
 const statusMessage = ref(null)
 
+// Helper function to get models array from a provider
+// Handles both custom provider objects and built-in provider strings
+const getProviderModels = (provider) => {
+  // If provider is an object (custom provider), parse its models field
+  if (typeof provider === 'object' && provider !== null) {
+    if (!provider.models) return []
+
+    // If it's already an array, return it
+    if (Array.isArray(provider.models)) {
+      return provider.models
+    }
+
+    // If it's a string, split by comma and trim
+    if (typeof provider.models === 'string') {
+      return provider.models
+        .split(',')
+        .map(m => m.trim())
+        .filter(m => m.length > 0)
+    }
+
+    return []
+  }
+
+  // If provider is a string (built-in provider), look up in providerModels
+  const baseModels = providerModels.value[provider] || []
+
+  // Add custom models for this provider
+  const customModelsList = customModels.value
+    .filter(m => m.provider === provider || !m.provider)
+    .map(m => ({
+      id: m.id,
+      name: m.name || m.id,
+      isCustom: true
+    }))
+
+  return [...baseModels, ...customModelsList]
+}
+
 // Base URLs now handled by backend configuration
 
 // Computed task groups
@@ -718,6 +744,19 @@ const hasUnsavedChanges = computed(() => {
 })
 
 // Methods
+const getApiKeyName = (provider) => {
+  // Check if this is a custom provider
+  const isCustomProvider = customProviders.value.some(cp => cp.name === provider)
+
+  // Custom providers use 'custom_' prefix
+  if (isCustomProvider) {
+    return `custom_${provider}`
+  }
+
+  // Built-in providers use their name directly
+  return provider
+}
+
 const formatProviderName = (provider) => {
   const names = {
     sambanova: 'SambaNova',
@@ -730,21 +769,6 @@ const formatProviderName = (provider) => {
 
 const toggleKeyVisibility = (provider) => {
   apiKeyVisibility.value[provider] = !apiKeyVisibility.value[provider]
-}
-
-const getProviderModels = (provider) => {
-  const baseModels = providerModels.value[provider] || []
-
-  // Add custom models for this provider
-  const customModelsList = customModels.value
-    .filter(m => m.provider === provider || !m.provider)
-    .map(m => ({
-      id: m.id,
-      name: m.name || m.id,
-      isCustom: true
-    }))
-
-  return [...baseModels, ...customModelsList]
 }
 
 // getAllModels function removed - not used
@@ -763,18 +787,22 @@ const addCustomProvider = () => {
     return
   }
 
+  // Parse models - can be comma-separated string or leave as string for backend to parse
+  const modelsValue = newProvider.value.models ? newProvider.value.models.trim() : ''
+
   customProviders.value.push({
     name: newProvider.value.name,
     baseUrl: newProvider.value.baseUrl,
     apiKey: newProvider.value.apiKey,
-    type: newProvider.value.type || 'openai'
+    providerType: newProvider.value.type || 'openai',  // Use providerType instead of type
+    models: modelsValue  // Include models field
   })
 
   // Store visibility state
   customProviderVisibility.value[newProvider.value.name] = false
 
   // Reset form
-  newProvider.value = { name: '', baseUrl: '', apiKey: '', type: 'openai' }
+  newProvider.value = { name: '', baseUrl: '', apiKey: '', type: 'openai', models: '' }
   showNewProviderApiKey.value = false
   showStatus('Custom provider added with API key', 'success')
 }
@@ -846,6 +874,9 @@ const loadConfiguration = async () => {
       config.custom_providers.forEach(provider => {
         customProviderVisibility.value[provider.name] = false
       })
+
+      // Populate custom provider API keys from apiKeys.value after keys are loaded
+      // This will happen in the next section when API keys are loaded
     }
 
     // Load custom models if present
@@ -888,10 +919,28 @@ const loadConfiguration = async () => {
           fireworks: keysResponse.data.fireworks_key || '',
           together: keysResponse.data.together_key || ''
         }
+
+        // Load custom provider API keys (they come with "custom_" prefix)
+        Object.keys(keysResponse.data).forEach(key => {
+          if (key.startsWith('custom_')) {
+            apiKeys.value[key] = keysResponse.data[key]
+          }
+        })
+
         console.log('Loaded API keys:', {
           sambanova: apiKeys.value.sambanova ? 'present' : 'empty',
           fireworks: apiKeys.value.fireworks ? 'present' : 'empty',
-          together: apiKeys.value.together ? 'present' : 'empty'
+          together: apiKeys.value.together ? 'present' : 'empty',
+          customProviders: Object.keys(apiKeys.value).filter(k => k.startsWith('custom_')).length
+        })
+
+        // Populate custom provider API keys into their objects
+        customProviders.value.forEach(provider => {
+          const customKeyName = `custom_${provider.name}`
+          if (apiKeys.value[customKeyName]) {
+            provider.apiKey = apiKeys.value[customKeyName]
+            console.log(`Loaded API key for custom provider ${provider.name}`)
+          }
         })
       }
     } catch (keyError) {
@@ -907,15 +956,24 @@ const loadConfiguration = async () => {
 
     // Then override with any user-specific configurations
     if (config.task_models) {
+      console.log('Loading task models, custom providers:', customProviders.value.map(cp => cp.name))
       Object.entries(config.task_models).forEach(([taskId, taskConfig]) => {
-        if (taskConfig.custom_provider) {
-          // Handle custom provider format
-          taskModels.value[taskId] = `custom:${taskConfig.custom_provider}:${taskConfig.model}`
-        } else if (taskConfig.provider && taskConfig.model) {
-          // Handle regular provider format
-          taskModels.value[taskId] = `${taskConfig.provider}:${taskConfig.model}`
+        if (taskConfig.provider && taskConfig.model) {
+          // Check if this provider is a custom provider
+          const isCustomProvider = customProviders.value.some(cp => cp.name === taskConfig.provider)
+
+          console.log(`Task ${taskId}: provider=${taskConfig.provider}, isCustom=${isCustomProvider}`)
+
+          if (isCustomProvider) {
+            // Handle custom provider format
+            taskModels.value[taskId] = `custom:${taskConfig.provider}:${taskConfig.model}`
+          } else {
+            // Handle regular provider format
+            taskModels.value[taskId] = `${taskConfig.provider}:${taskConfig.model}`
+          }
         }
       })
+      console.log('Final taskModels after load:', JSON.parse(JSON.stringify(taskModels.value)))
     }
 
     // Store original config for change detection (after loading API keys)
@@ -983,12 +1041,15 @@ const handleProviderChange = () => {
   mapModelsToProvider(selectedProvider.value)
 }
 
-const handleTaskModelChange = () => {
+const handleTaskModelChange = (taskId) => {
   // Task model change handled by v-model
+  console.log(`[handleTaskModelChange] ${taskId} changed to:`, taskModels.value[taskId])
 }
 
 const testProvider = async (provider) => {
-  if (!apiKeys.value[provider]) {
+  const apiKeyName = getApiKeyName(provider)
+
+  if (!apiKeys.value[apiKeyName]) {
     showStatus(`Please enter an API key for ${formatProviderName(provider)}`, 'error')
     return
   }
@@ -1000,7 +1061,7 @@ const testProvider = async (provider) => {
     const token = await getAccessTokenSilently()
     const response = await axios.post(`${apiBaseUrl.value}/admin/test-connection`, {
       provider: provider,
-      api_key: apiKeys.value[provider]
+      api_key: apiKeys.value[apiKeyName]
     }, {
       headers: {
         'Authorization': `Bearer ${token}`
@@ -1019,32 +1080,42 @@ const testProvider = async (provider) => {
 }
 
 const saveConfiguration = async () => {
+  // Prevent multiple simultaneous saves
+  if (isSaving.value) {
+    console.log('Save already in progress, skipping...')
+    return
+  }
+
   isSaving.value = true
 
   try {
     // Prepare task models in the correct format
     const formattedTaskModels = {}
+    console.log('[SAVE] Raw taskModels before formatting:', taskModels.value.main_agent)
     Object.entries(taskModels.value).forEach(([taskId, value]) => {
       if (value && value.includes(':')) {
         // Handle custom provider format: custom:providerName:modelId
         if (value.startsWith('custom:')) {
           const parts = value.split(':')
           const customProviderName = parts[1]
-          const customProvider = customProviders.value.find(p => p.name === customProviderName)
 
+          if (taskId === 'main_agent') {
+            console.log(`[SAVE] main_agent is custom: provider=${customProviderName}, model=${parts[2]}`)
+          }
           formattedTaskModels[taskId] = {
-            provider: customProvider?.type || 'openai',
-            custom_provider: customProviderName,
-            model: parts[2],
-            base_url: customProvider?.baseUrl,
-            api_key: customProvider?.apiKey  // Include the custom provider's API key
+            provider: customProviderName,  // Use the custom provider name as provider
+            model: parts[2]
           }
         } else {
           const [provider, model] = value.split(':')
+          if (taskId === 'main_agent') {
+            console.log(`[SAVE] main_agent is built-in: provider=${provider}, model=${model}`)
+          }
           formattedTaskModels[taskId] = { provider, model }
         }
       }
     })
+    console.log('[SAVE] Formatted main_agent:', formattedTaskModels.main_agent)
 
     const token = await getAccessTokenSilently()
 
