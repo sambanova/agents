@@ -184,7 +184,7 @@ def get_session_id_from_config(config: Configuration) -> Optional[str]:
     process_inputs=lambda x: None,
 )
 async def generate_report_plan(
-    writer_model, planner_model, state: ReportState, config: RunnableConfig
+    writer_model, planner_model, summary_model, state: ReportState, config: RunnableConfig
 ):
     configurable = Configuration.from_runnable_config(config)
     session_id = get_session_id_from_config(configurable)
@@ -202,18 +202,12 @@ async def generate_report_plan(
         report_structure = configurable.report_structure
 
     search_queries_interceptor = MessageInterceptor()
-    fixing_interceptor = MessageInterceptor()
-
-    # Create an intercepted version of the writer model for the fixing parser
-    fixing_writer_model = writer_model | RunnableLambda(
-        fixing_interceptor.capture_and_pass
-    )
 
     structured_llm = (
         writer_model
         | RunnableLambda(search_queries_interceptor.capture_and_pass)
         | OutputFixingParser.from_llm(
-            llm=fixing_writer_model,  # Use the intercepted model
+            llm=summary_model,  # Use summary model for fixing
             parser=PydanticOutputParser(pydantic_object=Queries),
         )
     )
@@ -314,10 +308,6 @@ async def generate_report_plan(
         m.additional_kwargs["agent_type"] = "deep_research_search_queries_plan"
         captured_messages.append(m)
 
-    for m in fixing_interceptor.captured_messages:
-        m.additional_kwargs["agent_type"] = "deep_research_search_queries_plan_fixed"
-        captured_messages.append(m)
-
     for m in search_sections_interceptor.captured_messages:
         m.additional_kwargs["agent_type"] = "deep_research_search_sections"
         captured_messages.append(m)
@@ -369,7 +359,7 @@ async def human_feedback(
     },
     process_inputs=lambda x: None,
 )
-async def generate_queries(writer_model, state: SectionState, config: RunnableConfig):
+async def generate_queries(writer_model, summary_model, state: SectionState, config: RunnableConfig):
     configurable = Configuration.from_runnable_config(config)
     sec = state["section"]
     session_id = get_session_id_from_config(configurable)
@@ -383,18 +373,12 @@ async def generate_queries(writer_model, state: SectionState, config: RunnableCo
     logger.info("Generating queries for section")
 
     search_queries_interceptor = MessageInterceptor()
-    fixing_interceptor = MessageInterceptor()
-
-    # Create an intercepted version of the writer model for the fixing parser
-    fixing_writer_model = writer_model | RunnableLambda(
-        fixing_interceptor.capture_and_pass
-    )
 
     structured_llm = (
         writer_model
         | RunnableLambda(search_queries_interceptor.capture_and_pass)
         | OutputFixingParser.from_llm(
-            llm=fixing_writer_model,  # Use the intercepted model
+            llm=summary_model,  # Use summary model for fixing
             parser=PydanticOutputParser(pydantic_object=Queries),
         )
     )
@@ -424,10 +408,6 @@ async def generate_queries(writer_model, state: SectionState, config: RunnableCo
     captured_message = []
     for m in search_queries_interceptor.captured_messages:
         m.additional_kwargs["agent_type"] = "deep_research_search_queries_section"
-        captured_message.append(m)
-
-    for m in fixing_interceptor.captured_messages:
-        m.additional_kwargs["agent_type"] = "deep_research_search_queries_section_fixed"
         captured_message.append(m)
 
     return {"search_queries": queries.queries, "messages": captured_message}
@@ -522,7 +502,7 @@ async def invoke_llm_with_tracking(
     process_inputs=lambda x: None,
 )
 async def write_section(
-    writer_model, state: SectionState, config: RunnableConfig
+    writer_model, summary_model, state: SectionState, config: RunnableConfig
 ) -> Command[Literal["__end__", "search_web"]]:
     configurable = Configuration.from_runnable_config(config)
     sec = state["section"]
@@ -566,7 +546,7 @@ async def write_section(
     schema = Feedback.model_json_schema()
     section_grader_schema = json.dumps(schema, indent=2)
 
-    # now we grade
+    # now we grade - use summary model (stronger) for grading
     logger.info("Grading section", section_name=sec.name)
     grader_inst = section_grader_instructions.format(
         section_topic=sec.description,
@@ -575,11 +555,12 @@ async def write_section(
     )
 
     grader_interceptor = MessageInterceptor()
+
     structured_llm = (
-        writer_model
+        summary_model
         | RunnableLambda(grader_interceptor.capture_and_pass)
         | OutputFixingParser.from_llm(
-            llm=writer_model, parser=PydanticOutputParser(pydantic_object=Feedback)
+            llm=summary_model, parser=PydanticOutputParser(pydantic_object=Feedback)
         )
     )
 
@@ -949,11 +930,11 @@ def create_deep_research_graph(
 
     section_builder = StateGraph(SectionState, output=SectionOutputState)
     section_builder.add_node(
-        "generate_queries", functools.partial(generate_queries, writer_model)
+        "generate_queries", functools.partial(generate_queries, writer_model, summary_model)
     )
     section_builder.add_node("search_web", search_web)
     section_builder.add_node(
-        "write_section", functools.partial(write_section, writer_model)
+        "write_section", functools.partial(write_section, writer_model, summary_model)
     )
 
     section_builder.add_edge(START, "generate_queries")
@@ -968,7 +949,7 @@ def create_deep_research_graph(
     )
     builder.add_node(
         "generate_report_plan",
-        functools.partial(generate_report_plan, writer_model, planner_model),
+        functools.partial(generate_report_plan, writer_model, planner_model, summary_model),
     )
     builder.add_node("human_feedback", human_feedback)
     builder.add_node(
