@@ -351,8 +351,8 @@ class WebSocketConnectionManager(WebSocketInterface):
                     user_id, user_message_input
                 )
 
-                # Check if user has config in Redis - if not, clear any cached overrides
-                # This handles the case where config was reset but singleton still has old data
+                # Check if user has config in Redis and load it into config manager
+                # This ensures the config manager has the latest user overrides
                 admin_enabled = os.getenv("SHOW_ADMIN_PANEL", "false").lower() == "true"
                 if admin_enabled:
                     try:
@@ -363,7 +363,21 @@ class WebSocketConnectionManager(WebSocketInterface):
                         config_key = f"llm_config:{user_id}"
                         stored_config = await self.message_storage.redis_client.get(config_key, user_id=user_id)
 
-                        if not stored_config and config_manager.has_user_override(user_id):
+                        if stored_config:
+                            # Load config from Redis into config manager
+                            overrides = json.loads(stored_config)
+                            logger.info(f"[CONFIG_LOAD] Loading user config from Redis for user {user_id[:8]}...")
+                            logger.info(f"[CONFIG_LOAD] Config has task_models: {'task_models' in overrides}, custom_providers: {'custom_providers' in overrides}")
+                            if 'task_models' in overrides:
+                                logger.info(f"[CONFIG_LOAD] Number of task_models: {len(overrides['task_models'])}")
+                                # Log financial analysis tasks specifically
+                                for task_name in ['financial_analysis_main', 'financial_competitor_finder', 'financial_aggregator']:
+                                    if task_name in overrides['task_models']:
+                                        logger.info(f"[CONFIG_LOAD] {task_name}: {overrides['task_models'][task_name]}")
+
+                            config_manager.set_user_override(user_id, overrides)
+                            logger.info(f"[CONFIG_LOAD] Successfully loaded config for user {user_id[:8]}...")
+                        elif config_manager.has_user_override(user_id):
                             # Redis doesn't have config but singleton does - clear it
                             logger.info(f"Clearing stale config override for user {user_id[:8]}...")
                             config_manager.clear_user_override(user_id)

@@ -298,10 +298,17 @@ class LLMConfigManager:
         Returns:
             Dict with provider, model, and optionally base_url information
         """
+        # Debug logging
+        logger.info(f"[TASK_MODEL_DEBUG] get_task_model called with task={task}, user_id={user_id[:8] if user_id else None}")
+        logger.info(f"[TASK_MODEL_DEBUG] user_id in self._user_overrides: {user_id in self._user_overrides if user_id else False}")
+        logger.info(f"[TASK_MODEL_DEBUG] Available user_ids in overrides: {[uid[:8] for uid in self._user_overrides.keys()]}")
+
         # Check user overrides first
         if user_id and user_id in self._user_overrides:
             user_config = self._user_overrides[user_id].get("task_models", {})
+            logger.info(f"[TASK_MODEL_DEBUG] Task: {task}, available tasks: {list(user_config.keys())}")
             if task in user_config:
+                logger.info(f"[TASK_MODEL_DEBUG] Found task {task} in user_config: {user_config[task]}")
                 result = user_config[task].copy()
 
                 # Check if the provider is a custom provider (either via custom_provider field or by checking the provider name)
