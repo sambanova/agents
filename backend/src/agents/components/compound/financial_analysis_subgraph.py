@@ -22,9 +22,9 @@ from langgraph.graph.message import MessageGraph
 logger = structlog.get_logger(__name__)
 
 
-def create_financial_analysis_graph(redis_client: SecureRedisService):
+def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: str = None, api_keys: dict = None):
     """Create a simple subgraph with just one node that greets the user."""
-    logger.info("Creating financial analysis subgraph")
+    logger.info("Creating financial analysis subgraph", user_id=user_id[:8] if user_id else "None")
 
     @ls.traceable(
         metadata={"agent_type": "financial_analysis_agent"},
@@ -54,6 +54,9 @@ def create_financial_analysis_graph(redis_client: SecureRedisService):
 
             # Initialize crew
             logger.info("Initializing FinancialAnalysisCrew")
+            logger.info(f"[FINANCIAL_DEBUG] api_keys from closure: {type(api_keys)}, is None: {api_keys is None}")
+            if api_keys:
+                logger.info(f"[FINANCIAL_DEBUG] api_keys keys: {list(api_keys.keys())}")
             crew = FinancialAnalysisCrew(
                 llm_api_key=api_key,
                 provider="sambanova",
@@ -63,6 +66,7 @@ def create_financial_analysis_graph(redis_client: SecureRedisService):
                 redis_client=redis_client,
                 verbose=False,
                 message_id=config["metadata"]["message_id"],
+                admin_api_keys=api_keys,  # Pass api_keys dict for admin panel support
             )
 
             inputs = {"ticker": extracted_ticker, "company_name": extracted_company}

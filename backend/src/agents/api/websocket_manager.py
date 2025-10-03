@@ -1257,7 +1257,11 @@ DATA OUTPUT FORMATTING: When creating reports or analysis outputs, structure dat
             "financial_analysis": {
                 "description": "This subgraph is used to analyze financial data and return the a comprehensive report.",
                 "next_node": END,
-                "graph": create_financial_analysis_graph(self.redis_client),
+                "graph": create_financial_analysis_graph(
+                    redis_client=self.redis_client,
+                    user_id=user_id,
+                    api_keys=config["configurable"].get("api_keys") if admin_enabled else None
+                ),
                 "state_input_mapper": lambda x: [HumanMessage(content=x)],
                 "state_output_mapper": lambda x: x[-1],
             },
@@ -1270,6 +1274,7 @@ DATA OUTPUT FORMATTING: When creating reports or analysis outputs, structure dat
                     request_timeout=120,
                     redis_storage=self.message_storage,
                     user_id=user_id,
+                    api_keys=config["configurable"].get("api_keys") if admin_enabled else None,
                 ),
                 "state_input_mapper": lambda x: {"topic": x},
                 "state_output_mapper": lambda x: AIMessage(
@@ -1289,6 +1294,7 @@ DATA OUTPUT FORMATTING: When creating reports or analysis outputs, structure dat
                     sambanova_api_key=api_key_to_use,
                     redis_storage=self.message_storage,
                     daytona_manager=daytona_manager,
+                    api_keys=config["configurable"].get("api_keys") if admin_enabled else None,
                 ),
                 "state_input_mapper": lambda x: {
                     "code": x,
@@ -1344,6 +1350,7 @@ For comprehensive analysis combining multiple files, prefer using the DaytonaCod
                     redis_storage=self.message_storage,
                     daytona_manager=daytona_manager,
                     directory_content=directory_content,
+                    api_keys=config["configurable"].get("api_keys") if admin_enabled else None,
                 ),
                 "state_input_mapper": lambda x: {
                     "internal_messages": [

@@ -886,102 +886,66 @@ def create_deep_research_graph(
     user_id: str,
     request_timeout: int = 120,
     checkpointer: Checkpointer = None,
+    api_keys: dict = None,
 ):
     """
     Create and configure the graph for deep research.
 
     Args:
-        api_key: The API key for the LLM provider
+        api_key: The API key for the LLM provider (for backward compatibility)
         provider: The LLM provider to use (fireworks or sambanova)
-        documents: Optional list of documents to process
+        redis_storage: Redis storage for persistence
+        user_id: User ID for configuration lookup
+        request_timeout: Request timeout in seconds
+        checkpointer: Optional checkpointer
+        api_keys: Dictionary of API keys by provider (preferred over api_key)
     """
     logger.info(
         "Creating deep research graph",
         provider=provider,
         request_timeout=request_timeout,
-    )
-    model_name = "llama-4-maverick"
-    planner_model_config: str = model_registry.get_model_info(
-        model_key=model_name, provider=provider
-    )
-    writer_model_config: str = model_registry.get_model_info(
-        model_key=model_name, provider=provider
-    )
-    summary_model_config: str = model_registry.get_model_info(
-        model_key=model_name, provider=provider
+        user_id=user_id[:8] if user_id else "None",
     )
 
-    if provider == "fireworks":
-        writer_model = ChatFireworks(
-            base_url=writer_model_config["url"],
-            model=writer_model_config["model"],
-            temperature=0,
-            max_tokens=8192,
-            api_key=api_key,
+    # Import config manager
+    from agents.config.llm_config_manager import get_config_manager
+    from agents.utils.llm_provider import get_llm_for_task
+
+    config_manager = get_config_manager()
+
+    # If api_keys dict is not provided, create it from single api_key for backward compatibility
+    if api_keys is None:
+        api_keys = {provider: api_key}
+        logger.info(f"Using backward-compatible single API key for provider: {provider}")
+
+    # Get LLM instances using config manager for task-specific models
+    try:
+        writer_model = get_llm_for_task(
+            task="deep_research_writer",
+            api_keys=api_keys,
+            config_manager=config_manager,
+            user_id=user_id
         )
-        planner_model = ChatFireworks(
-            base_url=planner_model_config["url"],
-            model=planner_model_config["model"],
-            temperature=0,
-            max_tokens=8192,
-            api_key=api_key,
+        logger.info(f"Deep research writer model initialized from config")
+
+        planner_model = get_llm_for_task(
+            task="deep_research_planner",
+            api_keys=api_keys,
+            config_manager=config_manager,
+            user_id=user_id
         )
-        summary_model = ChatFireworks(
-            base_url=summary_model_config["url"],
-            model=summary_model_config["model"],
-            temperature=0,
-            max_tokens=8192,
-            api_key=api_key,
+        logger.info(f"Deep research planner model initialized from config")
+
+        summary_model = get_llm_for_task(
+            task="deep_research_summary",
+            api_keys=api_keys,
+            config_manager=config_manager,
+            user_id=user_id
         )
-    elif provider == "sambanova":
-        writer_model = CustomChatSambaNovaCloud(
-            sambanova_url=writer_model_config["long_url"],
-            model=writer_model_config["model"],
-            temperature=0,
-            max_tokens=8192,
-            sambanova_api_key=api_key,
-            timeout=request_timeout,
-        )
-        planner_model = CustomChatSambaNovaCloud(
-            sambanova_url=planner_model_config["long_url"],
-            model=planner_model_config["model"],
-            temperature=0,
-            max_tokens=8192,
-            sambanova_api_key=api_key,
-            timeout=request_timeout,
-        )
-        summary_model = CustomChatSambaNovaCloud(
-            sambanova_url=summary_model_config["long_url"],
-            model=summary_model_config["model"],
-            temperature=0,
-            max_tokens=8192,
-            sambanova_api_key=api_key,
-            timeout=request_timeout,
-        )
-    elif provider == "together":
-        writer_model = ChatOpenAI(
-            base_url=writer_model_config["url"],
-            model=writer_model_config["model"],
-            temperature=0,
-            max_tokens=8192,
-            api_key=api_key,
-        )
-        planner_model = ChatOpenAI(
-            base_url=planner_model_config["url"],
-            model=planner_model_config["model"],
-            temperature=0,
-            max_tokens=8192,
-            api_key=api_key,
-        )
-        summary_model = ChatOpenAI(
-            base_url=summary_model_config["url"],
-            model=summary_model_config["model"],
-            temperature=0,
-            max_tokens=8192,
-            api_key=api_key,
-        )
-    else:
-        raise ValueError(f"Unsupported provider: {provider}")
+        logger.info(f"Deep research summary model initialized from config")
+    except Exception as e:
+        logger.error(f"Failed to initialize deep research models from config: {e}", exc_info=True)
+        raise
 
     section_builder = StateGraph(SectionState, output=SectionOutputState)
     section_builder.add_node(

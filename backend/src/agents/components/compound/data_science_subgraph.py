@@ -15,7 +15,7 @@ except ImportError:
     CONFIG_SYSTEM_AVAILABLE = False
 
 
-def setup_language_models(sambanova_api_key: str, user_id: Optional[str] = None):
+def setup_language_models(sambanova_api_key: str, user_id: Optional[str] = None, api_keys: Optional[Dict] = None):
     """Set up the language models needed for the workflow"""
 
     # Check if admin panel is enabled and config system is available
@@ -24,7 +24,9 @@ def setup_language_models(sambanova_api_key: str, user_id: Optional[str] = None)
     if CONFIG_SYSTEM_AVAILABLE and admin_enabled and user_id:
         # Use new config system when admin panel is enabled
         config_manager = get_config_manager()
-        api_keys = {"sambanova": sambanova_api_key}
+        # Use provided api_keys dict if available, otherwise create from sambanova_api_key
+        if api_keys is None:
+            api_keys = {"sambanova": sambanova_api_key}
 
         report_agent_llm = get_llm_for_task("data_science_report", api_keys, config_manager, user_id)
         code_agent_llm = get_llm_for_task("data_science_code", api_keys, config_manager, user_id)
@@ -74,8 +76,9 @@ def create_data_science_subgraph(
     daytona_manager: PersistentDaytonaManager,
     directory_content: list[str],
     checkpointer: Checkpointer = None,
+    api_keys: Optional[Dict] = None,
 ):
-    language_models = setup_language_models(sambanova_api_key, user_id)
+    language_models = setup_language_models(sambanova_api_key, user_id, api_keys)
     manager = WorkflowManager(
         language_models,
         user_id,
