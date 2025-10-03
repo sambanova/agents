@@ -588,7 +588,6 @@ async def write_section(
     writer_model_with_interceptor = (
         writer_model
         | RunnableLambda(writer_interceptor.capture_and_pass)
-        | CleanContentParser()  # Clean reasoning artifacts from content
     )
 
     content = await invoke_llm_with_tracking(
@@ -602,7 +601,7 @@ async def write_section(
         llm_name=get_model_name(writer_model),
     )
 
-    sec.content = content  # content is now a string due to CleanContentParser
+    sec.content = content.content if hasattr(content, 'content') else content
     logger.info("Generated content for section", section_name=sec.name)
 
     schema = Feedback.model_json_schema()
@@ -710,7 +709,6 @@ async def write_final_sections(
     writer_model_with_interceptor = (
         writer_model
         | RunnableLambda(writer_interceptor.capture_and_pass)
-        | CleanContentParser()  # Clean reasoning artifacts from content
     )
 
     content = await invoke_llm_with_tracking(
@@ -724,7 +722,7 @@ async def write_final_sections(
         llm_name=get_model_name(writer_model),
     )
 
-    sec.content = content  # content is now a string due to CleanContentParser
+    sec.content = content.content if hasattr(content, 'content') else content
     logger.info("Completed final section", section_name=sec.name)
 
     captured_messages = []
@@ -791,9 +789,14 @@ async def compile_final_report(
     for sec in sections:
         content = completed_map.get(sec.name, sec.content or "")
 
-        # 1) strip any sources block
+        # 1) strip any sources block (extract BEFORE cleaning reasoning artifacts)
         cleaned, block_refs = extract_sources_block(content)
-        # 2) optionally remove bullet lines that contain URLs but are not in sources block
+
+        # 2) clean reasoning artifacts from content (after sources extracted)
+        parser = CleanContentParser()
+        cleaned = parser.parse(cleaned)
+
+        # 3) optionally remove bullet lines that contain URLs but are not in sources block
         # if we want to keep inline links in the text, skip this step or tweak it
         final_cleaned, inline_refs = remove_inline_citation_lines(cleaned)
 
