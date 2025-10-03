@@ -65,7 +65,7 @@ class CleanContentParser(BaseOutputParser):
 
     def parse(self, text: str) -> str:
         """
-        Parse the output and remove common reasoning artifacts.
+        Parse the output and remove reasoning artifacts wrapped in <step> and <count> tags.
         When chained after an AIMessage, this extracts just the .content field.
         """
         # Log the raw content before filtering
@@ -74,60 +74,37 @@ class CleanContentParser(BaseOutputParser):
             raw_preview=text[:500] if len(text) > 500 else text
         )
 
+        # Remove <step>...</step> blocks (multiline)
+        # Pattern: **<step>**...any content...`</step>**`
+        text = re.sub(r'\*\*<step>\*\*.*?`</step>\*\*`', '', text, flags=re.DOTALL)
+
+        # Remove <count>...</count> lines
+        # Pattern: **<count> N </count>**
+        text = re.sub(r'\*\*<count>.*?</count>\*\*', '', text)
+
+        # Remove standalone number lines (artifacts left over)
         lines = text.split('\n')
         cleaned_lines = []
-        filtered_lines = []
+        filtered_count = 0
 
-        skip_mode = False
         for line in lines:
             stripped = line.strip()
-
-            # Skip lines that are just single numbers (reasoning countdown)
+            # Skip lines that are just numbers
             if stripped and stripped.replace('.', '').isdigit():
-                filtered_lines.append(f"[NUMBER] {line}")
+                filtered_count += 1
                 continue
-
-            # Skip evaluation/meta-commentary sections
-            if any(phrase in stripped for phrase in [
-                'Evaluation of the Reasoning Process',
-                'Quality Score:',
-                'The process of writing',
-                'Upon reviewing',
-                'Upon completing',
-                'quality checks',
-                'word limit',
-                'meets all quality'
-            ]):
-                skip_mode = True
-                filtered_lines.append(f"[EVAL_START] {line}")
-                continue
-
-            # Track what we're skipping in skip mode
-            if skip_mode:
-                filtered_lines.append(f"[EVAL_SKIP] {line}")
-
-            # Reset skip mode on next substantial content
-            if skip_mode and len(stripped) > 100:
-                skip_mode = False
-
-            if not skip_mode:
-                cleaned_lines.append(line)
-
-        # Log what was filtered out
-        if filtered_lines:
-            logger.info(
-                "[CONTENT_FILTER] Filtered content",
-                num_filtered_lines=len(filtered_lines),
-                filtered_preview='\n'.join(filtered_lines[:10])  # Show first 10 filtered lines
-            )
+            cleaned_lines.append(line)
 
         cleaned_text = '\n'.join(cleaned_lines).strip()
+
+        # Log filtering results
         logger.info(
             "[CONTENT_FILTER] Cleaned content (first 500 chars)",
             cleaned_preview=cleaned_text[:500] if len(cleaned_text) > 500 else cleaned_text,
             original_length=len(text),
             cleaned_length=len(cleaned_text),
-            reduction_percent=round((1 - len(cleaned_text)/len(text)) * 100, 1) if text else 0
+            filtered_number_lines=filtered_count,
+            reduction_percent=round((1 - len(cleaned_text)/len(text)) * 100, 1) if len(text) > 0 else 0
         )
 
         return cleaned_text
