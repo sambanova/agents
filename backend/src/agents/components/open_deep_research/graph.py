@@ -89,10 +89,19 @@ class CleanContentParser(BaseOutputParser):
 
         for line in lines:
             stripped = line.strip()
-            # Skip lines that are just numbers
-            if stripped and stripped.replace('.', '').isdigit():
+
+            # Skip lines that are just numbers (including decimals like 0.9, 0.8)
+            if stripped and re.match(r'^\d+\.?\d*$', stripped):
                 filtered_count += 1
                 continue
+
+            # Skip leftover "Sources" headers without content
+            # These should have been extracted already, so any remaining are artifacts
+            lower_stripped = stripped.lower()
+            if lower_stripped in ['sources', 'sources:', '### sources', '## sources']:
+                filtered_count += 1
+                continue
+
             cleaned_lines.append(line)
 
         cleaned_text = '\n'.join(cleaned_lines).strip()

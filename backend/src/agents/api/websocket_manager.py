@@ -1325,7 +1325,7 @@ DATA OUTPUT FORMATTING: When creating reports or analysis outputs, structure dat
 
         config["configurable"]["type==default/subgraphs"] = {
             "financial_analysis": {
-                "description": "This subgraph is used to analyze financial data and return the a comprehensive report.",
+                "description": "This subgraph is used to analyze financial data and return the a comprehensive report. KEY TRIGGER TERMS: Use this when the user says 'get financials' or 'analyze financials' for a single company.",
                 "next_node": END,
                 "graph": create_financial_analysis_graph(
                     redis_client=self.redis_client,
@@ -1336,7 +1336,7 @@ DATA OUTPUT FORMATTING: When creating reports or analysis outputs, structure dat
                 "state_output_mapper": lambda x: x[-1],
             },
             "deep_research": {
-                "description": "This subgraph generates comprehensive research reports with multiple perspectives, sources, and analysis. Use when the user requests: detailed research, in-depth analysis, comprehensive reports, market research, academic research, or thorough investigation of any topic. IMPORTANT: Pass the user's specific research question or topic as a clear, focused query. Extract the core research intent from the user's message and formulate it as a specific research question or topic statement. Examples: 'AI impact on healthcare industry', 'sustainable energy solutions for developing countries', 'cryptocurrency market trends 2024'.",
+                "description": "This subgraph generates comprehensive research reports with multiple perspectives, sources, and analysis. KEY TRIGGER TERM: Use this when the user says 'deep research'. Also use when the user requests: detailed research, in-depth analysis, comprehensive reports, market research, academic research, or thorough investigation of any topic. IMPORTANT: Pass the user's specific research question or topic as a clear, focused query. Extract the core research intent from the user's message and formulate it as a specific research question or topic statement. Examples: 'AI impact on healthcare industry', 'sustainable energy solutions for developing countries', 'cryptocurrency market trends 2024'.",
                 "next_node": END,
                 "graph": create_deep_research_graph(
                     api_key=api_key_to_use,
