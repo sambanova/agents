@@ -75,8 +75,12 @@ class CleanContentParser(BaseOutputParser):
         )
 
         # Remove <step>...</step> blocks (multiline)
-        # Pattern: **<step>**...any content...`</step>**`
-        text = re.sub(r'\*\*<step>\*\*.*?`</step>\*\*`', '', text, flags=re.DOTALL)
+        # Pattern: **<step>** or **<step> ** ... </step> or </step>**
+        # More flexible to handle variations from different reasoning models
+        text = re.sub(r'\*\*<step>(?:\s?\*\*)?.*?</step>(?:\*\*)?', '', text, flags=re.DOTALL)
+
+        # Also remove standalone </step> tags that might be left over
+        text = re.sub(r'</step>', '', text, flags=re.IGNORECASE)
 
         # Remove <count>...</count> lines
         # Pattern: **<count> N </count>**
@@ -92,6 +96,11 @@ class CleanContentParser(BaseOutputParser):
 
             # Skip lines that are just numbers (including decimals like 0.9, 0.8)
             if stripped and re.match(r'^\d+\.?\d*$', stripped):
+                logger.info(
+                    "[CONTENT_FILTER] Filtered decimal line",
+                    original_line=repr(line),
+                    stripped_line=repr(stripped)
+                )
                 filtered_count += 1
                 continue
 
@@ -99,6 +108,10 @@ class CleanContentParser(BaseOutputParser):
             # These should have been extracted already, so any remaining are artifacts
             lower_stripped = stripped.lower()
             if lower_stripped in ['sources', 'sources:', '### sources', '## sources']:
+                logger.info(
+                    "[CONTENT_FILTER] Filtered Sources header",
+                    original_line=repr(line)
+                )
                 filtered_count += 1
                 continue
 
@@ -651,6 +664,12 @@ async def write_section(
         m.additional_kwargs["agent_type"] = "deep_research_grader"
         captured_messages.append(m)
 
+    # Clean reasoning artifacts from section content before adding to completed_sections
+    # This ensures the UI displays clean content as sections stream in
+    if sec.content:
+        parser = CleanContentParser()
+        sec.content = parser.parse(sec.content)
+
     if fb.grade == "pass":
         logger.info("Section passed grading", section_name=sec.name)
         return Command(
@@ -732,6 +751,13 @@ async def write_final_sections(
     )
 
     sec.content = content.content if hasattr(content, 'content') else content
+
+    # Clean reasoning artifacts from final section content before adding to completed_sections
+    # This ensures the UI displays clean content as sections stream in
+    if sec.content:
+        parser = CleanContentParser()
+        sec.content = parser.parse(sec.content)
+
     logger.info("Completed final section", section_name=sec.name)
 
     captured_messages = []
@@ -824,6 +850,21 @@ async def compile_final_report(
                 citations=[],  # we skip local citations array
             )
         )
+
+    # Deduplicate citations by URL (keep first occurrence)
+    # This prevents the same source appearing hundreds of times
+    original_citation_count = len(all_citations)
+    seen_urls = {}
+    for citation in all_citations:
+        if citation.url not in seen_urls:
+            seen_urls[citation.url] = citation
+    all_citations = list(seen_urls.values())
+
+    logger.info(
+        "Deduplicated citations",
+        original_count=original_citation_count,
+        unique_count=len(all_citations)
+    )
 
     # build final text
     lines = []
