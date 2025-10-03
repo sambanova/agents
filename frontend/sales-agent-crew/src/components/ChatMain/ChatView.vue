@@ -1154,17 +1154,28 @@ async function filterChat(msgData) {
   sortedMessages.forEach(message => {
     // Count events that contribute to the conversation run
     const shouldTrackEvent = ['agent_completion', 'llm_stream_chunk', 'stream_complete'].includes(message.event);
-    
+
     if (shouldTrackEvent) {
       const runId = messageToRunMap.get(message.message_id) || message.message_id;
-      
+
       // Track metrics if they exist (for agent_completion events)
       if (message.event === 'agent_completion') {
-        // Check if we have token usage or performance metrics to track
+        // Debug: Log CrewAI tracking events
+        if (message.additional_kwargs?.agent_type === 'crewai_llm_call') {
+          console.log('[ChatView] Found CrewAI tracking event:', {
+            model_name: message.response_metadata?.model_name,
+            message_id: message.message_id,
+            runId: runId,
+            response_metadata: message.response_metadata
+          });
+        }
+
+        // Check if we have token usage, performance metrics, or model name to track
         const hasUsageMetadata = message.usage_metadata;
         const hasPerformanceMetrics = message.response_metadata?.usage;
-        
-        if (hasUsageMetadata || hasPerformanceMetrics) {
+        const hasModelName = message.response_metadata?.model_name;
+
+        if (hasUsageMetadata || hasPerformanceMetrics || hasModelName) {
           trackRunMetrics(runId, message.usage_metadata, message.response_metadata);
         } else {
           // Still count the event even without usage metadata

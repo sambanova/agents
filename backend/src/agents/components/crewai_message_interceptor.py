@@ -3,6 +3,7 @@ Message interceptor for CrewAI LLM calls.
 Wraps CustomLLM to capture calls and convert them to LangChain AIMessages.
 """
 
+import json
 import uuid
 from typing import List, Optional, Any, Dict, Union
 
@@ -45,6 +46,12 @@ class CrewAIMessageInterceptor:
 
             # Capture the message
             interceptor.captured_messages.append(ai_message)
+
+            # Note: We can't publish to Redis in real-time here because:
+            # 1. CrewAI runs synchronously in a thread
+            # 2. The Redis client is async-only (redis.asyncio)
+            # 3. Can't await in sync context
+            # Messages will be returned at the end and sent via the graph state stream
 
             return response
 

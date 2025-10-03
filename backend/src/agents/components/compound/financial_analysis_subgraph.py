@@ -60,6 +60,8 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                 logger.info(f"[FINANCIAL_DEBUG] api_keys keys: {list(api_keys.keys())}")
 
             # Create message interceptor
+            # Note: Real-time updates via Redis don't work because CrewAI runs sync
+            # Messages will be returned at the end and sent via graph state stream
             message_interceptor = CrewAIMessageInterceptor()
 
             crew = FinancialAnalysisCrew(
@@ -90,40 +92,41 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                 success=True,
             )
 
-            # Get captured messages and tag them
-            captured_messages = []
-            for msg in message_interceptor.captured_messages:
-                msg.additional_kwargs["agent_type"] = "financial_analysis_llm_call"
-                captured_messages.append(msg)
-
             logger.info(
                 "Captured LLM messages from crew execution",
-                num_messages=len(captured_messages),
+                num_messages=len(message_interceptor.captured_messages),
             )
 
             # Create final result message
-            final_message = LiberalAIMessage(
-                content=result[0].model_dump(),
-                additional_kwargs={
+            # Only include usage_metadata and response_metadata if we have actual values
+            final_message_kwargs = {
+                "content": result[0].model_dump(exclude_none=True),  # Exclude None values
+                "additional_kwargs": {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "agent_type": "financial_analysis_end",
                 },
-                usage_metadata={
-                    "input_tokens": result[1].get("prompt_tokens", None),
-                    "output_tokens": result[1].get("completion_tokens", None),
-                    "total_tokens": result[1].get("total_tokens", None),
-                },
-                response_metadata={
-                    "usage": {
-                        "completion_tokens": result[1].get("completion_tokens", None),
-                        "prompt_tokens": result[1].get("prompt_tokens", None),
-                        "total_tokens": result[1].get("total_tokens", None),
-                    }
-                },
-            )
+            }
 
-            # Return all messages (captured + final)
-            return captured_messages + [final_message]
+            # Only add usage_metadata if we have valid token counts
+            if result[1].get("prompt_tokens") or result[1].get("completion_tokens") or result[1].get("total_tokens"):
+                final_message_kwargs["usage_metadata"] = {
+                    "input_tokens": result[1].get("prompt_tokens", 0),
+                    "output_tokens": result[1].get("completion_tokens", 0),
+                    "total_tokens": result[1].get("total_tokens", 0),
+                }
+                final_message_kwargs["response_metadata"] = {
+                    "usage": {
+                        "completion_tokens": result[1].get("completion_tokens", 0),
+                        "prompt_tokens": result[1].get("prompt_tokens", 0),
+                        "total_tokens": result[1].get("total_tokens", 0),
+                    }
+                }
+
+            final_message = LiberalAIMessage(**final_message_kwargs)
+
+            # Return only the final message
+            # The interceptor messages are already sent in real-time via RedisConversationLogger
+            return [final_message]
         except Exception as e:
             logger.error(
                 "Financial analysis node failed",

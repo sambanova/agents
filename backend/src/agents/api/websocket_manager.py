@@ -524,6 +524,42 @@ class WebSocketConnectionManager(WebSocketInterface):
                             ):
                                 await self._safe_send(websocket, message_data)
 
+                                # ALSO send an agent_completion event with model metadata
+                                # so trackRunMetrics can count the model usage in real-time
+                                if "metadata" in data_parsed and "llm_name" in data_parsed["metadata"]:
+                                    model_tracking_event = {
+                                        "event": "agent_completion",
+                                        "user_id": user_id,
+                                        "conversation_id": conversation_id,
+                                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                                        "message_id": data_parsed["message_id"],
+                                        "id": str(uuid.uuid4()),  # Unique ID for deduplication
+                                        "type": "AIMessage",
+                                        "content": "",  # Empty content since this is just for tracking
+                                        "response_metadata": {
+                                            "model_name": data_parsed["metadata"]["llm_name"],
+                                        },
+                                        "additional_kwargs": {
+                                            "agent_type": "crewai_llm_call",
+                                        },
+                                    }
+
+                                    # Save to Redis for persistence using message_storage
+                                    await self.message_storage.save_message(
+                                        user_id,
+                                        conversation_id,
+                                        model_tracking_event
+                                    )
+
+                                    logger.info(
+                                        "Saved CrewAI model tracking event to Redis",
+                                        model_name=data_parsed["metadata"]["llm_name"],
+                                        message_id=data_parsed["message_id"],
+                                    )
+
+                                    # Send via WebSocket
+                                    await self._safe_send(websocket, model_tracking_event)
+
                         except Exception as e:
                             logger.error("Error processing Redis message", error=str(e))
                             continue
