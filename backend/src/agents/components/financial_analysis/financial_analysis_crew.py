@@ -194,6 +194,7 @@ class FinancialAnalysisCrew:
         message_id: str = None,
         verbose: bool = True,
         admin_api_keys: dict = None,
+        message_interceptor = None,
     ):
         # Use config manager if admin_api_keys are provided
         logger.info(f"[CREWAI_INIT] admin_api_keys type: {type(admin_api_keys)}, is None: {admin_api_keys is None}")
@@ -255,6 +256,13 @@ class FinancialAnalysisCrew:
                 temperature=0.0,
                 max_tokens=8192
             )
+
+            # Wrap LLMs with message interceptor if provided
+            if message_interceptor:
+                logger.info("Wrapping LLMs with message interceptor")
+                self.competitor_finder_llm = message_interceptor.wrap_llm(self.competitor_finder_llm)
+                self.llm = message_interceptor.wrap_llm(self.llm)
+                self.aggregator_llm = message_interceptor.wrap_llm(self.aggregator_llm)
         else:
             # Fallback to old behavior when admin panel is disabled
             competitor_finder_model_info = model_registry.get_model_info(
@@ -291,6 +299,14 @@ class FinancialAnalysisCrew:
                 api_key=llm_api_key,
                 base_url=aggregator_model_info["url"],
             )
+
+            # Wrap LLMs with message interceptor if provided
+            if message_interceptor:
+                logger.info("Wrapping LLMs with message interceptor (fallback mode)")
+                self.competitor_finder_llm = message_interceptor.wrap_llm(self.competitor_finder_llm)
+                self.llm = message_interceptor.wrap_llm(self.llm)
+                self.aggregator_llm = message_interceptor.wrap_llm(self.aggregator_llm)
+
         self.user_id = user_id
         self.run_id = run_id
         self.docs_included = docs_included

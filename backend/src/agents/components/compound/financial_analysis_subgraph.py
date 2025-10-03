@@ -6,6 +6,7 @@ import langsmith as ls
 import structlog
 from agents.components.compound.data_types import LiberalAIMessage
 from agents.components.compound.util import extract_api_key
+from agents.components.crewai_message_interceptor import CrewAIMessageInterceptor
 from agents.components.financial_analysis.financial_analysis_crew import (
     FinancialAnalysisCrew,
 )
@@ -52,11 +53,15 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                 extracted_company=extracted_company,
             )
 
-            # Initialize crew
-            logger.info("Initializing FinancialAnalysisCrew")
+            # Initialize crew with message interceptor
+            logger.info("Initializing FinancialAnalysisCrew with message interceptor")
             logger.info(f"[FINANCIAL_DEBUG] api_keys from closure: {type(api_keys)}, is None: {api_keys is None}")
             if api_keys:
                 logger.info(f"[FINANCIAL_DEBUG] api_keys keys: {list(api_keys.keys())}")
+
+            # Create message interceptor
+            message_interceptor = CrewAIMessageInterceptor()
+
             crew = FinancialAnalysisCrew(
                 llm_api_key=api_key,
                 provider="sambanova",
@@ -67,6 +72,7 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                 verbose=False,
                 message_id=config["metadata"]["message_id"],
                 admin_api_keys=api_keys,  # Pass api_keys dict for admin panel support
+                message_interceptor=message_interceptor,  # Pass interceptor to crew
             )
 
             inputs = {"ticker": extracted_ticker, "company_name": extracted_company}
@@ -84,7 +90,19 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                 success=True,
             )
 
-            return LiberalAIMessage(
+            # Get captured messages and tag them
+            captured_messages = []
+            for msg in message_interceptor.captured_messages:
+                msg.additional_kwargs["agent_type"] = "financial_analysis_llm_call"
+                captured_messages.append(msg)
+
+            logger.info(
+                "Captured LLM messages from crew execution",
+                num_messages=len(captured_messages),
+            )
+
+            # Create final result message
+            final_message = LiberalAIMessage(
                 content=result[0].model_dump(),
                 additional_kwargs={
                     "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -103,6 +121,9 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                     }
                 },
             )
+
+            # Return all messages (captured + final)
+            return captured_messages + [final_message]
         except Exception as e:
             logger.error(
                 "Financial analysis node failed",
