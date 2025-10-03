@@ -616,13 +616,14 @@ class WebSocketConnectionManager(WebSocketInterface):
 
                 if "id" in data:
                     if data["id"] is None:
-                        pass
-                    is_new = await self.message_storage.is_message_new(
-                        user_id, conversation_id, data["id"]
-                    )
+                        pass  # Skip deduplication if no id
+                    else:
+                        is_new = await self.message_storage.is_message_new(
+                            user_id, conversation_id, data["id"]
+                        )
 
-                    if not is_new:
-                        return True  # Still successful, just skipped duplicate
+                        if not is_new:
+                            return True  # Still successful, just skipped duplicate
 
                 current_usage = data.get("usage_metadata")
                 cumulative_usage = (
@@ -655,7 +656,26 @@ class WebSocketConnectionManager(WebSocketInterface):
             # Just try to send - most reliable way to detect if connection is still active
             return await self._safe_send(websocket, data)
         except Exception as e:
-            logger.error("Error sending WebSocket message", error=str(e))
+            logger.error(
+                "Error sending WebSocket message",
+                error=str(e),
+                data_keys=list(data.keys()) if isinstance(data, dict) else type(data),
+                event_type=data.get("event") if isinstance(data, dict) else None,  # Renamed to avoid conflict with structlog
+                agent_type=data.get("additional_kwargs", {}).get("agent_type") if isinstance(data, dict) else None,
+                message_id=data.get("id") if isinstance(data, dict) else None,
+            )
+            # Try to find which field has None
+            if isinstance(data, dict):
+                none_fields = []
+                for key, value in data.items():
+                    if value is None:
+                        none_fields.append(key)
+                    elif isinstance(value, dict):
+                        for sub_key, sub_value in value.items():
+                            if sub_value is None:
+                                none_fields.append(f"{key}.{sub_key}")
+                if none_fields:
+                    logger.error("Found None values in fields", none_fields=none_fields)
             return False
 
     async def _load_file_context_for_analysis(self, user_id: str, doc_ids: list) -> str:

@@ -99,8 +99,12 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
 
             # Create final result message
             # Only include usage_metadata and response_metadata if we have actual values
+            # Convert content to JSON string to ensure it's serializable for WebSocket
+            import json as json_module
+            import uuid
             final_message_kwargs = {
-                "content": result[0].model_dump(exclude_none=True),  # Exclude None values
+                "content": json_module.dumps(result[0].model_dump(exclude_none=True)),  # JSON string for WebSocket compatibility
+                "id": str(uuid.uuid4()),  # Add unique ID for message tracking
                 "additional_kwargs": {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "agent_type": "financial_analysis_end",
@@ -123,6 +127,14 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                 }
 
             final_message = LiberalAIMessage(**final_message_kwargs)
+
+            # Log the final message to debug WebSocket error
+            logger.info(
+                "Created final financial analysis message",
+                has_usage_metadata="usage_metadata" in final_message_kwargs,
+                has_response_metadata="response_metadata" in final_message_kwargs,
+                content_type=type(final_message_kwargs.get("content")),
+            )
 
             # Return only the final message
             # The interceptor messages are already sent in real-time via RedisConversationLogger
