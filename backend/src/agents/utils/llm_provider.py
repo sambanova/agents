@@ -268,29 +268,57 @@ def get_crewai_llm(
         A CustomLLM instance configured for the provider
     """
     from agents.components.crewai_llm import CustomLLM
+    import structlog
 
-    # Map provider to CrewAI model string format
-    if provider == "sambanova":
-        crewai_model = f"sambanova/{model}"
-    elif provider == "fireworks":
-        crewai_model = f"fireworks_ai/{model}"
-    elif provider == "together":
-        crewai_model = f"together_ai/{model}"
-    else:
-        crewai_model = model
+    logger = structlog.get_logger(__name__)
 
-    if not base_url:
+    # Clean base_url by stripping whitespace
+    if base_url:
+        base_url = base_url.strip()
+
+    # Define default base URLs for built-in providers
+    DEFAULT_BASE_URLS = {
+        "sambanova": "https://api.sambanova.ai/v1",
+        "fireworks": "https://api.fireworks.ai/inference/v1",
+        "together": "https://api.together.xyz/v1"
+    }
+
+    # Check if this is a built-in provider with default base_url
+    is_builtin_provider = provider in DEFAULT_BASE_URLS
+    is_default_base_url = base_url == DEFAULT_BASE_URLS.get(provider)
+
+    # If it's a built-in provider with default URL, don't pass base_url to litellm
+    # Let litellm handle routing automatically
+    if is_builtin_provider and (is_default_base_url or base_url is None):
+        # Built-in provider: use provider prefix and let litellm handle routing
         if provider == "sambanova":
-            base_url = "https://api.sambanova.ai/v1"
+            crewai_model = f"sambanova/{model}"
         elif provider == "fireworks":
-            base_url = "https://api.fireworks.ai/inference/v1"
+            crewai_model = f"fireworks_ai/{model}"
         elif provider == "together":
-            base_url = "https://api.together.xyz/v1"
+            crewai_model = f"together_ai/{model}"
+        else:
+            crewai_model = model
 
-    return CustomLLM(
-        model=crewai_model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        api_key=api_key,
-        base_url=base_url,
-    )
+        logger.info(f"[GET_CREWAI_LLM] Built-in provider: provider={provider}, model={model}, crewai_model={crewai_model}, base_url=None (litellm auto-routing)")
+
+        return CustomLLM(
+            model=crewai_model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            api_key=api_key,
+            base_url=None,  # Don't pass base_url for built-in providers
+        )
+    else:
+        # Custom provider with custom base_url: use openai/ prefix for litellm routing
+        # https://docs.litellm.ai/docs/providers/custom
+        crewai_model = f"openai/{model}"
+        logger.info(f"[GET_CREWAI_LLM] Custom provider detected: provider={provider}, raw_model={model}, crewai_model={crewai_model} (openai/ prefix), base_url={base_url}")
+
+        return CustomLLM(
+            model=crewai_model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            api_key=api_key,
+            base_url=base_url,
+        )

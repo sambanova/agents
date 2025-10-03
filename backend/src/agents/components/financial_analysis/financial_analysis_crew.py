@@ -1,7 +1,11 @@
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import structlog
+import litellm
 from agents.components.crewai_llm import CustomLLM
+
+# Enable litellm debug logging to see actual errors
+litellm.set_verbose = True
 from agents.registry.model_registry import model_registry
 from agents.services.structured_output_parser import CustomConverter
 from agents.storage.redis_service import SecureRedisService
@@ -221,14 +225,25 @@ class FinancialAnalysisCrew:
             aggregator_provider = aggregator_task.get("provider", "sambanova")
 
             # Get API keys
+            logger.info(f"[API_KEY_DEBUG] admin_api_keys sambanova value: {bool(admin_api_keys.get('sambanova'))}, preview: {admin_api_keys.get('sambanova')[:10] if admin_api_keys.get('sambanova') else 'None'}")
+            logger.info(f"[API_KEY_DEBUG] llm_api_key preview: {llm_api_key[:10] if llm_api_key else 'None'}")
+
             competitor_api_key = competitor_task.get("api_key") or admin_api_keys.get(competitor_provider, llm_api_key)
             default_api_key = default_task.get("api_key") or admin_api_keys.get(default_provider, llm_api_key)
             aggregator_api_key = aggregator_task.get("api_key") or admin_api_keys.get(aggregator_provider, llm_api_key)
+
+            logger.info(f"[API_KEY_DEBUG] aggregator_api_key result: {bool(aggregator_api_key)}, preview: {aggregator_api_key[:10] if aggregator_api_key else 'None'}")
 
             # Get provider configs
             competitor_config = config_manager.get_provider_config(competitor_provider, user_id)
             default_config = config_manager.get_provider_config(default_provider, user_id)
             aggregator_config = config_manager.get_provider_config(aggregator_provider, user_id)
+
+            logger.info(f"[CREWAI_CONFIG] aggregator_provider={aggregator_provider}")
+            logger.info(f"[CREWAI_CONFIG] aggregator_config base_url: {aggregator_config.get('base_url')}")
+            logger.info(f"[CREWAI_CONFIG] aggregator_task provider_type: {aggregator_task.get('provider_type')}")
+            logger.info(f"[CREWAI_CONFIG] Final provider for aggregator: {aggregator_task.get('provider_type') or aggregator_provider}")
+            logger.info(f"[CREWAI_CONFIG] Final base_url for aggregator: {aggregator_task.get('base_url') or aggregator_config.get('base_url')}")
 
             self.competitor_finder_llm = get_crewai_llm(
                 provider=competitor_task.get("provider_type") or competitor_provider,
@@ -256,6 +271,8 @@ class FinancialAnalysisCrew:
                 temperature=0.0,
                 max_tokens=8192
             )
+
+            logger.info(f"[CREWAI_LLM] Aggregator LLM initialized: model={self.aggregator_llm.model}")
 
             # Wrap LLMs with message interceptor if provided
             if message_interceptor:

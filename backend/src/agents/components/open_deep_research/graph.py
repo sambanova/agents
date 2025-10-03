@@ -44,6 +44,7 @@ from agents.utils.logging_utils import setup_logging_context
 from agents.utils.message_interceptor import MessageInterceptor
 from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.output_parsers import BaseOutputParser
 from langchain_core.runnables import RunnableConfig, RunnableLambda
 from langchain_fireworks import ChatFireworks
 from langchain_openai import ChatOpenAI
@@ -52,6 +53,88 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Checkpointer, Command, interrupt
 
 logger = structlog.get_logger(__name__)
+
+
+class CleanContentParser(BaseOutputParser):
+    """
+    Extract only the content field from AIMessage, removing any reasoning artifacts.
+
+    This parser is used to clean up output from reasoning models that may include
+    chain-of-thought reasoning, confidence scores, or meta-commentary in their responses.
+    """
+
+    def parse(self, text: str) -> str:
+        """
+        Parse the output and remove common reasoning artifacts.
+        When chained after an AIMessage, this extracts just the .content field.
+        """
+        # Log the raw content before filtering
+        logger.info(
+            "[CONTENT_FILTER] Raw section content (first 500 chars)",
+            raw_preview=text[:500] if len(text) > 500 else text
+        )
+
+        lines = text.split('\n')
+        cleaned_lines = []
+        filtered_lines = []
+
+        skip_mode = False
+        for line in lines:
+            stripped = line.strip()
+
+            # Skip lines that are just single numbers (reasoning countdown)
+            if stripped and stripped.replace('.', '').isdigit():
+                filtered_lines.append(f"[NUMBER] {line}")
+                continue
+
+            # Skip evaluation/meta-commentary sections
+            if any(phrase in stripped for phrase in [
+                'Evaluation of the Reasoning Process',
+                'Quality Score:',
+                'The process of writing',
+                'Upon reviewing',
+                'Upon completing',
+                'quality checks',
+                'word limit',
+                'meets all quality'
+            ]):
+                skip_mode = True
+                filtered_lines.append(f"[EVAL_START] {line}")
+                continue
+
+            # Track what we're skipping in skip mode
+            if skip_mode:
+                filtered_lines.append(f"[EVAL_SKIP] {line}")
+
+            # Reset skip mode on next substantial content
+            if skip_mode and len(stripped) > 100:
+                skip_mode = False
+
+            if not skip_mode:
+                cleaned_lines.append(line)
+
+        # Log what was filtered out
+        if filtered_lines:
+            logger.info(
+                "[CONTENT_FILTER] Filtered content",
+                num_filtered_lines=len(filtered_lines),
+                filtered_preview='\n'.join(filtered_lines[:10])  # Show first 10 filtered lines
+            )
+
+        cleaned_text = '\n'.join(cleaned_lines).strip()
+        logger.info(
+            "[CONTENT_FILTER] Cleaned content (first 500 chars)",
+            cleaned_preview=cleaned_text[:500] if len(cleaned_text) > 500 else cleaned_text,
+            original_length=len(text),
+            cleaned_length=len(cleaned_text),
+            reduction_percent=round((1 - len(cleaned_text)/len(text)) * 100, 1) if text else 0
+        )
+
+        return cleaned_text
+
+    @property
+    def _type(self) -> str:
+        return "clean_content"
 
 
 class LLMTimeoutError(Exception):
@@ -525,8 +608,10 @@ async def write_section(
         document_summary=doc_summary,
     )
     writer_interceptor = MessageInterceptor()
-    writer_model_with_interceptor = writer_model | RunnableLambda(
-        writer_interceptor.capture_and_pass
+    writer_model_with_interceptor = (
+        writer_model
+        | RunnableLambda(writer_interceptor.capture_and_pass)
+        | CleanContentParser()  # Clean reasoning artifacts from content
     )
 
     content = await invoke_llm_with_tracking(
@@ -540,7 +625,7 @@ async def write_section(
         llm_name=get_model_name(writer_model),
     )
 
-    sec.content = content.content
+    sec.content = content  # content is now a string due to CleanContentParser
     logger.info("Generated content for section", section_name=sec.name)
 
     schema = Feedback.model_json_schema()
@@ -645,8 +730,10 @@ async def write_final_sections(
     )
 
     writer_interceptor = MessageInterceptor()
-    writer_model_with_interceptor = writer_model | RunnableLambda(
-        writer_interceptor.capture_and_pass
+    writer_model_with_interceptor = (
+        writer_model
+        | RunnableLambda(writer_interceptor.capture_and_pass)
+        | CleanContentParser()  # Clean reasoning artifacts from content
     )
 
     content = await invoke_llm_with_tracking(
@@ -660,7 +747,7 @@ async def write_final_sections(
         llm_name=get_model_name(writer_model),
     )
 
-    sec.content = content.content
+    sec.content = content  # content is now a string due to CleanContentParser
     logger.info("Completed final section", section_name=sec.name)
 
     captured_messages = []
