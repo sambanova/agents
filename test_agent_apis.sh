@@ -2,7 +2,7 @@
 
 # Test script for Agent v2 APIs
 # Your API Key
-API_KEY="4957c8f9-2468-4cbd-9899-7ba15bd046b4"
+API_KEY="API_KEY"
 BASE_URL="http://localhost:8000/api/agent"
 
 echo "======================================"
