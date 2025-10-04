@@ -82,29 +82,53 @@ class HumeVoiceService:
         try:
             # Build system prompt with user context
             system_prompt_parts = [
-                "You are a helpful AI assistant with voice capabilities.",
-                "You can access various tools and subgraphs to help users with:",
-                "- Financial analysis and market research",
-                "- Deep research on any topic",
+                "You are an empathic AI co-pilot that works with a powerful agentic system.",
+                "",
+                "HOW YOU WORK:",
+                "- When users ask you to do something, you send it to backend agents who handle the work",
+                "- While agents work, you receive context updates about their progress",
+                "- You narrate these updates naturally: 'I'm analyzing that now...', 'Working on the research...'",
+                "- When complete, you explain the results conversationally",
+                "",
+                "CAPABILITIES (from backend agents):",
+                "- Financial analysis and company research",
+                "- Deep research reports on any topic",
                 "- Data analysis and code execution",
-                "- Document processing and information retrieval",
+                "- Web search and information retrieval",
                 "",
-                "When the user makes a request via voice:",
-                "1. Confirm understanding of their request briefly",
-                "2. Explain what you're doing as you work",
-                "3. Provide concise updates on progress",
-                "4. Deliver the final answer clearly and conversationally",
+                "YOUR ROLE:",
+                "- Be conversational and empathic",
+                "- When asked 'what can you do', describe the capabilities above naturally",
+                "- For greetings/small talk, respond briefly then ask how you can help",
+                "- For tasks, acknowledge naturally ('let me work on that') then wait for context updates",
+                "- Narrate progress using context updates you receive",
                 "",
-                "Keep responses natural and conversational for voice interaction.",
+                "Keep all responses natural and voice-appropriate.",
             ]
 
             context_data["system_prompt"] = "\n".join(system_prompt_parts)
 
-            # Add persistent context
+            # Build context with available tools/capabilities
             context_parts = [
                 f"User ID: {user_id}",
                 "Current mode: Voice assistant",
+                "",
+                "AVAILABLE CAPABILITIES:",
+                "",
+                "Subgraphs:",
+                "- Financial Analysis: Analyze stocks, get company financials, market research",
+                "- Deep Research: Comprehensive research reports on any topic",
+                "- Code Execution: Run Python code, data analysis, visualizations",
+                "",
+                "Tools:",
+                "- arxiv: Search academic papers",
+                "- search_tavily: Web search for current information",
+                "- search_tavily_answer: Get direct answers from web search",
+                "- wikipedia: Look up encyclopedic information",
             ]
+
+            # Add user's connected tools if any
+            # TODO: Fetch user's connected integrations (Google, Notion, etc.)
 
             # Load conversation history if available
             if conversation_id:
@@ -114,7 +138,7 @@ class HumeVoiceService:
                     )
                     if messages and len(messages) > 0:
                         context_parts.append(
-                            f"Active conversation with {len(messages)} previous messages"
+                            f"\nActive conversation with {len(messages)} previous messages"
                         )
                 except Exception as e:
                     logger.warning(
@@ -125,8 +149,8 @@ class HumeVoiceService:
 
             # Set up variables for dynamic prompt injection
             context_data["variables"] = {
-                "user_id": user_id[:8],  # Shortened ID for voice
-                "timestamp": "",  # Will be set dynamically
+                "user_id": user_id[:8],
+                "timestamp": "",
             }
 
             logger.info(

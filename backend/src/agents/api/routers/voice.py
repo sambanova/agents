@@ -27,6 +27,32 @@ router = APIRouter(
 )
 
 
+def detect_agent_intent(transcription: str) -> Optional[str]:
+    """
+    Detect if transcription is just a greeting/small talk.
+
+    Returns None for basic greetings (EVI handles), otherwise returns "general" (send to agents).
+    """
+    transcription_lower = transcription.lower().strip()
+
+    # Very short greetings/simple responses
+    if transcription_lower in ["hi", "hello", "hey", "thanks", "thank you", "bye", "goodbye", "ok", "okay"]:
+        return None
+
+    # Greeting phrases (EVI handles these conversationally)
+    greetings = [
+        "how are you", "how's it going", "what's up",
+        "good morning", "good afternoon", "good evening"
+    ]
+
+    if any(greeting in transcription_lower for greeting in greetings):
+        return None
+
+    # Everything else goes to backend agents
+    # This includes: tasks, questions, requests, analysis, research, etc.
+    return "general"
+
+
 @router.post("/token")
 async def get_voice_token(
     request: Request,
@@ -246,7 +272,6 @@ async def voice_chat_websocket(
 
                 if message_type == "voice_transcription":
                     # User's speech has been transcribed by frontend/Hume
-                    # Inject this into the existing chat workflow
                     transcription = message_data.get("text", "")
 
                     logger.info(
@@ -262,14 +287,38 @@ async def voice_chat_websocket(
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                     })
 
-                    # Inject into chat workflow via WebSocket manager
-                    # This will trigger the existing agent processing
-                    await websocket.app.state.manager.inject_voice_message(
-                        user_id=user_id,
-                        conversation_id=conversation_id,
-                        message_text=transcription,
-                        message_id=message_data.get("message_id"),
-                    )
+                    # Detect if this is just a greeting/small talk
+                    intent = detect_agent_intent(transcription)
+
+                    if intent is None:
+                        # Simple greeting - let EVI handle conversationally
+                        logger.info(
+                            "Simple greeting - EVI handles",
+                            user_id=user_id[:8],
+                        )
+                    else:
+                        # Everything else goes to backend agents
+                        logger.info(
+                            "Triggering backend agents",
+                            user_id=user_id[:8],
+                            intent=intent,
+                        )
+
+                        # Notify frontend to show agent workflow on screen
+                        await websocket.send_json({
+                            "type": "agent_triggered",
+                            "intent": intent,
+                            "text": transcription,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        })
+
+                        # Inject into backend agent workflow
+                        await websocket.app.state.manager.inject_voice_message(
+                            user_id=user_id,
+                            conversation_id=conversation_id,
+                            message_text=transcription,
+                            message_id=message_data.get("message_id"),
+                        )
 
                 elif message_type == "audio_chunk":
                     # Frontend sending raw audio chunks

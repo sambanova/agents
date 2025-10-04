@@ -140,7 +140,34 @@ export function useVoiceChat(conversationId) {
 
         case 'transcription_received':
           console.log('✅ Backend received transcription')
+          break
+
+        case 'agent_triggered':
+          // Backend agents are being triggered - show on screen
+          console.log('🚀 Agents triggered:', message.intent)
           voiceStatus.value = 'thinking'
+
+          // Emit event for UI to show agent workflow
+          window.dispatchEvent(new CustomEvent('voice-agent-triggered', {
+            detail: { intent: message.intent, text: message.text }
+          }))
+          break
+
+        case 'agent_context':
+          // Agent progress update - inject as temporary context for EVI narration
+          console.log('📊 Agent context:', message.context)
+          agentUpdate.value = message.context
+
+          // Inject as temporary context for EVI to naturally narrate
+          if (humeSocket && message.context) {
+            // Send as session settings with temporary context
+            humeSocket.sendSessionSettings({
+              context: {
+                text: message.context,
+                type: "temporary"  // Only applies to next response
+              }
+            })
+          }
           break
 
         case 'agent_response':
@@ -148,9 +175,17 @@ export function useVoiceChat(conversationId) {
           console.log('🤖 Agent response:', message.text)
           agentUpdate.value = ''
 
-          // Send response to Hume to speak
+          // Clean and send response to Hume to speak
           if (humeSocket && message.text) {
-            sendAssistantMessage(message.text)
+            // Strip HTML tags and limit length
+            let cleanText = message.text.replace(/<[^>]*>/g, '').trim()
+
+            // If too long, create a brief summary for Hume
+            if (cleanText.length > 500) {
+              cleanText = "I've completed the analysis. The results are displayed on your screen."
+            }
+
+            sendAssistantMessage(cleanText)
           }
           break
 

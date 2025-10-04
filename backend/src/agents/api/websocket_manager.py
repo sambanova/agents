@@ -715,12 +715,12 @@ class WebSocketConnectionManager(WebSocketInterface):
             # Send to main WebSocket
             result = await self._safe_send(websocket, data)
 
-            # Also send to voice WebSocket if connected and this is an agent completion
-            if data.get("event") == "agent_completion":
-                voice_websocket = self.get_voice_connection(user_id, conversation_id)
-                if voice_websocket:
-                    try:
-                        # Extract text from various possible fields
+            # Send events to voice WebSocket for EVI narration
+            voice_websocket = self.get_voice_connection(user_id, conversation_id)
+            if voice_websocket:
+                try:
+                    # Agent completion - final response for EVI to speak
+                    if data.get("event") == "agent_completion":
                         response_text = (
                             data.get("data") or
                             data.get("content") or
@@ -728,23 +728,48 @@ class WebSocketConnectionManager(WebSocketInterface):
                             ""
                         )
 
-                        # Send simplified message for voice response
                         await voice_websocket.send_json({
                             "type": "agent_response",
                             "text": response_text,
                             "timestamp": data.get("timestamp"),
                         })
                         logger.info(
-                            "Sent agent response to voice WebSocket",
+                            "Sent agent response to voice",
                             user_id=user_id[:8],
-                            conversation_id=conversation_id,
                             text_preview=response_text[:50] if response_text else "empty",
                         )
-                    except Exception as voice_err:
-                        logger.error(
-                            f"Failed to send to voice WebSocket: {str(voice_err)}",
-                            user_id=user_id[:8],
-                        )
+
+                    # Agent thinking - send brief context for EVI to narrate naturally
+                    elif data.get("event") == "think":
+                        think_data = json.loads(data.get("data", "{}")) if isinstance(data.get("data"), str) else data.get("data", {})
+
+                        # Extract brief progress update (< 200 chars for EVI)
+                        agent_type = think_data.get("metadata", {}).get("agent_type", "")
+                        step = think_data.get("step", "")
+
+                        # Create brief summary for EVI context
+                        if "search" in step.lower():
+                            context = "Searching for information"
+                        elif "analy" in step.lower():
+                            context = f"Analyzing {agent_type or 'data'}"
+                        elif "research" in step.lower():
+                            context = "Conducting research"
+                        elif "generat" in step.lower() or "writ" in step.lower():
+                            context = "Generating report"
+                        else:
+                            context = step[:150] if step else f"Working on {agent_type}"
+
+                        await voice_websocket.send_json({
+                            "type": "agent_context",
+                            "context": context,
+                            "timestamp": data.get("timestamp"),
+                        })
+
+                except Exception as voice_err:
+                    logger.error(
+                        f"Failed to send to voice WebSocket: {str(voice_err)}",
+                        user_id=user_id[:8],
+                    )
 
             return result
         except Exception as e:
