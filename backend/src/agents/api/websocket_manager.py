@@ -46,6 +46,7 @@ class WebSocketConnectionManager(WebSocketInterface):
     ):
         # Use user_id:conversation_id as the key
         self.connections: Dict[str, WebSocket] = {}
+        self.voice_connections: Dict[str, WebSocket] = {}  # Track voice WebSockets separately
         self.redis_client = redis_client
         self.sync_redis_client = sync_redis_client
         self.message_storage = RedisStorage(redis_client)
@@ -100,6 +101,50 @@ class WebSocketConnectionManager(WebSocketInterface):
         key = f"{user_id}:{conversation_id}"
         if key in self.connections:
             del self.connections[key]
+
+    def add_voice_connection(
+        self, websocket: WebSocket, user_id: str, conversation_id: str
+    ) -> None:
+        """
+        Adds a voice WebSocket connection to the manager.
+
+        Args:
+            websocket (WebSocket): The voice WebSocket connection.
+            user_id (str): The ID of the user.
+            conversation_id (str): The ID of the conversation.
+        """
+        key = f"{user_id}:{conversation_id}"
+        self.voice_connections[key] = websocket
+        logger.info(f"Added voice connection for {key}")
+
+    def get_voice_connection(
+        self, user_id: str, conversation_id: str
+    ) -> Optional[WebSocket]:
+        """
+        Gets voice WebSocket connection for a user's conversation.
+
+        Args:
+            user_id (str): The ID of the user.
+            conversation_id (str): The ID of the conversation.
+
+        Returns:
+            Optional[WebSocket]: The voice WebSocket connection if found, None otherwise.
+        """
+        key = f"{user_id}:{conversation_id}"
+        return self.voice_connections.get(key)
+
+    def remove_voice_connection(self, user_id: str, conversation_id: str) -> None:
+        """
+        Removes a voice WebSocket connection from the manager.
+
+        Args:
+            user_id (str): The ID of the user.
+            conversation_id (str): The ID of the conversation.
+        """
+        key = f"{user_id}:{conversation_id}"
+        if key in self.voice_connections:
+            del self.voice_connections[key]
+            logger.info(f"Removed voice connection for {key}")
 
     async def cleanup_inactive_sessions(self):
         """Cleanup sessions that have been inactive for longer than SESSION_TIMEOUT"""
@@ -667,8 +712,41 @@ class WebSocketConnectionManager(WebSocketInterface):
                 )
                 return False
 
-            # Just try to send - most reliable way to detect if connection is still active
-            return await self._safe_send(websocket, data)
+            # Send to main WebSocket
+            result = await self._safe_send(websocket, data)
+
+            # Also send to voice WebSocket if connected and this is an agent completion
+            if data.get("event") == "agent_completion":
+                voice_websocket = self.get_voice_connection(user_id, conversation_id)
+                if voice_websocket:
+                    try:
+                        # Extract text from various possible fields
+                        response_text = (
+                            data.get("data") or
+                            data.get("content") or
+                            data.get("text") or
+                            ""
+                        )
+
+                        # Send simplified message for voice response
+                        await voice_websocket.send_json({
+                            "type": "agent_response",
+                            "text": response_text,
+                            "timestamp": data.get("timestamp"),
+                        })
+                        logger.info(
+                            "Sent agent response to voice WebSocket",
+                            user_id=user_id[:8],
+                            conversation_id=conversation_id,
+                            text_preview=response_text[:50] if response_text else "empty",
+                        )
+                    except Exception as voice_err:
+                        logger.error(
+                            f"Failed to send to voice WebSocket: {str(voice_err)}",
+                            user_id=user_id[:8],
+                        )
+
+            return result
         except Exception as e:
             logger.error(
                 "Error sending WebSocket message",
@@ -1065,7 +1143,184 @@ class WebSocketConnectionManager(WebSocketInterface):
             raise
             
         return summary.strip()
-    
+
+    async def inject_voice_message(
+        self,
+        user_id: str,
+        conversation_id: str,
+        message_text: str,
+        message_id: Optional[str] = None,
+    ) -> bool:
+        """
+        Inject a voice-transcribed message into the chat workflow.
+
+        This method allows voice transcriptions to trigger the same agent
+        processing as regular text messages.
+
+        Args:
+            user_id: User ID
+            conversation_id: Conversation ID
+            message_text: Transcribed text from voice input
+            message_id: Optional message ID for tracking
+
+        Returns:
+            True if message was injected successfully
+        """
+        try:
+            from agents.components.compound.agent import enhanced_agent
+            import uuid
+
+            # Generate message ID if not provided
+            if not message_id:
+                message_id = str(uuid.uuid4())
+
+            # Get the WebSocket connection (voice WebSocket is registered as main connection)
+            websocket = self.get_connection(user_id, conversation_id)
+
+            if not websocket:
+                logger.error(
+                    "Cannot inject voice message: no active WebSocket connection",
+                    user_id=user_id[:8],
+                    conversation_id=conversation_id,
+                )
+                return False
+
+            # Set up session if not exists (for voice-only mode)
+            session_key = f"{user_id}:{conversation_id}"
+            channel = f"agent_thoughts:{user_id}:{conversation_id}"
+
+            # Initialize session if it doesn't exist
+            if session_key not in self.active_sessions:
+                # Create pubsub instance for voice session
+                pubsub = self.redis_client.pubsub(ignore_subscribe_messages=True)
+                await pubsub.subscribe(channel)
+                self.pubsub_instances[session_key] = pubsub
+
+                self.active_sessions[session_key] = {
+                    "background_task": None,
+                    "websocket": websocket,
+                    "is_active": True,
+                    "pubsub": pubsub,
+                }
+
+                logger.info(
+                    "Created voice session",
+                    user_id=user_id[:8],
+                    conversation_id=conversation_id,
+                )
+
+            # Update session activity time
+            self.session_last_active[session_key] = datetime.now(timezone.utc)
+
+            # Start background task for Redis messages if not running
+            session = self.active_sessions[session_key]
+            if not session.get("background_task") or session["background_task"].done():
+                session["background_task"] = asyncio.create_task(
+                    self.handle_redis_messages(
+                        websocket, session["pubsub"], user_id, conversation_id
+                    )
+                )
+                logger.info(
+                    "Started background task for voice session",
+                    user_id=user_id[:8],
+                )
+
+            # Load user's API keys and provider settings
+            redis_api_keys = await self.message_storage.get_user_api_key(user_id)
+
+            if redis_api_keys.sambanova_key == "":
+                logger.error("No API keys found for voice message injection")
+                return False
+
+            # Determine provider (default to sambanova for voice)
+            provider = "sambanova"
+
+            # Use admin keys if admin panel is disabled
+            admin_enabled = os.getenv("SHOW_ADMIN_PANEL", "false").lower() == "true"
+
+            if admin_enabled:
+                from agents.api.data_types import APIKeys
+                api_keys = APIKeys(
+                    sambanova_key=redis_api_keys.sambanova_key,
+                    fireworks_key=redis_api_keys.fireworks_key,
+                    together_key=redis_api_keys.together_key,
+                    serper_key=redis_api_keys.serper_key or os.getenv("SERPER_KEY", ""),
+                    exa_key=redis_api_keys.exa_key or os.getenv("EXA_KEY", ""),
+                )
+            else:
+                from agents.api.data_types import APIKeys
+                api_keys = APIKeys(
+                    sambanova_key=redis_api_keys.sambanova_key,
+                    fireworks_key=os.getenv("FIREWORKS_KEY", ""),
+                    together_key="",
+                    serper_key=redis_api_keys.serper_key or os.getenv("SERPER_KEY", ""),
+                    exa_key=redis_api_keys.exa_key or os.getenv("EXA_KEY", ""),
+                )
+
+            # Create HumanMessage from voice transcription
+            input_message = HumanMessage(
+                content=message_text,
+                additional_kwargs={
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "agent_type": "human",
+                    "resume": False,
+                    "source": "voice",  # Mark as voice input
+                },
+            )
+
+            # Store the user message
+            await self.message_storage.save_message(
+                user_id,
+                conversation_id,
+                {
+                    "event": "user_message",
+                    "data": message_text,
+                    "message_id": message_id,
+                    "conversation_id": conversation_id,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "source": "voice",
+                },
+            )
+
+            # Create config for agent processing
+            config = await self.create_config(
+                user_id=user_id,
+                thread_id=conversation_id,
+                api_keys=api_keys,
+                provider=provider,
+                message_id=message_id,
+                llm_type="DeepSeek V3",  # Default model for voice
+                doc_ids=tuple(),  # No documents for voice messages (for now)
+                multimodal_input=False,
+            )
+
+            # Trigger agent workflow (same as regular messages)
+            await enhanced_agent.astream_websocket(
+                input=input_message,
+                config=config,
+                websocket_manager=self,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                message_id=message_id,
+            )
+
+            logger.info(
+                "Successfully injected voice message into chat workflow",
+                user_id=user_id[:8],
+                conversation_id=conversation_id,
+                message_preview=message_text[:50],
+            )
+
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"Error injecting voice message: {str(e)}",
+                user_id=user_id[:8] if user_id else "unknown",
+                conversation_id=conversation_id,
+            )
+            return False
+
     async def create_config(
         self,
         user_id: str,

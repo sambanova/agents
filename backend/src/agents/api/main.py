@@ -15,6 +15,7 @@ from agents.api.routers.files import router as files_router
 from agents.api.routers.share import router as share_router
 from agents.api.routers.upload import router as upload_router
 from agents.api.routers.user import router as user_router
+from agents.api.routers.voice import router as voice_router
 from agents.api.websocket_manager import WebSocketConnectionManager
 from agents.auth.auth0_config import get_current_user_id
 from agents.components.compound.xml_agent import (
@@ -169,6 +170,7 @@ app.include_router(agent_router)
 app.include_router(export_router)
 app.include_router(connectors_router)
 app.include_router(dynamic_mcp_router)
+app.include_router(voice_router)
 
 
 @app.get("/health")

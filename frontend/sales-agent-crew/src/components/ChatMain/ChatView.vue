@@ -85,6 +85,18 @@
           </div>
         </div>
       </div>
+
+      <!-- Voice Status Badge -->
+      <div v-if="showVoiceStatus" class="sticky top-[72px] z-10 px-4 py-2">
+        <VoiceStatusBadge
+          :voice-status="voiceStatus"
+          :current-transcript="currentTranscript"
+          :agent-update="agentUpdate"
+          :is-visible="showVoiceStatus"
+          @close="showVoiceStatus = false"
+        />
+      </div>
+
       <div
         class="flex-1 w-full flex mx-auto"
         :class="
@@ -583,6 +595,15 @@
                       </button>
                     </Tooltip>
                     <!-- End Mic Button -->
+
+                    <!-- Voice Control -->
+                    <VoiceControl
+                      v-if="isVoiceSupported"
+                      :conversation-id="currentId"
+                      @voice-mode-starting="handleVoiceModeStarting"
+                      @voice-status-changed="handleVoiceStatusChange"
+                    />
+
                     <!-- Send Button -->
                     <button
                       type="button"
@@ -696,8 +717,11 @@ import emitterMitt from '@/utils/eventBus.js';
 import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue';
 import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue';
 import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue';
+import VoiceControl from '@/components/ChatMain/VoiceControl.vue';
+import VoiceStatusBadge from '@/components/ChatMain/VoiceStatusBadge.vue';
 import { isFinalAgentType, shouldExcludeFromGrouping } from '@/utils/globalFunctions.js';
 import { sharing } from '@/services/api.js';
+import { useVoiceChat } from '@/composables/useVoiceChat';
 
 // Access Auth0 user for personalization
 const { user } = useAuth0();
@@ -1115,6 +1139,44 @@ const isInDeepResearch = ref(false);
 
 // Track data science state
 const isInDataScience = ref(false);
+
+// Voice chat integration
+const {
+  isVoiceMode,
+  voiceStatus,
+  currentTranscript,
+  agentUpdate,
+  error: voiceError,
+  audioLevel,
+  isSupported: isVoiceSupported
+} = useVoiceChat(computed(() => currentId.value));
+
+// Voice status badge visibility
+const showVoiceStatus = ref(false);
+
+// Watch for voice mode changes to auto-show/hide status badge
+watch(isVoiceMode, (newValue) => {
+  showVoiceStatus.value = newValue;
+});
+
+// Handle voice mode starting (before activation)
+async function handleVoiceModeStarting() {
+  console.log('Voice mode starting - ensuring main chat WebSocket is connected');
+
+  // Ensure main chat WebSocket is connected
+  if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
+    await connectWebSocket();
+    await waitForSocketOpen();
+    console.log('✅ Main chat WebSocket ready for voice mode');
+  } else {
+    console.log('✅ Main chat WebSocket already connected');
+  }
+}
+
+// Handle voice status changes
+async function handleVoiceStatusChange(event) {
+  console.log('Voice status changed:', event);
+}
 
 watch(
   () => agentThoughtsData.value,

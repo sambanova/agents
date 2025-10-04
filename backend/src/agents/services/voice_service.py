@@ -1,0 +1,237 @@
+"""
+Voice service for managing Hume AI EVI (Empathic Voice Interface) sessions.
+"""
+import os
+from typing import Dict, Optional
+import structlog
+from hume import AsyncHumeClient
+from agents.storage.redis_storage import RedisStorage
+
+logger = structlog.get_logger(__name__)
+
+
+class HumeVoiceService:
+    """Service for managing Hume AI voice sessions and context injection."""
+
+    def __init__(self, redis_storage: RedisStorage):
+        """
+        Initialize the Hume Voice Service.
+
+        Args:
+            redis_storage: RedisStorage instance for accessing user data
+        """
+        self.redis_storage = redis_storage
+        self.api_key = os.getenv("HUME_API_KEY")
+        self.secret_key = os.getenv("HUME_SECRET_KEY")
+        self.config_id = os.getenv("HUME_EVI_CONFIG_ID")
+
+        if not self.api_key or not self.secret_key:
+            logger.warning(
+                "Hume API credentials not configured. Voice mode will be unavailable."
+            )
+
+    async def generate_access_token(self) -> Optional[Dict[str, str]]:
+        """
+        Generate a short-lived access token for Hume EVI.
+
+        For Hume EVI, we can use the API key directly for WebSocket connections.
+        The secret key is used for OAuth2 flows which we'll implement if needed.
+
+        Returns:
+            Dict with access_token (API key) and expires_in, or None if not configured
+        """
+        if not self.api_key:
+            logger.error("Cannot generate token: Hume API key not configured")
+            return None
+
+        try:
+            # For Hume EVI WebSocket connections, the API key itself can be used
+            # The secret key is for OAuth2 client credentials flow
+            # For now, return the API key as the access token
+
+            logger.info("Prepared Hume EVI access credentials successfully")
+
+            return {
+                "access_token": self.api_key,
+                "token_type": "api_key",
+                "expires_in": 3600,  # API keys don't expire, but we set a long duration
+            }
+        except Exception as e:
+            logger.error(f"Failed to prepare Hume access credentials: {str(e)}")
+            return None
+
+    async def get_user_context(
+        self, user_id: str, conversation_id: Optional[str] = None
+    ) -> Dict[str, str]:
+        """
+        Build user context for injection into Hume EVI session.
+
+        Args:
+            user_id: User ID
+            conversation_id: Optional conversation ID for loading history
+
+        Returns:
+            Dict with system_prompt, context, and variables
+        """
+        context_data = {
+            "system_prompt": "",
+            "context": "",
+            "variables": {},
+        }
+
+        try:
+            # Build system prompt with user context
+            system_prompt_parts = [
+                "You are a helpful AI assistant with voice capabilities.",
+                "You can access various tools and subgraphs to help users with:",
+                "- Financial analysis and market research",
+                "- Deep research on any topic",
+                "- Data analysis and code execution",
+                "- Document processing and information retrieval",
+                "",
+                "When the user makes a request via voice:",
+                "1. Confirm understanding of their request briefly",
+                "2. Explain what you're doing as you work",
+                "3. Provide concise updates on progress",
+                "4. Deliver the final answer clearly and conversationally",
+                "",
+                "Keep responses natural and conversational for voice interaction.",
+            ]
+
+            context_data["system_prompt"] = "\n".join(system_prompt_parts)
+
+            # Add persistent context
+            context_parts = [
+                f"User ID: {user_id}",
+                "Current mode: Voice assistant",
+            ]
+
+            # Load conversation history if available
+            if conversation_id:
+                try:
+                    messages = await self.redis_storage.get_messages(
+                        user_id, conversation_id
+                    )
+                    if messages and len(messages) > 0:
+                        context_parts.append(
+                            f"Active conversation with {len(messages)} previous messages"
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Could not load conversation history: {str(e)}"
+                    )
+
+            context_data["context"] = "\n".join(context_parts)
+
+            # Set up variables for dynamic prompt injection
+            context_data["variables"] = {
+                "user_id": user_id[:8],  # Shortened ID for voice
+                "timestamp": "",  # Will be set dynamically
+            }
+
+            logger.info(
+                "Built user context for voice session", user_id=user_id[:8]
+            )
+
+            return context_data
+
+        except Exception as e:
+            logger.error(f"Error building user context: {str(e)}")
+            return context_data
+
+    def get_session_settings(
+        self,
+        system_prompt: str,
+        context: str,
+        variables: Dict[str, str],
+        voice_name: str = "ITO",
+    ) -> Dict:
+        """
+        Build Hume EVI session settings message.
+
+        Args:
+            system_prompt: System prompt for the session
+            context: Persistent context
+            variables: Dynamic variables for the session
+            voice_name: Voice to use (default: ITO)
+
+        Returns:
+            Session settings message dict
+        """
+        return {
+            "type": "session_settings",
+            "voice": {"name": voice_name},
+            "system_prompt": {"text": system_prompt},
+            "context": {"text": context, "type": "persistent"},
+            "variables": variables,
+            "audio": {
+                "encoding": "linear16",
+                "sample_rate": 16000,
+                "channels": 1,
+            },
+        }
+
+    async def get_voice_config(self, user_id: str) -> Dict[str, str]:
+        """
+        Get user's voice preferences from storage.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Dict with voice preferences (voice_name, narration_enabled, etc.)
+        """
+        # Default voice settings
+        default_config = {
+            "voice_name": "ITO",
+            "narration_enabled": True,
+            "speech_speed": "normal",
+        }
+
+        try:
+            # Try to load from Redis
+            config_key = f"voice_config:{user_id}"
+            stored_config = await self.redis_storage.redis_client.get(
+                config_key, user_id
+            )
+
+            if stored_config:
+                import json
+
+                return {**default_config, **json.loads(stored_config)}
+
+            return default_config
+
+        except Exception as e:
+            logger.warning(
+                f"Could not load voice config, using defaults: {str(e)}"
+            )
+            return default_config
+
+    async def save_voice_config(
+        self, user_id: str, config: Dict[str, str]
+    ) -> bool:
+        """
+        Save user's voice preferences to storage.
+
+        Args:
+            user_id: User ID
+            config: Voice configuration dict
+
+        Returns:
+            True if saved successfully
+        """
+        try:
+            import json
+
+            config_key = f"voice_config:{user_id}"
+            await self.redis_storage.redis_client.set(
+                config_key, json.dumps(config), user_id
+            )
+
+            logger.info("Saved voice config for user", user_id=user_id[:8])
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to save voice config: {str(e)}")
+            return False
