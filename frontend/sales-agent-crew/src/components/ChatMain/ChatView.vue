@@ -1781,11 +1781,24 @@ onMounted(async () => {
   emitterMitt.on('new-chat', handleButtonClick);
   emitterMitt.on('reload-user-documents', loadUserDocuments);
 
+  // Listen for voice agent triggered events
+  window.addEventListener('voice-agent-triggered', handleVoiceAgentTriggered);
+
   // Click outside handler for connector panel - TEMPORARILY DISABLED FOR TESTING
   // document.addEventListener('click', handleClickOutside);
 });
 
+// Handler for voice agent triggered events
+function handleVoiceAgentTriggered(event) {
+  console.log('🚀 Voice agent triggered:', event.detail);
+  // Show agent workflow on screen - same as regular chat
+  // The conversation will already be displayed in messages
+  // Just ensure UI is in active state
+  isLoading.value = true;
+}
+
 onUnmounted(() => {
+  window.removeEventListener('voice-agent-triggered', handleVoiceAgentTriggered);
   emitterMitt.off('new-chat', handleButtonClick);
   emitterMitt.off('reload-user-documents', loadUserDocuments);
   // document.removeEventListener('click', handleClickOutside);

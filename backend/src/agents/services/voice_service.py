@@ -82,28 +82,31 @@ class HumeVoiceService:
         try:
             # Build system prompt with user context
             system_prompt_parts = [
-                "You are an empathic AI co-pilot that works with a powerful agentic system.",
+                "You are a friendly, empathic AI voice assistant with access to powerful backend agents.",
+                "",
+                "YOUR TOOL:",
+                "- You have access to 'query_backend_agent' tool that connects to backend agents",
+                "- Use this tool for ANY substantive questions or requests from users",
+                "- The tool provides: financial analysis, research, code execution, web search, and more",
                 "",
                 "HOW YOU WORK:",
-                "- When users ask you to do something, you send it to backend agents who handle the work",
-                "- While agents work, you receive context updates about their progress",
-                "- You narrate these updates naturally: 'I'm analyzing that now...', 'Working on the research...'",
-                "- When complete, you explain the results conversationally",
+                "1. When a user asks a question or makes a request, acknowledge naturally",
+                "2. Call the 'query_backend_agent' tool with their query",
+                "3. When you receive the tool response, incorporate it naturally in your answer",
+                "4. For simple greetings ('hi', 'hello'), respond warmly without calling the tool",
                 "",
-                "CAPABILITIES (from backend agents):",
-                "- Financial analysis and company research",
-                "- Deep research reports on any topic",
-                "- Data analysis and code execution",
-                "- Web search and information retrieval",
+                "YOUR INTERACTION STYLE:",
+                "- Be warm, natural, and conversational",
+                "- Acknowledge requests briefly before calling the tool ('Let me check that for you...')",
+                "- When you get tool responses, summarize them naturally and conversationally",
+                "- Keep voice responses concise - this is a conversation, not an essay",
+                "- For follow-up questions, call the tool again if needed",
                 "",
-                "YOUR ROLE:",
-                "- Be conversational and empathic",
-                "- When asked 'what can you do', describe the capabilities above naturally",
-                "- For greetings/small talk, respond briefly then ask how you can help",
-                "- For tasks, acknowledge naturally ('let me work on that') then wait for context updates",
-                "- Narrate progress using context updates you receive",
-                "",
-                "Keep all responses natural and voice-appropriate.",
+                "CRITICAL RULES:",
+                "- ALWAYS use the tool for questions/requests - don't make up information",
+                "- Incorporate tool results naturally - don't say 'the tool returned...'",
+                "- Be conversational and empathic, not robotic",
+                "- Keep it brief and voice-friendly",
             ]
 
             context_data["system_prompt"] = "\n".join(system_prompt_parts)
@@ -182,17 +185,34 @@ class HumeVoiceService:
         Returns:
             Session settings message dict
         """
+        # Define tool for EVI to call backend agents
+        # Note: parameters must be a JSON STRING, not an object
+        import json
+
+        tools = [
+            {
+                "type": "function",  # Required by Hume
+                "name": "query_backend_agent",
+                "description": "Query the backend agent system for information, analysis, research, or to execute tasks. Use this for any substantive user requests.",
+                "parameters": json.dumps({
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The user's question or request to send to the backend agents"
+                        }
+                    },
+                    "required": ["query"]
+                })
+            }
+        ]
+
         return {
-            "type": "session_settings",
             "voice": {"name": voice_name},
-            "system_prompt": {"text": system_prompt},
+            "systemPrompt": system_prompt,  # String, not object
             "context": {"text": context, "type": "persistent"},
             "variables": variables,
-            "audio": {
-                "encoding": "linear16",
-                "sample_rate": 16000,
-                "channels": 1,
-            },
+            "tools": tools,
         }
 
     async def get_voice_config(self, user_id: str) -> Dict[str, str]:

@@ -29,27 +29,29 @@ router = APIRouter(
 
 def detect_agent_intent(transcription: str) -> Optional[str]:
     """
-    Detect if transcription is just a greeting/small talk.
+    Detect if transcription is just a basic acknowledgment.
 
-    Returns None for basic greetings (EVI handles), otherwise returns "general" (send to agents).
+    Returns None for very basic acknowledgments (EVI handles),
+    otherwise returns "general" (send to backend agents).
+
+    Philosophy: Almost everything goes to backend agents, they provide final_completion,
+    and EVI speaks it naturally. This ensures consistent, up-to-date responses.
     """
     transcription_lower = transcription.lower().strip()
 
-    # Very short greetings/simple responses
-    if transcription_lower in ["hi", "hello", "hey", "thanks", "thank you", "bye", "goodbye", "ok", "okay"]:
-        return None
-
-    # Greeting phrases (EVI handles these conversationally)
-    greetings = [
-        "how are you", "how's it going", "what's up",
-        "good morning", "good afternoon", "good evening"
+    # Only the most basic acknowledgments - EVI handles these
+    basic_acknowledgments = [
+        "hi", "hello", "hey",
+        "thanks", "thank you",
+        "bye", "goodbye",
+        "ok", "okay", "sure"
     ]
 
-    if any(greeting in transcription_lower for greeting in greetings):
+    if transcription_lower in basic_acknowledgments:
         return None
 
     # Everything else goes to backend agents
-    # This includes: tasks, questions, requests, analysis, research, etc.
+    # This includes: greetings with questions, capability questions, tasks, analysis, etc.
     return "general"
 
 
@@ -219,20 +221,16 @@ async def voice_chat_websocket(
             conversation_id=conversation_id,
         )
 
-        # Register voice WebSocket with manager
+        # Register voice WebSocket with manager (voice-specific messages only)
         websocket.app.state.manager.add_voice_connection(
             websocket=websocket,
             user_id=user_id,
             conversation_id=conversation_id,
         )
 
-        # Also register as main connection for voice-only mode
-        # This allows agent to send messages through voice WebSocket
-        websocket.app.state.manager.add_connection(
-            websocket=websocket,
-            user_id=user_id,
-            conversation_id=conversation_id,
-        )
+        # Don't register as main connection - let ChatView's WebSocket remain the main connection
+        # This way UI updates work in real-time through the regular chat WebSocket
+        # Voice WebSocket only receives voice-specific messages (agent_response, agent_context)
 
         # Send connection established message
         await websocket.send_json({
@@ -256,9 +254,13 @@ async def voice_chat_websocket(
             voice_name=voice_config.get("voice_name", "ITO"),
         )
 
+        # Include config_id for EVI connection
+        config_id = os.getenv("HUME_EVI_CONFIG_ID")
+
         await websocket.send_json({
             "type": "session_settings",
             "data": session_settings,
+            "config_id": config_id,  # Send config_id to frontend
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
@@ -287,38 +289,28 @@ async def voice_chat_websocket(
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                     })
 
-                    # Detect if this is just a greeting/small talk
-                    intent = detect_agent_intent(transcription)
+                    # EVI tool calling handles intent - this is a tool call query
+                    logger.info(
+                        "Received tool call query from EVI",
+                        user_id=user_id[:8],
+                        query=transcription[:50],
+                    )
 
-                    if intent is None:
-                        # Simple greeting - let EVI handle conversationally
-                        logger.info(
-                            "Simple greeting - EVI handles",
-                            user_id=user_id[:8],
-                        )
-                    else:
-                        # Everything else goes to backend agents
-                        logger.info(
-                            "Triggering backend agents",
-                            user_id=user_id[:8],
-                            intent=intent,
-                        )
+                    # Notify frontend to show agent workflow on screen
+                    await websocket.send_json({
+                        "type": "agent_triggered",
+                        "intent": "tool_call",
+                        "text": transcription,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    })
 
-                        # Notify frontend to show agent workflow on screen
-                        await websocket.send_json({
-                            "type": "agent_triggered",
-                            "intent": intent,
-                            "text": transcription,
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                        })
-
-                        # Inject into backend agent workflow
-                        await websocket.app.state.manager.inject_voice_message(
-                            user_id=user_id,
-                            conversation_id=conversation_id,
-                            message_text=transcription,
-                            message_id=message_data.get("message_id"),
-                        )
+                    # Inject into backend agent workflow
+                    await websocket.app.state.manager.inject_voice_message(
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                        message_text=transcription,
+                        message_id=message_data.get("message_id"),
+                    )
 
                 elif message_type == "audio_chunk":
                     # Frontend sending raw audio chunks
@@ -383,17 +375,29 @@ async def voice_chat_websocket(
             pass
 
     finally:
-        # Remove connections from manager
+        # Remove voice connection from manager
         if user_id:
             try:
+                # Always remove voice connection
                 websocket.app.state.manager.remove_voice_connection(
                     user_id=user_id,
                     conversation_id=conversation_id,
                 )
-                websocket.app.state.manager.remove_connection(
-                    user_id=user_id,
-                    conversation_id=conversation_id,
+
+                # If this voice WebSocket was registered as main (voice-only mode),
+                # remove it from main connections too
+                main_connection = websocket.app.state.manager.get_connection(
+                    user_id, conversation_id
                 )
+                if main_connection == websocket:
+                    websocket.app.state.manager.remove_connection(
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                    )
+                    logger.info(
+                        "Removed voice WebSocket from main connections",
+                        user_id=user_id[:8],
+                    )
             except:
                 pass
 

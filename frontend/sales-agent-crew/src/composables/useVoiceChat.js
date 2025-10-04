@@ -28,6 +28,13 @@ export function useVoiceChat(conversationId) {
   let audioChunksInterval = null
   let audioPlayback = null // Audio playback queue for Hume responses
 
+  // Track current tool call
+  let currentToolCallId = null
+
+  // Store session settings from backend
+  let backendSessionSettings = null
+  let eviConfigId = null
+
   // Message deduplication
   const processedMessageIds = new Set()
   const MESSAGE_ID_CLEANUP_INTERVAL = 60000 // Clean up old IDs every minute
@@ -135,7 +142,34 @@ export function useVoiceChat(conversationId) {
           break
 
         case 'session_settings':
-          console.log('⚙️ Session settings received')
+          console.log('⚙️ Session settings received from backend')
+          backendSessionSettings = message.data
+          eviConfigId = message.config_id
+          console.log('📥 Backend session settings:', JSON.stringify(backendSessionSettings, null, 2))
+          console.log('📥 EVI Config ID:', eviConfigId)
+
+          // If Hume is already connected, send the settings now
+          if (humeSocket) {
+            console.log('📤 Sending backend session settings to Hume')
+            console.log('Settings object:', backendSessionSettings)
+            try {
+              // Send only the fields that Hume TypeScript SDK expects
+              // Based on error, try sending individual fields
+              if (backendSessionSettings.tools) {
+                console.log('📝 Tools:', backendSessionSettings.tools)
+              }
+              if (backendSessionSettings.systemPrompt) {
+                console.log('📝 System Prompt:', backendSessionSettings.systemPrompt.substring(0, 100))
+              }
+
+              // Try sending as-is first to see the detailed error
+              humeSocket.sendSessionSettings(backendSessionSettings)
+              console.log('✅ Session settings sent successfully')
+            } catch (e) {
+              console.error('❌ Error sending session settings:', e)
+              console.error('Full error:', JSON.stringify(e, null, 2))
+            }
+          }
           break
 
         case 'transcription_received':
@@ -154,38 +188,40 @@ export function useVoiceChat(conversationId) {
           break
 
         case 'agent_context':
-          // Agent progress update - inject as temporary context for EVI narration
+          // Agent progress update - inject as context
           console.log('📊 Agent context:', message.context)
           agentUpdate.value = message.context
 
-          // Inject as temporary context for EVI to naturally narrate
+          // Inject progress as temporary context
           if (humeSocket && message.context) {
-            // Send as session settings with temporary context
             humeSocket.sendSessionSettings({
               context: {
-                text: message.context,
-                type: "temporary"  // Only applies to next response
+                text: `Current progress: ${message.context}`,
+                type: 'temporary'
               }
             })
           }
           break
 
         case 'agent_response':
-          // Agent finished processing - have Hume speak the response
-          console.log('🤖 Agent response:', message.text)
+          // Backend finished - send as tool response to EVI
+          console.log('🤖 Agent response received:', message.text.substring(0, 100))
           agentUpdate.value = ''
 
-          // Clean and send response to Hume to speak
-          if (humeSocket && message.text) {
-            // Strip HTML tags and limit length
-            let cleanText = message.text.replace(/<[^>]*>/g, '').trim()
+          if (humeSocket && message.text && currentToolCallId) {
+            console.log('📤 Sending tool response to EVI with toolCallId:', currentToolCallId)
 
-            // If too long, create a brief summary for Hume
-            if (cleanText.length > 500) {
-              cleanText = "I've completed the analysis. The results are displayed on your screen."
-            }
+            // Send the result back to EVI as a tool response
+            humeSocket.sendToolResponse({
+              toolCallId: currentToolCallId,
+              content: message.text
+            })
 
-            sendAssistantMessage(cleanText)
+            // Clear the tool call ID
+            currentToolCallId = null
+            console.log('✅ Tool response sent - EVI will incorporate it naturally')
+          } else if (!currentToolCallId) {
+            console.warn('⚠️ Received agent response but no active tool call')
           }
           break
 
@@ -223,25 +259,30 @@ export function useVoiceChat(conversationId) {
         apiKey: accessToken
       })
 
-      // Connect to EVI WebSocket
-      humeSocket = humeClient.empathicVoice.chat.connect()
+      // Connect to EVI WebSocket with config_id (has Claude for tool support)
+      const connectOptions = {}
+      if (eviConfigId) {
+        connectOptions.configId = eviConfigId
+        console.log('🔧 Connecting with EVI config:', eviConfigId)
+      } else {
+        console.warn('⚠️ No EVI config_id - tools may not work')
+      }
+
+      humeSocket = humeClient.empathicVoice.chat.connect(connectOptions)
 
       // Set up event handlers
       humeSocket.on('open', () => {
         console.log('✅ Hume EVI WebSocket opened')
 
-        // Send session settings
-        const convId = typeof conversationId === 'object' && 'value' in conversationId
-          ? conversationId.value
-          : conversationId
+        // Send backend session settings if available (includes tools!)
+        if (backendSessionSettings) {
+          console.log('📤 Sending backend session settings to Hume (with tools)')
+          humeSocket.sendSessionSettings(backendSessionSettings)
+        } else {
+          console.warn('⚠️ Backend session settings not yet available, waiting...')
+          // They'll be sent when received from backend
+        }
 
-        humeSocket.sendSessionSettings({
-          context: {
-            text: `Conversation ID: ${convId}. You are a helpful voice assistant.`
-          }
-        })
-
-        console.log('📤 Sent session settings to Hume')
         voiceStatus.value = 'listening'
       })
 
@@ -276,17 +317,19 @@ export function useVoiceChat(conversationId) {
     let messageKey
     if (message.type === 'audio_output') {
       // For audio chunks, use ID + index as key
-      messageKey = `${message.id}_${message.index}`
+      messageKey = `audio_${message.id}_${message.index}`
     } else if (message.id) {
-      // For other messages with IDs
+      // For other messages with IDs, use type + ID
       messageKey = `${message.type}_${message.id}`
     } else {
-      // For messages without IDs (like assistant_end), use type + timestamp
-      messageKey = `${message.type}_${Date.now()}`
+      // For messages without IDs, use type + received timestamp (NOT Date.now())
+      const timestamp = message.receivedAt ? message.receivedAt.getTime() : Date.now()
+      messageKey = `${message.type}_${timestamp}`
     }
 
     // Skip if already processed
     if (processedMessageIds.has(messageKey)) {
+      console.log('🔄 Skipping duplicate:', message.type, messageKey)
       return
     }
     processedMessageIds.add(messageKey)
@@ -299,16 +342,30 @@ export function useVoiceChat(conversationId) {
       if (transcription) {
         console.log('🎤 User said:', transcription)
         currentTranscript.value = transcription
-        voiceStatus.value = 'thinking'
+        voiceStatus.value = 'listening'
+        // Don't send to backend yet - let EVI decide if it needs to call the tool
+      }
+    }
 
-        // Send transcription to backend for agent processing
+    // Handle EVI tool calls
+    if (message.type === 'tool_call') {
+      console.log('🔧 EVI calling tool:', message.name, message.parameters)
+      voiceStatus.value = 'thinking'
+
+      if (message.name === 'query_backend_agent') {
+        const query = message.parameters?.query
+        currentToolCallId = message.toolCallId  // Store for matching response
+
+        console.log('📤 Tool call - query:', query, 'toolCallId:', currentToolCallId)
+
+        // Send query to backend
         if (voiceWebSocket?.readyState === WebSocket.OPEN) {
           voiceWebSocket.send(JSON.stringify({
             type: 'voice_transcription',
-            text: transcription,
-            message_id: `voice_${Date.now()}`
+            text: query,
+            message_id: `voice_${Date.now()}`,
           }))
-          console.log('📤 Sent transcription to backend')
+          console.log('📤 Sent tool query to backend')
         }
       }
     }
@@ -357,20 +414,6 @@ export function useVoiceChat(conversationId) {
       error.value = message.error?.message || 'Voice error'
       voiceStatus.value = 'error'
     }
-  }
-
-  /**
-   * Send assistant message to Hume to speak
-   */
-  function sendAssistantMessage(text) {
-    if (!humeSocket) {
-      console.warn('⚠️ Hume socket not connected')
-      return
-    }
-
-    console.log('📢 Sending to Hume to speak:', text)
-    humeSocket.sendAssistantInput({ text })
-    voiceStatus.value = 'speaking'
   }
 
   /**
@@ -473,6 +516,20 @@ export function useVoiceChat(conversationId) {
 
       // Connect to backend WebSocket first
       await connectBackendWebSocket()
+
+      // Wait for backend session settings (with tools) before connecting to Hume
+      console.log('⏳ Waiting for session settings from backend...')
+      let waitCount = 0
+      while (!backendSessionSettings && waitCount < 50) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+        waitCount++
+      }
+
+      if (!backendSessionSettings) {
+        console.warn('⚠️ Timeout waiting for backend session settings, proceeding anyway')
+      } else {
+        console.log('✅ Got backend session settings, connecting to Hume...')
+      }
 
       // Then connect to Hume EVI
       await connectHumeEVI()

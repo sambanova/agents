@@ -719,8 +719,30 @@ class WebSocketConnectionManager(WebSocketInterface):
             voice_websocket = self.get_voice_connection(user_id, conversation_id)
             if voice_websocket:
                 try:
+                    # Filter out LangChain internal message types and messages without proper event types
+                    message_type = data.get("type")
+                    event_type = data.get("event")
+
+                    # List of internal message types to filter out
+                    internal_types = [
+                        "AIMessage",
+                        "HumanMessage",
+                        "LiberalFunctionMessage",
+                        "FunctionMessage",
+                        "SystemMessage",
+                        None
+                    ]
+
+                    # Only send specific event types to voice, skip everything else
+                    if event_type not in ["agent_completion", "think"]:
+                        logger.debug(
+                            "Skipping non-voice event for voice WebSocket",
+                            message_type=message_type,
+                            event_type=event_type,
+                        )
+                        pass
                     # Agent completion - final response for EVI to speak
-                    if data.get("event") == "agent_completion":
+                    elif event_type == "agent_completion":
                         response_text = (
                             data.get("data") or
                             data.get("content") or
@@ -740,7 +762,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                         )
 
                     # Agent thinking - send brief context for EVI to narrate naturally
-                    elif data.get("event") == "think":
+                    elif event_type == "think":
                         think_data = json.loads(data.get("data", "{}")) if isinstance(data.get("data"), str) else data.get("data", {})
 
                         # Extract brief progress update (< 200 chars for EVI)
@@ -1199,8 +1221,12 @@ class WebSocketConnectionManager(WebSocketInterface):
             if not message_id:
                 message_id = str(uuid.uuid4())
 
-            # Get the WebSocket connection (voice WebSocket is registered as main connection)
+            # Get the WebSocket connection - try main connection first, fallback to voice connection
             websocket = self.get_connection(user_id, conversation_id)
+
+            if not websocket:
+                # No main connection, try voice connection as fallback
+                websocket = self.get_voice_connection(user_id, conversation_id)
 
             if not websocket:
                 logger.error(
@@ -1209,6 +1235,24 @@ class WebSocketConnectionManager(WebSocketInterface):
                     conversation_id=conversation_id,
                 )
                 return False
+
+            # Determine which connection we're using
+            is_using_main_connection = self.get_connection(user_id, conversation_id) is not None
+
+            logger.info(
+                "Using WebSocket for voice message injection",
+                user_id=user_id[:8],
+                connection_type="main" if is_using_main_connection else "voice",
+            )
+
+            # If using voice connection as main, register it temporarily
+            # This ensures UI updates work even if ChatView isn't open
+            if not is_using_main_connection:
+                self.add_connection(websocket, user_id, conversation_id)
+                logger.info(
+                    "Temporarily registered voice WebSocket as main connection",
+                    user_id=user_id[:8],
+                )
 
             # Set up session if not exists (for voice-only mode)
             session_key = f"{user_id}:{conversation_id}"
