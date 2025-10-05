@@ -350,6 +350,7 @@ import { useAuth0 } from '@auth0/auth0-vue'
 import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
   import WorkflowDataItem from '@/components/ChatMain/WorkflowDataItem.vue'
   import { getComponentByAgentType } from '@/utils/componentUtils.js'
+  import UnknownTypeComponent from '@/components/ChatMain/ResponseTypes/UnknownTypeComponent.vue'
 
 // Icons for streaming timeline
 import {
@@ -479,6 +480,20 @@ import { isFinalAgentType } from '@/utils/globalFunctions.js'
     if (!props.data) return {}
     try {
       const parsed = JSON.parse(props.data)
+
+      // If content is a JSON string (e.g., financial analysis data from voice mode), parse it too
+      // This matches the behavior of finalResponseData which handles streaming mode
+      if (parsed && typeof parsed.content === 'string' &&
+          parsed.content.trim().startsWith('{') &&
+          parsed.content.trim().endsWith('}')) {
+        try {
+          parsed.content = JSON.parse(parsed.content)
+        } catch (contentParseError) {
+          console.debug('Content is not valid JSON, keeping as string:', contentParseError)
+          // Keep content as string if parsing fails
+        }
+      }
+
       return parsed || {}
     } catch (error) {
       console.error('Error parsing data in ChatBubble:', error)

@@ -583,6 +583,55 @@ class WebSocketConnectionManager(WebSocketInterface):
                             ):
                                 await self._safe_send(websocket, message_data)
 
+                                # ALSO send to voice WebSocket if active (for EVI progress updates)
+                                voice_websocket = self.get_voice_connection(user_id, conversation_id)
+                                if voice_websocket:
+                                    try:
+                                        # Extract step/task info for EVI context
+                                        step_text = data_parsed.get("text", "")
+                                        task = data_parsed.get("metadata", {}).get("task", "")
+                                        agent_name = data_parsed.get("agent_name", "")
+
+                                        # Create brief summary for EVI
+                                        if "search" in step_text.lower() or "search" in task.lower():
+                                            context = "Searching for information"
+                                        elif "analy" in step_text.lower() or "analy" in task.lower():
+                                            context = f"Analyzing data"
+                                        elif "compet" in step_text.lower() or "compet" in task.lower():
+                                            context = "Analyzing competitors"
+                                        elif "technical" in step_text.lower() or "technical" in task.lower():
+                                            context = "Running technical analysis"
+                                        elif "risk" in step_text.lower() or "risk" in task.lower():
+                                            context = "Assessing risk metrics"
+                                        elif "fundamental" in step_text.lower() or "fundamental" in task.lower():
+                                            context = "Analyzing fundamentals"
+                                        elif "news" in step_text.lower() or "news" in task.lower():
+                                            context = "Fetching recent news"
+                                        elif agent_name:
+                                            context = f"Running {agent_name}"
+                                        else:
+                                            context = step_text[:100] if step_text else "Processing"
+
+                                        await voice_websocket.send_json({
+                                            "type": "agent_context",
+                                            "context": context,
+                                            "timestamp": message_data.get("timestamp"),
+                                            "message_id": data_parsed.get("message_id") or f"voice_ctx_{int(time.time() * 1000)}",
+                                            "agent_name": agent_name,
+                                            "task": task,
+                                        })
+
+                                        logger.debug(
+                                            "Sent agent thought to voice WebSocket",
+                                            user_id=user_id[:8],
+                                            context=context,
+                                        )
+                                    except Exception as voice_err:
+                                        logger.debug(
+                                            f"Failed to send thought to voice WebSocket: {str(voice_err)}",
+                                            user_id=user_id[:8],
+                                        )
+
                                 # ALSO send an agent_completion event with model metadata
                                 # so trackRunMetrics can count the model usage in real-time
                                 if "metadata" in data_parsed and "llm_name" in data_parsed["metadata"]:
@@ -766,6 +815,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                                     "type": "agent_response",
                                     "text": response_text,
                                     "timestamp": data.get("timestamp"),
+                                    "message_id": data.get("id") or data.get("message_id") or f"voice_resp_{int(time.time() * 1000)}",
                                 })
                                 logger.info(
                                     "Sent agent response to voice",

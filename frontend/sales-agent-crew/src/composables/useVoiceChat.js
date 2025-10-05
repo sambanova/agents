@@ -17,6 +17,7 @@ export function useVoiceChat(conversationId) {
   const agentUpdate = ref('')
   const error = ref(null)
   const audioLevel = ref(0)
+  const accumulatedProgress = ref([]) // Store progress updates for inclusion in final tool response
 
   // WebSocket and audio references
   let voiceWebSocket = null // Our backend WebSocket for agent communication
@@ -188,18 +189,15 @@ export function useVoiceChat(conversationId) {
           break
 
         case 'agent_context':
-          // Agent progress update - inject as context
+          // Agent progress update - accumulate for final response
           console.log('📊 Agent context:', message.context)
           agentUpdate.value = message.context
 
-          // Inject progress as temporary context
-          if (humeSocket && message.context) {
-            humeSocket.sendSessionSettings({
-              context: {
-                text: `Current progress: ${message.context}`,
-                type: 'temporary'
-              }
-            })
+          // Accumulate progress updates to include in final tool response
+          // This allows EVI to naturally reference what happened during processing
+          if (message.context && !accumulatedProgress.value.includes(message.context)) {
+            accumulatedProgress.value.push(message.context)
+            console.log('📝 Accumulated progress:', accumulatedProgress.value.length, 'updates')
           }
           break
 
@@ -213,21 +211,33 @@ export function useVoiceChat(conversationId) {
             console.log('📤 Sending tool response to EVI with toolCallId:', currentToolCallId)
 
             try {
+              // Build the full response including progress context
+              let fullResponse = message.text
+
+              // If we have accumulated progress updates, prepend them as context
+              // This allows EVI to naturally reference what happened during processing
+              if (accumulatedProgress.value.length > 0) {
+                const progressSummary = `[Processing steps: ${accumulatedProgress.value.join(' → ')}]\n\n`
+                fullResponse = progressSummary + message.text
+                console.log('📊 Including', accumulatedProgress.value.length, 'progress updates in response')
+              }
+
               // Send the result back to EVI as a tool response
               // Use the correct SDK method: sendToolResponseMessage
               humeSocket.sendToolResponseMessage({
                 type: 'tool_response',
                 toolCallId: currentToolCallId,
-                content: message.text
+                content: fullResponse
               })
 
               console.log('✅ Tool response sent - EVI will incorporate it naturally')
 
-              // Clear the tool call ID after successful send
+              // Clear the tool call ID and accumulated progress after successful send
               currentToolCallId = null
+              accumulatedProgress.value = []
             } catch (e) {
               console.error('❌ Error sending tool response:', e)
-              // Don't clear currentToolCallId if send failed, will retry with next response
+              // Don't clear currentToolCallId or progress if send failed, will retry with next response
             }
           } else if (!currentToolCallId && message.text) {
             console.debug('⚠️ Received agent response but no active tool call (likely already sent)')
@@ -246,18 +256,10 @@ export function useVoiceChat(conversationId) {
           break
 
         default:
-          // Forward workflow messages to chat UI
-          // These include: HumanMessage, AIMessage, agent_completion, think, etc.
-          if (message.event || message.type === 'HumanMessage' || message.type === 'AIMessage' || message.type === 'LiberalFunctionMessage') {
-            console.log('📤 Forwarding workflow message to chat UI:', message.event || message.type)
-
-            // Emit as custom event for ChatView to catch
-            window.dispatchEvent(new CustomEvent('voice-workflow-message', {
-              detail: message
-            }))
-          } else {
-            console.log('Unknown backend message type:', message.type)
-          }
+          // Don't forward workflow messages - the main chat WebSocket already receives them!
+          // Voice WebSocket is ONLY for voice-specific messages (agent_response, agent_context)
+          // Forwarding creates duplicates since both WebSockets receive the same messages
+          console.log('Unknown backend message type:', message.type)
       }
     } catch (err) {
       console.error('Error handling backend message:', err)
@@ -386,6 +388,7 @@ export function useVoiceChat(conversationId) {
         }
 
         currentToolCallId = message.toolCallId  // Store for matching response
+        accumulatedProgress.value = [] // Clear any previous progress from last query
 
         console.log('📤 Tool call - query:', query, 'toolCallId:', currentToolCallId)
 
