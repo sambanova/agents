@@ -743,23 +743,43 @@ class WebSocketConnectionManager(WebSocketInterface):
                         pass
                     # Agent completion - final response for EVI to speak
                     elif event_type == "agent_completion":
-                        response_text = (
-                            data.get("data") or
-                            data.get("content") or
-                            data.get("text") or
-                            ""
-                        )
+                        # Skip model tracking events (CrewAI LLM calls) - these have empty content
+                        agent_type = data.get("additional_kwargs", {}).get("agent_type")
+                        if agent_type == "crewai_llm_call":
+                            logger.debug(
+                                "Skipping CrewAI LLM tracking event for voice",
+                                user_id=user_id[:8],
+                            )
+                            pass
+                        else:
+                            # Extract response text from agent completion
+                            response_text = (
+                                data.get("content") or
+                                data.get("data") or
+                                data.get("text") or
+                                ""
+                            )
 
-                        await voice_websocket.send_json({
-                            "type": "agent_response",
-                            "text": response_text,
-                            "timestamp": data.get("timestamp"),
-                        })
-                        logger.info(
-                            "Sent agent response to voice",
-                            user_id=user_id[:8],
-                            text_preview=response_text[:50] if response_text else "empty",
-                        )
+                            # Only send if we have actual content
+                            if response_text:
+                                await voice_websocket.send_json({
+                                    "type": "agent_response",
+                                    "text": response_text,
+                                    "timestamp": data.get("timestamp"),
+                                })
+                                logger.info(
+                                    "Sent agent response to voice",
+                                    user_id=user_id[:8],
+                                    text_preview=response_text[:50],
+                                    agent_type=agent_type,
+                                )
+                            else:
+                                logger.warning(
+                                    "Agent completion has no content for voice",
+                                    user_id=user_id[:8],
+                                    data_keys=list(data.keys()),
+                                    agent_type=agent_type,
+                                )
 
                     # Agent thinking - send brief context for EVI to narrate naturally
                     elif event_type == "think":

@@ -230,6 +230,7 @@ class HumeVoiceService:
             "voice_name": "ITO",
             "narration_enabled": True,
             "speech_speed": "normal",
+            "verbosity": "balanced",  # Options: "concise", "balanced", "detailed"
         }
 
         try:

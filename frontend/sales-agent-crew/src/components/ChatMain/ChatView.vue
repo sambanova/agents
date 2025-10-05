@@ -1784,6 +1784,9 @@ onMounted(async () => {
   // Listen for voice agent triggered events
   window.addEventListener('voice-agent-triggered', handleVoiceAgentTriggered);
 
+  // Listen for voice workflow messages to show in chat UI
+  window.addEventListener('voice-workflow-message', handleVoiceWorkflowMessage);
+
   // Click outside handler for connector panel - TEMPORARILY DISABLED FOR TESTING
   // document.addEventListener('click', handleClickOutside);
 });
@@ -1797,8 +1800,22 @@ function handleVoiceAgentTriggered(event) {
   isLoading.value = true;
 }
 
+// Handler for voice workflow messages - inject into chat UI
+function handleVoiceWorkflowMessage(event) {
+  const message = event.detail;
+  console.log('📥 Voice workflow message for chat UI:', message.event || message.type);
+
+  try {
+    // Add to messagesData so it shows in the chat
+    messagesData.value.push(message);
+  } catch (error) {
+    console.error('Error adding voice workflow message to chat:', error);
+  }
+}
+
 onUnmounted(() => {
   window.removeEventListener('voice-agent-triggered', handleVoiceAgentTriggered);
+  window.removeEventListener('voice-workflow-message', handleVoiceWorkflowMessage);
   emitterMitt.off('new-chat', handleButtonClick);
   emitterMitt.off('reload-user-documents', loadUserDocuments);
   // document.removeEventListener('click', handleClickOutside);

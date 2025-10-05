@@ -208,20 +208,29 @@ export function useVoiceChat(conversationId) {
           console.log('🤖 Agent response received:', message.text.substring(0, 100))
           agentUpdate.value = ''
 
+          // Only send to EVI if we have an active tool call
           if (humeSocket && message.text && currentToolCallId) {
             console.log('📤 Sending tool response to EVI with toolCallId:', currentToolCallId)
 
-            // Send the result back to EVI as a tool response
-            humeSocket.sendToolResponse({
-              toolCallId: currentToolCallId,
-              content: message.text
-            })
+            try {
+              // Send the result back to EVI as a tool response
+              // Use the correct SDK method: sendToolResponseMessage
+              humeSocket.sendToolResponseMessage({
+                type: 'tool_response',
+                toolCallId: currentToolCallId,
+                content: message.text
+              })
 
-            // Clear the tool call ID
-            currentToolCallId = null
-            console.log('✅ Tool response sent - EVI will incorporate it naturally')
-          } else if (!currentToolCallId) {
-            console.warn('⚠️ Received agent response but no active tool call')
+              console.log('✅ Tool response sent - EVI will incorporate it naturally')
+
+              // Clear the tool call ID after successful send
+              currentToolCallId = null
+            } catch (e) {
+              console.error('❌ Error sending tool response:', e)
+              // Don't clear currentToolCallId if send failed, will retry with next response
+            }
+          } else if (!currentToolCallId && message.text) {
+            console.debug('⚠️ Received agent response but no active tool call (likely already sent)')
           }
           break
 
@@ -237,7 +246,18 @@ export function useVoiceChat(conversationId) {
           break
 
         default:
-          console.log('Unknown backend message type:', message.type)
+          // Forward workflow messages to chat UI
+          // These include: HumanMessage, AIMessage, agent_completion, think, etc.
+          if (message.event || message.type === 'HumanMessage' || message.type === 'AIMessage' || message.type === 'LiberalFunctionMessage') {
+            console.log('📤 Forwarding workflow message to chat UI:', message.event || message.type)
+
+            // Emit as custom event for ChatView to catch
+            window.dispatchEvent(new CustomEvent('voice-workflow-message', {
+              detail: message
+            }))
+          } else {
+            console.log('Unknown backend message type:', message.type)
+          }
       }
     } catch (err) {
       console.error('Error handling backend message:', err)
@@ -353,7 +373,18 @@ export function useVoiceChat(conversationId) {
       voiceStatus.value = 'thinking'
 
       if (message.name === 'query_backend_agent') {
-        const query = message.parameters?.query
+        // Parameters is a JSON STRING, not an object - parse it!
+        let query
+        try {
+          const params = typeof message.parameters === 'string'
+            ? JSON.parse(message.parameters)
+            : message.parameters
+          query = params.query
+        } catch (e) {
+          console.error('❌ Error parsing tool parameters:', e)
+          query = message.parameters  // Fallback
+        }
+
         currentToolCallId = message.toolCallId  // Store for matching response
 
         console.log('📤 Tool call - query:', query, 'toolCallId:', currentToolCallId)
