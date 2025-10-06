@@ -2,12 +2,12 @@
  * Voice chat composable using Hume EVI for voice interaction.
  * Flow: User speaks → Hume transcribes → Backend processes → Hume responds
  */
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted, watch } from 'vue'
 import { useAuth0 } from '@auth0/auth0-vue'
 import { HumeClient } from 'hume'
 import { getMicrophoneStream, blobToBase64, AudioPlaybackQueue } from '../utils/audioHandler'
 
-export function useVoiceChat(conversationId) {
+export function useVoiceChat(conversationIdGetter) {
   const { getAccessTokenSilently, user } = useAuth0()
 
   // State
@@ -83,10 +83,8 @@ export function useVoiceChat(conversationId) {
     try {
       const token = await getAccessTokenSilently()
 
-      // Get conversation ID value
-      const convId = typeof conversationId === 'object' && 'value' in conversationId
-        ? conversationId.value
-        : conversationId
+      // Get conversation ID from getter function
+      const convId = conversationIdGetter()
 
       if (!convId) {
         throw new Error('Conversation ID required for voice mode. Please send a message first.')
@@ -654,6 +652,30 @@ export function useVoiceChat(conversationId) {
       await startVoiceMode()
     }
   }
+
+  // Watch for conversation ID changes - reconnect voice WebSocket to new conversation
+  watch(conversationIdGetter, async (newId, oldId) => {
+    if (!isVoiceMode.value) return // Only care if voice mode is active
+
+    if (newId !== oldId && newId) {
+      console.log(`🔄 Conversation changed from ${oldId} to ${newId}, reconnecting voice WebSocket...`)
+
+      // Close old voice WebSocket connection
+      if (voiceWebSocket && voiceWebSocket.readyState === WebSocket.OPEN) {
+        voiceWebSocket.close()
+        voiceWebSocket = null
+      }
+
+      // Reconnect to new conversation
+      try {
+        await connectBackendWebSocket()
+        console.log('✅ Voice WebSocket reconnected to new conversation')
+      } catch (err) {
+        console.error('❌ Failed to reconnect voice WebSocket:', err)
+        error.value = 'Failed to switch conversation in voice mode'
+      }
+    }
+  })
 
   // Cleanup on unmount
   onUnmounted(() => {

@@ -87,7 +87,7 @@ const props = defineProps({
 
 const emit = defineEmits(['voice-status-changed', 'voice-mode-starting'])
 
-// Use voice chat composable
+// Use voice chat composable - pass getter function for reactive tracking
 const {
   isVoiceMode,
   voiceStatus,
@@ -95,7 +95,7 @@ const {
   audioLevel,
   isSupported,
   toggleVoiceMode
-} = useVoiceChat(props.conversationId)
+} = useVoiceChat(() => props.conversationId)
 
 // Computed
 const voiceStatusClass = computed(() => {

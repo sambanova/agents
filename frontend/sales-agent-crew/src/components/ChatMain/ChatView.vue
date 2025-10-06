@@ -2238,18 +2238,21 @@ const addMessage = async () => {
   };
 
   if (selectedDocuments.value && selectedDocuments.value.length > 0) {
-    messagePayload.document_ids = selectedDocuments.value.map((docId) => {
-      // Find the full document object from uploadedDocuments
-      const fullDoc = uploadedDocuments.value.find(doc => doc.file_id === docId);
-      if (fullDoc) {
-        return {
-          format: fullDoc.format || 'unknown',
-          id: fullDoc.file_id,
-          indexed: fullDoc.indexed || false,
-          filename: fullDoc.filename || 'unknown',
-        };
-      }
-    });
+    messagePayload.document_ids = selectedDocuments.value
+      .map((docId) => {
+        // Find the full document object from uploadedDocuments
+        const fullDoc = uploadedDocuments.value.find(doc => doc.file_id === docId);
+        if (fullDoc) {
+          return {
+            format: fullDoc.format || 'unknown',
+            id: fullDoc.file_id,
+            indexed: fullDoc.indexed || false,
+            filename: fullDoc.filename || 'unknown',
+          };
+        }
+        return null;
+      })
+      .filter(doc => doc !== null);
   } else {
     messagePayload.document_ids = [];
   }
