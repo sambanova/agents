@@ -88,6 +88,7 @@ class HumeVoiceService:
                 "- You have access to 'query_backend_agent' tool that connects to backend agents",
                 "- Use this tool for ANY substantive questions or requests from users",
                 "- The tool provides: financial analysis, research, code execution, web search, and more",
+                "- If the user has connected integrations (Google Workspace, Jira, PayPal, Notion), the tool can also access those",
                 "",
                 "HOW YOU WORK:",
                 "1. When a user asks a question or makes a request, acknowledge naturally",
@@ -117,6 +118,16 @@ class HumeVoiceService:
                 "- 'Analyze Tesla financials' → MUST call tool (requires current data)",
                 "- 'Research AI trends' → MUST call tool (requires web search and analysis)",
                 "- 'What is X company doing?' → MUST call tool (requires current info)",
+                "- 'Check my calendar' → MUST call tool (if Google Workspace is connected)",
+                "- 'What Jira tickets are assigned to me?' → MUST call tool (if Atlassian is connected)",
+                "",
+                "CONNECTOR INTEGRATIONS:",
+                "- Google Workspace (Gmail, Calendar, Drive): Available if the user has connected their Google account",
+                "- Atlassian (Jira & Confluence): Available if the user has connected their Atlassian account",
+                "- PayPal: Available if the user has connected their PayPal account",
+                "- Notion: Available if the user has connected their Notion workspace",
+                "- When you receive responses from these connectors, incorporate the data naturally into your answer",
+                "- If a user asks about something requiring a connector that's not enabled, you can mention they can connect it in settings",
                 "",
                 "STYLE GUIDELINES:",
                 "- If you see processing steps in the response, acknowledge them briefly but naturally",
@@ -145,10 +156,16 @@ class HumeVoiceService:
                 "- search_tavily: Web search for current information",
                 "- search_tavily_answer: Get direct answers from web search",
                 "- wikipedia: Look up encyclopedic information",
+                "",
+                "Connector Integrations (user-enabled):",
+                "- Google Workspace: Gmail, Google Calendar, Google Drive (if connected)",
+                "- Atlassian: Jira tickets, Confluence pages (if connected)",
+                "- PayPal: Transaction history, account info (if connected)",
+                "- Notion: Workspace pages, databases (if connected)",
             ]
 
-            # Add user's connected tools if any
-            # TODO: Fetch user's connected integrations (Google, Notion, etc.)
+            # TODO: Fetch user's actual connected integrations and update context dynamically
+            # For now, we list all available connectors with "(if connected)" qualifier
 
             # Load conversation history if available
             if conversation_id:

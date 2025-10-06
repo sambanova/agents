@@ -6,6 +6,7 @@ import { ref, computed, onUnmounted, watch } from 'vue'
 import { useAuth0 } from '@auth0/auth0-vue'
 import { HumeClient } from 'hume'
 import { getMicrophoneStream, blobToBase64, AudioPlaybackQueue } from '../utils/audioHandler'
+import { isFinalAgentType } from '../utils/globalFunctions'
 
 export function useVoiceChat(conversationIdGetter) {
   const { getAccessTokenSilently, user } = useAuth0()
@@ -211,32 +212,42 @@ export function useVoiceChat(conversationIdGetter) {
           break
 
         case 'agent_response':
-          // Backend finished - send as tool response to EVI
-          console.log('🤖 Agent response received:', message.text.substring(0, 100))
+          // Backend agent response - accumulate until we get final completion
+          console.log('🤖 Agent response received:', message.text?.substring(0, 100))
           agentUpdate.value = ''
 
-          // Only send to EVI if we have an active tool call
-          if (humeSocket && message.text && currentToolCallId) {
-            console.log('📤 Sending tool response to EVI with toolCallId:', currentToolCallId)
+          // Accumulate this response - we'll send to EVI when we get the final completion
+          if (message.text && currentToolCallId) {
+            accumulatedProgress.value.push(message.text)
+            console.log('💬 Accumulated response update:', accumulatedProgress.value.length, 'total')
+          } else if (!currentToolCallId && message.text) {
+            console.debug('⚠️ Received agent response but no active tool call (likely already sent)')
+          }
+          break
+
+        case 'agent_completion_full':
+          // Check if this is the FINAL agent completion (any final type)
+          // If so, send accumulated responses to EVI as tool response
+          const agentType = message.data?.additional_kwargs?.agent_type || message.agent_type
+
+          console.log('📦 agent_completion received, agent_type:', agentType)
+
+          // Only send to EVI when we get the final completion (handles all final types)
+          if (isFinalAgentType(agentType) && currentToolCallId && humeSocket) {
+            console.log('🎯 Final completion received - sending accumulated responses to EVI')
 
             try {
-              // Build the full response including progress context
-              let fullResponse = message.text
+              // Get the last (final) response which should be the formatted summary
+              const finalResponse = accumulatedProgress.value[accumulatedProgress.value.length - 1] || 'Processing complete'
 
-              // If we have accumulated progress updates, prepend them as context
-              // This allows EVI to naturally reference what happened during processing
-              if (accumulatedProgress.value.length > 0) {
-                const progressSummary = `[Processing steps: ${accumulatedProgress.value.join(' → ')}]\n\n`
-                fullResponse = progressSummary + message.text
-                console.log('📊 Including', accumulatedProgress.value.length, 'progress updates in response')
-              }
+              console.log('📤 Sending final tool response to EVI with toolCallId:', currentToolCallId)
+              console.log('📊 Final response preview:', finalResponse.substring(0, 200))
 
               // Send the result back to EVI as a tool response
-              // Use the correct SDK method: sendToolResponseMessage
               humeSocket.sendToolResponseMessage({
                 type: 'tool_response',
                 toolCallId: currentToolCallId,
-                content: fullResponse
+                content: finalResponse
               })
 
               console.log('✅ Tool response sent - EVI will incorporate it naturally')
@@ -246,20 +257,11 @@ export function useVoiceChat(conversationIdGetter) {
               accumulatedProgress.value = []
             } catch (e) {
               console.error('❌ Error sending tool response:', e)
-              // Don't clear currentToolCallId or progress if send failed, will retry with next response
+              // Don't clear currentToolCallId or progress if send failed
             }
-          } else if (!currentToolCallId && message.text) {
-            console.debug('⚠️ Received agent response but no active tool call (likely already sent)')
+          } else {
+            console.debug('📦 Non-final agent_completion (waiting for final type), agent_type:', agentType)
           }
-          break
-
-        case 'agent_completion_full':
-          // DON'T forward these to ChatView - the main chat WebSocket already receives them!
-          // Both WebSockets receive the same messages from the backend.
-          // Forwarding from voice WebSocket creates duplicates in the UI.
-          // The main WebSocket handles ALL UI updates and streaming grouping.
-          // Voice WebSocket only needs agent_response messages for EVI to speak.
-          console.log('📦 agent_completion received (main WebSocket handles UI - no forwarding needed)')
           break
 
         case 'llm_stream_chunk_full':
