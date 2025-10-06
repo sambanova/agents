@@ -2,7 +2,7 @@
   <div class="space-y-4">
     <div class="mb-4">
       <p class="text-sm text-gray-600">
-        Allow Claude to reference other apps and services for more context.
+        Allow Agents to reference other apps and services for more context.
       </p>
     </div>
 

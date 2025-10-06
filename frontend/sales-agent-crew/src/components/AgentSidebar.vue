@@ -381,7 +381,7 @@ function parseMessage(fullText) {
  */
 function connectToSSE() {
   if (!props.userId || !props.runId) {
-    console.log('[AgentSidebar] Missing userId or runId:', { userId: props.userId, runId: props.runId })
+    console.log('[AgentSidebar] Missing userId or runId')
     return
   }
   if (eventSource) {

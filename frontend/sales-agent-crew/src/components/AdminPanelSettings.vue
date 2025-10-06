@@ -217,7 +217,7 @@
               />
               <input
                 v-model="newProvider.models"
-                placeholder="Model IDs (comma-separated, e.g., gpt-4, claude-3)"
+                placeholder="Model IDs (comma-separated, e.g., gpt-oss-120b, deepseek-r1)"
                 class="block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm"
               />
               <button

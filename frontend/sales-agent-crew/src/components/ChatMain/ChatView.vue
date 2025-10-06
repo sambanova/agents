@@ -1004,7 +1004,7 @@ const checkAndOpenSettings = () => {
 async function loadSharedConversation() {
   try {
     initialLoading.value = true;
-    console.log('Loading shared conversation:', shareToken.value);
+    console.log('Loading shared conversation');
     
     const data = await sharing.getSharedConversation(shareToken.value);
     
@@ -1781,7 +1781,7 @@ onMounted(async () => {
     currentId.value = routeConversationId || '';
     
     if (routeConversationId) {
-      console.log('Mounting with conversation ID:', routeConversationId);
+      console.log('Mounting with conversation ID');
       await loadPreviousChat(routeConversationId);
     } else {
       console.log('Mounting without conversation ID');
@@ -2224,7 +2224,7 @@ const addMessage = async () => {
       await nextTick();
       // After createNewChat, the router push should update the conversation id.
       currentId.value = route.params.id; // update currentId from router params
-      console.log('New chat created, conversation ID:', currentId.value);
+      console.log('New chat created');
     } catch (error) {
       console.error('Failed to create new chat:', error);
       errorMessage.value = 'Failed to create new conversation. Please try again.';

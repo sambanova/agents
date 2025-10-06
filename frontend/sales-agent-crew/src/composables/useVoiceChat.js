@@ -309,7 +309,7 @@ export function useVoiceChat(conversationIdGetter) {
         apiKey: accessToken
       })
 
-      // Connect to EVI WebSocket with config_id (has Claude for tool support)
+      // Connect to EVI WebSocket with config_id (has LLMs for tool support)
       const connectOptions = {}
       if (eviConfigId) {
         connectOptions.configId = eviConfigId
