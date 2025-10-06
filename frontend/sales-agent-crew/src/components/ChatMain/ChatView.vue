@@ -2276,11 +2276,15 @@ const addMessage = async () => {
     resume: shouldResume,
   };
 
+  console.log('[ChatView] selectedDocuments.value:', selectedDocuments.value);
+  console.log('[ChatView] uploadedDocuments.value:', uploadedDocuments.value);
+
   if (selectedDocuments.value && selectedDocuments.value.length > 0) {
     messagePayload.document_ids = selectedDocuments.value
       .map((docId) => {
         // Find the full document object from uploadedDocuments
         const fullDoc = uploadedDocuments.value.find(doc => doc.file_id === docId);
+        console.log('[ChatView] Processing docId:', docId, 'Found fullDoc:', fullDoc);
         if (fullDoc) {
           return {
             format: fullDoc.format || 'unknown',
@@ -2292,7 +2296,9 @@ const addMessage = async () => {
         return null;
       })
       .filter(doc => doc !== null);
+    console.log('[ChatView] Final document_ids in payload:', messagePayload.document_ids);
   } else {
+    console.log('[ChatView] No selectedDocuments, setting document_ids to []');
     messagePayload.document_ids = [];
   }
 
@@ -2948,7 +2954,9 @@ const filteredMessages = computed(() => {
       // Fallback: render as individual bubble - but only if it has meaningful content
       const hasContent = (msg.data?.content && msg.data.content.trim() !== '') ||
                         (msg.content && typeof msg.content === 'string' && msg.content.trim() !== '') ||
-                        (msg.text && msg.text.trim() !== '');
+                        (msg.text && msg.text.trim() !== '') ||
+                        (msg.event === 'user_message' && msg.data && typeof msg.data === 'string' && msg.data.trim() !== '') ||
+                        (msg.event === 'user_message' && msg.document_ids && msg.document_ids.length > 0);
 
       // Skip agent_completion messages with empty content (intermediate steps without output)
       if (msg.event === 'agent_completion' && !hasContent) {

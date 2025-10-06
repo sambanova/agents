@@ -1710,14 +1710,23 @@ class WebSocketConnectionManager(WebSocketInterface):
         data_analysis_doc_ids = []
         all_file_ids = []
         directory_content = []
-        
+
+        logger.info(f"[DOCUMENT_TRACE] Received doc_ids: {doc_ids}")
+
         for doc_id in doc_ids:
             all_file_ids.append(doc_id["id"])
+            logger.info(f"[DOCUMENT_TRACE] Processing doc_id: {doc_id['id']}, indexed: {doc_id.get('indexed', False)}, format: {doc_id.get('format', 'unknown')}")
             if doc_id["indexed"]:
                 indexed_doc_ids.append(doc_id["id"])
+                logger.info(f"[DOCUMENT_TRACE] Added {doc_id['id']} to indexed_doc_ids")
+            else:
+                logger.warning(f"[DOCUMENT_TRACE] Skipping {doc_id['id']} - NOT INDEXED!")
             if doc_id["format"] in ["text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel"]:
                 data_analysis_doc_ids.append(doc_id["id"])
                 directory_content.append(doc_id["filename"])
+
+        logger.info(f"[DOCUMENT_TRACE] Final indexed_doc_ids: {indexed_doc_ids}")
+        logger.info(f"[DOCUMENT_TRACE] Final all_file_ids: {all_file_ids}")
 
         enable_data_science = False
         if data_analysis_doc_ids:
@@ -1737,6 +1746,9 @@ class WebSocketConnectionManager(WebSocketInterface):
         if indexed_doc_ids:
             retrieval_prompt = (
                 f"{len(doc_ids)} documents are available for retrieval.\n\n"
+                "IMPORTANT: To search these documents, use the Retriever tool and pass the user's question or a relevant search query as the 'query' parameter. "
+                "Extract the key information the user is asking about and use that as your search query. "
+                "For example, if the user asks 'summarize this pdf' or 'what does this document say about X', pass a specific query like 'summary' or 'X' to the Retriever tool.\n\n"
             )
 
         data_analysis_prompt = ""
