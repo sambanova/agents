@@ -120,7 +120,7 @@
           class="mt-16 max-w-4xl w-full mx-auto space-y-5"
         >
           <!-- Chat Bubble -->
-          <li v-for="msgItem in filteredMessages" :key="msgItem.conversation_id || msgItem.message_id || msgItem.timestamp || Math.random()">
+          <li v-for="msgItem in filteredMessages" :key="msgItem.message_id || msgItem.id || msgItem.timestamp || Math.random()">
             <ChatBubble
               :workflowData="getModelData(msgItem.message_id || msgItem.messageId)"
               :plannerText="
@@ -2443,8 +2443,18 @@ async function connectWebSocket() {
           // Check if this is a final response event
           const isFinalResponse = isFinalAgentType(receivedData.additional_kwargs?.agent_type);
 
-          // Generate proper message ID - use backend ID if available, fallback to frontend currentMsgId
-          const messageId = receivedData.id || receivedData.message_id || currentMsgId.value || `agent_completion_${Date.now()}`;
+          // Generate proper message ID
+          // CRITICAL: Use currentMsgId.value FIRST to ensure all streaming events in a conversation turn
+          // share the SAME message_id so they group into ONE bubble in filteredMessages.
+          // If we use receivedData.id or receivedData.message_id first, backend might send different IDs
+          // for each event, creating separate bubbles instead of grouping!
+          const messageId = currentMsgId.value || receivedData.message_id || receivedData.id || `agent_completion_${Date.now()}`;
+
+          console.debug('[ChatView] Message ID:', {
+            agentType,
+            messageId,
+            source: currentMsgId.value ? 'currentMsgId' : (receivedData.message_id ? 'backend message_id' : (receivedData.id ? 'backend id' : 'timestamp'))
+          });
 
           // Validate message ID - must be defined and non-empty
           if (!messageId || messageId === 'undefined' || messageId === 'null') {
@@ -2464,6 +2474,8 @@ async function connectWebSocket() {
 
           // Skip empty agent_completion messages (intermediate steps without output)
           // UNLESS it's a final response or has special metadata we need to track
+          // Note: We should NOT filter based on isIntermediateAgentStep here because
+          // those messages need to be added to messagesData for proper streaming grouping
           if (!hasContent && !isFinalResponse && !receivedData.usage_metadata && !receivedData.cumulative_usage_metadata) {
             console.debug('[ChatView] Skipping empty agent_completion message', {
               message_id: messageId,
@@ -2529,22 +2541,26 @@ async function connectWebSocket() {
             isLoading.value = false;
           }
         } else if (receivedData.event === 'llm_stream_chunk') {
-          // Generate proper message ID for stream chunks
-          const chunkId = receivedData.id || receivedData.message_id || `chunk_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          // CRITICAL: Use currentMsgId.value as the message_id so all stream chunks
+          // in this conversation turn group with agent_completion events into ONE bubble!
+          const streamMessageId = currentMsgId.value || receivedData.message_id || receivedData.id || `chunk_${Date.now()}`;
 
-          // Validate chunk ID
-          if (!chunkId || chunkId === 'undefined' || chunkId === 'null') {
+          // Validate message ID
+          if (!streamMessageId || streamMessageId === 'undefined' || streamMessageId === 'null') {
             console.warn('[ChatView] Rejecting stream chunk with invalid ID');
             return;
           }
 
-          // Find existing message with the same ID
+          // Use a unique chunk identifier for content accumulation, but share message_id for grouping
+          const chunkIdentifier = receivedData.id || `${streamMessageId}_${Date.now()}`;
+
+          // Find existing chunk with the same identifier to accumulate content
           const existingIndex = messagesData.value.findIndex(
-            (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
+            (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkIdentifier
           );
 
           if (existingIndex !== -1) {
-            // Accumulate content for existing message
+            // Accumulate content for existing chunk
             try {
               const existingContent = messagesData.value[existingIndex].data?.content || '';
               const newContent = receivedData.content || '';
@@ -2553,14 +2569,14 @@ async function connectWebSocket() {
               console.error('Error updating stream chunk:', error);
             }
           } else {
-            // Create new message for new ID - use the generated chunkId
+            // Create new chunk with shared message_id for grouping
             try {
               messagesData.value.push({
                 event: 'llm_stream_chunk',
-                data: receivedData || {},
-                message_id: chunkId,  // Use chunkId, not currentMsgId
+                data: { ...receivedData, id: chunkIdentifier },
+                message_id: streamMessageId,  // SHARED message_id for grouping!
                 conversation_id: currentId.value,
-                timestamp: new Date().toISOString()
+                timestamp: receivedData.timestamp || new Date().toISOString()
               });
             } catch (error) {
               console.error('Error adding new stream chunk:', error);
@@ -2832,15 +2848,14 @@ function formatMessageData(msgItem) {
 
 // Check if we have an active streaming group for the current message
 const hasActiveStreamingGroup = computed(() => {
-  if (!messagesData.value || messagesData.value.length === 0 || !currentMsgId.value) {
+  if (!messagesData.value || messagesData.value.length === 0) {
     return false;
   }
-  
-  // Check if any message in the current conversation turn has streaming events
-  return messagesData.value.some(msg => 
-    msg.message_id === currentMsgId.value && 
-    (msg.event === 'agent_completion' || msg.event === 'llm_stream_chunk')
-  );
+
+  // Check if filteredMessages contains any streaming_group
+  // This is more reliable than checking message_id matches because
+  // backend might send different message_ids than frontend currentMsgId
+  return filteredMessages.value.some(item => item.type === 'streaming_group');
 });
 
 

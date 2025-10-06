@@ -256,23 +256,18 @@ export function useVoiceChat(conversationIdGetter) {
         case 'agent_completion_full':
           // DON'T forward these to ChatView - the main chat WebSocket already receives them!
           // Both WebSockets receive the same messages from the backend.
-          // Forwarding from voice WebSocket creates duplicates.
-          // The main WebSocket handles all UI updates.
-          console.log('📦 Full agent_completion received (main WebSocket will handle UI update)')
+          // Forwarding from voice WebSocket creates duplicates in the UI.
+          // The main WebSocket handles ALL UI updates and streaming grouping.
+          // Voice WebSocket only needs agent_response messages for EVI to speak.
+          console.log('📦 agent_completion received (main WebSocket handles UI - no forwarding needed)')
           break
 
         case 'llm_stream_chunk_full':
-          // Full llm_stream_chunk message for chat UI to detect Daytona tool calls in streaming
-          console.log('📦 Full llm_stream_chunk received for chat UI')
-          // Forward to chat UI via custom event
-          window.dispatchEvent(new CustomEvent('voice-workflow-message', {
-            detail: {
-              event: message.event || 'llm_stream_chunk',
-              data: message.data || message,
-              message_id: message.message_id,
-              timestamp: message.timestamp || new Date().toISOString()
-            }
-          }))
+          // DON'T forward these to ChatView - the main chat WebSocket already receives them!
+          // Forwarding creates duplicate messages with potentially different message_ids,
+          // breaking the streaming group logic in filteredMessages.
+          // The main WebSocket handles ALL UI updates including Daytona tool calls.
+          console.log('📦 llm_stream_chunk received (main WebSocket handles UI - no forwarding needed)')
           break
 
         case 'agent_update':
