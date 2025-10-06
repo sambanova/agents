@@ -254,17 +254,11 @@ export function useVoiceChat(conversationIdGetter) {
           break
 
         case 'agent_completion_full':
-          // Full agent_completion message for chat UI to detect Daytona/tool calls
-          console.log('📦 Full agent_completion received for chat UI')
-          // Forward to chat UI via custom event
-          window.dispatchEvent(new CustomEvent('voice-workflow-message', {
-            detail: {
-              event: message.event || 'agent_completion',
-              data: message.data || message,
-              message_id: message.message_id,
-              timestamp: message.timestamp || new Date().toISOString()
-            }
-          }))
+          // DON'T forward these to ChatView - the main chat WebSocket already receives them!
+          // Both WebSockets receive the same messages from the backend.
+          // Forwarding from voice WebSocket creates duplicates.
+          // The main WebSocket handles all UI updates.
+          console.log('📦 Full agent_completion received (main WebSocket will handle UI update)')
           break
 
         case 'llm_stream_chunk_full':
@@ -359,8 +353,8 @@ export function useVoiceChat(conversationIdGetter) {
         console.log('🔌 Hume EVI disconnected')
       })
 
-      // Actually connect the socket
-      humeSocket.connect()
+      // Note: .connect() already opens the connection, no need to call it again
+      // Calling it twice would open TWO WebSocket connections!
 
     } catch (err) {
       console.error('Failed to connect Hume EVI:', err)
