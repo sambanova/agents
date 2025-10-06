@@ -278,6 +278,23 @@
               {{ testResults[provider].message }}
             </div>
           </div>
+
+          <!-- PayPal Invoicing Email -->
+          <div class="mt-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              PayPal Invoicing Email (Optional)
+              <span class="text-xs text-gray-500 ml-2">- Required for creating shareable invoices</span>
+            </label>
+            <input
+              v-model="apiKeys.paypal_invoicing_email"
+              type="email"
+              placeholder="Enter your PayPal business account email"
+              class="block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+            />
+            <p class="mt-1 text-xs text-gray-500">
+              This is the email address you use to log in to your PayPal business account. It's required to create shareable invoice links.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -667,7 +684,8 @@ const selectedProvider = ref('sambanova')
 const apiKeys = ref({
   sambanova: '',
   fireworks: '',
-  together: ''
+  together: '',
+  paypal_invoicing_email: ''
 })
 const apiKeyVisibility = ref({
   sambanova: false,
@@ -1021,7 +1039,8 @@ const loadConfiguration = async () => {
         apiKeys.value = {
           sambanova: keysResponse.data.sambanova_key || '',
           fireworks: keysResponse.data.fireworks_key || '',
-          together: keysResponse.data.together_key || ''
+          together: keysResponse.data.together_key || '',
+          paypal_invoicing_email: keysResponse.data.paypal_invoicing_email || ''
         }
 
         // Load custom provider API keys (they come with "custom_" prefix)
@@ -1343,7 +1362,8 @@ const resetConfiguration = async () => {
       apiKeys.value = {
         sambanova: '',
         fireworks: '',
-        together: ''
+        together: '',
+        paypal_invoicing_email: ''
       }
 
       // Don't call loadConfiguration here - it would overwrite the reset values

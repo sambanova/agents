@@ -510,6 +510,7 @@ class RedisStorage:
             exa_key=api_keys.get("exa_key", ""),
             fireworks_key=api_keys.get("fireworks_key", ""),
             together_key=api_keys.get("together_key", ""),
+            paypal_invoicing_email=api_keys.get("paypal_invoicing_email", ""),
         )
 
     async def set_user_api_key(self, user_id: str, keys: "APIKeys") -> None:
@@ -525,6 +526,7 @@ class RedisStorage:
                 "exa_key": keys.exa_key,
                 "fireworks_key": keys.fireworks_key,
                 "together_key": getattr(keys, 'together_key', ''),  # Use getattr for backward compatibility
+                "paypal_invoicing_email": getattr(keys, 'paypal_invoicing_email', ''),
             },
             user_id=user_id,
         )

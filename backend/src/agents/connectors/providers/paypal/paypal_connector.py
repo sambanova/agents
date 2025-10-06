@@ -326,11 +326,11 @@ class PayPalConnector(MCPConnector):
                 raise ValueError(f"Token exchange failed: {response.text}")
             
             token_data = response.json()
-        
+
         # Parse the token response
         expires_in = token_data.get("expires_in", 3600)
         expires_at = datetime.utcnow() + timedelta(seconds=int(expires_in))
-        
+
         # PayPal may not always return refresh tokens
         refresh_token = token_data.get("refresh_token")
         if not refresh_token:
@@ -339,7 +339,7 @@ class PayPalConnector(MCPConnector):
                 user_id=user_id,
                 scope=token_data.get("scope")
             )
-        
+
         token = UserOAuthToken(
             user_id=user_id,
             provider_id=self.mcp_config.provider_id,
@@ -421,7 +421,7 @@ class PayPalConnector(MCPConnector):
         # Parse refreshed token
         expires_in = token_data.get("expires_in", 3600)
         expires_at = datetime.utcnow() + timedelta(seconds=int(expires_in))
-        
+
         # Create new token with refreshed data
         new_token = UserOAuthToken(
             user_id=user_id,
@@ -621,10 +621,10 @@ class PayPalConnector(MCPConnector):
         
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{api_base}/v1/identity/openidconnect/userinfo",
+                f"{api_base}/v1/identity/openidconnect/userinfo?schema=openid",
                 headers={
                     "Authorization": f"Bearer {token.access_token}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/x-www-form-urlencoded"
                 }
             )
             

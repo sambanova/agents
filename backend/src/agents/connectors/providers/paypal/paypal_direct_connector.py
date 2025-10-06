@@ -428,12 +428,25 @@ class CreateInvoiceTool(PayPalDirectTool):
     
     async def _arun(self, **kwargs) -> str:
         """Create an invoice."""
-        # Get the authenticated user's PayPal email address
-        user_info = await self.connector.get_user_info(self.user_id)
-        invoicer_email = user_info.get("email")
+        # Get the user's PayPal invoicing email from API keys
+        api_keys = await self.connector.redis_storage.get_user_api_key(self.user_id)
+        invoicer_email = api_keys.paypal_invoicing_email if api_keys else None
+
+        logger.info(
+            "Retrieving PayPal invoicing email",
+            user_id=self.user_id,
+            has_email=bool(invoicer_email)
+        )
 
         if not invoicer_email:
-            return "Error: Could not retrieve your PayPal email address. Please ensure you're properly authenticated."
+            logger.error(
+                "PayPal invoicing email not configured",
+                user_id=self.user_id
+            )
+            return """Error: PayPal invoicing email address not configured.
+
+Please set your PayPal business account email in the Admin panel under API Keys.
+This is the email address you use to log in to your PayPal business account."""
 
         # Build invoice data
         items = []
@@ -471,7 +484,7 @@ class CreateInvoiceTool(PayPalDirectTool):
                     "given_name": "Business",
                     "surname": "Owner"
                 },
-                "email_address": invoicer_email  # Use authenticated user's email
+                "email_address": invoicer_email
             },
             "primary_recipients": [{
                 "billing_info": {

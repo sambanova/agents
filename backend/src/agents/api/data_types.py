@@ -63,6 +63,7 @@ class APIKeys(BaseModel):
     together_key: str = ""
     serper_key: str
     exa_key: str
+    paypal_invoicing_email: str = ""
 
 
 class ShareResponse(BaseModel):

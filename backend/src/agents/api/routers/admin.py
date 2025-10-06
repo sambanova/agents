@@ -278,7 +278,8 @@ async def update_configuration(
                     fireworks_key=update.api_keys.get("fireworks", ""),
                     together_key=update.api_keys.get("together", ""),
                     serper_key=existing_keys.serper_key if existing_keys else "",
-                    exa_key=existing_keys.exa_key if existing_keys else ""
+                    exa_key=existing_keys.exa_key if existing_keys else "",
+                    paypal_invoicing_email=update.api_keys.get("paypal_invoicing_email", existing_keys.paypal_invoicing_email if existing_keys else "")
                 )
 
                 # Debug log what we're storing
