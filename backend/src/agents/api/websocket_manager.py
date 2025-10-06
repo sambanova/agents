@@ -1645,6 +1645,11 @@ class WebSocketConnectionManager(WebSocketInterface):
                 },
             )
 
+            # Update conversation metadata with title from first message
+            await self.message_storage.update_metadata(
+                message_text, user_id, conversation_id
+            )
+
             # Create config for agent processing
             config = await self.create_config(
                 user_id=user_id,

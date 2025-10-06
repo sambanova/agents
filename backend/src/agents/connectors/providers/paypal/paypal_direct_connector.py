@@ -224,8 +224,12 @@ class ShowProductDetailsInput(BaseModel):
 class CreateInvoiceInput(BaseModel):
     """Input for creating an invoice."""
     recipient_email: str = Field(description="Recipient email address")
-    items: List[Dict[str, Any]] = Field(description="Invoice items with name, quantity, unit_amount")
-    currency_code: str = Field(default="USD", description="Currency code (e.g., USD, EUR)")
+    items: List[Dict[str, Any]] = Field(
+        description="Invoice items. Each item should have: name (str), quantity (int), and unit_amount (str or dict). "
+                    "If unit_amount is a string, it will be the price value (e.g., '200.00'). "
+                    "If unit_amount is a dict, it should have 'currency_code' and 'value' keys."
+    )
+    currency_code: str = Field(default="USD", description="Default currency code (e.g., USD, EUR) for all items")
     note: Optional[str] = Field(None, description="Note to the payer")
     terms: Optional[str] = Field(None, description="Terms and conditions")
     memo: Optional[str] = Field(None, description="Private memo")
@@ -415,23 +419,46 @@ class ShowProductDetailsTool(PayPalDirectTool):
 class CreateInvoiceTool(PayPalDirectTool):
     """Create an invoice."""
     name: str = "paypal_create_invoice"
-    description: str = "Create a new invoice"
+    description: str = (
+        "Create and send a PayPal invoice. The invoice is automatically sent to the recipient and a shareable link is returned. "
+        "Items should include name, quantity, and unit_amount (as a decimal string like '200.00'). "
+        "The invoice will be sent from the authenticated user's PayPal account."
+    )
     args_schema: Type[BaseModel] = CreateInvoiceInput
     
     async def _arun(self, **kwargs) -> str:
         """Create an invoice."""
+        # Get the authenticated user's PayPal email address
+        user_info = await self.connector.get_user_info(self.user_id)
+        invoicer_email = user_info.get("email")
+
+        if not invoicer_email:
+            return "Error: Could not retrieve your PayPal email address. Please ensure you're properly authenticated."
+
         # Build invoice data
         items = []
         for item in kwargs["items"]:
+            # Handle unit_amount - can be a dict or a simple value
+            unit_amount = item.get("unit_amount")
+            if isinstance(unit_amount, dict):
+                # Already a dict with currency_code and value
+                unit_amount_data = {
+                    "currency_code": unit_amount.get("currency_code", kwargs.get("currency_code", "USD")),
+                    "value": str(unit_amount.get("value", "0"))
+                }
+            else:
+                # Simple value, convert to dict
+                unit_amount_data = {
+                    "currency_code": kwargs.get("currency_code", "USD"),
+                    "value": str(unit_amount)
+                }
+
             items.append({
                 "name": item["name"],
                 "quantity": str(item.get("quantity", 1)),
-                "unit_amount": {
-                    "currency_code": kwargs.get("currency_code", "USD"),
-                    "value": str(item["unit_amount"])
-                }
+                "unit_amount": unit_amount_data
             })
-        
+
         data = {
             "detail": {
                 "currency_code": kwargs.get("currency_code", "USD"),
@@ -441,9 +468,10 @@ class CreateInvoiceTool(PayPalDirectTool):
             },
             "invoicer": {
                 "name": {
-                    "given_name": "PayPal",
-                    "surname": "User"
-                }
+                    "given_name": "Business",
+                    "surname": "Owner"
+                },
+                "email_address": invoicer_email  # Use authenticated user's email
             },
             "primary_recipients": [{
                 "billing_info": {
@@ -459,11 +487,56 @@ class CreateInvoiceTool(PayPalDirectTool):
             user_id=self.user_id,
             data=data
         )
-        
+
         if "error" in result:
             return f"Error creating invoice: {result['error']}"
-        
-        return f"Invoice created successfully. ID: {result.get('id', 'Unknown')}"
+
+        invoice_id = result.get('id', 'Unknown')
+
+        # Send the invoice to make it shareable (invoices must be sent to get a shareable link)
+        send_result = await self.connector._make_api_request(
+            method="POST",
+            endpoint=f"/v2/invoicing/invoices/{invoice_id}/send",
+            user_id=self.user_id,
+            data={"send_to_invoicer": False}  # Don't send copy to invoicer
+        )
+
+        if "error" in send_result:
+            # Invoice created but failed to send
+            return f"Invoice created (ID: {invoice_id}) but failed to send: {send_result['error']}\nYou can manually send it using the send_invoice tool."
+
+        # After sending, get the updated invoice to retrieve the shareable link
+        invoice_details = await self.connector._make_api_request(
+            method="GET",
+            endpoint=f"/v2/invoicing/invoices/{invoice_id}",
+            user_id=self.user_id
+        )
+
+        # Extract shareable link from response
+        shareable_link = None
+        if "error" not in invoice_details:
+            links = invoice_details.get('links', [])
+            for link in links:
+                # Look for payer-view link (shareable link for customer)
+                if link.get('rel') == 'payer-view':
+                    shareable_link = link.get('href')
+                    break
+
+        response = f"Invoice created and sent successfully!\n"
+        response += f"Invoice ID: {invoice_id}\n"
+
+        if shareable_link:
+            response += f"Shareable Link: {shareable_link}\n"
+            response += f"(Send this link to the customer to view and pay the invoice)"
+        else:
+            # If no payer-view link, construct it manually using PayPal's format
+            # Format: https://www.sandbox.paypal.com/invoice/s/details/{invoice_id}
+            base_url = "https://www.sandbox.paypal.com" if self.connector.is_sandbox else "https://www.paypal.com"
+            shareable_link = f"{base_url}/invoice/s/details/{invoice_id}"
+            response += f"Shareable Link: {shareable_link}\n"
+            response += f"(Send this link to the customer to view and pay the invoice)"
+
+        return response
     
     def _run(self, **kwargs) -> str:
         """Sync version."""
@@ -474,34 +547,39 @@ class CreateInvoiceTool(PayPalDirectTool):
 class ListInvoicesTool(PayPalDirectTool):
     """List invoices."""
     name: str = "paypal_list_invoices"
-    description: str = "List all invoices"
+    description: str = "List invoices with pagination. Returns current page of invoices and total count of all invoices in the account."
     args_schema: Type[BaseModel] = ListInvoicesInput
     
     async def _arun(self, **kwargs) -> str:
         """List invoices."""
         params = {
             "page_size": min(kwargs.get("page_size", 10), 20),
-            "page": kwargs.get("page", 1)
+            "page": kwargs.get("page", 1),
+            "total_required": "true"  # Required to get total_items in response
         }
-        
+
         if kwargs.get("status"):
             params["status"] = kwargs["status"]
-        
+
         result = await self.connector._make_api_request(
             method="GET",
             endpoint="/v2/invoicing/invoices",
             user_id=self.user_id,
             params=params
         )
-        
+
         if "error" in result:
             return f"Error listing invoices: {result['error']}"
-        
+
         invoices = result.get("items", [])
+        total_items = result.get("total_items", len(invoices))  # PayPal v2 uses total_items
+        total_pages = result.get("total_pages", 1)
+
         if not invoices:
             return "No invoices found."
-        
-        output = f"Found {len(invoices)} invoices:\n\n"
+
+        # Show both current page count and total count
+        output = f"Showing {len(invoices)} of {total_items} total invoices (Page {params['page']} of {total_pages}):\n\n"
         for invoice in invoices:
             detail = invoice.get("detail", {})
             amount = invoice.get("amount", {})
