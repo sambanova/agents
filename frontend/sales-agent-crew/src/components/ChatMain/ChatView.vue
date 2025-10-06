@@ -1176,6 +1176,17 @@ async function handleVoiceModeStarting() {
 // Handle voice status changes
 async function handleVoiceStatusChange(event) {
   console.log('Voice status changed:', event);
+
+  // Set isLoading based on voice status to trigger Daytona sidebar and other UI
+  if (event.status === 'thinking' || event.status === 'processing') {
+    console.log('Voice mode is processing - setting isLoading=true for Daytona sidebar');
+    isLoading.value = true;
+  } else if (event.status === 'idle' || event.status === 'listening' || event.status === 'error') {
+    console.log('Voice mode finished processing - setting isLoading=false');
+    isLoading.value = false;
+  }
+
+  // Note: Don't set isLoading=false for 'speaking' status - we want sidebar to stay open while EVI speaks
 }
 
 watch(
@@ -1806,8 +1817,14 @@ function handleVoiceWorkflowMessage(event) {
   console.log('📥 Voice workflow message for chat UI:', message.event || message.type);
 
   try {
+    // Ensure message has a valid ID before pushing to messagesData
+    const messageWithId = {
+      ...message,
+      message_id: message.message_id || message.id || `voice_wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    };
+
     // Add to messagesData so it shows in the chat
-    messagesData.value.push(message);
+    messagesData.value.push(messageWithId);
   } catch (error) {
     console.error('Error adding voice workflow message to chat:', error);
   }
@@ -2075,15 +2092,21 @@ function cleanTranscription(transcribedText) {
 
 async function handleFileUpload(event) {
   const files = Array.from(event.target.files || []);
+  console.log('[ChatView] Upload triggered, files:', files.length);
   if (files.length === 0) return;
 
   isUploading.value = true;
   try {
     for (const file of files) {
+      console.log('[ChatView] Uploading file:', file.name, 'size:', file.size, 'type:', file.type);
       const formData = new FormData();
       formData.append('file', file);
+
+      const uploadUrl = `${import.meta.env.VITE_API_URL}/upload`;
+      console.log('[ChatView] Upload URL:', uploadUrl);
+
       const response = await axios.post(
-        `${import.meta.env.VITE_API_URL}/upload`,
+        uploadUrl,
         formData,
         {
           headers: {
@@ -2092,7 +2115,15 @@ async function handleFileUpload(event) {
         }
       );
 
+      console.log('[ChatView] Upload response:', response.status, response.data);
+
       const document = response.data.document || response.data.file;
+      if (!document) {
+        console.error('[ChatView] No document in response:', response.data);
+        throw new Error('Invalid upload response - no document returned');
+      }
+
+      console.log('[ChatView] Document uploaded:', document.file_id);
       uploadedDocuments.value.unshift(document);
       if (!selectedDocuments.value.includes(document.file_id)) {
         selectedDocuments.value.push(document.file_id);
@@ -2100,11 +2131,19 @@ async function handleFileUpload(event) {
     }
 
     await loadUserDocuments();
+    console.log('[ChatView] Upload complete, total documents:', uploadedDocuments.value.length);
   } catch (error) {
     console.error('[ChatView] Upload error:', error);
+    console.error('[ChatView] Error details:', {
+      message: error.message,
+      response: error.response,
+      status: error.response?.status,
+      data: error.response?.data,
+      headers: error.response?.headers,
+    });
     uploadStatus.value = {
       type: 'error',
-      message: error.response?.data?.error || 'Failed to upload document(s)',
+      message: error.response?.data?.error || error.message || 'Failed to upload document(s)',
     };
     setTimeout(() => {
       uploadStatus.value = null;
@@ -2403,12 +2442,42 @@ async function connectWebSocket() {
           
           // Check if this is a final response event
           const isFinalResponse = isFinalAgentType(receivedData.additional_kwargs?.agent_type);
-          
+
+          // Generate proper message ID - use backend ID if available, fallback to frontend currentMsgId
+          const messageId = receivedData.id || receivedData.message_id || currentMsgId.value || `agent_completion_${Date.now()}`;
+
+          // Validate message ID - must be defined and non-empty
+          if (!messageId || messageId === 'undefined' || messageId === 'null') {
+            console.warn('[ChatView] Rejecting message with invalid ID:', {
+              id: receivedData.id,
+              message_id: receivedData.message_id,
+              currentMsgId: currentMsgId.value,
+              agent_type: agentType,
+            });
+            return;
+          }
+
+          // Check if message has meaningful content - skip empty intermediate messages
+          const hasContent = (receivedData.content && receivedData.content.trim() !== '') ||
+                            (receivedData.data?.content && receivedData.data.content.trim() !== '') ||
+                            (receivedData.text && receivedData.text.trim() !== '');
+
+          // Skip empty agent_completion messages (intermediate steps without output)
+          // UNLESS it's a final response or has special metadata we need to track
+          if (!hasContent && !isFinalResponse && !receivedData.usage_metadata && !receivedData.cumulative_usage_metadata) {
+            console.debug('[ChatView] Skipping empty agent_completion message', {
+              message_id: messageId,
+              agent_type: agentType,
+            });
+            return;
+          }
+
           // Create message object and attach token usage data directly to it
           const messageData = {
-            event: 'agent_completion', 
+            event: 'agent_completion',
             data: receivedData || {},
-            message_id: currentMsgId.value,
+            message_id: messageId,
+            id: messageId, // Also set 'id' for compatibility
             conversation_id: currentId.value,
             timestamp: receivedData.timestamp || new Date().toISOString(),
             agent_type: receivedData.agent_type,
@@ -2460,53 +2529,42 @@ async function connectWebSocket() {
             isLoading.value = false;
           }
         } else if (receivedData.event === 'llm_stream_chunk') {
+          // Generate proper message ID for stream chunks
+          const chunkId = receivedData.id || receivedData.message_id || `chunk_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-          
-          const chunkId = receivedData.id;
-          
-          if (chunkId) {
-            // Find existing message with the same ID
-            const existingIndex = messagesData.value.findIndex(
-              (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
-            );
-            
-            if (existingIndex !== -1) {
-              // Accumulate content for existing message
-              try {
-                const existingContent = messagesData.value[existingIndex].data?.content || '';
-                const newContent = receivedData.content || '';
-                messagesData.value[existingIndex].data.content = existingContent + newContent;
-              } catch (error) {
-                console.error('Error updating stream chunk:', error);
-              }
-            } else {
-              // Create new message for new ID
-              try {
-                messagesData.value.push({
-                  event: 'llm_stream_chunk',
-                  data: receivedData || {},
-                  message_id: currentMsgId.value,
-                  conversation_id: currentId.value,
-                  timestamp: new Date().toISOString()
-                });
-              } catch (error) {
-                console.error('Error adding new stream chunk:', error);
-              }
+          // Validate chunk ID
+          if (!chunkId || chunkId === 'undefined' || chunkId === 'null') {
+            console.warn('[ChatView] Rejecting stream chunk with invalid ID');
+            return;
+          }
+
+          // Find existing message with the same ID
+          const existingIndex = messagesData.value.findIndex(
+            (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
+          );
+
+          if (existingIndex !== -1) {
+            // Accumulate content for existing message
+            try {
+              const existingContent = messagesData.value[existingIndex].data?.content || '';
+              const newContent = receivedData.content || '';
+              messagesData.value[existingIndex].data.content = existingContent + newContent;
+            } catch (error) {
+              console.error('Error updating stream chunk:', error);
             }
           } else {
-            // No ID, just add as new message
+            // Create new message for new ID - use the generated chunkId
             try {
               messagesData.value.push({
                 event: 'llm_stream_chunk',
                 data: receivedData || {},
-                message_id: currentMsgId.value,
+                message_id: chunkId,  // Use chunkId, not currentMsgId
                 conversation_id: currentId.value,
                 timestamp: new Date().toISOString()
               });
             } catch (error) {
-              console.error('Error adding stream chunk without ID:', error);
+              console.error('Error adding new stream chunk:', error);
             }
-
           }
         } else if (receivedData.event === 'stream_complete') {
           console.log('Stream complete:', receivedData);
@@ -2872,10 +2930,22 @@ const filteredMessages = computed(() => {
         return;
       }
 
-      // Fallback: render as individual bubble - but only if it has content
-      if (msg.data?.content || msg.content) {
-        const uniqueKey = `${msg.type || msg.event}_${msgId}_${index}`;
+      // Fallback: render as individual bubble - but only if it has meaningful content
+      const hasContent = (msg.data?.content && msg.data.content.trim() !== '') ||
+                        (msg.content && typeof msg.content === 'string' && msg.content.trim() !== '') ||
+                        (msg.text && msg.text.trim() !== '');
 
+      // Skip agent_completion messages with empty content (intermediate steps without output)
+      if (msg.event === 'agent_completion' && !hasContent) {
+        console.debug('Skipping empty agent_completion message', {
+          message_id: msgId,
+          agent_type: agentType,
+        });
+        return;
+      }
+
+      if (hasContent) {
+        const uniqueKey = `${msg.type || msg.event}_${msgId}_${index}`;
         grouped.set(uniqueKey, msg);
       }
       

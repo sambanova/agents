@@ -61,6 +61,14 @@ class WebSocketConnectionManager(WebSocketInterface):
         self.pubsub_instances: Dict[str, redis.client.PubSub] = {}
         # Add cleanup task
         self.cleanup_task: Optional[asyncio.Task] = None
+        # Voice message deduplication tracker: {conversation_id: {message_hash: timestamp}}
+        self.voice_message_tracker: Dict[str, Dict[str, datetime]] = {}
+        # Deduplication window (5 seconds)
+        self.DEDUP_WINDOW = timedelta(seconds=5)
+
+        # Auto-approval deduplication: {conversation_id: timestamp}
+        # Ensures we only auto-approve once per conversation interrupt
+        self.auto_approval_tracker: Dict[str, datetime] = {}
 
     def add_connection(
         self, websocket: WebSocket, user_id: str, conversation_id: str
@@ -713,6 +721,21 @@ class WebSocketConnectionManager(WebSocketInterface):
     ) -> bool:
         """Send a message through the WebSocket for a specific conversation."""
         try:
+            import uuid
+
+            # Ensure message always has a valid ID to prevent Vue prop warnings
+            if not data.get("id") and not data.get("message_id"):
+                # Generate a fallback ID based on event type and timestamp
+                timestamp = int(time.time() * 1000)
+                event_type = data.get("event", "unknown")
+                fallback_id = f"{event_type}_{timestamp}_{str(uuid.uuid4())[:8]}"
+                data["id"] = fallback_id
+                logger.debug(
+                    "Generated fallback message ID",
+                    fallback_id=fallback_id,
+                    event=event_type,
+                )
+
             session_key = f"{user_id}:{conversation_id}"
             websocket = self.connections.get(session_key)
 
@@ -794,6 +817,35 @@ class WebSocketConnectionManager(WebSocketInterface):
                     elif event_type == "agent_completion":
                         # Skip model tracking events (CrewAI LLM calls) - these have empty content
                         agent_type = data.get("additional_kwargs", {}).get("agent_type")
+
+                        # VOICE MODE AUTO-APPROVAL: Detect deep research interrupt and auto-approve
+                        if agent_type == "deep_research_interrupt":
+                            # Check if we've already triggered auto-approval for this conversation recently
+                            current_time = datetime.now(timezone.utc)
+                            last_approval = self.auto_approval_tracker.get(conversation_id)
+
+                            # Only trigger if we haven't auto-approved in the last 5 seconds
+                            # Reduced from 10s to be more responsive in voice mode
+                            if not last_approval or (current_time - last_approval).total_seconds() > 5:
+                                logger.info(
+                                    "Voice mode: Detected deep research interrupt - will auto-approve",
+                                    user_id=user_id[:8],
+                                    conversation_id=conversation_id,
+                                )
+                                # Mark that we're auto-approving for this conversation
+                                self.auto_approval_tracker[conversation_id] = current_time
+
+                                # Schedule auto-approval after a brief delay to let the interrupt persist
+                                asyncio.create_task(
+                                    self._auto_approve_interrupt(user_id, conversation_id)
+                                )
+                            else:
+                                logger.debug(
+                                    "Voice mode: Skipping duplicate auto-approval",
+                                    user_id=user_id[:8],
+                                    time_since_last=int((current_time - last_approval).total_seconds()),
+                                )
+
                         if agent_type == "crewai_llm_call":
                             logger.debug(
                                 "Skipping CrewAI LLM tracking event for voice",
@@ -811,17 +863,69 @@ class WebSocketConnectionManager(WebSocketInterface):
 
                             # Only send if we have actual content
                             if response_text:
+                                # EVI has character limits - if response is too long, create a summary
+                                MAX_EVI_LENGTH = 2000  # Conservative limit for EVI consumption
+                                original_length = len(response_text)
+
+                                if len(response_text) > MAX_EVI_LENGTH:
+                                    logger.info(
+                                        "Response too long for EVI - creating summary",
+                                        user_id=user_id[:8],
+                                        original_length=original_length,
+                                        max_length=MAX_EVI_LENGTH,
+                                    )
+
+                                    # Try to extract key findings/summary from the report
+                                    # Look for common summary sections
+                                    summary_text = response_text
+
+                                    # Check for executive summary, key findings, or conclusion sections
+                                    for marker in ["## Executive Summary", "## Key Findings", "## Summary", "## Conclusion"]:
+                                        if marker in response_text:
+                                            # Extract section after marker up to next ## or end
+                                            start_idx = response_text.find(marker) + len(marker)
+                                            next_section = response_text.find("##", start_idx)
+                                            if next_section > 0:
+                                                summary_text = response_text[start_idx:next_section].strip()
+                                            else:
+                                                summary_text = response_text[start_idx:].strip()
+                                            break
+
+                                    # If still too long, take first MAX_EVI_LENGTH chars with ellipsis
+                                    if len(summary_text) > MAX_EVI_LENGTH:
+                                        summary_text = summary_text[:MAX_EVI_LENGTH - 50] + "\n\n[Full report available in chat interface]"
+
+                                    response_text = summary_text
+                                    logger.info(
+                                        "Summary created for EVI",
+                                        user_id=user_id[:8],
+                                        summary_length=len(response_text),
+                                    )
+
+                                # Send simplified response for EVI
                                 await voice_websocket.send_json({
                                     "type": "agent_response",
                                     "text": response_text,
                                     "timestamp": data.get("timestamp"),
                                     "message_id": data.get("id") or data.get("message_id") or f"voice_resp_{int(time.time() * 1000)}",
                                 })
+
+                                # ALSO send full agent_completion message for chat UI to detect Daytona/tool calls
+                                # This ensures sidebar detection works in real-time
+                                await voice_websocket.send_json({
+                                    "type": "agent_completion_full",
+                                    "event": "agent_completion",
+                                    "data": data,  # Full message data
+                                    "message_id": data.get("id") or data.get("message_id"),
+                                    "timestamp": data.get("timestamp"),
+                                })
+
                                 logger.info(
                                     "Sent agent response to voice",
                                     user_id=user_id[:8],
                                     text_preview=response_text[:50],
                                     agent_type=agent_type,
+                                    response_length=len(response_text),
                                 )
                             else:
                                 logger.warning(
@@ -830,6 +934,17 @@ class WebSocketConnectionManager(WebSocketInterface):
                                     data_keys=list(data.keys()),
                                     agent_type=agent_type,
                                 )
+
+                    # LLM stream chunk - send to voice for potential tool call detection
+                    elif event_type == "llm_stream_chunk":
+                        # Send full chunk to voice WebSocket for chat UI to detect tool calls
+                        await voice_websocket.send_json({
+                            "type": "llm_stream_chunk_full",
+                            "event": "llm_stream_chunk",
+                            "data": data,
+                            "message_id": data.get("id") or data.get("message_id"),
+                            "timestamp": data.get("timestamp"),
+                        })
 
                     # Agent thinking - send brief context for EVI to narrate naturally
                     elif event_type == "think":
@@ -1261,13 +1376,69 @@ class WebSocketConnectionManager(WebSocketInterface):
             
         return summary.strip()
 
+    async def _auto_approve_interrupt(
+        self,
+        user_id: str,
+        conversation_id: str,
+    ) -> None:
+        """
+        Auto-approve a pending interrupt in voice mode.
+
+        This follows the same pattern as the API router - when deep research
+        or other workflows create an interrupt, voice mode automatically approves
+        it to avoid requiring verbal confirmation.
+
+        Args:
+            user_id: User ID
+            conversation_id: Conversation ID
+        """
+        try:
+            # Small delay to ensure interrupt is persisted to checkpoint
+            await asyncio.sleep(0.5)
+
+            logger.info(
+                "Voice mode: Auto-approving interrupt",
+                user_id=user_id[:8],
+                conversation_id=conversation_id,
+            )
+
+            # Inject approval message as if user said "approved"
+            # This triggers the resume flow in stream.py
+            await self.inject_voice_message(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                message_text="approved",
+                message_id=None,  # Generate new ID
+            )
+
+            logger.info(
+                "Voice mode: Auto-approval message injected",
+                user_id=user_id[:8],
+            )
+
+            # Clear the approval tracker for this conversation after successful approval
+            # This allows future interrupts to be auto-approved
+            if conversation_id in self.auto_approval_tracker:
+                del self.auto_approval_tracker[conversation_id]
+                logger.debug(
+                    "Cleared auto-approval tracker for conversation",
+                    conversation_id=conversation_id,
+                )
+
+        except Exception as e:
+            logger.error(
+                f"Voice mode: Failed to auto-approve interrupt: {str(e)}",
+                user_id=user_id[:8],
+                exc_info=True,
+            )
+
     async def inject_voice_message(
         self,
         user_id: str,
         conversation_id: str,
         message_text: str,
         message_id: Optional[str] = None,
-    ) -> bool:
+    ) -> tuple[bool, Optional[str]]:
         """
         Inject a voice-transcribed message into the chat workflow.
 
@@ -1281,15 +1452,47 @@ class WebSocketConnectionManager(WebSocketInterface):
             message_id: Optional message ID for tracking
 
         Returns:
-            True if message was injected successfully
+            Tuple of (success: bool, message_id: str) - the actual message ID used
         """
         try:
             from agents.components.compound.agent import enhanced_agent
             import uuid
+            import hashlib
 
             # Generate message ID if not provided
             if not message_id:
                 message_id = str(uuid.uuid4())
+
+            # Deduplication: Check if this message was recently processed
+            message_hash = hashlib.md5(message_text.encode()).hexdigest()
+            current_time = datetime.now(timezone.utc)
+
+            # Initialize tracker for this conversation if needed
+            if conversation_id not in self.voice_message_tracker:
+                self.voice_message_tracker[conversation_id] = {}
+
+            # Clean up old entries (older than dedup window)
+            conversation_tracker = self.voice_message_tracker[conversation_id]
+            expired_hashes = [
+                h for h, t in conversation_tracker.items()
+                if current_time - t > self.DEDUP_WINDOW
+            ]
+            for h in expired_hashes:
+                del conversation_tracker[h]
+
+            # Check if this is a duplicate
+            if message_hash in conversation_tracker:
+                time_since_last = current_time - conversation_tracker[message_hash]
+                logger.info(
+                    "Skipping duplicate voice message",
+                    user_id=user_id[:8],
+                    message_preview=message_text[:50],
+                    time_since_last_ms=int(time_since_last.total_seconds() * 1000),
+                )
+                return (True, message_id)  # Return success but don't process
+
+            # Track this message
+            conversation_tracker[message_hash] = current_time
 
             # Get the WebSocket connection - try main connection first, fallback to voice connection
             websocket = self.get_connection(user_id, conversation_id)
@@ -1304,7 +1507,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                     user_id=user_id[:8],
                     conversation_id=conversation_id,
                 )
-                return False
+                return (False, None)
 
             # Determine which connection we're using
             is_using_main_connection = self.get_connection(user_id, conversation_id) is not None
@@ -1369,7 +1572,7 @@ class WebSocketConnectionManager(WebSocketInterface):
 
             if redis_api_keys.sambanova_key == "":
                 logger.error("No API keys found for voice message injection")
-                return False
+                return (False, None)
 
             # Determine provider (default to sambanova for voice)
             provider = "sambanova"
@@ -1396,13 +1599,41 @@ class WebSocketConnectionManager(WebSocketInterface):
                     exa_key=redis_api_keys.exa_key or os.getenv("EXA_KEY", ""),
                 )
 
+            # Check if there's a pending interrupt that needs resuming
+            should_resume = False
+            try:
+                # Get the checkpointer to check conversation state
+                from agents.components.compound.agent import enhanced_agent
+                from langchain_core.runnables import RunnableConfig
+
+                # Create config to query state
+                state_config = RunnableConfig(configurable={"thread_id": conversation_id})
+
+                # Get current state from checkpointer
+                state = await enhanced_agent.aget_state(state_config)
+
+                # Check if there's a pending interrupt
+                if state and hasattr(state, 'values') and state.values:
+                    if "__interrupt__" in state.values and state.values["__interrupt__"]:
+                        logger.info(
+                            "Found pending interrupt in conversation state - setting resume=True",
+                            user_id=user_id[:8],
+                            interrupt_count=len(state.values["__interrupt__"]),
+                        )
+                        should_resume = True
+            except Exception as e:
+                logger.warning(
+                    f"Could not check for pending interrupts: {str(e)}",
+                    user_id=user_id[:8],
+                )
+
             # Create HumanMessage from voice transcription
             input_message = HumanMessage(
                 content=message_text,
                 additional_kwargs={
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "agent_type": "human",
-                    "resume": False,
+                    "resume": should_resume,  # Set based on interrupt state
                     "source": "voice",  # Mark as voice input
                 },
             )
@@ -1443,6 +1674,9 @@ class WebSocketConnectionManager(WebSocketInterface):
                 message_id=message_id,
             )
 
+            # Note: Auto-approval for interrupts is now handled in send_message
+            # when the deep_research_interrupt message is detected
+
             logger.info(
                 "Successfully injected voice message into chat workflow",
                 user_id=user_id[:8],
@@ -1450,7 +1684,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                 message_preview=message_text[:50],
             )
 
-            return True
+            return (True, message_id)
 
         except Exception as e:
             logger.error(
@@ -1458,7 +1692,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                 user_id=user_id[:8] if user_id else "unknown",
                 conversation_id=conversation_id,
             )
-            return False
+            return (False, None)
 
     async def create_config(
         self,

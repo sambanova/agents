@@ -296,21 +296,22 @@ async def voice_chat_websocket(
                         query=transcription[:50],
                     )
 
-                    # Notify frontend to show agent workflow on screen
-                    await websocket.send_json({
-                        "type": "agent_triggered",
-                        "intent": "tool_call",
-                        "text": transcription,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    })
-
-                    # Inject into backend agent workflow
-                    await websocket.app.state.manager.inject_voice_message(
+                    # Inject into backend agent workflow and get message ID
+                    success, actual_message_id = await websocket.app.state.manager.inject_voice_message(
                         user_id=user_id,
                         conversation_id=conversation_id,
                         message_text=transcription,
                         message_id=message_data.get("message_id"),
                     )
+
+                    # Notify frontend to show agent workflow on screen
+                    await websocket.send_json({
+                        "type": "agent_triggered",
+                        "intent": "tool_call",
+                        "text": transcription,
+                        "message_id": actual_message_id,  # Include the backend-generated ID
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    })
 
                 elif message_type == "audio_chunk":
                     # Frontend sending raw audio chunks

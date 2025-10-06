@@ -29,8 +29,9 @@ export function useVoiceChat(conversationIdGetter) {
   let audioChunksInterval = null
   let audioPlayback = null // Audio playback queue for Hume responses
 
-  // Track current tool call
+  // Track current tool call and message
   let currentToolCallId = null
+  let currentMessageId = null // Backend-generated message ID for the current query
 
   // Store session settings from backend
   let backendSessionSettings = null
@@ -177,12 +178,22 @@ export function useVoiceChat(conversationIdGetter) {
 
         case 'agent_triggered':
           // Backend agents are being triggered - show on screen
-          console.log('🚀 Agents triggered:', message.intent)
+          console.log('🚀 Agents triggered:', message.intent, 'message_id:', message.message_id)
           voiceStatus.value = 'thinking'
+
+          // Store the backend-generated message ID for tracking
+          if (message.message_id) {
+            currentMessageId = message.message_id
+            console.log('💾 Stored message ID:', currentMessageId)
+          }
 
           // Emit event for UI to show agent workflow
           window.dispatchEvent(new CustomEvent('voice-agent-triggered', {
-            detail: { intent: message.intent, text: message.text }
+            detail: {
+              intent: message.intent,
+              text: message.text,
+              message_id: message.message_id // Include message ID for tracking
+            }
           }))
           break
 
@@ -240,6 +251,34 @@ export function useVoiceChat(conversationIdGetter) {
           } else if (!currentToolCallId && message.text) {
             console.debug('⚠️ Received agent response but no active tool call (likely already sent)')
           }
+          break
+
+        case 'agent_completion_full':
+          // Full agent_completion message for chat UI to detect Daytona/tool calls
+          console.log('📦 Full agent_completion received for chat UI')
+          // Forward to chat UI via custom event
+          window.dispatchEvent(new CustomEvent('voice-workflow-message', {
+            detail: {
+              event: message.event || 'agent_completion',
+              data: message.data || message,
+              message_id: message.message_id,
+              timestamp: message.timestamp || new Date().toISOString()
+            }
+          }))
+          break
+
+        case 'llm_stream_chunk_full':
+          // Full llm_stream_chunk message for chat UI to detect Daytona tool calls in streaming
+          console.log('📦 Full llm_stream_chunk received for chat UI')
+          // Forward to chat UI via custom event
+          window.dispatchEvent(new CustomEvent('voice-workflow-message', {
+            detail: {
+              event: message.event || 'llm_stream_chunk',
+              data: message.data || message,
+              message_id: message.message_id,
+              timestamp: message.timestamp || new Date().toISOString()
+            }
+          }))
           break
 
         case 'agent_update':
@@ -338,6 +377,9 @@ export function useVoiceChat(conversationIdGetter) {
     if (message.type === 'audio_output') {
       // For audio chunks, use ID + index as key
       messageKey = `audio_${message.id}_${message.index}`
+    } else if (message.type === 'tool_call' && message.toolCallId) {
+      // For tool calls, use toolCallId as the unique key
+      messageKey = `tool_call_${message.toolCallId}`
     } else if (message.id) {
       // For other messages with IDs, use type + ID
       messageKey = `${message.type}_${message.id}`
@@ -390,14 +432,14 @@ export function useVoiceChat(conversationIdGetter) {
 
         console.log('📤 Tool call - query:', query, 'toolCallId:', currentToolCallId)
 
-        // Send query to backend
+        // Send query to backend (backend will generate message_id)
         if (voiceWebSocket?.readyState === WebSocket.OPEN) {
           voiceWebSocket.send(JSON.stringify({
             type: 'voice_transcription',
             text: query,
-            message_id: `voice_${Date.now()}`,
+            // No message_id - backend will generate a UUID and send it back in agent_triggered
           }))
-          console.log('📤 Sent tool query to backend')
+          console.log('📤 Sent tool query to backend (backend will generate message ID)')
         }
       }
     }

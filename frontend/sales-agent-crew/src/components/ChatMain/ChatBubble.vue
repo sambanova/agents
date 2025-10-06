@@ -1129,6 +1129,11 @@ async function generateSelectablePDF() {
 
 // Helper function to parse Python-style JSON with single quotes
 function parsePythonStyleJSON(jsonString) {
+  // Return null if input is invalid
+  if (!jsonString || typeof jsonString !== 'string' || jsonString.trim() === '') {
+    return null;
+  }
+
   try {
     // First try regular JSON parsing
     return JSON.parse(jsonString);
@@ -1138,7 +1143,7 @@ function parsePythonStyleJSON(jsonString) {
       // Use a more sophisticated approach to handle Python-style JSON
       // This regex-based approach is more robust for handling nested quotes
       let processedString = jsonString;
-      
+
       // Replace Python-style single quotes with double quotes, but preserve escaped quotes
       // This handles cases like: [{'url': 'https://example.com', 'content': 'The company\'s mission...'}]
       processedString = processedString
@@ -1146,7 +1151,7 @@ function parsePythonStyleJSON(jsonString) {
         .replace(/\\"/g, "'") // Restore escaped quotes back to single quotes
         .replace(/"(\w+)":/g, '"$1":') // Ensure property names are double-quoted
         .replace(/:\s*"([^"]*)"(?=\s*[,}])/g, ':"$1"'); // Ensure string values are properly quoted
-      
+
       return JSON.parse(processedString);
     } catch (e2) {
       // If still failing, try using eval as last resort (safer than before)
@@ -1155,7 +1160,13 @@ function parsePythonStyleJSON(jsonString) {
         const result = eval('(' + jsonString + ')');
         return result;
       } catch (e3) {
-        console.error('Failed to parse JSON with all methods:', e3);
+        // Only log detailed error in development mode, otherwise fail silently
+        if (import.meta.env.DEV) {
+          console.warn('Failed to parse JSON, returning null:', {
+            preview: jsonString.substring(0, 100),
+            error: e3.message
+          });
+        }
         return null;
       }
     }
