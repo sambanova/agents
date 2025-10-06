@@ -69,7 +69,7 @@ const syncLocalStorageToRedis = async () => {
       const configResponse = await axios.get(`${apiBaseUrl}/admin/config`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-      console.log('[SYNC] Redis config check:', configResponse.data)
+      console.log('[SYNC] Redis config found')
     } catch (configError) {
       if (configError.response?.status === 404) {
         console.log('[SYNC] Redis config is empty (404), needs sync')
@@ -82,7 +82,7 @@ const syncLocalStorageToRedis = async () => {
       const keysResponse = await axios.get(`${apiBaseUrl}/get_api_keys`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-      console.log('[SYNC] Redis keys check:', keysResponse.data)
+      console.log('[SYNC] Redis keys found')
       if (!keysResponse.data || !keysResponse.data.sambanova_key) {
         needsSync = true
       }
@@ -102,7 +102,7 @@ const syncLocalStorageToRedis = async () => {
     const storedKeys = localStorage.getItem('llm_api_keys')
     if (storedKeys) {
       const parsedKeys = JSON.parse(storedKeys)
-      console.log('[SYNC] Found keys in localStorage:', Object.keys(parsedKeys))
+      console.log('[SYNC] Syncing API keys from localStorage')
 
       const apiKeysPayload = {
         sambanova_key: parsedKeys.sambanova || '',
