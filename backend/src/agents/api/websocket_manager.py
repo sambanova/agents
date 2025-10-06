@@ -1393,8 +1393,9 @@ class WebSocketConnectionManager(WebSocketInterface):
             conversation_id: Conversation ID
         """
         try:
-            # Small delay to ensure interrupt is persisted to checkpoint
-            await asyncio.sleep(0.5)
+            # Delay to ensure interrupt is fully persisted to checkpoint
+            # Increased to 1.0s to give checkpoint time to save
+            await asyncio.sleep(1.0)
 
             logger.info(
                 "Voice mode: Auto-approving interrupt",
@@ -1599,32 +1600,24 @@ class WebSocketConnectionManager(WebSocketInterface):
                     exa_key=redis_api_keys.exa_key or os.getenv("EXA_KEY", ""),
                 )
 
-            # Check if there's a pending interrupt that needs resuming
+            # Check if this is an approval message (for resuming interrupts)
+            # Note: We can't reliably detect interrupts because subgraphs are recreated
+            # with new checkpointers on each message. Instead, we detect approval keywords.
             should_resume = False
-            try:
-                # Get the checkpointer to check conversation state
-                from agents.components.compound.agent import enhanced_agent
-                from langchain_core.runnables import RunnableConfig
+            content_lower = message_text.lower().strip()
+            approval_keywords = [
+                "approve", "approved", "yes", "continue", "proceed", "true",
+                "ok", "okay", "sure", "go ahead", "yep", "yeah", "affirmative",
+                "confirm", "confirmed", "accepted"
+            ]
 
-                # Create config to query state
-                state_config = RunnableConfig(configurable={"thread_id": conversation_id})
-
-                # Get current state from checkpointer
-                state = await enhanced_agent.aget_state(state_config)
-
-                # Check if there's a pending interrupt
-                if state and hasattr(state, 'values') and state.values:
-                    if "__interrupt__" in state.values and state.values["__interrupt__"]:
-                        logger.info(
-                            "Found pending interrupt in conversation state - setting resume=True",
-                            user_id=user_id[:8],
-                            interrupt_count=len(state.values["__interrupt__"]),
-                        )
-                        should_resume = True
-            except Exception as e:
-                logger.warning(
-                    f"Could not check for pending interrupts: {str(e)}",
+            if any(keyword in content_lower for keyword in approval_keywords):
+                # This looks like an approval - set resume=True to continue interrupted workflow
+                should_resume = True
+                logger.info(
+                    "Detected approval keyword - setting resume=True to continue interrupted workflow",
                     user_id=user_id[:8],
+                    message_text=message_text[:50],
                 )
 
             # Create HumanMessage from voice transcription
