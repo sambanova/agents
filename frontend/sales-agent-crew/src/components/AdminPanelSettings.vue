@@ -1463,6 +1463,7 @@ onMounted(async () => {
     await checkAdminStatus()
     if (isBackendEnabled.value) {
       loadStoredApiKeys()
+
       // Load providers and models first, then configuration
       await Promise.all([
         loadProviders(),

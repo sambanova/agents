@@ -109,7 +109,9 @@ async def lifespan(app: FastAPI):
     # Set the global checkpointer for use in agents
     set_global_checkpointer(app.state.checkpointer)
 
-    await AsyncRedisSaver(redis_client=app.state.redis_client).asetup()
+    # Setup the checkpointer (create Redis indexes)
+    if app.state.checkpointer:
+        await app.state.checkpointer.asetup()
 
     yield
 
