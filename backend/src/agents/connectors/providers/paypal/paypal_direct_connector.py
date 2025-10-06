@@ -435,7 +435,9 @@ class CreateInvoiceTool(PayPalDirectTool):
         logger.info(
             "Retrieving PayPal invoicing email",
             user_id=self.user_id,
-            has_email=bool(invoicer_email)
+            has_email=bool(invoicer_email),
+            email_value=invoicer_email,
+            api_keys_obj=str(api_keys.__dict__ if api_keys else None)
         )
 
         if not invoicer_email:
@@ -494,6 +496,12 @@ This is the email address you use to log in to your PayPal business account."""
             "items": items
         }
         
+        logger.info(
+            "Creating PayPal invoice with data",
+            user_id=self.user_id,
+            invoice_data=data
+        )
+
         result = await self.connector._make_api_request(
             method="POST",
             endpoint="/v2/invoicing/invoices",
@@ -505,6 +513,11 @@ This is the email address you use to log in to your PayPal business account."""
             return f"Error creating invoice: {result['error']}"
 
         invoice_id = result.get('id', 'Unknown')
+        logger.info(
+            "Invoice created successfully, attempting to send",
+            user_id=self.user_id,
+            invoice_id=invoice_id
+        )
 
         # Send the invoice to make it shareable (invoices must be sent to get a shareable link)
         send_result = await self.connector._make_api_request(
@@ -515,8 +528,15 @@ This is the email address you use to log in to your PayPal business account."""
         )
 
         if "error" in send_result:
-            # Invoice created but failed to send
-            return f"Invoice created (ID: {invoice_id}) but failed to send: {send_result['error']}\nYou can manually send it using the send_invoice tool."
+            # Invoice created but failed to send - log the full error details
+            logger.error(
+                "Failed to send invoice",
+                user_id=self.user_id,
+                invoice_id=invoice_id,
+                error=send_result.get('error'),
+                error_details=send_result.get('details')
+            )
+            return f"Invoice created (ID: {invoice_id}) but failed to send: {send_result['error']}\nDetails: {send_result.get('details', 'No additional details')}\nYou can manually send it using the send_invoice tool."
 
         # After sending, get the updated invoice to retrieve the shareable link
         invoice_details = await self.connector._make_api_request(
@@ -543,9 +563,9 @@ This is the email address you use to log in to your PayPal business account."""
             response += f"(Send this link to the customer to view and pay the invoice)"
         else:
             # If no payer-view link, construct it manually using PayPal's format
-            # Format: https://www.sandbox.paypal.com/invoice/s/details/{invoice_id}
+            # Format: https://www.sandbox.paypal.com/invoice/p/#INVOICE_ID (for payer view)
             base_url = "https://www.sandbox.paypal.com" if self.connector.is_sandbox else "https://www.paypal.com"
-            shareable_link = f"{base_url}/invoice/s/details/{invoice_id}"
+            shareable_link = f"{base_url}/invoice/p/#{invoice_id}"
             response += f"Shareable Link: {shareable_link}\n"
             response += f"(Send this link to the customer to view and pay the invoice)"
 

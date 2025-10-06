@@ -199,8 +199,8 @@ async def set_api_keys(
 
     When admin panel is enabled (SHOW_ADMIN_PANEL=true):
     - This endpoint should only be called by non-admin components (for Serper/Exa keys)
-    - Preserves Fireworks/Together/SambaNova keys managed by admin panel
-    - Admin panel uses /admin/config endpoint for LLM provider keys
+    - Preserves Fireworks/Together/SambaNova keys and PayPal email managed by admin panel
+    - Admin panel uses /admin/config endpoint for LLM provider keys and PayPal email
 
     When admin panel is disabled:
     - This endpoint manages all API keys as before
@@ -218,7 +218,7 @@ async def set_api_keys(
             # This endpoint should only update non-LLM keys (Serper, Exa)
             existing_keys = await app.state.redis_storage_service.get_user_api_key(user_id)
 
-            # Preserve all LLM provider keys from admin panel
+            # Preserve all LLM provider keys and PayPal email from admin panel
             if existing_keys:
                 # Keep existing provider keys if not explicitly provided
                 if not keys.sambanova_key and existing_keys.sambanova_key:
@@ -227,8 +227,11 @@ async def set_api_keys(
                     keys.fireworks_key = existing_keys.fireworks_key
                 if not getattr(keys, 'together_key', '') and getattr(existing_keys, 'together_key', ''):
                     keys.together_key = existing_keys.together_key
+                # Preserve PayPal invoicing email
+                if not getattr(keys, 'paypal_invoicing_email', '') and getattr(existing_keys, 'paypal_invoicing_email', ''):
+                    keys.paypal_invoicing_email = existing_keys.paypal_invoicing_email
 
-            logger.info(f"Preserving LLM keys while updating other keys for user {user_id[:8]}...")
+            logger.info(f"Preserving LLM keys and PayPal email while updating other keys for user {user_id[:8]}...")
 
         await app.state.redis_storage_service.set_user_api_key(user_id, keys)
 
