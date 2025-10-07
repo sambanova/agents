@@ -1824,11 +1824,16 @@ onMounted(async () => {
 function handleVoiceAgentTriggered(event) {
   console.log('🚀 Voice agent triggered:', event.detail);
 
-  // CRITICAL: Set currentMsgId so all streaming events group together (same as non-voice mode)
-  // Without this, llm_stream_chunk, agent_completion, and think events use different message_ids
-  // and don't group into one bubble, breaking real-time Daytona sidebar, timeline, etc.
-  currentMsgId.value = event.detail.message_id;
-  console.log('📝 Voice mode currentMsgId set to:', currentMsgId.value);
+  // CRITICAL: Only set currentMsgId if streaming hasn't started yet
+  // If currentMsgId is already set (from first stream chunk), keep it to ensure
+  // ALL metrics and events group together with the same message_id
+  // This prevents workflowData from being split across multiple message_ids
+  if (!currentMsgId.value) {
+    currentMsgId.value = event.detail.message_id;
+    console.log('📝 Voice mode currentMsgId set to:', currentMsgId.value);
+  } else if (currentMsgId.value !== event.detail.message_id) {
+    console.warn('⚠️ agent_triggered has different message_id. Keeping streaming ID:', currentMsgId.value, 'ignoring:', event.detail.message_id);
+  }
 
   // Show agent workflow on screen - same as regular chat
   // The conversation will already be displayed in messages
