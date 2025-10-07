@@ -1823,17 +1823,19 @@ onMounted(async () => {
 // Handler for voice agent triggered events
 function handleVoiceAgentTriggered(event) {
   console.log('🚀 Voice agent triggered:', event.detail);
+  console.log('[VOICE-DEBUG] handleVoiceAgentTriggered called:', {
+    text: event.detail.text,
+    message_id: event.detail.message_id,
+    currentMsgId_before: currentMsgId.value,
+    messagesData_length: messagesData.value.length,
+    intent: event.detail.intent
+  });
 
-  // CRITICAL: Only set currentMsgId if streaming hasn't started yet
-  // If currentMsgId is already set (from first stream chunk), keep it to ensure
-  // ALL metrics and events group together with the same message_id
-  // This prevents workflowData from being split across multiple message_ids
-  if (!currentMsgId.value) {
-    currentMsgId.value = event.detail.message_id;
-    console.log('📝 Voice mode currentMsgId set to:', currentMsgId.value);
-  } else if (currentMsgId.value !== event.detail.message_id) {
-    console.warn('⚠️ agent_triggered has different message_id. Keeping streaming ID:', currentMsgId.value, 'ignoring:', event.detail.message_id);
-  }
+  // CRITICAL: Always use the fresh message_id from the agent_triggered event
+  // This ensures each new voice query gets its own unique message_id
+  // and prevents Query 2 from reusing Query 1's message_id due to race conditions
+  currentMsgId.value = event.detail.message_id;
+  console.log('📝 Voice mode currentMsgId set to:', currentMsgId.value);
 
   // Show agent workflow on screen - same as regular chat
   // The conversation will already be displayed in messages
@@ -2465,9 +2467,32 @@ async function connectWebSocket() {
       try {
         const receivedData = JSON.parse(event.data);
 
+        // VOICE-DEBUG: Comprehensive logging for voice mode debugging
+        console.log('[VOICE-DEBUG] WebSocket message received:', {
+          event: receivedData.event,
+          message_id: receivedData.message_id || receivedData.id,
+          timestamp: receivedData.timestamp,
+          type: receivedData.type,
+          content_preview: receivedData.content?.substring(0, 50) ||
+                          receivedData.data?.content?.substring(0, 50) ||
+                          receivedData.data?.substring?.(0, 50) ||
+                          'no content',
+          agent_type: receivedData.additional_kwargs?.agent_type || receivedData.agent_type
+        });
+
         // Debug log to verify main WebSocket is receiving events (especially in voice mode)
         if (receivedData.event && ['llm_stream_chunk', 'think', 'agent_completion'].includes(receivedData.event)) {
           console.log('[Main WS] Received:', receivedData.event, 'message_id:', receivedData.message_id || receivedData.id || 'none');
+        }
+
+        // CRITICAL: Handle stream_start FIRST to set correct message_id for voice mode
+        // This event arrives before any messages, ensuring the right ID is used from the start
+        if (receivedData.event === 'stream_start') {
+          if (receivedData.message_id) {
+            currentMsgId.value = receivedData.message_id;
+            console.log('[Voice Mode] stream_start detected - using new message_id:', currentMsgId.value);
+          }
+          // Don't return - let the event propagate in case other handlers need it
         }
 
         if (receivedData.type === 'pong') {
@@ -2594,6 +2619,14 @@ async function connectWebSocket() {
           }
           
           try {
+            console.log('[VOICE-DEBUG] Pushing agent_completion to messagesData:', {
+              event: messageData.event,
+              message_id: messageData.message_id,
+              timestamp: messageData.timestamp,
+              agent_type: messageData.agent_type,
+              type: messageData.data?.type,
+              messagesData_length_before: messagesData.value.length
+            });
             messagesData.value.push(messageData);
           } catch (error) {
             console.error('Error pushing message data:', error);
@@ -2653,13 +2686,20 @@ async function connectWebSocket() {
           } else {
             // Create new chunk with shared message_id for grouping
             try {
-              messagesData.value.push({
+              const chunkData = {
                 event: 'llm_stream_chunk',
                 data: { ...receivedData, id: chunkIdentifier },
                 message_id: streamMessageId,  // SHARED message_id for grouping!
                 conversation_id: currentId.value,
                 timestamp: receivedData.timestamp || new Date().toISOString()
+              };
+              console.log('[VOICE-DEBUG] Pushing llm_stream_chunk to messagesData:', {
+                event: chunkData.event,
+                message_id: chunkData.message_id,
+                timestamp: chunkData.timestamp,
+                messagesData_length_before: messagesData.value.length
               });
+              messagesData.value.push(chunkData);
 
               // CRITICAL: Track metrics for llm_stream_chunk if it has response_metadata
               // This enables live model count updates during streaming
@@ -2689,7 +2729,11 @@ async function connectWebSocket() {
             console.error('Error adding stream complete message:', error);
           }
           isLoading.value = false;
-          
+
+          // CRITICAL: Reset currentMsgId for voice mode so next query uses fresh backend message_id
+          // This prevents message grouping issues where Query 2 reuses Query 1's message_id
+          currentMsgId.value = null;
+
           // Reload user documents (artifacts) after chat completion
           if (!isSharedConversation.value && isAuthenticated.value) {
             console.log('Reloading user documents after chat completion');
@@ -2983,6 +3027,8 @@ const workflowDataByMessageId = computed(() => {
 });
 
 const filteredMessages = computed(() => {
+  console.log('[VOICE-DEBUG] filteredMessages computing, messagesData count:', messagesData.value?.length || 0);
+
   if (!messagesData.value || messagesData.value.length === 0) {
     return [];
   }
@@ -3125,6 +3171,17 @@ const filteredMessages = computed(() => {
       const aTime = new Date(a.timestamp || 0).getTime();
       const bTime = new Date(b.timestamp || 0).getTime();
       return aTime - bTime;
+    });
+
+    console.log('[VOICE-DEBUG] filteredMessages result:', {
+      total_groups: result.length,
+      groups: result.map(r => ({
+        type: r.type || r.event,
+        message_id: r.message_id,
+        timestamp: r.timestamp,
+        events_count: r.events?.length,
+        has_user_message: r.event === 'user_message' || r.type === 'HumanMessage'
+      }))
     });
 
     return result;
