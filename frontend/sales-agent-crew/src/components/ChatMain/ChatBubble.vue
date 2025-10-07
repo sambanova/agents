@@ -1211,7 +1211,13 @@ const userMessageContent = computed(() => {
 // Check if this is a user/human message
 const isUserMessage = computed(() => {
   try {
-    return (props.event === 'agent_completion' && 
+    // Check for user_message event (sent when user types a message)
+    if (props.event === 'user_message') {
+      return true;
+    }
+
+    // Check for agent_completion with human type (from backend/loaded conversations)
+    return (props.event === 'agent_completion' &&
            (parsedData.value?.additional_kwargs?.agent_type === 'human' ||
             parsedData.value?.type === 'HumanMessage'))
   } catch (error) {
@@ -1224,8 +1230,34 @@ const isUserMessage = computed(() => {
 // Decide whether this bubble should be rendered (skip internal or debug-only messages)
 const showBubble = computed(() => {
   try {
-    // Always show if this bubble carries streamingEvents (status line)
-    if (props.streamingEvents) return true
+    // For streaming events, only show if there's displayable content
+    if (props.streamingEvents) {
+      // Check if we have any displayable content
+      const hasContent = streamingResponseContent.value &&
+                        streamingResponseContent.value.trim() !== '';
+      const hasComponent = finalResponseComponent.value !== null;
+      const hasSources = toolSources.value && toolSources.value.length > 0;
+      const hasArtifacts = artifacts.value && artifacts.value.length > 0;
+      const hasWorkflow = props.workflowData && props.workflowData.length > 0;
+
+      // For final response types (react_end, etc.), check if they have actual content
+      // Don't show empty final response bubbles
+      if (hasComponent && !hasContent && !hasSources && !hasArtifacts && !hasWorkflow) {
+        // Check if finalResponseData has meaningful content
+        const responseData = finalResponseData.value;
+        const hasResponseContent = responseData &&
+                                   responseData.content &&
+                                   (typeof responseData.content === 'object' ||
+                                    (typeof responseData.content === 'string' && responseData.content.trim() !== ''));
+
+        if (!hasResponseContent) {
+          return false; // Don't show empty final response bubbles
+        }
+      }
+
+      // Only show if we have something to display
+      return hasContent || hasComponent || hasSources || hasArtifacts || hasWorkflow;
+    }
 
     // Always show user messages
     if (isUserMessage.value) return true

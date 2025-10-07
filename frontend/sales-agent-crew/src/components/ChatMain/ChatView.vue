@@ -2889,25 +2889,44 @@ const filteredMessages = computed(() => {
   try {
     const grouped = new Map();
     const streamingEvents = ['agent_completion', 'llm_stream_chunk', 'stream_complete'];
-    
+
     // First pass: identify distinct conversation turns and streaming groups
     const messageIdCounts = {};
     const userMessages = new Set(); // Track user messages
     const aiMessages = new Set(); // Track AI messages
-    
+    const userMessageIds = new Map(); // Track user message_ids to detect duplicates
+
     messagesData.value.forEach(msg => {
       if (!msg) return;
-      
+
       // Identify user messages (these should always be separate)
-      if (msg.type === 'HumanMessage' || msg.agent_type === 'human' || msg.additional_kwargs?.agent_type === 'human') {
+      // Check both top-level and nested data properties
+      const isUserMsg = msg.type === 'HumanMessage' ||
+                        msg.agent_type === 'human' ||
+                        msg.additional_kwargs?.agent_type === 'human' ||
+                        msg.data?.type === 'HumanMessage' ||
+                        msg.data?.additional_kwargs?.agent_type === 'human';
+
+      if (isUserMsg) {
         userMessages.add(msg.message_id);
+        // Track backend user messages (canonical source)
+        if (msg.event === 'agent_completion') {
+          userMessageIds.set(msg.message_id, 'backend');
+        }
       }
-      
+      // Also track local user messages
+      if (msg.event === 'user_message') {
+        // Don't overwrite backend version if it exists
+        if (!userMessageIds.has(msg.message_id)) {
+          userMessageIds.set(msg.message_id, 'local');
+        }
+      }
+
       // Identify AI messages (these should be separate unless they're truly streaming)
       if (msg.type === 'AIMessage' || isFinalAgentType(msg.agent_type)) {
         aiMessages.add(msg.message_id);
       }
-      
+
       if (streamingEvents.includes(msg.event) && msg.message_id) {
         // Count ALL streaming events for grouping - we want everything in one bubble
         messageIdCounts[msg.message_id] = (messageIdCounts[msg.message_id] || 0) + 1;
@@ -2920,24 +2939,35 @@ const filteredMessages = computed(() => {
         console.warn('Skipping null/undefined message at index:', index);
         return; // Skip null/undefined messages
       }
-      
+
       const msgId = msg.message_id;
 
       // Decide whether this message should always render its own bubble
       const agentType = msg.agent_type || msg.additional_kwargs?.agent_type || msg.data?.additional_kwargs?.agent_type || msg.data?.agent_type
-      
 
-      
+
+      // Skip duplicate user messages - prefer backend version over local
+      // If this is a local user_message and we have a backend version with the same message_id, skip it
+      if (msg.event === 'user_message' && userMessageIds.get(msgId) === 'backend') {
+        console.debug('Skipping duplicate local user message, backend version exists:', msgId);
+        return;
+      }
+
       // Always separate genuine user inputs
-      if (agentType === 'human' || msg.type === 'HumanMessage') {
-        const uniqueKey = `${msg.type || msg.agent_type}_${msgId}_${index}`;
+      const isUserInput = agentType === 'human' ||
+                         msg.type === 'HumanMessage' ||
+                         msg.data?.type === 'HumanMessage' ||
+                         msg.event === 'user_message';
+
+      if (isUserInput) {
+        const uniqueKey = `${msg.type || msg.event}_${msgId}_${index}`;
         grouped.set(uniqueKey, msg);
         return;
       }
 
       if (streamingEvents.includes(msg.event) &&
           msgId &&
-          !(agentType === 'human' || msg.type === 'HumanMessage')) {
+          !(agentType === 'human' || msg.type === 'HumanMessage' || msg.data?.type === 'HumanMessage')) {
 
         const groupKey = `streaming_${msgId}`;
 
