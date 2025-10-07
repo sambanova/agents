@@ -1624,13 +1624,28 @@ class WebSocketConnectionManager(WebSocketInterface):
             ]
 
             if any(keyword in content_lower for keyword in approval_keywords):
-                # This looks like an approval - set resume=True to continue interrupted workflow
-                should_resume = True
-                logger.info(
-                    "Detected approval keyword - setting resume=True to continue interrupted workflow",
-                    user_id=user_id[:8],
-                    message_text=message_text[:50],
-                )
+                # Check if conversation has existing messages before enabling resume
+                # Resume mode should only be used when continuing an interrupted workflow,
+                # not when starting a fresh conversation
+                existing_messages = await self.message_storage.get_messages(user_id, conversation_id)
+
+                if existing_messages and len(existing_messages) > 0:
+                    # Only enable resume if there's existing conversation history
+                    should_resume = True
+                    logger.info(
+                        "Detected approval keyword with existing history - setting resume=True",
+                        user_id=user_id[:8],
+                        num_existing_messages=len(existing_messages),
+                        message_text=message_text[:50],
+                    )
+                else:
+                    # First message or empty history - treat as new conversation
+                    should_resume = False
+                    logger.info(
+                        "Detected approval keyword but no history - treating as new conversation",
+                        user_id=user_id[:8],
+                        message_text=message_text[:50],
+                    )
 
             # Create HumanMessage from voice transcription
             input_message = HumanMessage(
