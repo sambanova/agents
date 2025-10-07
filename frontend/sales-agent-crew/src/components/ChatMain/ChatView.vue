@@ -122,7 +122,7 @@
           <!-- Chat Bubble -->
           <li v-for="msgItem in filteredMessages" :key="msgItem.message_id || msgItem.id || msgItem.timestamp || Math.random()">
             <ChatBubble
-              :workflowData="getModelData(msgItem.message_id || msgItem.messageId)"
+              :workflowData="workflowDataByMessageId[msgItem.message_id || msgItem.messageId] || []"
               :plannerText="
                 plannerTextData.filter(
                   (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
@@ -217,8 +217,8 @@
           </li>
           
                       <ChatLoaderBubble
-            :workflowData="getModelData(currentMsgId)"
-            v-if="isLoading && !hasActiveStreamingGroup && getModelData(currentMsgId).length > 0"
+            :workflowData="workflowDataByMessageId[currentMsgId] || []"
+            v-if="isLoading && !hasActiveStreamingGroup && (workflowDataByMessageId[currentMsgId] || []).length > 0"
             :isLoading="isLoading"
             :statusText="'Planning...'"
             :plannerText="
@@ -2586,6 +2586,15 @@ async function connectWebSocket() {
               const existingContent = messagesData.value[existingIndex].data?.content || '';
               const newContent = receivedData.content || '';
               messagesData.value[existingIndex].data.content = existingContent + newContent;
+
+              // Track metrics if this chunk has response_metadata (e.g., final chunk with metadata)
+              if (receivedData.response_metadata || receivedData.usage_metadata) {
+                trackRunMetrics(
+                  streamMessageId,
+                  receivedData.usage_metadata,
+                  receivedData.response_metadata
+                );
+              }
             } catch (error) {
               console.error('Error updating stream chunk:', error);
             }
@@ -2599,6 +2608,16 @@ async function connectWebSocket() {
                 conversation_id: currentId.value,
                 timestamp: receivedData.timestamp || new Date().toISOString()
               });
+
+              // CRITICAL: Track metrics for llm_stream_chunk if it has response_metadata
+              // This enables live model count updates during streaming
+              if (receivedData.response_metadata || receivedData.usage_metadata) {
+                trackRunMetrics(
+                  streamMessageId,
+                  receivedData.usage_metadata,
+                  receivedData.response_metadata
+                );
+              }
             } catch (error) {
               console.error('Error adding new stream chunk:', error);
             }
@@ -2635,8 +2654,25 @@ async function connectWebSocket() {
 
           statusText.value = dataParsed.agent_name;
           emit('agentThoughtsDataChanged', agentThoughtsData.value);
+
+          // CRITICAL: Track metrics from think events for model counts
+          // Financial analysis workflow uses think events with metadata.llm_name
+          if (dataParsed.metadata && dataParsed.metadata.llm_name) {
+            const runId = receivedData.message_id || currentMsgId.value;
+            trackRunMetrics(
+              runId,
+              null,  // No usage_metadata in think events
+              {
+                model_name: dataParsed.metadata.llm_name,
+                usage: {
+                  total_latency: dataParsed.metadata.duration || 0
+                }
+              }
+            );
+          }
+
           try {
-            
+
             // Add think event to messages for persistence
             try {
               messagesData.value.push({
@@ -2880,6 +2916,19 @@ const hasActiveStreamingGroup = computed(() => {
 });
 
 
+
+// Computed property to create reactive mapping of workflow data by message_id
+const workflowDataByMessageId = computed(() => {
+  const result = {};
+  // Group workflowData by message_id
+  workflowData.value.forEach(item => {
+    if (!result[item.message_id]) {
+      result[item.message_id] = [];
+    }
+    result[item.message_id].push(item);
+  });
+  return result;
+});
 
 const filteredMessages = computed(() => {
   if (!messagesData.value || messagesData.value.length === 0) {
@@ -3290,11 +3339,29 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata) {
   // Only increment event count if event has both response_metadata and model_name, since we are counting llm calls
   if (responseMetadata && responseMetadata.model_name) {
     runData.event_count++;
-    
+
     // Track model usage
     const modelName = responseMetadata.model_name;
     const currentCount = runData.models.get(modelName) || 0;
     runData.models.set(modelName, currentCount + 1);
+
+    // CRITICAL: Also update workflowData array for reactive updates
+    // Vue tracks array changes, so updating this will trigger re-renders
+    const existingIndex = workflowData.value.findIndex(
+      item => item.message_id === runId && item.llm_name === modelName
+    );
+
+    if (existingIndex !== -1) {
+      // Update existing entry
+      workflowData.value[existingIndex].count = currentCount + 1;
+    } else {
+      // Add new entry
+      workflowData.value.push({
+        llm_name: modelName,
+        count: currentCount + 1,
+        message_id: runId
+      });
+    }
   }
 }
 
@@ -3358,26 +3425,18 @@ function getRunSummary(msgItem) {
   return summary;
 }
 
-// Get model data from runMetrics for display
+// Get model data from workflowData array for display
+// Using the reactive array instead of Map ensures Vue detects changes
 function getModelData(message_id) {
   const runId = message_id || currentMsgId.value;
-  
-  if (!runId || !runMetrics.value.has(runId)) {
+
+  if (!runId) {
     return [];
   }
-  
-  const runData = runMetrics.value.get(runId);
-  const models = [];
-  
-  for (const [modelName, count] of runData.models.entries()) {
-    models.push({
-      llm_name: modelName,
-      count: count,
-      message_id: runId
-    });
-  }
-  
-  return models;
+
+  // Filter workflowData array by message_id
+  // Vue tracks array access, so this will be reactive!
+  return workflowData.value.filter(item => item.message_id === runId);
 }
 
 // File utility functions
