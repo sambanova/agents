@@ -1823,6 +1823,13 @@ onMounted(async () => {
 // Handler for voice agent triggered events
 function handleVoiceAgentTriggered(event) {
   console.log('🚀 Voice agent triggered:', event.detail);
+
+  // CRITICAL: Set currentMsgId so all streaming events group together (same as non-voice mode)
+  // Without this, llm_stream_chunk, agent_completion, and think events use different message_ids
+  // and don't group into one bubble, breaking real-time Daytona sidebar, timeline, etc.
+  currentMsgId.value = event.detail.message_id;
+  console.log('📝 Voice mode currentMsgId set to:', currentMsgId.value);
+
   // Show agent workflow on screen - same as regular chat
   // The conversation will already be displayed in messages
   // Just ensure UI is in active state
@@ -2452,7 +2459,12 @@ async function connectWebSocket() {
     socket.value.onmessage = async (event) => {
       try {
         const receivedData = JSON.parse(event.data);
-        
+
+        // Debug log to verify main WebSocket is receiving events (especially in voice mode)
+        if (receivedData.event && ['llm_stream_chunk', 'think', 'agent_completion'].includes(receivedData.event)) {
+          console.log('[Main WS] Received:', receivedData.event, 'message_id:', receivedData.message_id || receivedData.id || 'none');
+        }
+
         if (receivedData.type === 'pong') {
           // Pong received, connection is alive.
           return;
@@ -2589,6 +2601,14 @@ async function connectWebSocket() {
             isLoading.value = false;
           }
         } else if (receivedData.event === 'llm_stream_chunk') {
+          // VOICE MODE FIX: If currentMsgId is not set, this is the start of voice mode streaming
+          // Set it now (before processing) so isDaytonaActiveGlobal watch can trigger sidebar opening
+          if (!currentMsgId.value && receivedData.message_id) {
+            console.log('[Voice Mode] First stream chunk detected - initializing streaming state', receivedData.message_id);
+            currentMsgId.value = receivedData.message_id;
+            isLoading.value = true;
+          }
+
           // CRITICAL: Use currentMsgId.value as the message_id so all stream chunks
           // in this conversation turn group with agent_completion events into ONE bubble!
           const streamMessageId = currentMsgId.value || receivedData.message_id || receivedData.id || `chunk_${Date.now()}`;
