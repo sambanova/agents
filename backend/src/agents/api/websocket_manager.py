@@ -1615,19 +1615,43 @@ class WebSocketConnectionManager(WebSocketInterface):
             # Check if this is an approval message (for resuming interrupts)
             # Note: We can't reliably detect interrupts because subgraphs are recreated
             # with new checkpointers on each message. Instead, we detect approval keywords.
+            # IMPORTANT: Only enable auto-approval for EXISTING conversations (not new ones)
             should_resume = False
-            content_lower = message_text.lower().strip()
-            approval_keywords = [
-                "approve", "approved", "yes", "continue", "proceed", "true",
-                "ok", "okay", "sure", "go ahead", "yep", "yeah", "affirmative",
-                "confirm", "confirmed", "accepted"
-            ]
 
-            if any(keyword in content_lower for keyword in approval_keywords):
-                # This looks like an approval - set resume=True to continue interrupted workflow
-                should_resume = True
+            # Load existing messages to check if this is a new conversation
+            existing_messages = await self.message_storage.get_messages(
+                user_id, conversation_id
+            )
+            num_messages = len(existing_messages)
+
+            logger.info(
+                "Voice message injection context",
+                user_id=user_id[:8],
+                num_messages=num_messages,
+            )
+
+            # Only apply auto-approval detection if there are existing messages
+            # (meaning there's an interrupted workflow that could be resumed)
+            if num_messages > 0:
+                content_lower = message_text.lower().strip()
+                approval_keywords = [
+                    "approve", "approved", "yes", "continue", "proceed", "true",
+                    "ok", "okay", "sure", "go ahead", "yep", "yeah", "affirmative",
+                    "confirm", "confirmed", "accepted"
+                ]
+
+                if any(keyword in content_lower for keyword in approval_keywords):
+                    # This looks like an approval - set resume=True to continue interrupted workflow
+                    should_resume = True
+                    logger.info(
+                        "Detected approval keyword in existing conversation - setting resume=True to continue interrupted workflow",
+                        user_id=user_id[:8],
+                        message_text=message_text[:50],
+                        num_messages=num_messages,
+                    )
+            else:
                 logger.info(
-                    "Detected approval keyword - setting resume=True to continue interrupted workflow",
+                    "New conversation (num_messages=0) - skipping auto-approval detection, letting agent route normally",
                     user_id=user_id[:8],
                     message_text=message_text[:50],
                 )

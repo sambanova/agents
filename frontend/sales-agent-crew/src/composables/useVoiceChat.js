@@ -8,6 +8,11 @@ import { HumeClient } from 'hume'
 import { getMicrophoneStream, blobToBase64, AudioPlaybackQueue } from '../utils/audioHandler'
 import { isFinalAgentType } from '../utils/globalFunctions'
 
+// GLOBAL SINGLETON: Ensure only ONE voice mode instance is active across ALL ChatView instances
+let globalVoiceModeActive = false
+let globalVoiceModeConversationId = null
+let globalStopVoiceModeCallback = null
+
 export function useVoiceChat(conversationIdGetter) {
   const { getAccessTokenSilently, user } = useAuth0()
 
@@ -96,7 +101,8 @@ export function useVoiceChat(conversationIdGetter) {
       const wsHost = window.location.host
       const wsUrl = `${wsProtocol}//${wsHost}/api/voice/chat?conversation_id=${convId}`
 
-      console.log('🔌 Connecting to backend voice WebSocket:', wsUrl)
+      console.log(`🔌 Connecting voice WebSocket to FOCUSED conversation ${convId}`)
+      console.log(`   WebSocket URL: ${wsUrl}`)
       voiceWebSocket = new WebSocket(wsUrl)
 
       return new Promise((resolve, reject) => {
@@ -232,32 +238,34 @@ export function useVoiceChat(conversationIdGetter) {
 
           console.log('📦 agent_completion received, agent_type:', agentType)
 
-          // Only send to EVI when we get the final completion (handles all final types)
+          // Only inject results when we get the final completion (handles all final types)
           if (isFinalAgentType(agentType) && currentToolCallId && humeSocket) {
-            console.log('🎯 Final completion received - sending accumulated responses to EVI')
+            console.log('🎯 Final completion received - injecting results via context')
 
             try {
               // Get the last (final) response which should be the formatted summary
               const finalResponse = accumulatedProgress.value[accumulatedProgress.value.length - 1] || 'Processing complete'
 
-              console.log('📤 Sending final tool response to EVI with toolCallId:', currentToolCallId)
+              console.log('📤 Injecting final results as temporary context')
               console.log('📊 Final response preview:', finalResponse.substring(0, 200))
 
-              // Send the result back to EVI as a tool response
-              humeSocket.sendToolResponseMessage({
-                type: 'tool_response',
-                toolCallId: currentToolCallId,
-                content: finalResponse
+              // Inject results as temporary context while EVI is speaking
+              // This allows EVI to seamlessly incorporate the results into its ongoing response
+              humeSocket.sendSessionSettings({
+                context: {
+                  text: `Query results: ${finalResponse}`,
+                  type: 'temporary'
+                }
               })
 
-              console.log('✅ Tool response sent - EVI will incorporate it naturally')
+              console.log('✅ Results injected - EVI will incorporate them while speaking')
 
-              // Clear the tool call ID and accumulated progress after successful send
+              // Clear the tool call ID and accumulated progress after successful injection
               currentToolCallId = null
               accumulatedProgress.value = []
             } catch (e) {
-              console.error('❌ Error sending tool response:', e)
-              // Don't clear currentToolCallId or progress if send failed
+              console.error('❌ Error injecting results:', e)
+              // Don't clear currentToolCallId or progress if injection failed
             }
           } else {
             console.debug('📦 Non-final agent_completion (waiting for final type), agent_type:', agentType)
@@ -324,7 +332,7 @@ export function useVoiceChat(conversationIdGetter) {
       const connectOptions = {}
       if (eviConfigId) {
         connectOptions.configId = eviConfigId
-        console.log('🔧 Connecting with EVI config:', eviConfigId)
+        console.log(`🔧 Connecting Hume EVI for conversation ${conversationIdGetter()} with config: ${eviConfigId}`)
       } else {
         console.warn('⚠️ No EVI config_id - tools may not work')
       }
@@ -433,6 +441,17 @@ export function useVoiceChat(conversationIdGetter) {
         accumulatedProgress.value = [] // Clear any previous progress from last query
 
         console.log('📤 Tool call - query:', query, 'toolCallId:', currentToolCallId)
+
+        // CRITICAL FIX: Send immediate partial tool response to unblock EVI
+        // EVI 3 architecture requires this so it can start speaking while backend processes
+        if (humeSocket) {
+          humeSocket.sendToolResponseMessage({
+            type: 'tool_response',
+            toolCallId: currentToolCallId,
+            content: 'Processing your request now. Let me gather that information for you.'
+          })
+          console.log('⚡ Sent immediate partial tool response - EVI can now start speaking')
+        }
 
         // Send query to backend (backend will generate message_id)
         if (voiceWebSocket?.readyState === WebSocket.OPEN) {
@@ -574,18 +593,41 @@ export function useVoiceChat(conversationIdGetter) {
    */
   async function startVoiceMode() {
     try {
-      console.log('🎙️ Starting voice mode...')
+      const currentConversationId = conversationIdGetter()
+
+      if (!currentConversationId) {
+        throw new Error('No conversation ID available. Cannot start voice mode.')
+      }
+
+      console.log('🎙️ Starting voice mode for FOCUSED conversation:', currentConversationId)
 
       // Check browser support
       if (!isSupported.value) {
         throw new Error('Your browser does not support voice mode')
       }
 
-      // Guard: prevent starting if already in voice mode or connecting
+      // GLOBAL GUARD: Stop any existing voice mode from other instances first
+      if (globalVoiceModeActive) {
+        if (globalVoiceModeConversationId === currentConversationId) {
+          console.log('✅ Voice mode already active for this conversation, skipping')
+          return
+        }
+        console.warn(`⚠️ Voice mode active on conversation ${globalVoiceModeConversationId}, switching to ${currentConversationId}`)
+        if (globalStopVoiceModeCallback) {
+          await globalStopVoiceModeCallback()
+        }
+      }
+
+      // Local guard: prevent duplicate start within this instance
       if (isVoiceMode.value || voiceStatus.value === 'connecting') {
-        console.warn('⚠️ Voice mode already active or connecting, ignoring duplicate start request')
+        console.warn('⚠️ Voice mode already active in this instance, ignoring duplicate start request')
         return
       }
+
+      // Register this instance globally
+      globalVoiceModeActive = true
+      globalVoiceModeConversationId = currentConversationId
+      globalStopVoiceModeCallback = stopVoiceMode
 
       isVoiceMode.value = true
       error.value = null
@@ -646,6 +688,14 @@ export function useVoiceChat(conversationIdGetter) {
    */
   async function stopVoiceMode() {
     console.log('🛑 Stopping voice mode...')
+
+    // Clear global singleton if this was the active instance
+    if (globalVoiceModeConversationId === conversationIdGetter()) {
+      globalVoiceModeActive = false
+      globalVoiceModeConversationId = null
+      globalStopVoiceModeCallback = null
+      console.log('✅ Cleared global voice mode singleton')
+    }
 
     isVoiceMode.value = false
     voiceStatus.value = 'idle'
