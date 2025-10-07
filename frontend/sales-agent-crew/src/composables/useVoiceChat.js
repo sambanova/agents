@@ -216,6 +216,18 @@ export function useVoiceChat(conversationIdGetter) {
           console.log('🤖 Agent response received:', message.text?.substring(0, 100))
           agentUpdate.value = ''
 
+          // Check for Daytona tool calls in agent responses
+          if (message.text && (message.text.includes('<tool>DaytonaCodeSandbox</tool>') ||
+              message.text.includes('<subgraph>DaytonaCodeSandbox'))) {
+            console.log('🔧 Daytona tool call detected in agent_response - dispatching voice-daytona-detected event')
+            window.dispatchEvent(new CustomEvent('voice-daytona-detected', {
+              detail: {
+                message_id: message.message_id || currentMessageId,
+                timestamp: new Date().toISOString()
+              }
+            }))
+          }
+
           // Accumulate this response - we'll send to EVI when we get the final completion
           if (message.text && currentToolCallId) {
             accumulatedProgress.value.push(message.text)
@@ -270,6 +282,20 @@ export function useVoiceChat(conversationIdGetter) {
           // breaking the streaming group logic in filteredMessages.
           // The main WebSocket handles ALL UI updates including Daytona tool calls.
           console.log('📦 llm_stream_chunk received (main WebSocket handles UI - no forwarding needed)')
+
+          // EXCEPTION: Check for Daytona tool calls and dispatch special detection event
+          // This ensures the Daytona sidebar opens in voice mode even if main WebSocket has timing issues
+          const chunkContent = message.data?.data?.content || message.data?.content || ''
+          if (chunkContent.includes('<tool>DaytonaCodeSandbox</tool>') ||
+              chunkContent.includes('<subgraph>DaytonaCodeSandbox</subgraph>')) {
+            console.log('🔧 Daytona tool call detected in voice mode - dispatching voice-daytona-detected event')
+            window.dispatchEvent(new CustomEvent('voice-daytona-detected', {
+              detail: {
+                message_id: message.message_id || currentMessageId,
+                timestamp: new Date().toISOString()
+              }
+            }))
+          }
           break
 
         case 'agent_update':

@@ -1813,6 +1813,9 @@ onMounted(async () => {
   // Listen for voice workflow messages to show in chat UI
   window.addEventListener('voice-workflow-message', handleVoiceWorkflowMessage);
 
+  // Listen for Daytona tool call detection in voice mode
+  window.addEventListener('voice-daytona-detected', handleVoiceDaytonaDetected);
+
   // Click outside handler for connector panel - TEMPORARILY DISABLED FOR TESTING
   // document.addEventListener('click', handleClickOutside);
 });
@@ -1845,9 +1848,33 @@ function handleVoiceWorkflowMessage(event) {
   }
 }
 
+// Handler for Daytona tool call detection in voice mode
+function handleVoiceDaytonaDetected(event) {
+  console.log('🔧 Voice Daytona detected event received:', event.detail);
+
+  // In voice mode, when user explicitly invokes Daytona via voice command,
+  // we should open the sidebar even if they previously closed it in another context.
+  // This is a NEW explicit request from the user.
+  // Only skip during initial page load (loading old messages)
+  if (!initialLoading.value) {
+    console.log('✅ Opening Daytona sidebar for voice mode (this is a new explicit Daytona invocation)')
+    // Reset the closed flag since this is a new explicit Daytona request via voice
+    daytonaSidebarClosed.value = false
+    showDaytonaSidebar.value = true
+    updateCurrentDaytonaEvents()
+    // Close artifact canvas if it's open since we're using sidebar now
+    showArtifactCanvas.value = false
+  } else {
+    console.log('⏸️ Skipping Daytona sidebar open - still in initial loading:', {
+      initialLoading: initialLoading.value
+    })
+  }
+}
+
 onUnmounted(() => {
   window.removeEventListener('voice-agent-triggered', handleVoiceAgentTriggered);
   window.removeEventListener('voice-workflow-message', handleVoiceWorkflowMessage);
+  window.removeEventListener('voice-daytona-detected', handleVoiceDaytonaDetected);
   emitterMitt.off('new-chat', handleButtonClick);
   emitterMitt.off('reload-user-documents', loadUserDocuments);
   // document.removeEventListener('click', handleClickOutside);
