@@ -1161,7 +1161,22 @@ watch(isVoiceMode, (newValue) => {
 
 // Handle voice mode starting (before activation)
 async function handleVoiceModeStarting() {
-  console.log('Voice mode starting - ensuring main chat WebSocket is connected');
+  console.log('Voice mode starting - ensuring conversation and WebSocket ready');
+
+  // If no conversation exists, create one first (same pattern as addMessage)
+  if (!route.params.id && !isSharedConversation.value) {
+    try {
+      console.log('No conversation ID - creating new chat for voice mode');
+      await createNewChat();
+      await nextTick();
+      // After createNewChat, the router push should update the conversation id
+      conversationId.value = route.params.id;
+      console.log('✅ New chat created for voice mode:', conversationId.value);
+    } catch (error) {
+      console.error('Failed to create new chat for voice mode:', error);
+      throw new Error('Failed to create conversation for voice mode');
+    }
+  }
 
   // Ensure main chat WebSocket is connected
   if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {

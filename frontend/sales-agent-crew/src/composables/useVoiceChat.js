@@ -301,6 +301,17 @@ export function useVoiceChat(conversationIdGetter) {
     try {
       console.log('🎤 Connecting to Hume EVI...')
 
+      // Close existing Hume socket if any (prevents duplicate connections)
+      if (humeSocket) {
+        console.warn('⚠️ Closing existing Hume socket before creating new one')
+        try {
+          humeSocket.close()
+        } catch (e) {
+          console.error('Error closing existing Hume socket:', e)
+        }
+        humeSocket = null
+      }
+
       // Get Hume access token from backend
       const accessToken = await getHumeToken()
 
@@ -570,6 +581,12 @@ export function useVoiceChat(conversationIdGetter) {
         throw new Error('Your browser does not support voice mode')
       }
 
+      // Guard: prevent starting if already in voice mode or connecting
+      if (isVoiceMode.value || voiceStatus.value === 'connecting') {
+        console.warn('⚠️ Voice mode already active or connecting, ignoring duplicate start request')
+        return
+      }
+
       isVoiceMode.value = true
       error.value = null
       voiceStatus.value = 'connecting'
@@ -691,7 +708,18 @@ export function useVoiceChat(conversationIdGetter) {
     if (!isVoiceMode.value) return // Only care if voice mode is active
 
     if (newId !== oldId && newId) {
-      console.log(`🔄 Conversation changed from ${oldId} to ${newId}, reconnecting voice WebSocket...`)
+      console.log(`🔄 Conversation changed from ${oldId} to ${newId}, reconnecting...`)
+
+      // Close old Hume socket connection
+      if (humeSocket) {
+        try {
+          humeSocket.close()
+          humeSocket = null
+          console.log('✅ Closed old Hume socket')
+        } catch (e) {
+          console.error('Error closing old Hume socket:', e)
+        }
+      }
 
       // Close old voice WebSocket connection
       if (voiceWebSocket && voiceWebSocket.readyState === WebSocket.OPEN) {
@@ -702,9 +730,10 @@ export function useVoiceChat(conversationIdGetter) {
       // Reconnect to new conversation
       try {
         await connectBackendWebSocket()
-        console.log('✅ Voice WebSocket reconnected to new conversation')
+        await connectHumeEVI()
+        console.log('✅ Voice connections reconnected to new conversation')
       } catch (err) {
-        console.error('❌ Failed to reconnect voice WebSocket:', err)
+        console.error('❌ Failed to reconnect voice connections:', err)
         error.value = 'Failed to switch conversation in voice mode'
       }
     }

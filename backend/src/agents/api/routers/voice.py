@@ -222,7 +222,7 @@ async def voice_chat_websocket(
         )
 
         # Register voice WebSocket with manager (voice-specific messages only)
-        websocket.app.state.manager.add_voice_connection(
+        await websocket.app.state.manager.add_voice_connection(
             websocket=websocket,
             user_id=user_id,
             conversation_id=conversation_id,

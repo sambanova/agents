@@ -110,11 +110,12 @@ class WebSocketConnectionManager(WebSocketInterface):
         if key in self.connections:
             del self.connections[key]
 
-    def add_voice_connection(
+    async def add_voice_connection(
         self, websocket: WebSocket, user_id: str, conversation_id: str
     ) -> None:
         """
         Adds a voice WebSocket connection to the manager.
+        Closes any existing voice connection for the same user/conversation first.
 
         Args:
             websocket (WebSocket): The voice WebSocket connection.
@@ -122,6 +123,17 @@ class WebSocketConnectionManager(WebSocketInterface):
             conversation_id (str): The ID of the conversation.
         """
         key = f"{user_id}:{conversation_id}"
+
+        # Close existing voice connection if any (prevents duplicate voice sockets)
+        existing = self.voice_connections.get(key)
+        if existing:
+            logger.warning(f"Closing existing voice connection for {key} before adding new one")
+            try:
+                if existing.client_state != WebSocketState.DISCONNECTED:
+                    await existing.close()
+            except Exception as e:
+                logger.error(f"Error closing existing voice connection: {str(e)}")
+
         self.voice_connections[key] = websocket
         logger.info(f"Added voice connection for {key}")
 
