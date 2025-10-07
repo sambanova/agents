@@ -1,9 +1,21 @@
 #!/bin/bash
 
 # Test script for Agent v2 APIs
-# Your API Key
-API_KEY="API_KEY"
-BASE_URL="http://localhost:8000/api/agent"
+# Usage: ./test_agent_apis.sh <API_KEY> [BASE_URL]
+# Example: ./test_agent_apis.sh your-api-key-here
+# Example: ./test_agent_apis.sh your-api-key-here https://api.example.com/api/agent
+
+# Check if API key is provided
+if [ -z "$1" ]; then
+  echo "Error: API key is required"
+  echo "Usage: $0 <API_KEY> [BASE_URL]"
+  echo "Example: $0 your-api-key-here"
+  echo "Example: $0 your-api-key-here https://api.example.com/api/agent"
+  exit 1
+fi
+
+API_KEY="$1"
+BASE_URL="${2:-http://localhost:8000/api/agent}"
 
 echo "======================================"
 echo "Testing Agent v2 APIs"
