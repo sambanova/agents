@@ -52,12 +52,19 @@
       ></div>
     </button>
 
-    <!-- Error Message -->
-    <div v-if="error" class="voice-error">
-      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+    <!-- Error/Info Message -->
+    <div v-if="error" :class="['voice-message', isSessionEnded ? 'voice-info' : 'voice-error']">
+      <svg v-if="!isSessionEnded" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
         <path
           fill-rule="evenodd"
           d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+          clip-rule="evenodd"
+        />
+      </svg>
+      <svg v-else class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+        <path
+          fill-rule="evenodd"
+          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
           clip-rule="evenodd"
         />
       </svg>
@@ -108,6 +115,10 @@ const voiceStatusClass = computed(() => {
     error: 'status-error'
   }
   return statusMap[voiceStatus.value] || 'status-idle'
+})
+
+const isSessionEnded = computed(() => {
+  return error.value && error.value.toLowerCase().includes('session ended')
 })
 
 const buttonTitle = computed(() => {
@@ -303,19 +314,28 @@ onUnmounted(() => {
   }
 }
 
-/* Error Message */
-.voice-error {
+/* Message Styles */
+.voice-message {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.75rem;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
   border-radius: 0.5rem;
-  color: #dc2626;
   font-size: 0.875rem;
   max-width: 300px;
   text-align: center;
+}
+
+.voice-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+}
+
+.voice-info {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #2563eb;
 }
 
 /* Keyboard Hint */

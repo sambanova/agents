@@ -121,6 +121,20 @@ export function useVoiceChat(conversationIdGetter) {
 
         voiceWebSocket.onclose = () => {
           console.log('🔌 Backend WebSocket closed')
+          // Gracefully end voice session
+          if (isVoiceMode.value) {
+            console.log('🛑 Voice session ended due to WebSocket close')
+            isVoiceMode.value = false
+            voiceStatus.value = 'idle'
+            error.value = 'Voice session ended. Press Ctrl+Space to restart'
+
+            // Clean up resources
+            stopAudioCapture()
+            if (audioPlayback) {
+              audioPlayback.stop()
+              audioPlayback = null
+            }
+          }
         }
       })
     } catch (err) {
@@ -385,6 +399,20 @@ export function useVoiceChat(conversationIdGetter) {
 
       humeSocket.on('close', () => {
         console.log('🔌 Hume EVI disconnected')
+        // Gracefully end voice session
+        if (isVoiceMode.value) {
+          console.log('🛑 Voice session ended due to Hume disconnect')
+          isVoiceMode.value = false
+          voiceStatus.value = 'idle'
+          error.value = 'Voice session ended. Press Ctrl+Space to restart'
+
+          // Clean up resources
+          stopAudioCapture()
+          if (audioPlayback) {
+            audioPlayback.stop()
+            audioPlayback = null
+          }
+        }
       })
 
       // Note: .connect() already opens the connection, no need to call it again
