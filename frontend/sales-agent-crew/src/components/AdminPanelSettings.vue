@@ -658,10 +658,12 @@
 import { ref, onMounted, computed, watch, inject } from 'vue'
 import axios from 'axios'
 import { useAuth0 } from '@auth0/auth0-vue'
+import { encryptKey } from '../utils/encryption'
 
 const emit = defineEmits(['configuration-updated', 'api-keys-updated'])
 
-const { getAccessTokenSilently } = useAuth0()
+const { user, getAccessTokenSilently } = useAuth0()
+const userId = computed(() => user.value?.sub)
 
 // Check VITE environment variable first
 const isViteEnabled = ref(import.meta.env.VITE_SHOW_ADMIN_PANEL === 'true')
@@ -1456,6 +1458,24 @@ const loadStoredApiKeys = () => {
 watch(apiKeys, (newKeys) => {
   localStorage.setItem('llm_api_keys', JSON.stringify(newKeys))
 }, { deep: true })
+
+// Sync SambaNova key to legacy localStorage location for backward compatibility
+watch(() => apiKeys.value.sambanova, async (newKey) => {
+  if (!userId.value) return
+
+  try {
+    if (newKey) {
+      // Encrypt and save to legacy location
+      const encryptedKey = await encryptKey(newKey)
+      localStorage.setItem(`sambanova_key_${userId.value}`, encryptedKey)
+    } else {
+      // Clear legacy location when key is removed
+      localStorage.removeItem(`sambanova_key_${userId.value}`)
+    }
+  } catch (error) {
+    console.error('Failed to sync SambaNova key to legacy storage:', error)
+  }
+})
 
 // Initialize
 onMounted(async () => {
