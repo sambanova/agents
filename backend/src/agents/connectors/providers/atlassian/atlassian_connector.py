@@ -164,6 +164,26 @@ class AtlassianConnector(MCPConnector):
                         "required": ["issue_key", "comment"]
                     }
                 ),
+                ConnectorTool(
+                    id="jira_find_user",
+                    name="Find Jira User",
+                    description="Find Jira users by display name to get their account ID. Use this before searching issues by assignee when you only have a person's name.",
+                    parameters_schema={
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "User's display name to search for (e.g., 'John Smith', 'Jane Doe')"
+                            },
+                            "max_results": {
+                                "type": "integer",
+                                "default": 10,
+                                "description": "Maximum number of results"
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                ),
                 # Confluence Tools
                 ConnectorTool(
                     id="confluence_create_page",

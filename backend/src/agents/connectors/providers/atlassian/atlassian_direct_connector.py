@@ -21,13 +21,13 @@ class JiraSearchTool(BaseTool):
     """Tool for searching Jira issues using REST API"""
     
     name: str = "jira_search_issues"
-    description: str = "Search for Jira issues using JQL"
+    description: str = "Search for Jira issues using JQL (Jira Query Language). For assignee searches by person's name, first use jira_find_user to get their accountId, then search with 'assignee = \"accountId\"'. Use 'assignee = currentUser()' for current user."
     
     access_token: str
     cloud_id: str
     
     class Args(BaseModel):
-        jql: str = Field(description="JQL query string")
+        jql: str = Field(description="JQL query string. Examples: 'project = PROJ', 'assignee = \"accountId\"', 'status = Blocked AND assignee = currentUser()'. IMPORTANT: For assignee searches by person's name, first use jira_find_user tool to get their accountId, then use 'assignee = \"accountId\"' in your JQL. Avoid guessing usernames.")
         max_results: int = Field(default=10, description="Maximum number of results")
         fields: List[str] = Field(
             default_factory=lambda: ["summary", "status", "priority", "assignee"],
@@ -47,7 +47,10 @@ class JiraSearchTool(BaseTool):
         try:
             if fields is None:
                 fields = ["summary", "status", "priority", "assignee"]
-            
+            # Always ensure assignee is included even if LLM specifies custom fields
+            if "assignee" not in fields:
+                fields.append("assignee")
+
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     f"https://api.atlassian.com/ex/jira/{self.cloud_id}/rest/api/3/search/jql",
@@ -429,6 +432,76 @@ class JiraUpdateIssueTool(BaseTool):
             logger.error("Failed to update Jira issue", error=str(e), exc_info=True)
             return f"Error updating issue: {str(e)}"
     
+    def _run(self, *args, **kwargs):
+        """Sync execution not supported"""
+        raise NotImplementedError("Use async execution")
+
+
+class JiraFindUserTool(BaseTool):
+    """Tool for finding Jira users by name"""
+
+    name: str = "jira_find_user"
+    description: str = "Find Jira users by display name to get their account ID or username. Use this when you need to search issues by assignee but only have a person's full name. Returns user account ID that can be used in JQL queries like 'assignee = accountId'."
+
+    access_token: str
+    cloud_id: str
+
+    class Args(BaseModel):
+        query: str = Field(description="User's name to search for (e.g., 'Kwasi Ankomah', 'John Smith')")
+        max_results: int = Field(default=10, description="Maximum number of results")
+
+    args_schema = Args
+
+    async def _arun(
+        self,
+        query: str,
+        max_results: int = 10,
+        run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
+    ) -> str:
+        """Search for Jira users"""
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"https://api.atlassian.com/ex/jira/{self.cloud_id}/rest/api/3/user/search",
+                    params={
+                        "query": query,
+                        "maxResults": max_results
+                    },
+                    headers={
+                        "Authorization": f"Bearer {self.access_token}",
+                        "Accept": "application/json"
+                    }
+                )
+
+                if response.status_code == 200:
+                    users = response.json()
+
+                    if not users:
+                        return f"No users found matching '{query}'."
+
+                    # Format the results
+                    results = []
+                    for user in users:
+                        user_data = {
+                            "accountId": user.get("accountId", ""),
+                            "displayName": user.get("displayName", ""),
+                            "emailAddress": user.get("emailAddress", ""),
+                            "active": user.get("active", True)
+                        }
+                        results.append(user_data)
+
+                    return json.dumps(results, indent=2)
+                elif response.status_code == 401:
+                    return "Authentication failed. Please reconnect your Jira account."
+                elif response.status_code == 403:
+                    return "Permission denied. You don't have access to search users."
+                else:
+                    return f"Error searching users: {response.status_code} - {response.text}"
+
+        except Exception as e:
+            logger.error("Jira user search failed", error=str(e), exc_info=True)
+            return f"Error searching users: {str(e)}"
+
     def _run(self, *args, **kwargs):
         """Sync execution not supported"""
         raise NotImplementedError("Use async execution")
@@ -1117,6 +1190,7 @@ async def create_atlassian_direct_tools(
         "jira_get_issue": JiraGetIssueTool,
         "jira_update_issue": JiraUpdateIssueTool,
         "jira_add_comment": JiraAddCommentTool,
+        "jira_find_user": JiraFindUserTool,
         # Confluence tools
         "confluence_search": ConfluenceSearchTool,
         "confluence_get_page": ConfluenceGetPageTool,
