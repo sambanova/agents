@@ -12,6 +12,7 @@ from agents.api.routers.connectors import router as connectors_router
 from agents.api.routers.dynamic_mcp import router as dynamic_mcp_router
 from agents.api.routers.export import router as export_router
 from agents.api.routers.files import router as files_router
+from agents.api.routers.openai_responses import router as openai_router
 from agents.api.routers.share import router as share_router
 from agents.api.routers.upload import router as upload_router
 from agents.api.routers.user import router as user_router
@@ -173,6 +174,7 @@ app.include_router(export_router)
 app.include_router(connectors_router)
 app.include_router(dynamic_mcp_router)
 app.include_router(voice_router)
+app.include_router(openai_router)
 
 
 @app.get("/health")
