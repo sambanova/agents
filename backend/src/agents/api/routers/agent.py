@@ -5,6 +5,7 @@ import uuid
 from typing import List, Optional
 
 import markdown
+import structlog
 from agents.api.routers.upload import process_and_store_file, upload_document
 from agents.api.utils import process_data_science_report
 from agents.components.compound.data_science_subgraph import (
@@ -14,6 +15,7 @@ from agents.components.compound.xml_agent import get_global_checkpointer
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.components.open_deep_research.graph import create_deep_research_graph
 from agents.storage.redis_storage import RedisStorage
+from agents.tools.langgraph_tools import load_static_tools
 from fastapi import (
     APIRouter,
     File,
@@ -28,6 +30,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command, Interrupt
 from pydantic import BaseModel
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(
     prefix="/agent",
@@ -550,6 +554,31 @@ async def main_agent(
         from agents.components.compound.data_types import LLMType
         from agents.api.subgraph_factory import create_all_subgraphs
 
+        # Load tools same way as websocket
+        tools_config = [
+            {"type": "arxiv", "config": {}},
+            {"type": "search_tavily", "config": {}},
+            {"type": "search_tavily_answer", "config": {}},
+            {"type": "wikipedia", "config": {}},
+        ]
+
+        all_tools = await load_static_tools(tools_config)
+
+        # Load connector tools if available
+        try:
+            from agents.connectors.core.connector_manager import get_connector_manager
+            connector_manager = get_connector_manager()
+            if connector_manager:
+                connector_tools = await connector_manager.get_user_tools(api_key)
+                all_tools.extend(connector_tools)
+                logger.info(
+                    "Loaded connector tools for main agent API",
+                    num_connector_tools=len(connector_tools),
+                    total_tools=len(all_tools)
+                )
+        except Exception as e:
+            logger.error("Failed to load connector tools", error=str(e))
+
         # Create all subgraphs for the main agent using centralized factory
         subgraphs = create_all_subgraphs(
             user_id=api_key,
@@ -559,14 +588,14 @@ async def main_agent(
             enable_data_science=False,  # No files uploaded in this API
         )
 
-        # Configure and execute the main agent
+        # Configure and execute the main agent with correct config keys
         agent = enhanced_agent.with_config(
             configurable={
                 "llm_type": LLMType.SN_DEEPSEEK_V3,
-                "system_message": "You are a helpful AI assistant. You can help with general questions, coding tasks, financial analysis, deep research, and data science. When a user asks for something specific, you can delegate to specialized subagents.",
-                "tools": [],
-                "subgraphs": subgraphs,
-                "user_id": api_key,
+                "type==default/system_message": "You are a helpful AI assistant. You can help with general questions, coding tasks, financial analysis, deep research, and data science. When a user asks for something specific, you can delegate to specialized subagents.",
+                "type==default/tools": all_tools,
+                "type==default/subgraphs": subgraphs,
+                "type==default/user_id": api_key,
             }
         )
 
@@ -585,6 +614,44 @@ async def main_agent(
                 }
             },
         )
+
+        # Handle deep research interrupts (auto-approve for fire-and-forget API)
+        max_interrupt_retries = 3
+        interrupt_retry = 0
+        while "__interrupt__" in result and len(result.get("__interrupt__", [])) > 0 and interrupt_retry < max_interrupt_retries:
+            interrupt_msg = result["__interrupt__"][0]
+            interrupt_value = interrupt_msg.value if isinstance(interrupt_msg, Interrupt) else interrupt_msg
+
+            # Check if this is a deep research interrupt (contains the plan approval prompt)
+            if "provide feedback" in str(interrupt_value).lower() and "approve" in str(interrupt_value).lower():
+                logger.info(
+                    "Main agent API: Auto-approving deep research interrupt",
+                    thread_id=thread_id,
+                    retry=interrupt_retry
+                )
+                # Auto-approve and continue
+                result = await agent.ainvoke(
+                    Command(resume="APPROVE"),
+                    config={
+                        "configurable": {
+                            "thread_id": thread_id,
+                            "api_key": api_key,
+                        },
+                        "metadata": {
+                            "user_id": api_key,
+                            "thread_id": thread_id,
+                            "message_id": str(uuid.uuid4()),
+                        }
+                    },
+                )
+                interrupt_retry += 1
+            else:
+                # Unknown interrupt type, break out
+                logger.warning(
+                    "Main agent API: Unknown interrupt type, cannot auto-approve",
+                    interrupt_msg=str(interrupt_value)[:200]
+                )
+                break
 
         # Extract the final message content and collect artifacts from ALL messages
         if result and len(result) > 0:
@@ -673,6 +740,31 @@ async def main_agent_interactive(
         from agents.components.compound.data_types import LLMType
         from agents.api.subgraph_factory import create_all_subgraphs
 
+        # Load tools same way as websocket
+        tools_config = [
+            {"type": "arxiv", "config": {}},
+            {"type": "search_tavily", "config": {}},
+            {"type": "search_tavily_answer", "config": {}},
+            {"type": "wikipedia", "config": {}},
+        ]
+
+        all_tools = await load_static_tools(tools_config)
+
+        # Load connector tools if available
+        try:
+            from agents.connectors.core.connector_manager import get_connector_manager
+            connector_manager = get_connector_manager()
+            if connector_manager:
+                connector_tools = await connector_manager.get_user_tools(api_key)
+                all_tools.extend(connector_tools)
+                logger.info(
+                    "Loaded connector tools for main agent interactive API",
+                    num_connector_tools=len(connector_tools),
+                    total_tools=len(all_tools)
+                )
+        except Exception as e:
+            logger.error("Failed to load connector tools", error=str(e))
+
         # Create all subgraphs for the main agent using centralized factory
         subgraphs = create_all_subgraphs(
             user_id=api_key,
@@ -682,14 +774,14 @@ async def main_agent_interactive(
             enable_data_science=False,  # No files uploaded in this API
         )
 
-        # Configure and execute the main agent
+        # Configure and execute the main agent with correct config keys
         agent = enhanced_agent.with_config(
             configurable={
                 "llm_type": LLMType.SN_DEEPSEEK_V3,
-                "system_message": "You are a helpful AI assistant. You can help with general questions, coding tasks, financial analysis, deep research, and data science. When a user asks for something specific, you can delegate to specialized subagents.",
-                "tools": [],
-                "subgraphs": subgraphs,
-                "user_id": api_key,
+                "type==default/system_message": "You are a helpful AI assistant. You can help with general questions, coding tasks, financial analysis, deep research, and data science. When a user asks for something specific, you can delegate to specialized subagents.",
+                "type==default/tools": all_tools,
+                "type==default/subgraphs": subgraphs,
+                "type==default/user_id": api_key,
             }
         )
 
@@ -715,6 +807,44 @@ async def main_agent_interactive(
                 }
             },
         )
+
+        # Handle deep research interrupts (auto-approve for main agent API)
+        max_interrupt_retries = 3
+        interrupt_retry = 0
+        while "__interrupt__" in result and len(result.get("__interrupt__", [])) > 0 and interrupt_retry < max_interrupt_retries:
+            interrupt_msg = result["__interrupt__"][0]
+            interrupt_value = interrupt_msg.value if isinstance(interrupt_msg, Interrupt) else interrupt_msg
+
+            # Check if this is a deep research interrupt (contains the plan approval prompt)
+            if "provide feedback" in str(interrupt_value).lower() and "approve" in str(interrupt_value).lower():
+                logger.info(
+                    "Main agent interactive API: Auto-approving deep research interrupt",
+                    thread_id=thread_id,
+                    retry=interrupt_retry
+                )
+                # Auto-approve and continue
+                result = await agent.ainvoke(
+                    Command(resume="APPROVE"),
+                    config={
+                        "configurable": {
+                            "thread_id": thread_id,
+                            "api_key": api_key,
+                        },
+                        "metadata": {
+                            "user_id": api_key,
+                            "thread_id": thread_id,
+                            "message_id": str(uuid.uuid4()),
+                        }
+                    },
+                )
+                interrupt_retry += 1
+            else:
+                # Unknown interrupt type, break out
+                logger.warning(
+                    "Main agent interactive API: Unknown interrupt type, cannot auto-approve",
+                    interrupt_msg=str(interrupt_value)[:200]
+                )
+                break
 
         # Check for interrupts (if the agent needs user input)
         if "__interrupt__" in result and len(result["__interrupt__"]) > 0:
