@@ -599,9 +599,13 @@ async def main_agent(
             }
         )
 
-        # Execute the agent
-        result = await agent.ainvoke(
-            [HumanMessage(content=agent_request.prompt)],
+        # Execute the agent using streaming (same as frontend websocket) to avoid truncation
+        # Collect all streamed events and build the final result
+        result = None
+        graph_input = [HumanMessage(content=agent_request.prompt)]
+
+        async for chunk in agent.astream(
+            graph_input,
             config={
                 "configurable": {
                     "thread_id": thread_id,
@@ -613,12 +617,14 @@ async def main_agent(
                     "message_id": str(uuid.uuid4()),
                 }
             },
-        )
+            stream_mode="values"
+        ):
+            result = chunk  # Keep updating with latest state
 
         # Handle deep research interrupts (auto-approve for fire-and-forget API)
         max_interrupt_retries = 3
         interrupt_retry = 0
-        while "__interrupt__" in result and len(result.get("__interrupt__", [])) > 0 and interrupt_retry < max_interrupt_retries:
+        while result and "__interrupt__" in result and len(result.get("__interrupt__", [])) > 0 and interrupt_retry < max_interrupt_retries:
             interrupt_msg = result["__interrupt__"][0]
             interrupt_value = interrupt_msg.value if isinstance(interrupt_msg, Interrupt) else interrupt_msg
 
@@ -629,8 +635,9 @@ async def main_agent(
                     thread_id=thread_id,
                     retry=interrupt_retry
                 )
-                # Auto-approve and continue
-                result = await agent.ainvoke(
+                # Auto-approve and continue using streaming
+                result = None
+                async for chunk in agent.astream(
                     Command(resume="APPROVE"),
                     config={
                         "configurable": {
@@ -643,7 +650,9 @@ async def main_agent(
                             "message_id": str(uuid.uuid4()),
                         }
                     },
-                )
+                    stream_mode="values"
+                ):
+                    result = chunk  # Keep updating with latest state
                 interrupt_retry += 1
             else:
                 # Unknown interrupt type, break out
@@ -785,7 +794,7 @@ async def main_agent_interactive(
             }
         )
 
-        # Execute the agent
+        # Execute the agent using streaming (same as frontend websocket) to avoid truncation
         if agent_request.resume is False:
             # Initial request
             graph_input = [HumanMessage(content=agent_request.prompt)]
@@ -793,7 +802,9 @@ async def main_agent_interactive(
             # Continuing conversation - append new message
             graph_input = Command(resume=[HumanMessage(content=agent_request.prompt)])
 
-        result = await agent.ainvoke(
+        # Collect all streamed events and build the final result
+        result = None
+        async for chunk in agent.astream(
             graph_input,
             config={
                 "configurable": {
@@ -806,12 +817,14 @@ async def main_agent_interactive(
                     "message_id": str(uuid.uuid4()),
                 }
             },
-        )
+            stream_mode="values"
+        ):
+            result = chunk  # Keep updating with latest state
 
         # Handle deep research interrupts (auto-approve for main agent API)
         max_interrupt_retries = 3
         interrupt_retry = 0
-        while "__interrupt__" in result and len(result.get("__interrupt__", [])) > 0 and interrupt_retry < max_interrupt_retries:
+        while result and "__interrupt__" in result and len(result.get("__interrupt__", [])) > 0 and interrupt_retry < max_interrupt_retries:
             interrupt_msg = result["__interrupt__"][0]
             interrupt_value = interrupt_msg.value if isinstance(interrupt_msg, Interrupt) else interrupt_msg
 
@@ -822,8 +835,9 @@ async def main_agent_interactive(
                     thread_id=thread_id,
                     retry=interrupt_retry
                 )
-                # Auto-approve and continue
-                result = await agent.ainvoke(
+                # Auto-approve and continue using streaming
+                result = None
+                async for chunk in agent.astream(
                     Command(resume="APPROVE"),
                     config={
                         "configurable": {
@@ -836,7 +850,9 @@ async def main_agent_interactive(
                             "message_id": str(uuid.uuid4()),
                         }
                     },
-                )
+                    stream_mode="values"
+                ):
+                    result = chunk  # Keep updating with latest state
                 interrupt_retry += 1
             else:
                 # Unknown interrupt type, break out
