@@ -24,7 +24,15 @@ async def astream_state_websocket(
 
     if "resume" in input.additional_kwargs and input.additional_kwargs["resume"]:
         # Decide if it's feedback or a brand-new request
-        if input.content.lower() == "approve" or input.content.lower() == "true":
+        content_lower = input.content.lower().strip()
+        # Accept multiple approval keywords for voice and text input
+        # Extended list to better support voice mode natural language
+        approval_keywords = [
+            "approve", "approved", "yes", "continue", "proceed", "true",
+            "ok", "okay", "sure", "go ahead", "yep", "yeah", "affirmative",
+            "confirm", "confirmed", "accepted"
+        ]
+        if any(keyword in content_lower for keyword in approval_keywords):
             graph_input = Command(resume="APPROVE")
         elif input.content:
             # user typed some text, treat it as feedback

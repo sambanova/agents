@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+</head>
+<body>
+    <h1>WebSocket Connection Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="messages"></div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const messagesDiv = document.getElementById('messages');
+
+        function log(message) {
+            console.log(message);
+            const p = document.createElement('p');
+            p.textContent = new Date().toISOString() + ': ' + message;
+            messagesDiv.appendChild(p);
+        }
+
+        // Test 1: Direct connection to backend (bypassing Vite proxy)
+        log('Test 1: Connecting directly to ws://localhost:8000/voice/chat');
+        const ws1 = new WebSocket('ws://localhost:8000/voice/chat?conversation_id=test-direct');
+
+        ws1.onopen = () => {
+            log('✅ Direct connection OPENED');
+            statusDiv.textContent = 'Direct connection: OPEN';
+            ws1.send(JSON.stringify({
+                type: 'auth',
+                token: 'Bearer test-token'
+            }));
+        };
+
+        ws1.onmessage = (event) => {
+            log('Direct connection message: ' + event.data);
+        };
+
+        ws1.onerror = (error) => {
+            log('❌ Direct connection ERROR: ' + error);
+            statusDiv.textContent = 'Direct connection: ERROR';
+        };
+
+        ws1.onclose = (event) => {
+            log('Direct connection CLOSED: ' + event.code + ' - ' + event.reason);
+            statusDiv.textContent = 'Direct connection: CLOSED';
+        };
+
+        // Test 2: Connection through Vite proxy
+        setTimeout(() => {
+            log('\nTest 2: Connecting through Vite proxy at ws://localhost:5173/api/voice/chat');
+            const ws2 = new WebSocket('ws://localhost:5173/api/voice/chat?conversation_id=test-proxy');
+
+            ws2.onopen = () => {
+                log('✅ Proxy connection OPENED');
+                ws2.send(JSON.stringify({
+                    type: 'auth',
+                    token: 'Bearer test-token'
+                }));
+            };
+
+            ws2.onmessage = (event) => {
+                log('Proxy connection message: ' + event.data);
+            };
+
+            ws2.onerror = (error) => {
+                log('❌ Proxy connection ERROR: ' + error);
+            };
+
+            ws2.onclose = (event) => {
+                log('Proxy connection CLOSED: ' + event.code + ' - ' + event.reason);
+            };
+        }, 2000);
+    </script>
+</body>
+</html>

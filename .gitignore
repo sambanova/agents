@@ -179,3 +179,10 @@ notebooks/
 helm/aiskagents/values.dev.yaml
 helm/aiskagents/values.prod.yaml
 **/.DS_Store
+
+#TODO Figure out 
+helm/*.tag
+helm/*.tgz
+helm/Chart.lock
+helm/ci-values.yaml
+**/charts/*.tgz

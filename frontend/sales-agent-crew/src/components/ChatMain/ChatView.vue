@@ -85,6 +85,18 @@
           </div>
         </div>
       </div>
+
+      <!-- Voice Status Badge -->
+      <div v-if="showVoiceStatus" class="sticky top-[72px] z-10 px-4 py-2">
+        <VoiceStatusBadge
+          :voice-status="voiceStatus"
+          :current-transcript="currentTranscript"
+          :agent-update="agentUpdate"
+          :is-visible="showVoiceStatus"
+          @close="showVoiceStatus = false"
+        />
+      </div>
+
       <div
         class="flex-1 w-full flex mx-auto"
         :class="
@@ -108,9 +120,9 @@
           class="mt-16 max-w-4xl w-full mx-auto space-y-5"
         >
           <!-- Chat Bubble -->
-          <li v-for="msgItem in filteredMessages" :key="msgItem.conversation_id || msgItem.message_id || msgItem.timestamp || Math.random()">
+          <li v-for="msgItem in filteredMessages" :key="msgItem.message_id || msgItem.id || msgItem.timestamp || Math.random()">
             <ChatBubble
-              :workflowData="getModelData(msgItem.message_id || msgItem.messageId)"
+              :workflowData="workflowDataByMessageId[msgItem.message_id || msgItem.messageId] || []"
               :plannerText="
                 plannerTextData.filter(
                   (item) => item.message_id === (msgItem.message_id || msgItem.messageId)
@@ -205,8 +217,8 @@
           </li>
           
                       <ChatLoaderBubble
-            :workflowData="getModelData(currentMsgId)"
-            v-if="isLoading && !hasActiveStreamingGroup && getModelData(currentMsgId).length > 0"
+            :workflowData="workflowDataByMessageId[currentMsgId] || []"
+            v-if="isLoading && !hasActiveStreamingGroup && (workflowDataByMessageId[currentMsgId] || []).length > 0"
             :isLoading="isLoading"
             :statusText="'Planning...'"
             :plannerText="
@@ -463,6 +475,24 @@
                       </svg>
                     </button>
                     <!-- End Attach Button -->
+
+                    <!-- Connector Toggle Button -->
+                    <div class="relative">
+                      <button
+                        ref="connectorButtonElement"
+                        @click.stop="toggleConnectorPanel"
+                        type="button"
+                        :disabled="isLoading"
+                        data-connector-button
+                        class="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-100 focus:z-1 focus:outline-none focus:bg-gray-100 pointer-events-auto"
+                      >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                        </svg>
+                      </button>
+                    </div>
+                    <!-- End Connector Toggle Button -->
+
                     <!-- Mic Button -->
                     <button
                       type="button"
@@ -565,6 +595,15 @@
                       </button>
                     </Tooltip>
                     <!-- End Mic Button -->
+
+                    <!-- Voice Control -->
+                    <VoiceControl
+                      v-if="isVoiceSupported"
+                      :conversation-id="currentId"
+                      @voice-mode-starting="handleVoiceModeStarting"
+                      @voice-status-changed="handleVoiceStatusChange"
+                    />
+
                     <!-- Send Button -->
                     <button
                       type="button"
@@ -613,6 +652,31 @@
           <!-- End Textarea -->
         </div>
       </div>
+
+      <!-- Connector Panel Dropdown (outside of pointer-events-none container) -->
+      <div
+        v-if="showConnectorPanel"
+        ref="connectorPanelElement"
+        data-connector-panel
+        class="absolute bottom-20 left-4 z-[9999] w-72 bg-white border border-gray-200 rounded-lg shadow-lg p-3"
+      >
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-gray-800">Connected Apps</h3>
+          <button
+            @click.stop="showConnectorPanel = false"
+            class="text-gray-400 hover:text-gray-600"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <ConnectorTogglePanel
+          ref="connectorPanelRef"
+          @manage-connectors="openSettingsForConnectors"
+          @add-connectors="openSettingsForConnectors"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -633,6 +697,7 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import ChatBubble from '@/components/ChatMain/ChatBubble.vue';
 import ChatLoaderBubble from '@/components/ChatMain/ChatLoaderBubble.vue';
+import ConnectorTogglePanel from '@/components/ChatMain/ConnectorTogglePanel.vue';
 const router = useRouter();
 const route = useRoute();
 import { useAuth0 } from '@auth0/auth0-vue';
@@ -652,8 +717,11 @@ import emitterMitt from '@/utils/eventBus.js';
 import ErrorComponent from '@/components/ChatMain/ResponseTypes/ErrorComponent.vue';
 import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue';
 import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue';
+import VoiceControl from '@/components/ChatMain/VoiceControl.vue';
+import VoiceStatusBadge from '@/components/ChatMain/VoiceStatusBadge.vue';
 import { isFinalAgentType, shouldExcludeFromGrouping } from '@/utils/globalFunctions.js';
 import { sharing } from '@/services/api.js';
+import { useVoiceChat } from '@/composables/useVoiceChat';
 
 // Access Auth0 user for personalization
 const { user } = useAuth0();
@@ -859,6 +927,11 @@ const props = defineProps({
 
 const isLoading = ref(false);
 const initialLoading = ref(false);
+const showConnectorPanel = ref(false);
+const justOpenedConnectorPanel = ref(false);
+const connectorPanelRef = ref(null);
+const connectorPanelElement = ref(null);
+const connectorButtonElement = ref(null);
 
 // Conversation change watcher:
 watch(
@@ -931,7 +1004,7 @@ const checkAndOpenSettings = () => {
 async function loadSharedConversation() {
   try {
     initialLoading.value = true;
-    console.log('Loading shared conversation:', shareToken.value);
+    console.log('Loading shared conversation');
     
     const data = await sharing.getSharedConversation(shareToken.value);
     
@@ -1067,6 +1140,70 @@ const isInDeepResearch = ref(false);
 // Track data science state
 const isInDataScience = ref(false);
 
+// Voice chat integration
+const {
+  isVoiceMode,
+  voiceStatus,
+  currentTranscript,
+  agentUpdate,
+  error: voiceError,
+  audioLevel,
+  isSupported: isVoiceSupported
+} = useVoiceChat(computed(() => currentId.value));
+
+// Voice status badge visibility
+const showVoiceStatus = ref(false);
+
+// Watch for voice mode changes to auto-show/hide status badge
+watch(isVoiceMode, (newValue) => {
+  showVoiceStatus.value = newValue;
+});
+
+// Handle voice mode starting (before activation)
+async function handleVoiceModeStarting() {
+  console.log('Voice mode starting - ensuring conversation and WebSocket ready');
+
+  // If no conversation exists, create one first (same pattern as addMessage)
+  if (!route.params.id && !isSharedConversation.value) {
+    try {
+      console.log('No conversation ID - creating new chat for voice mode');
+      await createNewChat();
+      await nextTick();
+      // After createNewChat, the router push should update the conversation id
+      conversationId.value = route.params.id;
+      console.log('✅ New chat created for voice mode:', conversationId.value);
+    } catch (error) {
+      console.error('Failed to create new chat for voice mode:', error);
+      throw new Error('Failed to create conversation for voice mode');
+    }
+  }
+
+  // Ensure main chat WebSocket is connected
+  if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
+    await connectWebSocket();
+    await waitForSocketOpen();
+    console.log('✅ Main chat WebSocket ready for voice mode');
+  } else {
+    console.log('✅ Main chat WebSocket already connected');
+  }
+}
+
+// Handle voice status changes
+async function handleVoiceStatusChange(event) {
+  console.log('Voice status changed:', event);
+
+  // Set isLoading based on voice status to trigger Daytona sidebar and other UI
+  if (event.status === 'thinking' || event.status === 'processing') {
+    console.log('Voice mode is processing - setting isLoading=true for Daytona sidebar');
+    isLoading.value = true;
+  } else if (event.status === 'idle' || event.status === 'listening' || event.status === 'error') {
+    console.log('Voice mode finished processing - setting isLoading=false');
+    isLoading.value = false;
+  }
+
+  // Note: Don't set isLoading=false for 'speaking' status - we want sidebar to stay open while EVI speaks
+}
+
 watch(
   () => agentThoughtsData.value,
   (newThoughts) => {
@@ -1105,17 +1242,28 @@ async function filterChat(msgData) {
   sortedMessages.forEach(message => {
     // Count events that contribute to the conversation run
     const shouldTrackEvent = ['agent_completion', 'llm_stream_chunk', 'stream_complete'].includes(message.event);
-    
+
     if (shouldTrackEvent) {
       const runId = messageToRunMap.get(message.message_id) || message.message_id;
-      
+
       // Track metrics if they exist (for agent_completion events)
       if (message.event === 'agent_completion') {
-        // Check if we have token usage or performance metrics to track
+        // Debug: Log CrewAI tracking events
+        if (message.additional_kwargs?.agent_type === 'crewai_llm_call') {
+          console.log('[ChatView] Found CrewAI tracking event:', {
+            model_name: message.response_metadata?.model_name,
+            message_id: message.message_id,
+            runId: runId,
+            response_metadata: message.response_metadata
+          });
+        }
+
+        // Check if we have token usage, performance metrics, or model name to track
         const hasUsageMetadata = message.usage_metadata;
         const hasPerformanceMetrics = message.response_metadata?.usage;
-        
-        if (hasUsageMetadata || hasPerformanceMetrics) {
+        const hasModelName = message.response_metadata?.model_name;
+
+        if (hasUsageMetadata || hasPerformanceMetrics || hasModelName) {
           trackRunMetrics(runId, message.usage_metadata, message.response_metadata);
         } else {
           // Still count the event even without usage metadata
@@ -1648,7 +1796,7 @@ onMounted(async () => {
     currentId.value = routeConversationId || '';
     
     if (routeConversationId) {
-      console.log('Mounting with conversation ID:', routeConversationId);
+      console.log('Mounting with conversation ID');
       await loadPreviousChat(routeConversationId);
     } else {
       console.log('Mounting without conversation ID');
@@ -1658,12 +1806,120 @@ onMounted(async () => {
 
   emitterMitt.on('new-chat', handleButtonClick);
   emitterMitt.on('reload-user-documents', loadUserDocuments);
+
+  // Listen for voice agent triggered events
+  window.addEventListener('voice-agent-triggered', handleVoiceAgentTriggered);
+
+  // Listen for voice workflow messages to show in chat UI
+  window.addEventListener('voice-workflow-message', handleVoiceWorkflowMessage);
+
+  // Listen for Daytona tool call detection in voice mode
+  window.addEventListener('voice-daytona-detected', handleVoiceDaytonaDetected);
+
+  // Click outside handler for connector panel - TEMPORARILY DISABLED FOR TESTING
+  // document.addEventListener('click', handleClickOutside);
 });
 
+// Handler for voice agent triggered events
+function handleVoiceAgentTriggered(event) {
+  console.log('🚀 Voice agent triggered:', event.detail);
+  console.log('[VOICE-DEBUG] handleVoiceAgentTriggered called:', {
+    text: event.detail.text,
+    message_id: event.detail.message_id,
+    currentMsgId_before: currentMsgId.value,
+    messagesData_length: messagesData.value.length,
+    intent: event.detail.intent
+  });
+
+  // CRITICAL: Always use the fresh message_id from the agent_triggered event
+  // This ensures each new voice query gets its own unique message_id
+  // and prevents Query 2 from reusing Query 1's message_id due to race conditions
+  currentMsgId.value = event.detail.message_id;
+  console.log('📝 Voice mode currentMsgId set to:', currentMsgId.value);
+
+  // Show agent workflow on screen - same as regular chat
+  // The conversation will already be displayed in messages
+  // Just ensure UI is in active state
+  isLoading.value = true;
+}
+
+// Handler for voice workflow messages - inject into chat UI
+function handleVoiceWorkflowMessage(event) {
+  const message = event.detail;
+  console.log('📥 Voice workflow message for chat UI:', message.event || message.type);
+
+  try {
+    // Ensure message has a valid ID before pushing to messagesData
+    const messageWithId = {
+      ...message,
+      message_id: message.message_id || message.id || `voice_wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    };
+
+    // Add to messagesData so it shows in the chat
+    messagesData.value.push(messageWithId);
+  } catch (error) {
+    console.error('Error adding voice workflow message to chat:', error);
+  }
+}
+
+// Handler for Daytona tool call detection in voice mode
+function handleVoiceDaytonaDetected(event) {
+  console.log('🔧 Voice Daytona detected event received:', event.detail);
+
+  // In voice mode, when user explicitly invokes Daytona via voice command,
+  // we should open the sidebar even if they previously closed it in another context.
+  // This is a NEW explicit request from the user.
+  // Only skip during initial page load (loading old messages)
+  if (!initialLoading.value) {
+    console.log('✅ Opening Daytona sidebar for voice mode (this is a new explicit Daytona invocation)')
+    // Reset the closed flag since this is a new explicit Daytona request via voice
+    daytonaSidebarClosed.value = false
+    showDaytonaSidebar.value = true
+    updateCurrentDaytonaEvents()
+    // Close artifact canvas if it's open since we're using sidebar now
+    showArtifactCanvas.value = false
+  } else {
+    console.log('⏸️ Skipping Daytona sidebar open - still in initial loading:', {
+      initialLoading: initialLoading.value
+    })
+  }
+}
+
 onUnmounted(() => {
+  window.removeEventListener('voice-agent-triggered', handleVoiceAgentTriggered);
+  window.removeEventListener('voice-workflow-message', handleVoiceWorkflowMessage);
+  window.removeEventListener('voice-daytona-detected', handleVoiceDaytonaDetected);
   emitterMitt.off('new-chat', handleButtonClick);
   emitterMitt.off('reload-user-documents', loadUserDocuments);
+  // document.removeEventListener('click', handleClickOutside);
 });
+
+// Handle click outside to close connector panel
+function handleClickOutside(event) {
+  // Don't close if we just opened the panel
+  if (justOpenedConnectorPanel.value) {
+    console.log('Ignoring click - panel just opened');
+    return;
+  }
+
+  // Check if click is on the button or panel using refs
+  const isButtonClick = connectorButtonElement.value?.contains(event.target);
+  const isPanelClick = connectorPanelElement.value?.contains(event.target);
+
+  console.log('handleClickOutside called', {
+    isButtonClick,
+    isPanelClick,
+    showConnectorPanel: showConnectorPanel.value,
+    target: event.target,
+    panelElement: connectorPanelElement.value
+  });
+
+  // Only close if clicking outside both button and panel
+  if (!isButtonClick && !isPanelClick && showConnectorPanel.value) {
+    console.log('Closing connector panel');
+    showConnectorPanel.value = false;
+  }
+}
 
 watch(
   () => props.keysUpdated,
@@ -1708,6 +1964,31 @@ function toggleRecording() {
   } else {
     startRecordingFlow();
   }
+}
+
+// Connector panel methods
+function toggleConnectorPanel() {
+  if (!showConnectorPanel.value) {
+    showConnectorPanel.value = true;
+    justOpenedConnectorPanel.value = true;
+    // Reset the flag after event propagation completes
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        justOpenedConnectorPanel.value = false;
+      }, 0);
+    });
+    console.log('Connector panel opened');
+  } else {
+    showConnectorPanel.value = false;
+  }
+}
+
+function openSettingsForConnectors() {
+  console.log('openSettingsForConnectors called');
+  showConnectorPanel.value = false;
+  // Open settings modal to connectors tab
+  console.log('Emitting open-settings event with tab: connectors');
+  emitterMitt.emit('open-settings', { tab: 'connectors' });
 }
 
 async function startRecordingFlow() {
@@ -1867,15 +2148,21 @@ function cleanTranscription(transcribedText) {
 
 async function handleFileUpload(event) {
   const files = Array.from(event.target.files || []);
+  console.log('[ChatView] Upload triggered, files:', files.length);
   if (files.length === 0) return;
 
   isUploading.value = true;
   try {
     for (const file of files) {
+      console.log('[ChatView] Uploading file:', file.name, 'size:', file.size, 'type:', file.type);
       const formData = new FormData();
       formData.append('file', file);
+
+      const uploadUrl = `${import.meta.env.VITE_API_URL}/upload`;
+      console.log('[ChatView] Upload URL:', uploadUrl);
+
       const response = await axios.post(
-        `${import.meta.env.VITE_API_URL}/upload`,
+        uploadUrl,
         formData,
         {
           headers: {
@@ -1884,7 +2171,15 @@ async function handleFileUpload(event) {
         }
       );
 
+      console.log('[ChatView] Upload response:', response.status, response.data);
+
       const document = response.data.document || response.data.file;
+      if (!document) {
+        console.error('[ChatView] No document in response:', response.data);
+        throw new Error('Invalid upload response - no document returned');
+      }
+
+      console.log('[ChatView] Document uploaded:', document.file_id);
       uploadedDocuments.value.unshift(document);
       if (!selectedDocuments.value.includes(document.file_id)) {
         selectedDocuments.value.push(document.file_id);
@@ -1892,11 +2187,19 @@ async function handleFileUpload(event) {
     }
 
     await loadUserDocuments();
+    console.log('[ChatView] Upload complete, total documents:', uploadedDocuments.value.length);
   } catch (error) {
     console.error('[ChatView] Upload error:', error);
+    console.error('[ChatView] Error details:', {
+      message: error.message,
+      response: error.response,
+      status: error.response?.status,
+      data: error.response?.data,
+      headers: error.response?.headers,
+    });
     uploadStatus.value = {
       type: 'error',
-      message: error.response?.data?.error || 'Failed to upload document(s)',
+      message: error.response?.data?.error || error.message || 'Failed to upload document(s)',
     };
     setTimeout(() => {
       uploadStatus.value = null;
@@ -1977,7 +2280,7 @@ const addMessage = async () => {
       await nextTick();
       // After createNewChat, the router push should update the conversation id.
       currentId.value = route.params.id; // update currentId from router params
-      console.log('New chat created, conversation ID:', currentId.value);
+      console.log('New chat created');
     } catch (error) {
       console.error('Failed to create new chat:', error);
       errorMessage.value = 'Failed to create new conversation. Please try again.';
@@ -2029,20 +2332,29 @@ const addMessage = async () => {
     resume: shouldResume,
   };
 
+  console.log('[ChatView] selectedDocuments.value:', selectedDocuments.value);
+  console.log('[ChatView] uploadedDocuments.value:', uploadedDocuments.value);
+
   if (selectedDocuments.value && selectedDocuments.value.length > 0) {
-    messagePayload.document_ids = selectedDocuments.value.map((docId) => {
-      // Find the full document object from uploadedDocuments
-      const fullDoc = uploadedDocuments.value.find(doc => doc.file_id === docId);
-      if (fullDoc) {
-        return {
-          format: fullDoc.format || 'unknown',
-          id: fullDoc.file_id,
-          indexed: fullDoc.indexed || false,
-          filename: fullDoc.filename || 'unknown',
-        };
-      }
-    });
+    messagePayload.document_ids = selectedDocuments.value
+      .map((docId) => {
+        // Find the full document object from uploadedDocuments
+        const fullDoc = uploadedDocuments.value.find(doc => doc.file_id === docId);
+        console.log('[ChatView] Processing docId:', docId, 'Found fullDoc:', fullDoc);
+        if (fullDoc) {
+          return {
+            format: fullDoc.format || 'unknown',
+            id: fullDoc.file_id,
+            indexed: fullDoc.indexed || false,
+            filename: fullDoc.filename || 'unknown',
+          };
+        }
+        return null;
+      })
+      .filter(doc => doc !== null);
+    console.log('[ChatView] Final document_ids in payload:', messagePayload.document_ids);
   } else {
+    console.log('[ChatView] No selectedDocuments, setting document_ids to []');
     messagePayload.document_ids = [];
   }
 
@@ -2104,16 +2416,22 @@ async function connectWebSocket() {
     return;
   }
 
+  // Check if admin panel is enabled
+  const isAdminPanelEnabled = import.meta.env.VITE_SHOW_ADMIN_PANEL === 'true'
+
   try {
     await loadKeys();
 
-    await axios.post(
-      `${import.meta.env.VITE_API_URL}/set_api_keys`,
-      {
-        sambanova_key: sambanovaKey.value || '',
-        serper_key: serperKey.value || '',
-        exa_key: exaKey.value || '',
-        fireworks_key: fireworksKey.value || '',
+    // Only call /set_api_keys if admin panel is disabled
+    // When admin panel is enabled, keys are managed through /admin/config
+    if (!isAdminPanelEnabled) {
+      await axios.post(
+        `${import.meta.env.VITE_API_URL}/set_api_keys`,
+        {
+          sambanova_key: sambanovaKey.value || '',
+          serper_key: serperKey.value || '',
+          exa_key: exaKey.value || '',
+          fireworks_key: fireworksKey.value || '',
       },
       {
         headers: {
@@ -2121,6 +2439,7 @@ async function connectWebSocket() {
         },
       }
     );
+    }
 
     // Use the same proxy pattern as API calls - let Vite proxy handle it
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -2147,7 +2466,35 @@ async function connectWebSocket() {
     socket.value.onmessage = async (event) => {
       try {
         const receivedData = JSON.parse(event.data);
-        
+
+        // VOICE-DEBUG: Comprehensive logging for voice mode debugging
+        console.log('[VOICE-DEBUG] WebSocket message received:', {
+          event: receivedData.event,
+          message_id: receivedData.message_id || receivedData.id,
+          timestamp: receivedData.timestamp,
+          type: receivedData.type,
+          content_preview: receivedData.content?.substring(0, 50) ||
+                          receivedData.data?.content?.substring(0, 50) ||
+                          receivedData.data?.substring?.(0, 50) ||
+                          'no content',
+          agent_type: receivedData.additional_kwargs?.agent_type || receivedData.agent_type
+        });
+
+        // Debug log to verify main WebSocket is receiving events (especially in voice mode)
+        if (receivedData.event && ['llm_stream_chunk', 'think', 'agent_completion'].includes(receivedData.event)) {
+          console.log('[Main WS] Received:', receivedData.event, 'message_id:', receivedData.message_id || receivedData.id || 'none');
+        }
+
+        // CRITICAL: Handle stream_start FIRST to set correct message_id for voice mode
+        // This event arrives before any messages, ensuring the right ID is used from the start
+        if (receivedData.event === 'stream_start') {
+          if (receivedData.message_id) {
+            currentMsgId.value = receivedData.message_id;
+            console.log('[Voice Mode] stream_start detected - using new message_id:', currentMsgId.value);
+          }
+          // Don't return - let the event propagate in case other handlers need it
+        }
+
         if (receivedData.type === 'pong') {
           // Pong received, connection is alive.
           return;
@@ -2185,12 +2532,54 @@ async function connectWebSocket() {
           
           // Check if this is a final response event
           const isFinalResponse = isFinalAgentType(receivedData.additional_kwargs?.agent_type);
-          
+
+          // Generate proper message ID
+          // CRITICAL: Use currentMsgId.value FIRST to ensure all streaming events in a conversation turn
+          // share the SAME message_id so they group into ONE bubble in filteredMessages.
+          // If we use receivedData.id or receivedData.message_id first, backend might send different IDs
+          // for each event, creating separate bubbles instead of grouping!
+          const messageId = currentMsgId.value || receivedData.message_id || receivedData.id || `agent_completion_${Date.now()}`;
+
+          console.debug('[ChatView] Message ID:', {
+            agentType,
+            messageId,
+            source: currentMsgId.value ? 'currentMsgId' : (receivedData.message_id ? 'backend message_id' : (receivedData.id ? 'backend id' : 'timestamp'))
+          });
+
+          // Validate message ID - must be defined and non-empty
+          if (!messageId || messageId === 'undefined' || messageId === 'null') {
+            console.warn('[ChatView] Rejecting message with invalid ID:', {
+              id: receivedData.id,
+              message_id: receivedData.message_id,
+              currentMsgId: currentMsgId.value,
+              agent_type: agentType,
+            });
+            return;
+          }
+
+          // Check if message has meaningful content - skip empty intermediate messages
+          const hasContent = (receivedData.content && receivedData.content.trim() !== '') ||
+                            (receivedData.data?.content && receivedData.data.content.trim() !== '') ||
+                            (receivedData.text && receivedData.text.trim() !== '');
+
+          // Skip empty agent_completion messages (intermediate steps without output)
+          // UNLESS it's a final response or has special metadata we need to track
+          // Note: We should NOT filter based on isIntermediateAgentStep here because
+          // those messages need to be added to messagesData for proper streaming grouping
+          if (!hasContent && !isFinalResponse && !receivedData.usage_metadata && !receivedData.cumulative_usage_metadata) {
+            console.debug('[ChatView] Skipping empty agent_completion message', {
+              message_id: messageId,
+              agent_type: agentType,
+            });
+            return;
+          }
+
           // Create message object and attach token usage data directly to it
           const messageData = {
-            event: 'agent_completion', 
+            event: 'agent_completion',
             data: receivedData || {},
-            message_id: currentMsgId.value,
+            message_id: messageId,
+            id: messageId, // Also set 'id' for compatibility
             conversation_id: currentId.value,
             timestamp: receivedData.timestamp || new Date().toISOString(),
             agent_type: receivedData.agent_type,
@@ -2230,6 +2619,14 @@ async function connectWebSocket() {
           }
           
           try {
+            console.log('[VOICE-DEBUG] Pushing agent_completion to messagesData:', {
+              event: messageData.event,
+              message_id: messageData.message_id,
+              timestamp: messageData.timestamp,
+              agent_type: messageData.agent_type,
+              type: messageData.data?.type,
+              messagesData_length_before: messagesData.value.length
+            });
             messagesData.value.push(messageData);
           } catch (error) {
             console.error('Error pushing message data:', error);
@@ -2242,53 +2639,80 @@ async function connectWebSocket() {
             isLoading.value = false;
           }
         } else if (receivedData.event === 'llm_stream_chunk') {
+          // VOICE MODE FIX: If currentMsgId is not set, this is the start of voice mode streaming
+          // Set it now (before processing) so isDaytonaActiveGlobal watch can trigger sidebar opening
+          if (!currentMsgId.value && receivedData.message_id) {
+            console.log('[Voice Mode] First stream chunk detected - initializing streaming state', receivedData.message_id);
+            currentMsgId.value = receivedData.message_id;
+            isLoading.value = true;
+          }
 
-          
-          const chunkId = receivedData.id;
-          
-          if (chunkId) {
-            // Find existing message with the same ID
-            const existingIndex = messagesData.value.findIndex(
-              (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkId
-            );
-            
-            if (existingIndex !== -1) {
-              // Accumulate content for existing message
-              try {
-                const existingContent = messagesData.value[existingIndex].data?.content || '';
-                const newContent = receivedData.content || '';
-                messagesData.value[existingIndex].data.content = existingContent + newContent;
-              } catch (error) {
-                console.error('Error updating stream chunk:', error);
+          // CRITICAL: Use currentMsgId.value as the message_id so all stream chunks
+          // in this conversation turn group with agent_completion events into ONE bubble!
+          const streamMessageId = currentMsgId.value || receivedData.message_id || receivedData.id || `chunk_${Date.now()}`;
+
+          // Validate message ID
+          if (!streamMessageId || streamMessageId === 'undefined' || streamMessageId === 'null') {
+            console.warn('[ChatView] Rejecting stream chunk with invalid ID');
+            return;
+          }
+
+          // Use a unique chunk identifier for content accumulation, but share message_id for grouping
+          const chunkIdentifier = receivedData.id || `${streamMessageId}_${Date.now()}`;
+
+          // Find existing chunk with the same identifier to accumulate content
+          const existingIndex = messagesData.value.findIndex(
+            (msg) => msg.event === 'llm_stream_chunk' && msg.data?.id === chunkIdentifier
+          );
+
+          if (existingIndex !== -1) {
+            // Accumulate content for existing chunk
+            try {
+              const existingContent = messagesData.value[existingIndex].data?.content || '';
+              const newContent = receivedData.content || '';
+              messagesData.value[existingIndex].data.content = existingContent + newContent;
+
+              // Track metrics if this chunk has response_metadata (e.g., final chunk with metadata)
+              if (receivedData.response_metadata || receivedData.usage_metadata) {
+                trackRunMetrics(
+                  streamMessageId,
+                  receivedData.usage_metadata,
+                  receivedData.response_metadata
+                );
               }
-            } else {
-              // Create new message for new ID
-              try {
-                messagesData.value.push({
-                  event: 'llm_stream_chunk',
-                  data: receivedData || {},
-                  message_id: currentMsgId.value,
-                  conversation_id: currentId.value,
-                  timestamp: new Date().toISOString()
-                });
-              } catch (error) {
-                console.error('Error adding new stream chunk:', error);
-              }
+            } catch (error) {
+              console.error('Error updating stream chunk:', error);
             }
           } else {
-            // No ID, just add as new message
+            // Create new chunk with shared message_id for grouping
             try {
-              messagesData.value.push({
+              const chunkData = {
                 event: 'llm_stream_chunk',
-                data: receivedData || {},
-                message_id: currentMsgId.value,
+                data: { ...receivedData, id: chunkIdentifier },
+                message_id: streamMessageId,  // SHARED message_id for grouping!
                 conversation_id: currentId.value,
-                timestamp: new Date().toISOString()
+                timestamp: receivedData.timestamp || new Date().toISOString()
+              };
+              console.log('[VOICE-DEBUG] Pushing llm_stream_chunk to messagesData:', {
+                event: chunkData.event,
+                message_id: chunkData.message_id,
+                timestamp: chunkData.timestamp,
+                messagesData_length_before: messagesData.value.length
               });
-            } catch (error) {
-              console.error('Error adding stream chunk without ID:', error);
-            }
+              messagesData.value.push(chunkData);
 
+              // CRITICAL: Track metrics for llm_stream_chunk if it has response_metadata
+              // This enables live model count updates during streaming
+              if (receivedData.response_metadata || receivedData.usage_metadata) {
+                trackRunMetrics(
+                  streamMessageId,
+                  receivedData.usage_metadata,
+                  receivedData.response_metadata
+                );
+              }
+            } catch (error) {
+              console.error('Error adding new stream chunk:', error);
+            }
           }
         } else if (receivedData.event === 'stream_complete') {
           console.log('Stream complete:', receivedData);
@@ -2305,7 +2729,11 @@ async function connectWebSocket() {
             console.error('Error adding stream complete message:', error);
           }
           isLoading.value = false;
-          
+
+          // CRITICAL: Reset currentMsgId for voice mode so next query uses fresh backend message_id
+          // This prevents message grouping issues where Query 2 reuses Query 1's message_id
+          currentMsgId.value = null;
+
           // Reload user documents (artifacts) after chat completion
           if (!isSharedConversation.value && isAuthenticated.value) {
             console.log('Reloading user documents after chat completion');
@@ -2322,8 +2750,25 @@ async function connectWebSocket() {
 
           statusText.value = dataParsed.agent_name;
           emit('agentThoughtsDataChanged', agentThoughtsData.value);
+
+          // CRITICAL: Track metrics from think events for model counts
+          // Financial analysis workflow uses think events with metadata.llm_name
+          if (dataParsed.metadata && dataParsed.metadata.llm_name) {
+            const runId = receivedData.message_id || currentMsgId.value;
+            trackRunMetrics(
+              runId,
+              null,  // No usage_metadata in think events
+              {
+                model_name: dataParsed.metadata.llm_name,
+                usage: {
+                  total_latency: dataParsed.metadata.duration || 0
+                }
+              }
+            );
+          }
+
           try {
-            
+
             // Add think event to messages for persistence
             try {
               messagesData.value.push({
@@ -2556,20 +3001,34 @@ function formatMessageData(msgItem) {
 
 // Check if we have an active streaming group for the current message
 const hasActiveStreamingGroup = computed(() => {
-  if (!messagesData.value || messagesData.value.length === 0 || !currentMsgId.value) {
+  if (!messagesData.value || messagesData.value.length === 0) {
     return false;
   }
-  
-  // Check if any message in the current conversation turn has streaming events
-  return messagesData.value.some(msg => 
-    msg.message_id === currentMsgId.value && 
-    (msg.event === 'agent_completion' || msg.event === 'llm_stream_chunk')
-  );
+
+  // Check if filteredMessages contains any streaming_group
+  // This is more reliable than checking message_id matches because
+  // backend might send different message_ids than frontend currentMsgId
+  return filteredMessages.value.some(item => item.type === 'streaming_group');
 });
 
 
 
+// Computed property to create reactive mapping of workflow data by message_id
+const workflowDataByMessageId = computed(() => {
+  const result = {};
+  // Group workflowData by message_id
+  workflowData.value.forEach(item => {
+    if (!result[item.message_id]) {
+      result[item.message_id] = [];
+    }
+    result[item.message_id].push(item);
+  });
+  return result;
+});
+
 const filteredMessages = computed(() => {
+  console.log('[VOICE-DEBUG] filteredMessages computing, messagesData count:', messagesData.value?.length || 0);
+
   if (!messagesData.value || messagesData.value.length === 0) {
     return [];
   }
@@ -2577,25 +3036,44 @@ const filteredMessages = computed(() => {
   try {
     const grouped = new Map();
     const streamingEvents = ['agent_completion', 'llm_stream_chunk', 'stream_complete'];
-    
+
     // First pass: identify distinct conversation turns and streaming groups
     const messageIdCounts = {};
     const userMessages = new Set(); // Track user messages
     const aiMessages = new Set(); // Track AI messages
-    
+    const userMessageIds = new Map(); // Track user message_ids to detect duplicates
+
     messagesData.value.forEach(msg => {
       if (!msg) return;
-      
+
       // Identify user messages (these should always be separate)
-      if (msg.type === 'HumanMessage' || msg.agent_type === 'human' || msg.additional_kwargs?.agent_type === 'human') {
+      // Check both top-level and nested data properties
+      const isUserMsg = msg.type === 'HumanMessage' ||
+                        msg.agent_type === 'human' ||
+                        msg.additional_kwargs?.agent_type === 'human' ||
+                        msg.data?.type === 'HumanMessage' ||
+                        msg.data?.additional_kwargs?.agent_type === 'human';
+
+      if (isUserMsg) {
         userMessages.add(msg.message_id);
+        // Track backend user messages (canonical source)
+        if (msg.event === 'agent_completion') {
+          userMessageIds.set(msg.message_id, 'backend');
+        }
       }
-      
+      // Also track local user messages
+      if (msg.event === 'user_message') {
+        // Don't overwrite backend version if it exists
+        if (!userMessageIds.has(msg.message_id)) {
+          userMessageIds.set(msg.message_id, 'local');
+        }
+      }
+
       // Identify AI messages (these should be separate unless they're truly streaming)
       if (msg.type === 'AIMessage' || isFinalAgentType(msg.agent_type)) {
         aiMessages.add(msg.message_id);
       }
-      
+
       if (streamingEvents.includes(msg.event) && msg.message_id) {
         // Count ALL streaming events for grouping - we want everything in one bubble
         messageIdCounts[msg.message_id] = (messageIdCounts[msg.message_id] || 0) + 1;
@@ -2608,24 +3086,35 @@ const filteredMessages = computed(() => {
         console.warn('Skipping null/undefined message at index:', index);
         return; // Skip null/undefined messages
       }
-      
+
       const msgId = msg.message_id;
 
       // Decide whether this message should always render its own bubble
       const agentType = msg.agent_type || msg.additional_kwargs?.agent_type || msg.data?.additional_kwargs?.agent_type || msg.data?.agent_type
-      
 
-      
+
+      // Skip duplicate user messages - prefer backend version over local
+      // If this is a local user_message and we have a backend version with the same message_id, skip it
+      if (msg.event === 'user_message' && userMessageIds.get(msgId) === 'backend') {
+        console.debug('Skipping duplicate local user message, backend version exists:', msgId);
+        return;
+      }
+
       // Always separate genuine user inputs
-      if (agentType === 'human' || msg.type === 'HumanMessage') {
-        const uniqueKey = `${msg.type || msg.agent_type}_${msgId}_${index}`;
+      const isUserInput = agentType === 'human' ||
+                         msg.type === 'HumanMessage' ||
+                         msg.data?.type === 'HumanMessage' ||
+                         msg.event === 'user_message';
+
+      if (isUserInput) {
+        const uniqueKey = `${msg.type || msg.event}_${msgId}_${index}`;
         grouped.set(uniqueKey, msg);
         return;
       }
 
       if (streamingEvents.includes(msg.event) &&
           msgId &&
-          !(agentType === 'human' || msg.type === 'HumanMessage')) {
+          !(agentType === 'human' || msg.type === 'HumanMessage' || msg.data?.type === 'HumanMessage')) {
 
         const groupKey = `streaming_${msgId}`;
 
@@ -2654,10 +3143,24 @@ const filteredMessages = computed(() => {
         return;
       }
 
-      // Fallback: render as individual bubble - but only if it has content
-      if (msg.data?.content || msg.content) {
-        const uniqueKey = `${msg.type || msg.event}_${msgId}_${index}`;
+      // Fallback: render as individual bubble - but only if it has meaningful content
+      const hasContent = (msg.data?.content && msg.data.content.trim() !== '') ||
+                        (msg.content && typeof msg.content === 'string' && msg.content.trim() !== '') ||
+                        (msg.text && msg.text.trim() !== '') ||
+                        (msg.event === 'user_message' && msg.data && typeof msg.data === 'string' && msg.data.trim() !== '') ||
+                        (msg.event === 'user_message' && msg.document_ids && msg.document_ids.length > 0);
 
+      // Skip agent_completion messages with empty content (intermediate steps without output)
+      if (msg.event === 'agent_completion' && !hasContent) {
+        console.debug('Skipping empty agent_completion message', {
+          message_id: msgId,
+          agent_type: agentType,
+        });
+        return;
+      }
+
+      if (hasContent) {
+        const uniqueKey = `${msg.type || msg.event}_${msgId}_${index}`;
         grouped.set(uniqueKey, msg);
       }
       
@@ -2668,6 +3171,17 @@ const filteredMessages = computed(() => {
       const aTime = new Date(a.timestamp || 0).getTime();
       const bTime = new Date(b.timestamp || 0).getTime();
       return aTime - bTime;
+    });
+
+    console.log('[VOICE-DEBUG] filteredMessages result:', {
+      total_groups: result.length,
+      groups: result.map(r => ({
+        type: r.type || r.event,
+        message_id: r.message_id,
+        timestamp: r.timestamp,
+        events_count: r.events?.length,
+        has_user_message: r.event === 'user_message' || r.type === 'HumanMessage'
+      }))
     });
 
     return result;
@@ -2934,11 +3448,29 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata) {
   // Only increment event count if event has both response_metadata and model_name, since we are counting llm calls
   if (responseMetadata && responseMetadata.model_name) {
     runData.event_count++;
-    
+
     // Track model usage
     const modelName = responseMetadata.model_name;
     const currentCount = runData.models.get(modelName) || 0;
     runData.models.set(modelName, currentCount + 1);
+
+    // CRITICAL: Also update workflowData array for reactive updates
+    // Vue tracks array changes, so updating this will trigger re-renders
+    const existingIndex = workflowData.value.findIndex(
+      item => item.message_id === runId && item.llm_name === modelName
+    );
+
+    if (existingIndex !== -1) {
+      // Update existing entry
+      workflowData.value[existingIndex].count = currentCount + 1;
+    } else {
+      // Add new entry
+      workflowData.value.push({
+        llm_name: modelName,
+        count: currentCount + 1,
+        message_id: runId
+      });
+    }
   }
 }
 
@@ -3002,26 +3534,18 @@ function getRunSummary(msgItem) {
   return summary;
 }
 
-// Get model data from runMetrics for display
+// Get model data from workflowData array for display
+// Using the reactive array instead of Map ensures Vue detects changes
 function getModelData(message_id) {
   const runId = message_id || currentMsgId.value;
-  
-  if (!runId || !runMetrics.value.has(runId)) {
+
+  if (!runId) {
     return [];
   }
-  
-  const runData = runMetrics.value.get(runId);
-  const models = [];
-  
-  for (const [modelName, count] of runData.models.entries()) {
-    models.push({
-      llm_name: modelName,
-      count: count,
-      message_id: runId
-    });
-  }
-  
-  return models;
+
+  // Filter workflowData array by message_id
+  // Vue tracks array access, so this will be reactive!
+  return workflowData.value.filter(item => item.message_id === runId);
 }
 
 // File utility functions

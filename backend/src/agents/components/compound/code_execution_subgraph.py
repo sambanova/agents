@@ -154,8 +154,9 @@ def create_code_execution_graph(
     sambanova_api_key: str,
     redis_storage: RedisStorage,
     daytona_manager: PersistentDaytonaManager,
+    api_keys: dict = None,
 ):
-    logger.info("Creating code execution subgraph")
+    logger.info("Creating code execution subgraph", user_id=user_id[:8] if user_id else "None")
 
     images_formats = ["image/png", "image/jpg", "image/jpeg", "image/gif", "image/svg"]
 
@@ -382,7 +383,22 @@ def create_code_execution_graph(
             logger.info("Analyzing error and deciding on next step...")
 
         try:
-            llm = get_sambanova_llm(api_key=sambanova_api_key, model="DeepSeek-V3-0324")
+            # Use config manager if api_keys dict is provided (admin panel enabled)
+            if api_keys is not None:
+                from agents.config.llm_config_manager import get_config_manager
+                from agents.utils.llm_provider import get_llm_for_task
+
+                config_manager = get_config_manager()
+                llm = get_llm_for_task(
+                    task="code_execution_agent",
+                    api_keys=api_keys,
+                    config_manager=config_manager,
+                    user_id=user_id
+                )
+                logger.info("Code execution agent using model from config")
+            else:
+                # Fallback to old behavior when admin panel is disabled
+                llm = get_sambanova_llm(api_key=sambanova_api_key, model="DeepSeek-V3-0324")
 
             messages = [
                 SystemMessage(

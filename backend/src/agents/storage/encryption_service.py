@@ -112,7 +112,13 @@ class EncryptionService:
         Returns:
             dict: Dictionary with encrypted values
         """
-        return {k: self.encrypt(v, user_id) for k, v in data.items()}
+        encrypted = {}
+        for k, v in data.items():
+            encrypted_value = self.encrypt(v, user_id)
+            # Only include non-None values (Redis doesn't accept None)
+            if encrypted_value is not None:
+                encrypted[k] = encrypted_value
+        return encrypted
 
     def decrypt_dict(self, data: Dict[str, bytes], user_id: str) -> Dict[str, Any]:
         """
