@@ -29,6 +29,7 @@ VITE_API_URL = $(shell grep -A21 "frontend:" $(VALUES_FILE) | grep "VITE_API_URL
 VITE_AUTH0_DOMAIN = $(shell grep -A21 "frontend:" $(VALUES_FILE) | grep "VITE_AUTH0_DOMAIN:" | sed 's/.*VITE_AUTH0_DOMAIN: *//;s/"//g')
 VITE_AUTH0_CLIENT_ID = $(shell grep -A21 "frontend:" $(VALUES_FILE) | grep "VITE_AUTH0_CLIENT_ID:" | sed 's/.*VITE_AUTH0_CLIENT_ID: *//;s/"//g')
 VITE_AUTH0_SCOPES = $(shell grep -A21 "frontend:" $(VALUES_FILE) | grep "VITE_AUTH0_SCOPES:" | sed 's/.*VITE_AUTH0_SCOPES: *//;s/"//g')
+VITE_SHOW_ADMIN_PANEL = $(shell grep -A21 "frontend:" $(VALUES_FILE) | grep "VITE_SHOW_ADMIN_PANEL:" | sed 's/.*VITE_SHOW_ADMIN_PANEL: *//;s/"//g')
 
 # Common variables
 BACKEND_DOCKER_IMAGE = $(BACKEND_REPO)
@@ -62,12 +63,14 @@ build-frontend:
 	@echo "Using VITE_AUTH0_DOMAIN: '$(VITE_AUTH0_DOMAIN)'"
 	@echo "Using VITE_AUTH0_CLIENT_ID: '$(VITE_AUTH0_CLIENT_ID)'"
 	@echo "Using VITE_AUTH0_SCOPES: '$(VITE_AUTH0_SCOPES)'"
+	@echo "Using VITE_SHOW_ADMIN_PANEL: '$(VITE_SHOW_ADMIN_PANEL)'"
 	cd ../frontend/sales-agent-crew && docker build \
 		--platform=linux/amd64 \
 		--build-arg VITE_API_URL="$(VITE_API_URL)" \
 		--build-arg VITE_AUTH0_DOMAIN="$(VITE_AUTH0_DOMAIN)" \
 		--build-arg VITE_AUTH0_CLIENT_ID="$(VITE_AUTH0_CLIENT_ID)" \
 		--build-arg VITE_AUTH0_SCOPES="$(VITE_AUTH0_SCOPES)" \
+		--build-arg VITE_SHOW_ADMIN_PANEL="$(VITE_SHOW_ADMIN_PANEL)" \
 		-t $(FRONTEND_DOCKER_IMAGE):$(TAG) .
 
 # Push the backend Docker image
@@ -132,6 +135,7 @@ help:
 	@echo "VITE_AUTH0_DOMAIN: $(VITE_AUTH0_DOMAIN)"
 	@echo "VITE_AUTH0_CLIENT_ID: $(VITE_AUTH0_CLIENT_ID)"
 	@echo "VITE_AUTH0_SCOPES: $(VITE_AUTH0_SCOPES)"
+	@echo "VITE_SHOW_ADMIN_PANEL: $(VITE_SHOW_ADMIN_PANEL)"
 	@echo ""
 	@echo "Targets:"
 	@echo "  build-backend   Build the backend Docker image"
