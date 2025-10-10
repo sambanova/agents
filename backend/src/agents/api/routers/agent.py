@@ -5,6 +5,7 @@ import uuid
 from typing import List, Optional
 
 import markdown
+import structlog
 from agents.api.routers.upload import process_and_store_file, upload_document
 from agents.api.utils import process_data_science_report
 from agents.components.compound.data_science_subgraph import (
@@ -14,6 +15,7 @@ from agents.components.compound.xml_agent import get_global_checkpointer
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.components.open_deep_research.graph import create_deep_research_graph
 from agents.storage.redis_storage import RedisStorage
+from agents.tools.langgraph_tools import load_static_tools
 from fastapi import (
     APIRouter,
     File,
@@ -24,10 +26,12 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command, Interrupt
 from pydantic import BaseModel
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(
     prefix="/agent",
@@ -504,4 +508,894 @@ async def deepresearch_interactive_agent(
                 "status": "error",
                 "error": str(e),
             },
+        )
+
+
+# ==================== MAIN AGENT API ====================
+
+
+class MainAgentRequest(BaseModel):
+    prompt: str
+
+
+class MainAgentInteractiveRequest(BaseModel):
+    prompt: str
+    thread_id: Optional[str] = None
+    resume: bool = False
+
+
+@router.post("/mainagent", tags=["Agents"])
+async def main_agent(
+    request: Request,
+    agent_request: MainAgentRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Fire-and-forget main agent API.
+    The main agent is a general-purpose AI assistant that can coordinate with subagents
+    (coding, financial analysis, deep research, data science) to complete complex tasks.
+
+    Submits a prompt and returns the final response in a single call.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "Authorization header with Bearer token is required"},
+        )
+
+    api_key = authorization.replace("Bearer ", "")
+    redis_storage = request.app.state.redis_storage_service
+    checkpointer = get_global_checkpointer()
+    thread_id = str(uuid.uuid4())
+
+    try:
+        # Import here to avoid circular dependencies
+        from agents.components.compound.agent import enhanced_agent
+        from agents.components.compound.data_types import LLMType
+        from agents.api.subgraph_factory import create_all_subgraphs
+
+        # Load tools same way as websocket
+        tools_config = [
+            {"type": "arxiv", "config": {}},
+            {"type": "search_tavily", "config": {}},
+            {"type": "search_tavily_answer", "config": {}},
+            {"type": "wikipedia", "config": {}},
+        ]
+
+        all_tools = await load_static_tools(tools_config)
+
+        # Load connector tools if available
+        try:
+            from agents.connectors.core.connector_manager import get_connector_manager
+            connector_manager = get_connector_manager()
+            if connector_manager:
+                connector_tools = await connector_manager.get_user_tools(api_key)
+                all_tools.extend(connector_tools)
+                logger.info(
+                    "Loaded connector tools for main agent API",
+                    num_connector_tools=len(connector_tools),
+                    total_tools=len(all_tools)
+                )
+        except Exception as e:
+            logger.error("Failed to load connector tools", error=str(e))
+
+        # Create all subgraphs for the main agent using centralized factory
+        subgraphs = create_all_subgraphs(
+            user_id=api_key,
+            api_key=api_key,
+            redis_storage=redis_storage,
+            provider="sambanova",
+            enable_data_science=False,  # No files uploaded in this API
+        )
+
+        # Configure and execute the main agent with correct config keys
+        agent = enhanced_agent.with_config(
+            configurable={
+                "llm_type": LLMType.SN_DEEPSEEK_V3,
+                "type==default/system_message": "You are a helpful AI assistant. You can help with general questions, coding tasks, financial analysis, deep research, and data science. When a user asks for something specific, you can delegate to specialized subagents.",
+                "type==default/tools": all_tools,
+                "type==default/subgraphs": subgraphs,
+                "type==default/user_id": api_key,
+            }
+        )
+
+        # Execute the agent using streaming (same as frontend websocket) to avoid truncation
+        # Collect all streamed events and build the final result
+        result = None
+        graph_input = [HumanMessage(content=agent_request.prompt)]
+
+        async for chunk in agent.astream(
+            graph_input,
+            config={
+                "configurable": {
+                    "thread_id": thread_id,
+                    "api_key": api_key,
+                },
+                "metadata": {
+                    "user_id": api_key,
+                    "thread_id": thread_id,
+                    "message_id": str(uuid.uuid4()),
+                }
+            },
+            stream_mode="values"
+        ):
+            result = chunk  # Keep updating with latest state
+
+        # Handle deep research interrupts (auto-approve for fire-and-forget API)
+        max_interrupt_retries = 3
+        interrupt_retry = 0
+        while result and "__interrupt__" in result and len(result.get("__interrupt__", [])) > 0 and interrupt_retry < max_interrupt_retries:
+            interrupt_msg = result["__interrupt__"][0]
+            interrupt_value = interrupt_msg.value if isinstance(interrupt_msg, Interrupt) else interrupt_msg
+
+            # Check if this is a deep research interrupt (contains the plan approval prompt)
+            if "provide feedback" in str(interrupt_value).lower() and "approve" in str(interrupt_value).lower():
+                logger.info(
+                    "Main agent API: Auto-approving deep research interrupt",
+                    thread_id=thread_id,
+                    retry=interrupt_retry
+                )
+                # Auto-approve and continue using streaming
+                result = None
+                async for chunk in agent.astream(
+                    Command(resume="APPROVE"),
+                    config={
+                        "configurable": {
+                            "thread_id": thread_id,
+                            "api_key": api_key,
+                        },
+                        "metadata": {
+                            "user_id": api_key,
+                            "thread_id": thread_id,
+                            "message_id": str(uuid.uuid4()),
+                        }
+                    },
+                    stream_mode="values"
+                ):
+                    result = chunk  # Keep updating with latest state
+                interrupt_retry += 1
+            else:
+                # Unknown interrupt type, break out
+                logger.warning(
+                    "Main agent API: Unknown interrupt type, cannot auto-approve",
+                    interrupt_msg=str(interrupt_value)[:200]
+                )
+                break
+
+        # Extract the final message content and collect artifacts from ALL messages
+        if result and len(result) > 0:
+            final_message = result[-1]
+            response_content = final_message.content if hasattr(final_message, 'content') else str(final_message)
+
+            # Collect artifacts from ALL messages in the conversation
+            # Subgraphs (like DaytonaCodeSandbox) return files in their output messages
+            artifacts = []
+            for message in result:
+                if hasattr(message, 'additional_kwargs') and message.additional_kwargs:
+                    files = message.additional_kwargs.get('files', [])
+                    if files:
+                        # Avoid duplicates
+                        for file in files:
+                            if file not in artifacts:
+                                artifacts.append(file)
+
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "thread_id": thread_id,
+                    "status": "completed",
+                    "result": response_content,
+                    "artifacts": artifacts,
+                },
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "thread_id": thread_id,
+                "status": "error",
+                "error": "No response from agent",
+            },
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "thread_id": thread_id,
+                "status": "error",
+                "error": str(e),
+            },
+        )
+
+
+@router.post("/mainagent/interactive", tags=["Agents"])
+async def main_agent_interactive(
+    request: Request,
+    agent_request: MainAgentInteractiveRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Interactive main agent API for multi-turn conversations.
+    The main agent is a general-purpose AI assistant that can coordinate with subagents
+    (coding, financial analysis, deep research, data science) to complete complex tasks.
+
+    Step 1: Submit prompt, get thread_id and initial response.
+    Step 2: Continue conversation with thread_id and resume=true.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "Authorization header with Bearer token is required"},
+        )
+
+    api_key = authorization.replace("Bearer ", "")
+    redis_storage = request.app.state.redis_storage_service
+    checkpointer = get_global_checkpointer()
+
+    if agent_request.resume is False:
+        thread_id = str(uuid.uuid4())
+    else:
+        thread_id = agent_request.thread_id
+        if not thread_id:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "thread_id is required when resume=true"},
+            )
+
+    try:
+        # Import here to avoid circular dependencies
+        from agents.components.compound.agent import enhanced_agent
+        from agents.components.compound.data_types import LLMType
+        from agents.api.subgraph_factory import create_all_subgraphs
+
+        # Load tools same way as websocket
+        tools_config = [
+            {"type": "arxiv", "config": {}},
+            {"type": "search_tavily", "config": {}},
+            {"type": "search_tavily_answer", "config": {}},
+            {"type": "wikipedia", "config": {}},
+        ]
+
+        all_tools = await load_static_tools(tools_config)
+
+        # Load connector tools if available
+        try:
+            from agents.connectors.core.connector_manager import get_connector_manager
+            connector_manager = get_connector_manager()
+            if connector_manager:
+                connector_tools = await connector_manager.get_user_tools(api_key)
+                all_tools.extend(connector_tools)
+                logger.info(
+                    "Loaded connector tools for main agent interactive API",
+                    num_connector_tools=len(connector_tools),
+                    total_tools=len(all_tools)
+                )
+        except Exception as e:
+            logger.error("Failed to load connector tools", error=str(e))
+
+        # Create all subgraphs for the main agent using centralized factory
+        subgraphs = create_all_subgraphs(
+            user_id=api_key,
+            api_key=api_key,
+            redis_storage=redis_storage,
+            provider="sambanova",
+            enable_data_science=False,  # No files uploaded in this API
+        )
+
+        # Configure and execute the main agent with correct config keys
+        agent = enhanced_agent.with_config(
+            configurable={
+                "llm_type": LLMType.SN_DEEPSEEK_V3,
+                "type==default/system_message": "You are a helpful AI assistant. You can help with general questions, coding tasks, financial analysis, deep research, and data science. When a user asks for something specific, you can delegate to specialized subagents.",
+                "type==default/tools": all_tools,
+                "type==default/subgraphs": subgraphs,
+                "type==default/user_id": api_key,
+            }
+        )
+
+        # Execute the agent using streaming (same as frontend websocket) to avoid truncation
+        if agent_request.resume is False:
+            # Initial request
+            graph_input = [HumanMessage(content=agent_request.prompt)]
+        else:
+            # Continuing conversation - append new message
+            graph_input = Command(resume=[HumanMessage(content=agent_request.prompt)])
+
+        # Collect all streamed events and build the final result
+        result = None
+        async for chunk in agent.astream(
+            graph_input,
+            config={
+                "configurable": {
+                    "thread_id": thread_id,
+                    "api_key": api_key,
+                },
+                "metadata": {
+                    "user_id": api_key,
+                    "thread_id": thread_id,
+                    "message_id": str(uuid.uuid4()),
+                }
+            },
+            stream_mode="values"
+        ):
+            result = chunk  # Keep updating with latest state
+
+        # Handle deep research interrupts (auto-approve for main agent API)
+        max_interrupt_retries = 3
+        interrupt_retry = 0
+        while result and "__interrupt__" in result and len(result.get("__interrupt__", [])) > 0 and interrupt_retry < max_interrupt_retries:
+            interrupt_msg = result["__interrupt__"][0]
+            interrupt_value = interrupt_msg.value if isinstance(interrupt_msg, Interrupt) else interrupt_msg
+
+            # Check if this is a deep research interrupt (contains the plan approval prompt)
+            if "provide feedback" in str(interrupt_value).lower() and "approve" in str(interrupt_value).lower():
+                logger.info(
+                    "Main agent interactive API: Auto-approving deep research interrupt",
+                    thread_id=thread_id,
+                    retry=interrupt_retry
+                )
+                # Auto-approve and continue using streaming
+                result = None
+                async for chunk in agent.astream(
+                    Command(resume="APPROVE"),
+                    config={
+                        "configurable": {
+                            "thread_id": thread_id,
+                            "api_key": api_key,
+                        },
+                        "metadata": {
+                            "user_id": api_key,
+                            "thread_id": thread_id,
+                            "message_id": str(uuid.uuid4()),
+                        }
+                    },
+                    stream_mode="values"
+                ):
+                    result = chunk  # Keep updating with latest state
+                interrupt_retry += 1
+            else:
+                # Unknown interrupt type, break out
+                logger.warning(
+                    "Main agent interactive API: Unknown interrupt type, cannot auto-approve",
+                    interrupt_msg=str(interrupt_value)[:200]
+                )
+                break
+
+        # Check for interrupts (if the agent needs user input)
+        if "__interrupt__" in result and len(result["__interrupt__"]) > 0:
+            interrupt_message = result["__interrupt__"][0]
+            if isinstance(interrupt_message, Interrupt):
+                interrupt_message = interrupt_message.value
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "thread_id": thread_id,
+                    "status": "interrupted",
+                    "result": interrupt_message,
+                },
+            )
+
+        # Extract the final message content and collect artifacts from ALL messages
+        if result and len(result) > 0:
+            final_message = result[-1]
+            response_content = final_message.content if hasattr(final_message, 'content') else str(final_message)
+
+            # Collect artifacts from ALL messages in the conversation
+            # Subgraphs (like DaytonaCodeSandbox) return files in their output messages
+            artifacts = []
+            for message in result:
+                if hasattr(message, 'additional_kwargs') and message.additional_kwargs:
+                    files = message.additional_kwargs.get('files', [])
+                    if files:
+                        # Avoid duplicates
+                        for file in files:
+                            if file not in artifacts:
+                                artifacts.append(file)
+
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "thread_id": thread_id,
+                    "status": "completed",
+                    "result": response_content,
+                    "artifacts": artifacts,
+                },
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "thread_id": thread_id,
+                "status": "completed",
+                "result": "Unable to extract results from the agent",
+            },
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "thread_id": thread_id,
+                "status": "error",
+                "error": str(e),
+            },
+        )
+
+# ==================== CODING AGENT API ====================
+
+
+class CodingAgentRequest(BaseModel):
+    prompt: str
+    code: str
+
+
+class CodingAgentInteractiveRequest(BaseModel):
+    prompt: str
+    code: str
+    thread_id: Optional[str] = None
+    resume: bool = False
+
+
+@router.post("/coding", tags=["Agents"])
+async def coding_agent(
+    request: Request,
+    agent_request: CodingAgentRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Fire-and-forget coding agent API.
+    The coding agent can execute Python code in a sandbox environment, fix errors, and provide results.
+
+    Submits code with an optional prompt and returns the execution result in a single call.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "Authorization header with Bearer token is required"},
+        )
+
+    api_key = authorization.replace("Bearer ", "")
+    redis_storage = request.app.state.redis_storage_service
+    thread_id = str(uuid.uuid4())
+
+    try:
+        # Import here to avoid circular dependencies
+        from agents.components.compound.code_execution_subgraph import create_code_execution_graph
+        from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
+
+        # Create Daytona manager for code execution
+        daytona_manager = PersistentDaytonaManager(
+            user_id=api_key,
+            redis_storage=redis_storage,
+            snapshot="data-analysis:0.0.10",
+            file_ids=[],
+        )
+
+        # Create code execution graph
+        code_graph = create_code_execution_graph(
+            user_id=api_key,
+            sambanova_api_key=api_key,
+            redis_storage=redis_storage,
+            daytona_manager=daytona_manager,
+        )
+
+        # Execute the code
+        result = await code_graph.ainvoke(
+            {
+                "code": agent_request.code,
+                "steps_taken": [],
+                "error_detected": False,
+                "corrections_proposed": [],
+                "current_retry": 0,
+                "max_retries": 3,
+                "messages": [],
+                "search_context": None,
+                "additional_packages": [],
+                "installation_successful": True,
+                "search_query": None,
+                "correction_feedback": None,
+                "files": [],
+            },
+            config={
+                "configurable": {"thread_id": thread_id},
+                "metadata": {
+                    "user_id": api_key,
+                    "thread_id": thread_id,
+                    "message_id": str(uuid.uuid4()),
+                }
+            },
+        )
+
+        # Extract results
+        steps_taken = result.get("steps_taken", [])
+        files = result.get("files", [])
+
+        # Format the response
+        response_content = "\n\n".join(steps_taken) if steps_taken else "Code execution completed."
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "thread_id": thread_id,
+                "status": "completed",
+                "result": response_content,
+                "artifacts": files,
+            },
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "thread_id": thread_id,
+                "status": "error",
+                "error": str(e),
+            },
+        )
+
+
+@router.post("/coding/interactive", tags=["Agents"])
+async def coding_agent_interactive(
+    request: Request,
+    agent_request: CodingAgentInteractiveRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Interactive coding agent API for iterative code development.
+    The coding agent can execute Python code in a sandbox environment, fix errors, and provide results.
+
+    Step 1: Submit code with prompt, get thread_id and execution result.
+    Step 2: Continue with thread_id and resume=true to iterate on code.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "Authorization header with Bearer token is required"},
+        )
+
+    api_key = authorization.replace("Bearer ", "")
+    redis_storage = request.app.state.redis_storage_service
+
+    if agent_request.resume is False:
+        thread_id = str(uuid.uuid4())
+    else:
+        thread_id = agent_request.thread_id
+        if not thread_id:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "thread_id is required when resume=true"},
+            )
+
+    try:
+        # Import here to avoid circular dependencies
+        from agents.components.compound.code_execution_subgraph import create_code_execution_graph
+        from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
+
+        # Create Daytona manager for code execution
+        daytona_manager = PersistentDaytonaManager(
+            user_id=api_key,
+            redis_storage=redis_storage,
+            snapshot="data-analysis:0.0.10",
+            file_ids=[],
+        )
+
+        # Create code execution graph
+        code_graph = create_code_execution_graph(
+            user_id=api_key,
+            sambanova_api_key=api_key,
+            redis_storage=redis_storage,
+            daytona_manager=daytona_manager,
+        )
+
+        # Execute the code
+        result = await code_graph.ainvoke(
+            {
+                "code": agent_request.code,
+                "steps_taken": [],
+                "error_detected": False,
+                "corrections_proposed": [],
+                "current_retry": 0,
+                "max_retries": 3,
+                "messages": [],
+                "search_context": None,
+                "additional_packages": [],
+                "installation_successful": True,
+                "search_query": None,
+                "correction_feedback": None,
+                "files": [],
+            },
+            config={
+                "configurable": {"thread_id": thread_id},
+                "metadata": {
+                    "user_id": api_key,
+                    "thread_id": thread_id,
+                    "message_id": str(uuid.uuid4()),
+                }
+            },
+        )
+
+        # Extract results
+        steps_taken = result.get("steps_taken", [])
+        files = result.get("files", [])
+
+        # Format the response
+        response_content = "\n\n".join(steps_taken) if steps_taken else "Code execution completed."
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "thread_id": thread_id,
+                "status": "completed",
+                "result": response_content,
+                "artifacts": files,
+            },
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "thread_id": thread_id,
+                "status": "error",
+                "error": str(e),
+            },
+        )
+
+
+# ==================== FINANCIAL ANALYSIS AGENT API ====================
+
+
+class FinancialAnalysisRequest(BaseModel):
+    prompt: str
+
+
+class FinancialAnalysisInteractiveRequest(BaseModel):
+    prompt: str
+    thread_id: Optional[str] = None
+    resume: bool = False
+
+
+@router.post("/financialanalysis", tags=["Agents"])
+async def financial_analysis_agent(
+    request: Request,
+    agent_request: FinancialAnalysisRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Fire-and-forget financial analysis agent API.
+    The financial analysis agent can analyze stocks, companies, and financial data.
+
+    Submits a prompt and returns the financial analysis report in a single call.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "Authorization header with Bearer token is required"},
+        )
+
+    api_key = authorization.replace("Bearer ", "")
+    redis_storage = request.app.state.redis_storage_service
+    thread_id = str(uuid.uuid4())
+
+    try:
+        # Import here to avoid circular dependencies
+        from agents.components.compound.financial_analysis_subgraph import create_financial_analysis_graph
+
+        # Create financial analysis graph
+        financial_graph = create_financial_analysis_graph(
+            redis_client=redis_storage,
+            user_id=api_key,
+        )
+
+        # Execute the analysis
+        result = await financial_graph.ainvoke(
+            [HumanMessage(content=agent_request.prompt)],
+            config={
+                "configurable": {"thread_id": thread_id, "api_key": api_key},
+                "metadata": {
+                    "user_id": api_key,
+                    "thread_id": thread_id,
+                    "message_id": str(uuid.uuid4()),
+                }
+            },
+        )
+
+        # Extract the final message content
+        if result and len(result) > 0:
+            final_message = result[-1]
+
+            # Handle the JSON content from financial analysis
+            import json as json_module
+            if hasattr(final_message, 'content'):
+                try:
+                    # The content is a JSON string, parse it
+                    content_data = json_module.loads(final_message.content)
+                    response_content = json_module.dumps(content_data, indent=2)
+                except (json_module.JSONDecodeError, TypeError):
+                    # If it's not JSON, use as-is
+                    response_content = final_message.content
+            else:
+                response_content = str(final_message)
+
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "thread_id": thread_id,
+                    "status": "completed",
+                    "result": response_content,
+                },
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "thread_id": thread_id,
+                "status": "error",
+                "error": "No response from financial analysis agent",
+            },
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "thread_id": thread_id,
+                "status": "error",
+                "error": str(e),
+            },
+        )
+
+
+@router.post("/financialanalysis/interactive", tags=["Agents"])
+async def financial_analysis_agent_interactive(
+    request: Request,
+    agent_request: FinancialAnalysisInteractiveRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Interactive financial analysis agent API for follow-up questions.
+    The financial analysis agent can analyze stocks, companies, and financial data.
+
+    Step 1: Submit prompt, get thread_id and initial analysis.
+    Step 2: Continue with thread_id and resume=true for follow-up questions.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "Authorization header with Bearer token is required"},
+        )
+
+    api_key = authorization.replace("Bearer ", "")
+    redis_storage = request.app.state.redis_storage_service
+
+    if agent_request.resume is False:
+        thread_id = str(uuid.uuid4())
+    else:
+        thread_id = agent_request.thread_id
+        if not thread_id:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "thread_id is required when resume=true"},
+            )
+
+    try:
+        # Import here to avoid circular dependencies
+        from agents.components.compound.financial_analysis_subgraph import create_financial_analysis_graph
+
+        # Create financial analysis graph
+        financial_graph = create_financial_analysis_graph(
+            redis_client=redis_storage,
+            user_id=api_key,
+        )
+
+        # Execute the analysis
+        result = await financial_graph.ainvoke(
+            [HumanMessage(content=agent_request.prompt)],
+            config={
+                "configurable": {"thread_id": thread_id, "api_key": api_key},
+                "metadata": {
+                    "user_id": api_key,
+                    "thread_id": thread_id,
+                    "message_id": str(uuid.uuid4()),
+                }
+            },
+        )
+
+        # Extract the final message content
+        if result and len(result) > 0:
+            final_message = result[-1]
+
+            # Handle the JSON content from financial analysis
+            import json as json_module
+            if hasattr(final_message, 'content'):
+                try:
+                    # The content is a JSON string, parse it
+                    content_data = json_module.loads(final_message.content)
+                    response_content = json_module.dumps(content_data, indent=2)
+                except (json_module.JSONDecodeError, TypeError):
+                    # If it's not JSON, use as-is
+                    response_content = final_message.content
+            else:
+                response_content = str(final_message)
+
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "thread_id": thread_id,
+                    "status": "completed",
+                    "result": response_content,
+                },
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "thread_id": thread_id,
+                "status": "error",
+                "error": "No response from financial analysis agent",
+            },
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "thread_id": thread_id,
+                "status": "error",
+                "error": str(e),
+            },
+        )
+
+
+# ==================== FILE DOWNLOAD API ====================
+
+
+@router.get("/files/{file_id}", tags=["Agents"])
+async def download_agent_file(
+    request: Request,
+    file_id: str,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Download a file generated by an agent using Bearer token authentication.
+    This endpoint allows API users to download files (artifacts) returned by agent APIs.
+    
+    Security: Files are scoped to users - you can only download your own files.
+    The storage layer verifies file ownership before returning data.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "Authorization header with Bearer token is required"},
+        )
+
+    # The API key IS the user_id in the agent system
+    user_id = authorization.replace("Bearer ", "")
+    redis_storage = request.app.state.redis_storage_service
+
+    try:
+        # Get file from Redis storage with ownership verification
+        # This call internally verifies the file belongs to this user_id
+        file_data, file_metadata = await redis_storage.get_file(user_id, file_id)
+
+        if not file_data or not file_metadata:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"error": "File not found or access denied"},
+            )
+
+        # Return the file with appropriate headers
+        return Response(
+            content=file_data,
+            media_type=file_metadata.get("format", "application/octet-stream"),
+            headers={
+                "Content-Disposition": f'attachment; filename="{file_metadata.get("filename", file_id)}"'
+            },
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": f"Error downloading file: {str(e)}"},
         )

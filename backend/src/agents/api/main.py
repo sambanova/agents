@@ -5,13 +5,18 @@ import mlflow
 import structlog
 from agents.api.data_types import APIKeys
 from agents.api.middleware import LoggingMiddleware
+from agents.api.routers.admin import router as admin_router
 from agents.api.routers.agent import router as agent_router
 from agents.api.routers.chat import router as chat_router
+from agents.api.routers.connectors import router as connectors_router
+from agents.api.routers.dynamic_mcp import router as dynamic_mcp_router
 from agents.api.routers.export import router as export_router
 from agents.api.routers.files import router as files_router
+from agents.api.routers.openai_responses import router as openai_router
 from agents.api.routers.share import router as share_router
 from agents.api.routers.upload import router as upload_router
 from agents.api.routers.user import router as user_router
+from agents.api.routers.voice import router as voice_router
 from agents.api.websocket_manager import WebSocketConnectionManager
 from agents.auth.auth0_config import get_current_user_id
 from agents.components.compound.xml_agent import (
@@ -76,6 +81,21 @@ async def lifespan(app: FastAPI):
 
     # Set global Redis storage service for tools
     set_global_redis_storage_service(app.state.redis_storage_service)
+    
+    # Initialize OAuth connectors
+    try:
+        from agents.connectors.runtime.integration import initialize_connectors
+        from agents.tools.dynamic_tool_loader import set_dynamic_tool_loader, DynamicToolLoader
+        
+        app.state.connector_manager = await initialize_connectors(app.state.redis_storage_service)
+        
+        # Initialize the dynamic tool loader with connector manager
+        dynamic_loader = DynamicToolLoader(app.state.redis_storage_service, app.state.connector_manager)
+        set_dynamic_tool_loader(dynamic_loader)
+        
+        logger.info("OAuth connector system and dynamic tool loader initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize OAuth connectors: {e}", exc_info=True)
 
     logger.info("Using Redis with shared connection pool")
 
@@ -90,7 +110,9 @@ async def lifespan(app: FastAPI):
     # Set the global checkpointer for use in agents
     set_global_checkpointer(app.state.checkpointer)
 
-    await AsyncRedisSaver(redis_client=app.state.redis_client).asetup()
+    # Setup the checkpointer (create Redis indexes)
+    if app.state.checkpointer:
+        await app.state.checkpointer.asetup()
 
     yield
 
@@ -141,6 +163,7 @@ app.add_middleware(
     expose_headers=["content-type", "content-length"],
 )
 
+app.include_router(admin_router)
 app.include_router(chat_router)
 app.include_router(upload_router)
 app.include_router(files_router)
@@ -148,6 +171,10 @@ app.include_router(share_router)
 app.include_router(user_router)
 app.include_router(agent_router)
 app.include_router(export_router)
+app.include_router(connectors_router)
+app.include_router(dynamic_mcp_router)
+app.include_router(voice_router)
+app.include_router(openai_router)
 
 
 @app.get("/health")
@@ -174,12 +201,42 @@ async def set_api_keys(
     """
     Store API keys for a user in Redis.
 
+    When admin panel is enabled (SHOW_ADMIN_PANEL=true):
+    - This endpoint should only be called by non-admin components (for Serper/Exa keys)
+    - Preserves Fireworks/Together/SambaNova keys and PayPal email managed by admin panel
+    - Admin panel uses /admin/config endpoint for LLM provider keys and PayPal email
+
+    When admin panel is disabled:
+    - This endpoint manages all API keys as before
+
     Args:
         user_id (str): The ID of the user
         keys (APIKeys): The API keys to store
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
     try:
+        admin_enabled = os.getenv("SHOW_ADMIN_PANEL", "false").lower() == "true"
+
+        if admin_enabled:
+            # When admin panel is enabled, preserve LLM provider keys
+            # This endpoint should only update non-LLM keys (Serper, Exa)
+            existing_keys = await app.state.redis_storage_service.get_user_api_key(user_id)
+
+            # Preserve all LLM provider keys and PayPal email from admin panel
+            if existing_keys:
+                # Keep existing provider keys if not explicitly provided
+                if not keys.sambanova_key and existing_keys.sambanova_key:
+                    keys.sambanova_key = existing_keys.sambanova_key
+                if not keys.fireworks_key and existing_keys.fireworks_key:
+                    keys.fireworks_key = existing_keys.fireworks_key
+                if not getattr(keys, 'together_key', '') and getattr(existing_keys, 'together_key', ''):
+                    keys.together_key = existing_keys.together_key
+                # Preserve PayPal invoicing email
+                if not getattr(keys, 'paypal_invoicing_email', '') and getattr(existing_keys, 'paypal_invoicing_email', ''):
+                    keys.paypal_invoicing_email = existing_keys.paypal_invoicing_email
+
+            logger.info(f"Preserving LLM keys and PayPal email while updating other keys for user {user_id[:8]}...")
+
         await app.state.redis_storage_service.set_user_api_key(user_id, keys)
 
         return JSONResponse(
@@ -206,23 +263,41 @@ async def get_api_keys(
         token_data (HTTPAuthorizationCredentials): The authentication token data
     """
     try:
-        key_prefix = f"api_keys:{user_id}"
-        stored_keys = await app.state.redis_client.hgetall(key_prefix, user_id)
+        # Use the redis_storage_service which properly handles the data
+        stored_keys = await app.state.redis_storage_service.get_user_api_key(user_id)
 
-        if not stored_keys:
+        if not stored_keys or not stored_keys.sambanova_key:
             return JSONResponse(
                 status_code=404,
                 content={"error": "No API keys found for this user"},
             )
 
+        response_data = {
+            "sambanova_key": stored_keys.sambanova_key,
+            "serper_key": stored_keys.serper_key,
+            "exa_key": stored_keys.exa_key,
+            "fireworks_key": stored_keys.fireworks_key,
+            "together_key": stored_keys.together_key,
+        }
+
+        # Also include custom provider API keys from LLM config
+        config_key = f"llm_config:{user_id}"
+        stored_config = await app.state.redis_storage_service.redis_client.get(
+            config_key,
+            user_id=user_id
+        )
+
+        if stored_config:
+            import json
+            overrides = json.loads(stored_config)
+
+            # Add custom provider API keys if they exist
+            if "custom_api_keys" in overrides:
+                response_data.update(overrides["custom_api_keys"])
+
         return JSONResponse(
             status_code=200,
-            content={
-                "sambanova_key": stored_keys.get("sambanova_key", ""),
-                "serper_key": stored_keys.get("serper_key", ""),
-                "exa_key": stored_keys.get("exa_key", ""),
-                "fireworks_key": stored_keys.get("fireworks_key", ""),
-            },
+            content=response_data,
         )
 
     except Exception as e:

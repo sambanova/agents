@@ -4,11 +4,12 @@ import time
 from datetime import datetime, timezone
 from typing import Callable
 
+import httpx
 import langsmith as ls
 import structlog
 from agents.components.compound.data_types import LiberalFunctionMessage, LLMType
 from agents.components.compound.prompts import xml_template
-from agents.components.compound.util import extract_api_key
+from agents.components.compound.util import extract_api_key, extract_api_keys, extract_user_id
 from agents.utils.logging_utils import setup_logging_context
 from langchain.tools import BaseTool
 from langchain_core.language_models.base import LanguageModelLike
@@ -17,6 +18,7 @@ from langchain_core.messages import (
     FunctionMessage,
     HumanMessage,
     SystemMessage,
+    ToolMessage,
 )
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.redis import AsyncRedisSaver
@@ -382,12 +384,18 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
         setup_logging_context(config, node="agent")
         logger.info("Agent node execution started", num_messages=len(messages))
         api_key = extract_api_key(config)
+        api_keys = extract_api_keys(config)  # Get all API keys if admin panel is enabled
+        user_id = extract_user_id(config)  # Get user_id for admin panel support
 
-        # Call your LLM partial with api_key
-        initialised_llm = llm(api_key=api_key)
+        # Call your LLM partial with api_key (and optionally api_keys and user_id)
+        # Pass api_keys and user_id if available for admin panel support
+        if api_keys:
+            initialised_llm = llm(api_key=api_key, api_keys=api_keys, user_id=user_id)
+        else:
+            initialised_llm = llm(api_key=api_key)
 
         llm_with_stop = initialised_llm.bind(
-            stop=["</tool_input>", "</subgraph_input>", "<observation>"]
+            stop=["</subgraph_input>", "<observation>", "\n\nHuman:", "\n\nAssistant:"]
         )
 
         # Check if the last message indicates a malformed tool call that needs retry
@@ -425,10 +433,22 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             logger.info("Invoking LLM")
             response = await llm_with_stop.ainvoke(processed_messages, config)
             duration = time.time() - start_time
+
+            # Get model name - different providers store it differently
+            model_name = None
+            if hasattr(llm_with_stop, 'model'):
+                model_name = llm_with_stop.model
+            elif hasattr(llm_with_stop, 'model_name'):
+                model_name = llm_with_stop.model_name
+            elif hasattr(llm_with_stop, 'bound') and hasattr(llm_with_stop.bound, 'model'):
+                model_name = llm_with_stop.bound.model
+            elif hasattr(llm_with_stop, 'bound') and hasattr(llm_with_stop.bound, 'model_name'):
+                model_name = llm_with_stop.bound.model_name
+
             logger.info(
                 "LLM invocation completed",
                 duration_ms=round(duration * 1000, 2),
-                model=llm_with_stop.model,
+                model=model_name,
             )
 
             # Post-process response to catch potential formatting issues
@@ -446,6 +466,215 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                     response.content = content
 
             return response
+
+        except RuntimeError as e:
+            error_str = str(e)
+            # Check if it's a context length error
+            if "maximum context length" in error_str.lower() and "32768" in error_str:
+                logger.warning(
+                    "Context length exceeded for DeepSeek model, falling back to gpt-oss-120b",
+                    original_error=error_str
+                )
+
+                # Switch to using gpt-oss-120b directly with full context
+                logger.info("Switching to gpt-oss-120b for this response due to context length")
+
+                # Create a traceable wrapper for the gpt-oss-120b call
+                @ls.traceable(
+                    name="gpt-oss-120b-fallback",
+                    run_type="llm",
+                    metadata={
+                        "model": "gpt-oss-120b",
+                        "fallback_reason": "context_length_exceeded",
+                        "original_model": "DeepSeek-V3-0324"
+                    }
+                )
+                async def call_gpt_oss_120b(messages_dict, api_key):
+                    """Traceable wrapper for gpt-oss-120b API call"""
+                    async with httpx.AsyncClient(timeout=60.0) as client:
+                        response = await client.post(
+                            "https://api.sambanova.ai/v1/chat/completions",
+                            headers={
+                                "Authorization": f"Bearer {api_key}",
+                                "Content-Type": "application/json"
+                            },
+                            json={
+                                "model": "gpt-oss-120b",
+                                "messages": messages_dict,
+                                "stream": False,
+                                "max_tokens": 16384,
+                                "temperature": 0,
+                                "reasoning_effort": "medium"
+                            }
+                        )
+
+                        if response.status_code != 200:
+                            raise Exception(f"gpt-oss-120b call failed with status {response.status_code}: {response.text}")
+
+                        return response.json()
+
+                try:
+                    # Get ALL messages for context - gpt-oss-120b has 128k context window
+                    recent_messages = []
+
+                    # Keep FULL system message if it exists - include ALL tool definitions
+                    if processed_messages and isinstance(processed_messages[0], SystemMessage):
+                        system_content = processed_messages[0].content
+
+                        # Check what's in the system message for debugging
+                        logger.info(
+                            "System message for gpt-oss-120b",
+                            full_length=len(system_content),
+                            has_tools_section="You have access to the following tools:" in system_content,
+                            has_tool_tags="<tool>" in system_content,
+                            has_confluence="confluence" in system_content.lower(),
+                            first_500_chars=system_content[:500] if len(system_content) > 500 else system_content
+                        )
+
+                        recent_messages.append({
+                            "role": "system",
+                            "content": system_content  # Full system message, no truncation
+                        })
+
+                    # Include ALL messages in the conversation - no truncation or limiting
+                    for msg in processed_messages[1:] if processed_messages and isinstance(processed_messages[0], SystemMessage) else processed_messages:
+                        if isinstance(msg, HumanMessage):
+                            recent_messages.append({
+                                "role": "user",
+                                "content": msg.content if msg.content else "Continue with the task"
+                            })
+                        elif isinstance(msg, AIMessage):
+                            # Include FULL AI message content - no truncation
+                            content_text = msg.content if msg.content else ""
+                            if not content_text and hasattr(msg, "tool_calls"):
+                                content_text = f"[Tool calls: {msg.tool_calls}]"
+                            if content_text:  # Only add if there's actual content
+                                recent_messages.append({
+                                    "role": "assistant",
+                                    "content": content_text  # Full content, no truncation
+                                })
+                        elif isinstance(msg, (ToolMessage, FunctionMessage)):
+                            # Include FULL tool results - no truncation
+                            tool_content = msg.content if msg.content else "[Tool executed]"
+                            recent_messages.append({
+                                "role": "assistant",
+                                "content": f"[Tool result]: {tool_content}"  # Full tool result, no truncation
+                            })
+
+                    # Ensure we have at least a user message
+                    if not any(msg["role"] == "user" for msg in recent_messages):
+                        recent_messages.append({
+                            "role": "user",
+                            "content": "Please continue with the current task based on the context."
+                        })
+
+                    # Add explicit instruction for tool use if this is a continuation
+                    if len(recent_messages) > 1 and recent_messages[-1]["role"] == "assistant":
+                        # Add a user message to prompt continuation
+                        recent_messages.append({
+                            "role": "user",
+                            "content": (
+                                "Continue with the task. If you need to use tools, format them as:\n"
+                                "<tool>tool_name</tool>\n<tool_input>{parameters}</tool_input>\n\n"
+                                "Otherwise, provide your response directly."
+                            )
+                        })
+
+                    # Log what we're sending
+                    logger.info(
+                        "Sending FULL conversation context to gpt-oss-120b",
+                        num_messages=len(recent_messages),
+                        total_chars=sum(len(msg["content"]) for msg in recent_messages),
+                        message_roles=[msg["role"] for msg in recent_messages],
+                        has_full_system_message=any(msg["role"] == "system" and "<tool>" in msg["content"] for msg in recent_messages),
+                        messages_preview=[
+                            {"role": msg["role"], "content": msg["content"][:100] + "..." if len(msg["content"]) > 100 else msg["content"]}
+                            for msg in recent_messages[:5]  # Only preview first 5 messages for logging
+                        ]
+                    )
+
+                    # Make traceable call to gpt-oss-120b
+                    result = await call_gpt_oss_120b(recent_messages, api_key)
+
+                    # Log the full response structure for debugging
+                    logger.info(
+                        "gpt-oss-120b response structure",
+                        has_choices="choices" in result,
+                        num_choices=len(result.get("choices", [])) if "choices" in result else 0,
+                        first_choice=result.get("choices", [{}])[0] if result.get("choices") else None
+                    )
+
+                    # Safely extract content
+                    content = None
+                    if "choices" in result and len(result["choices"]) > 0:
+                        choice = result["choices"][0]
+                        # Log the choice structure
+                        logger.info(
+                            "gpt-oss-120b choice structure",
+                            choice_keys=list(choice.keys()),
+                            has_message="message" in choice,
+                            message_content=choice.get("message", {}).get("content", "NO_CONTENT")[:200] if "message" in choice and choice.get("message", {}).get("content") else "NO_MESSAGE",
+                            message_reasoning=choice.get("message", {}).get("reasoning", "NO_REASONING")[:200] if "message" in choice and choice.get("message", {}).get("reasoning") else "NO_REASONING"
+                        )
+
+                        if "message" in choice and choice["message"] is not None:
+                            # Check for content first
+                            content = choice["message"].get("content")
+
+                            # If content is None but reasoning exists, extract next action from reasoning
+                            # This happens with reasoning_effort="medium" - the model provides reasoning separately
+                            if not content and "reasoning" in choice["message"]:
+                                reasoning = choice["message"].get("reasoning", "")
+                                logger.info(
+                                    "gpt-oss-120b provided reasoning, extracting next action",
+                                    reasoning=reasoning[:500]  # Log first 500 chars
+                                )
+
+                                # When reasoning_effort="medium", the model may provide reasoning without content
+                                # In this case, we'll use the reasoning as the response
+                                logger.info(
+                                    "gpt-oss-120b provided reasoning without content, using reasoning as response"
+                                )
+                                # Truncate very long reasoning and format as a response
+                                if len(reasoning) > 2000:
+                                    content = reasoning[:2000] + "..."
+                                else:
+                                    content = reasoning
+
+                            elif "text" in choice:
+                                content = choice["text"]
+
+                        # Fallback if no content
+                        if not content:
+                            logger.warning(
+                                "gpt-oss-120b returned empty content",
+                                response_keys=list(result.keys()) if result else None,
+                                choices_length=len(result.get("choices", [])),
+                                first_choice_keys=list(result["choices"][0].keys()) if result.get("choices") else None
+                            )
+                            content = "I need more context to continue. Please provide additional information or try a different query."
+
+                    duration = time.time() - start_time
+                    logger.info(
+                        "Successfully used gpt-oss-120b for full response",
+                        duration_ms=round(duration * 1000, 2),
+                        model="gpt-oss-120b"
+                    )
+
+                    return AIMessage(content=content)
+
+                except Exception as fallback_error:
+                    logger.error(
+                        "GPT-OSS-120b fallback failed",
+                        error_type=type(fallback_error).__name__,
+                        error_message=str(fallback_error),
+                        exc_info=True
+                    )
+                    # Re-raise the original error if fallback fails
+                    raise e
+            else:
+                # Not a context length error, re-raise
+                raise
 
         except Exception as e:
             logger.error(
@@ -525,6 +754,15 @@ Make sure to include both opening and closing tags for both tool and tool_input.
         last_message = messages[-1]
         content = last_message.content
 
+        # Check if there are multiple tool calls
+        tool_count = content.count("</tool>")
+
+        if tool_count > 1:
+            # Multiple tool calls detected - execute in parallel
+            logger.info(f"Detected {tool_count} tool calls, executing in parallel")
+            return await _execute_parallel_tools(content, tool_executor)
+
+        # Single tool call - continue with existing logic
         try:
             # Parse tool call with improved error handling
             if "</tool>" not in content:
@@ -774,6 +1012,122 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                     "error_type": "unexpected_parse_error",
                 },
             )
+
+    # Function to execute multiple tools in parallel
+    async def _execute_parallel_tools(content, tool_executor):
+        """Execute multiple tool calls in parallel."""
+        import asyncio
+        import json
+
+        # Extract all tool calls
+        tool_calls = []
+        remaining_content = content
+
+        # Parse each tool call
+        while "</tool>" in remaining_content:
+            tool_parts = remaining_content.split("</tool>", 1)
+            tool_part, after_tool = tool_parts
+
+            # Extract tool name
+            if "<tool>" not in tool_part:
+                remaining_content = after_tool
+                continue
+
+            tool_name = tool_part.split("<tool>")[-1].strip()
+
+            # Extract tool input
+            tool_input = ""
+            if "<tool_input>" in after_tool:
+                input_parts = after_tool.split("<tool_input>", 1)
+                if len(input_parts) > 1:
+                    input_content = input_parts[1]
+                    if "</tool_input>" in input_content:
+                        tool_input = input_content.split("</tool_input>")[0].strip()
+                        # Move past this tool call
+                        remaining_content = input_content.split("</tool_input>", 1)[1]
+                    else:
+                        # Malformed, but try to extract what we can
+                        tool_input = input_content.strip()
+                        remaining_content = ""
+            else:
+                # No input for this tool
+                remaining_content = after_tool
+
+            # Smart JSON extraction (reuse the existing logic from single tool)
+            if tool_input:
+                # Try to parse as JSON if it looks like JSON
+                if tool_input.startswith("{") and tool_input.endswith("}"):
+                    try:
+                        tool_input = json.loads(tool_input)
+                    except json.JSONDecodeError:
+                        # Keep as string if not valid JSON
+                        pass
+
+            tool_calls.append((tool_name, tool_input))
+
+        if not tool_calls:
+            return LiberalFunctionMessage(
+                content="Error: Could not parse any tool calls",
+                name="system_error",
+                additional_kwargs={
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "agent_type": "tool_response",
+                    "error_type": "parse_error",
+                },
+            )
+
+        logger.info(
+            f"Executing {len(tool_calls)} tools in parallel",
+            tools=[t[0] for t in tool_calls]
+        )
+
+        # Create tasks for parallel execution
+        tasks = []
+        for tool_name, tool_input in tool_calls:
+            action = ToolInvocation(tool=tool_name, tool_input=tool_input)
+            tasks.append(tool_executor.ainvoke(action))
+
+        # Execute all tools in parallel
+        start_time = time.time()
+        try:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+        except Exception as e:
+            logger.error(f"Error during parallel tool execution: {e}")
+            results = [str(e) for _ in tasks]
+
+        duration = time.time() - start_time
+        logger.info(
+            f"Parallel tool execution completed",
+            duration_ms=round(duration * 1000, 2),
+            num_tools=len(tool_calls)
+        )
+
+        # Combine results into separate observation blocks for each tool
+        combined_results = []
+        for i, (tool_name, tool_input) in enumerate(tool_calls):
+            result = results[i]
+            if isinstance(result, Exception):
+                result_text = f"Error executing {tool_name}: {str(result)}"
+            else:
+                result_text = str(result) if result else "No response from tool"
+
+            # Format each result as a separate observation
+            combined_results.append(f"[Tool: {tool_name}]\n{result_text}")
+
+        # Create a combined function message with all results
+        combined_content = "\n\n".join(combined_results)
+
+        return LiberalFunctionMessage(
+            content=combined_content,
+            name="parallel_tools",
+            response_metadata={"usage": {"total_latency": duration}},
+            additional_kwargs={
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "agent_type": "tool_response",
+                "parallel_tools": [t[0] for t in tool_calls],
+                "num_tools": len(tool_calls),
+            },
+        )
 
     # Create subgraph entry nodes
     def create_subgraph_entry_node(

@@ -22,13 +22,43 @@ export function formattedDuration(duration) {
   export function isFinalAgentType(agentType) {
     const finalAgentTypes = [
       'react_end',
-      'financial_analysis_end', 
+      'financial_analysis_end',
       'sales_leads_end',
       'deep_research_interrupt',
       'deep_research_end',
       'data_science_end'
     ];
     return finalAgentTypes.includes(agentType);
+  }
+
+  /**
+   * Check if an agent type represents an intermediate processing step that should NOT create a chat bubble
+   * These steps should only appear in the audit log/timeline, not as separate messages in the chat
+   * @param {string} agentType - The agent type to check
+   * @returns {boolean} - True if it's an intermediate step that should be filtered out
+   */
+  export function isIntermediateAgentStep(agentType) {
+    if (!agentType) return false;
+
+    const intermediateSteps = [
+      // Deep research intermediate phases
+      'react_subgraph_deep_research',
+      'deep_research_search_queries_plan',
+      'deep_research_search_queries_plan_fixed',
+      'deep_research_search_sections',
+      'deep_research_search_queries_section',
+      'deep_research_search_queries_section_fixed',
+      'deep_research_writer',
+      'deep_research_grader',
+      // Data science intermediate phases (if any)
+      'react_subgraph_data_science',
+      // Other intermediate processing steps
+      'search_web',
+      'write_section',
+      'grade_section'
+    ];
+
+    return intermediateSteps.includes(agentType);
   }
 
   /**

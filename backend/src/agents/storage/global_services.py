@@ -88,3 +88,30 @@ def get_global_redis_storage_service() -> Optional[RedisStorage]:
     """Get the global Redis storage service."""
     global _global_redis_storage_service
     return _global_redis_storage_service
+
+
+def ensure_connector_services_initialized() -> bool:
+    """Ensure connector services are initialized with the dynamic tool loader."""
+    try:
+        from agents.connectors.core.connector_manager import get_connector_manager
+        from agents.tools.dynamic_tool_loader import get_dynamic_tool_loader, set_dynamic_tool_loader, DynamicToolLoader
+        
+        # Check if already initialized
+        if get_dynamic_tool_loader() is not None:
+            return True
+            
+        # Get the connector manager
+        connector_manager = get_connector_manager()
+        if connector_manager is None:
+            return False
+            
+        # Get Redis storage
+        redis_storage = get_global_redis_storage_service()
+        
+        # Create and set the dynamic tool loader
+        loader = DynamicToolLoader(redis_storage, connector_manager)
+        set_dynamic_tool_loader(loader)
+        
+        return True
+    except Exception:
+        return False
