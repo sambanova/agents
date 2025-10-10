@@ -238,7 +238,7 @@ function onSelectConversation(conversation) {
     onToggleChatSelection(conversation.conversation_id);
   } else {
     // Normal mode - navigate to chat
-    console.log('Parent: Selected conversation');
+    console.log('Parent: Selected conversation', conversation);
     preselectedChat.value = conversation.conversation_id;
     router.push(`/${conversation.conversation_id}`);
   }
@@ -433,7 +433,7 @@ async function createNewChat() {
 
 // Updated delete handler calls deleteChat().
 async function onDeleteChat(conversationId) {
-  console.log('Parent: Delete conversation');
+  console.log('Parent: Delete conversation', conversationId);
   try {
     await deleteChat(conversationId);
   } catch (error) {
@@ -442,11 +442,11 @@ async function onDeleteChat(conversationId) {
 }
 
 function onShareChat(conversationId) {
-  console.log('Parent: Share conversation');
+  console.log('Parent: Share conversation', conversationId);
 }
 
 function onDownloadChat(conversationId) {
-  console.log('Parent: Download conversation');
+  console.log('Parent: Download conversation', conversationId);
 }
 
 watch(

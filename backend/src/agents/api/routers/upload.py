@@ -28,9 +28,7 @@ async def process_and_store_file(
     vector_ids = []
 
     upload_time = time.time()
-    logger.info(f"[UPLOAD_TRACE] Processing file: {file.filename}, content_type: {file.content_type}, file_id: {file_id}")
     if file.content_type == "application/pdf":
-        logger.info(f"[UPLOAD_TRACE] File is PDF, starting indexing for {file_id}")
         file_blobs = await convert_ingestion_input_to_blob(content, file.filename)
         api_keys = await request.app.state.redis_storage_service.get_user_api_key(
             user_id
@@ -44,12 +42,9 @@ async def process_and_store_file(
                 "redis_client": request.app.state.sync_redis_client,
             },
         )
-        logger.info(f"[UPLOAD_TRACE] Indexed file successfully - file_id: {file_id}, vector_ids: {len(vector_ids)}")
+        logger.info("Indexed file successfully", file_id=file_id)
         indexed = True
-    else:
-        logger.warning(f"[UPLOAD_TRACE] File is NOT PDF ({file.content_type}), skipping indexing for {file_id}")
 
-    logger.info(f"[UPLOAD_TRACE] Storing file in Redis - file_id: {file_id}, indexed: {indexed}")
     await request.app.state.redis_storage_service.put_file(
         user_id,
         file_id,
@@ -61,7 +56,6 @@ async def process_and_store_file(
         source="upload",
         vector_ids=vector_ids,
     )
-    logger.info(f"[UPLOAD_TRACE] File stored successfully in Redis - file_id: {file_id}")
     return {
         "file_id": file_id,
         "filename": file.filename,

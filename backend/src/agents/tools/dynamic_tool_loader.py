@@ -1,14 +1,16 @@
 """
-Dynamic tool loading system that merges static tools with user-specific connector tools.
+Dynamic tool loading system that merges static tools with user-specific MCP tools.
 
 This module provides functionality to load and combine tools from the static tool registry
-with dynamically discovered connector tools for each user.
+with dynamically discovered MCP tools for each user.
 """
 
 import asyncio
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 import structlog
+from agents.api.data_types import MCPServerConfig
+from agents.mcp.server_manager import MCPServerManager
 from agents.storage.redis_storage import RedisStorage
 from agents.tools.langgraph_tools import TOOL_REGISTRY, Tool as StaticToolConfig, validate_tool_config
 from langchain.tools import BaseTool
@@ -18,15 +20,15 @@ logger = structlog.get_logger(__name__)
 
 class DynamicToolLoader:
     """
-    Loads and manages both static and connector tools for users.
+    Loads and manages both static and MCP tools for users.
     
     This class handles the integration of static tools from the TOOL_REGISTRY
-    with user-specific connector tools from their configured OAuth connectors.
+    with user-specific MCP tools from their configured MCP servers.
     """
 
-    def __init__(self, redis_storage: Optional[RedisStorage], connector_manager: Optional[Any] = None):
+    def __init__(self, redis_storage: Optional[RedisStorage], mcp_server_manager: Optional[MCPServerManager]):
         self.redis_storage = redis_storage
-        self.connector_manager = connector_manager
+        self.mcp_server_manager = mcp_server_manager
         self.tool_cache: Dict[str, List[BaseTool]] = {}  # user_id -> cached tools
         self.cache_expiry: Dict[str, float] = {}  # user_id -> expiry time
         self.cache_ttl = 300  # 5 minutes cache TTL
@@ -38,7 +40,7 @@ class DynamicToolLoader:
         force_refresh: bool = False,
     ) -> List[BaseTool]:
         """
-        Load both static and connector tools for a user.
+        Load both static and MCP tools for a user.
         
         Args:
             user_id: The user ID to load tools for
@@ -46,7 +48,7 @@ class DynamicToolLoader:
             force_refresh: Whether to force refresh the tool cache
             
         Returns:
-            List of all tools (static + connector) for the user
+            List of all tools (static + MCP) for the user
         """
         try:
             # Check cache first
@@ -63,11 +65,11 @@ class DynamicToolLoader:
             # Load static tools
             static_tool_instances = await self._load_static_tools(static_tools)
             
-            # Load connector tools for the user
-            connector_tool_instances = await self._load_connector_tools(user_id)
+            # Load MCP tools for the user
+            mcp_tool_instances = await self._load_mcp_tools(user_id)
             
             # Combine all tools
-            all_tools = static_tool_instances + connector_tool_instances
+            all_tools = static_tool_instances + mcp_tool_instances
             
             # Cache the result
             self.tool_cache[user_id] = all_tools
@@ -77,7 +79,7 @@ class DynamicToolLoader:
                 "Loaded tools for user",
                 user_id=user_id,
                 num_static_tools=len(static_tool_instances),
-                num_connector_tools=len(connector_tool_instances),
+                num_mcp_tools=len(mcp_tool_instances),
                 total_tools=len(all_tools),
             )
             
@@ -93,11 +95,11 @@ class DynamicToolLoader:
             # Fall back to just static tools
             return await self._load_static_tools(static_tools)
 
-    async def reload_user_connector_tools(self, user_id: str) -> None:
+    async def reload_user_mcp_tools(self, user_id: str) -> None:
         """
-        Reload connector tools for a user and invalidate cache.
+        Reload MCP tools for a user and invalidate cache.
         
-        This is useful when a user adds/removes/updates OAuth connectors.
+        This is useful when a user adds/removes/updates MCP servers.
         """
         try:
             # Invalidate cache
@@ -106,16 +108,15 @@ class DynamicToolLoader:
             if user_id in self.cache_expiry:
                 del self.cache_expiry[user_id]
             
-            # Reload connector tools if needed
-            if self.connector_manager is not None:
-                # Force refresh connector tools
-                await self.connector_manager.get_user_tools(user_id, force_refresh=True)
+            # Start user's MCP servers if needed
+            if self.mcp_server_manager is not None:
+                await self.mcp_server_manager.start_all_user_servers(user_id)
             
-            logger.info("Reloaded connector tools for user", user_id=user_id)
+            logger.info("Reloaded MCP tools for user", user_id=user_id)
             
         except Exception as e:
             logger.error(
-                "Error reloading connector tools for user",
+                "Error reloading MCP tools for user",
                 user_id=user_id,
                 error=str(e),
                 exc_info=True,
@@ -130,34 +131,43 @@ class DynamicToolLoader:
         """
         try:
             # Check if services are available
-            if self.redis_storage is None or self.connector_manager is None:
-                logger.info("Connector services not available for user tool info")
+            if self.redis_storage is None or self.mcp_server_manager is None:
+                logger.info("MCP services not available for user tool info")
                 return {
-                    "total_connectors": 0,
-                    "enabled_connectors": 0,
-                    "available_connector_tools": 0,
+                    "total_mcp_servers": 0,
+                    "enabled_mcp_servers": 0,
+                    "available_mcp_tools": 0,
                     "cached_tools": len(self.tool_cache.get(user_id, [])),
                     "cache_valid": self._is_user_cache_valid(user_id),
-                    "connectors": [],
+                    "servers": [],
                 }
             
-            # Get connector info
-            connector_tools = await self.connector_manager.get_user_tools(user_id)
+            # Get MCP server info
+            mcp_servers = await self.redis_storage.list_user_mcp_servers(user_id)
+            enabled_servers = [server for server in mcp_servers if server.enabled]
             
-            # Get connector status info from manager if available
-            connector_info = []
-            if hasattr(self.connector_manager, 'get_user_connectors_info'):
-                connector_info = await self.connector_manager.get_user_connectors_info(user_id)
+            # Get MCP tools
+            mcp_tools = await self.mcp_server_manager.get_user_mcp_tools(user_id)
             
             # Get cached tools if available
             cached_tools = self.tool_cache.get(user_id, [])
             
             return {
-                "total_connectors": len(connector_info),
-                "available_connector_tools": len(connector_tools),
+                "total_mcp_servers": len(mcp_servers),
+                "enabled_mcp_servers": len(enabled_servers),
+                "available_mcp_tools": len(mcp_tools),
                 "cached_tools": len(cached_tools),
                 "cache_valid": self._is_user_cache_valid(user_id),
-                "connectors": connector_info,
+                "servers": [
+                    {
+                        "server_id": server.server_id,
+                        "name": server.name,
+                        "enabled": server.enabled,
+                        "health_status": server.health_status,
+                        "available_tools": len(server.available_tools or []),
+                    }
+                    for server in mcp_servers
+                ],
             }
             
         except Exception as e:
@@ -168,11 +178,12 @@ class DynamicToolLoader:
                 exc_info=True,
             )
             return {
-                "total_connectors": 0,
-                "available_connector_tools": 0,
+                "total_mcp_servers": 0,
+                "enabled_mcp_servers": 0,
+                "available_mcp_tools": 0,
                 "cached_tools": 0,
                 "cache_valid": False,
-                "connectors": [],
+                "servers": [],
             }
 
     def invalidate_user_cache(self, user_id: str) -> None:
@@ -241,28 +252,28 @@ class DynamicToolLoader:
             )
             return []
 
-    async def _load_connector_tools(self, user_id: str) -> List[BaseTool]:
-        """Load connector tools for a user."""
+    async def _load_mcp_tools(self, user_id: str) -> List[BaseTool]:
+        """Load MCP tools for a user."""
         try:
-            # Check if connector manager is available
-            if self.connector_manager is None:
-                logger.info("Connector manager not available, skipping connector tools")
+            # Check if MCP server manager is available
+            if self.mcp_server_manager is None:
+                logger.info("MCP server manager not available, skipping MCP tools")
                 return []
             
-            # Get connector tools from the connector manager
-            connector_tools = await self.connector_manager.get_user_tools(user_id)
+            # Get MCP tools from the server manager
+            mcp_tools = await self.mcp_server_manager.get_user_mcp_tools(user_id)
             
             logger.info(
-                "Loaded connector tools for user",
+                "Loaded MCP tools for user",
                 user_id=user_id,
-                num_tools=len(connector_tools),
+                num_tools=len(mcp_tools),
             )
             
-            return connector_tools
+            return mcp_tools
             
         except Exception as e:
             logger.error(
-                "Error loading connector tools for user",
+                "Error loading MCP tools for user",
                 user_id=user_id,
                 error=str(e),
                 exc_info=True,
@@ -309,13 +320,13 @@ async def load_tools_for_user(
     """
     loader = get_dynamic_tool_loader()
     if loader is None:
-        # Try to ensure connector services are initialized
+        # Try to ensure MCP services are initialized
         try:
-            from agents.storage.global_services import ensure_connector_services_initialized
-            if ensure_connector_services_initialized():
+            from agents.storage.global_services import ensure_mcp_services_initialized
+            if ensure_mcp_services_initialized():
                 loader = get_dynamic_tool_loader()
         except Exception as e:
-            logger.warning(f"Failed to initialize connector services: {e}")
+            logger.warning(f"Failed to initialize MCP services: {e}")
     
     if loader is None:
         logger.warning("Dynamic tool loader not initialized, loading static tools only")
@@ -325,13 +336,13 @@ async def load_tools_for_user(
     return await loader.load_user_tools(user_id, static_tools, force_refresh)
 
 
-async def reload_connector_tools_for_user(user_id: str) -> None:
+async def reload_mcp_tools_for_user(user_id: str) -> None:
     """
-    Convenience function to reload connector tools for a user using the global tool loader.
+    Convenience function to reload MCP tools for a user using the global tool loader.
     """
     loader = get_dynamic_tool_loader()
     if loader is None:
         logger.warning("Dynamic tool loader not initialized")
         return
     
-    await loader.reload_user_connector_tools(user_id) 
+    await loader.reload_user_mcp_tools(user_id) 

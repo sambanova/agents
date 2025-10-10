@@ -42,32 +42,6 @@
               >
                 Export Data
               </button>
-              
-              <button
-                @click="activeTab = 'connectors'"
-                :class="[
-                  'py-2 px-1 border-b-2 font-medium text-sm',
-                  activeTab === 'connectors'
-                    ? 'border-primary-brandColor text-primary-brandColor'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                ]"
-              >
-                Connected Apps
-              </button>
-
-              <!-- Admin Panel Tab (only show if enabled) -->
-              <button
-                v-if="isAdminPanelEnabled"
-                @click="activeTab = 'admin'"
-                :class="[
-                  'py-2 px-1 border-b-2 font-medium text-sm',
-                  activeTab === 'admin'
-                    ? 'border-primary-brandColor text-primary-brandColor'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                ]"
-              >
-                LLM Configuration
-              </button>
 
             </nav>
           </div>
@@ -85,30 +59,8 @@
 
         <!-- Tab Content -->
         <div class="tab-content">
-
           <!-- API Keys Tab -->
           <div v-if="activeTab === 'api-keys'" class="space-y-6">
-            <!-- Show different UI based on admin panel status -->
-            <div v-if="isAdminPanelEnabled" class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h3 class="text-lg font-semibold text-blue-800 mb-2">API Key Management has Moved</h3>
-              <p class="text-sm text-blue-700 mb-3">
-                When the Admin Panel is enabled, all API keys are managed through the Admin Panel tab.
-              </p>
-              <ul class="list-disc list-inside text-sm text-blue-700 space-y-1 ml-4">
-                <li>Configure your LLM provider (SambaNova, Fireworks, Together)</li>
-                <li>Set API keys for each provider</li>
-                <li>Customize model selection for different tasks</li>
-              </ul>
-              <button
-                @click="activeTab = 'admin'"
-                class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                Go to Admin Panel →
-              </button>
-            </div>
-
-            <!-- Original API Keys UI - only shown when admin panel is disabled -->
-            <template v-else>
           <!-- SambaNova API Key -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
@@ -357,7 +309,6 @@
               </button>
             </div>
           </div>
-          </template>
           </div>
 
           <!-- Export Data Tab -->
@@ -457,18 +408,7 @@
             </div>
           </div>
 
-          <!-- Connected Apps Tab -->
-          <div v-if="activeTab === 'connectors'" class="space-y-4">
-            <CleanConnectorsTab @connector-updated="handleConnectorUpdate" />
-          </div>
 
-          <!-- Admin Panel Tab -->
-          <div v-if="activeTab === 'admin' && isAdminPanelEnabled" class="space-y-4">
-            <AdminPanelSettings
-              @configuration-updated="handleConfigurationUpdate"
-              @api-keys-updated="handleApiKeysUpdate"
-            />
-          </div>
 
         </div>
 
@@ -554,24 +494,18 @@
   </div>
 </template>
 <script setup>
-import { ref, watch, defineProps, defineExpose, defineEmits, onMounted, computed, inject, nextTick } from 'vue'
+import { ref, watch, defineProps, defineExpose, defineEmits, onMounted, computed,inject } from 'vue'
 import { useAuth0 } from '@auth0/auth0-vue'
 import { encryptKey, decryptKey } from '../utils/encryption'
 import axios from 'axios'
 import emitterMitt from '@/utils/eventBus.js';
 import SelectProvider from '@/components/ChatMain/SelectProvider.vue'
-import AdminPanelSettings from '@/components/AdminPanelSettings.vue'
-import CleanConnectorsTab from '@/components/Settings/CleanConnectorsTab.vue'
 
 
 const selectedOption = inject('selectedOption')
 
 const isUserKeysEnabled = computed(() => {
   return import.meta.env.VITE_ENABLE_USER_KEYS === 'true'
-})
-
-const isAdminPanelEnabled = computed(() => {
-  return import.meta.env.VITE_SHOW_ADMIN_PANEL === 'true'
 })
 
 
@@ -587,7 +521,7 @@ const { user, getAccessTokenSilently, logout } = useAuth0()
 const userId = computed(() => user.value?.sub)
 
 const isOpen = ref(false)
-const activeTab = ref('api-keys')  // Default to api-keys tab
+const activeTab = ref('api-keys')
 const sambanovaKey = ref('')
 const exaKey = ref('')
 const serperKey = ref('')
@@ -716,22 +650,14 @@ const handleModelSelection = () => {
 }
 
 // ✅ Function to manually open modal
-const openModal = (tabName = null) => {
-  // Ensure tabName is a string or null, not an event object
-  if (tabName && typeof tabName === 'string') {
-    activeTab.value = tabName
-  } else {
-    // Ensure we always have a default tab
-    activeTab.value = 'api-keys'
-  }
-
+const openModal = () => {
   isOpen.value = true
 }
 
 // ✅ Function to manually close modal
 const close = () => {
   isOpen.value = false
-  // Don't reset activeTab here - keep the last selected tab
+  activeTab.value = 'api-keys'
   errorMessage.value = ''
   successMessage.value = ''
 }
@@ -829,13 +755,6 @@ const saveSerperKey = async () => {
 
 // Add the updateBackendKeys function
 const updateBackendKeys = async () => {
-  // Skip updating keys via /set_api_keys if admin panel is enabled
-  // Admin panel manages all keys through /admin/config endpoint
-  if (isAdminPanelEnabled.value) {
-    console.log('Admin panel is enabled, skipping /set_api_keys call')
-    return
-  }
-
   try {
     const url = `${import.meta.env.VITE_API_URL}/set_api_keys`
     const postParams = {
@@ -921,41 +840,10 @@ const updateAndCallEvents=()=>{
 
 }
 
-// Admin Panel handlers
-const handleConfigurationUpdate = (config) => {
-  console.log('Configuration updated:', config)
-  // Update the selectedOption with the new provider from the admin config
-  if (config && config.default_provider && selectedOption && selectedOption.value) {
-    const providerMapping = {
-      'sambanova': { label: 'SambaNova', value: 'sambanova' },
-      'fireworks': { label: 'Fireworks AI', value: 'fireworks' },
-      'together': { label: 'Together AI', value: 'together' }
-    }
-
-    if (providerMapping[config.default_provider]) {
-      selectedOption.value = providerMapping[config.default_provider]
-      console.log('Updated selectedOption to:', selectedOption.value)
-    }
-  }
-}
-
-const handleApiKeysUpdate = (apiKeys) => {
-  console.log('API keys updated:', apiKeys)
-  // Update the missing keys and emit events
-  updateAndCallEvents()
-}
-
-// Connector update handler
-const handleConnectorUpdate = () => {
-  console.log('Connector updated')
-  // Any additional logic if needed
-}
-
 // ✅ Expose methods for parent component
 defineExpose({
   openModal,
   checkRequiredKeys,
-  activeTab,  // Expose activeTab so parent can set it
   exaKey: exaKey.value,
     serperKey: serperKey.value,
     fireworksKey: fireworksKey.value,
@@ -1182,5 +1070,4 @@ const executeDeleteAccount = async () => {
     isDeleting.value = false
   }
 }
-
 </script>

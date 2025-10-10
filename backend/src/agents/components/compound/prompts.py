@@ -57,27 +57,6 @@ You have access to the following tools:
 
 In order to use a tool, you can use <tool></tool> and <tool_input></tool_input> tags. You will then get back a response in the form <observation></observation>
 
-CRITICAL: PARALLEL TOOL EXECUTION REQUIREMENT
-When you need multiple pieces of information, you MUST output ALL tool calls at once, then STOP and wait for ALL observations.
-
-DO THIS (CORRECT - All tools in ONE response):
-Assistant: I'll fetch all the required pages now.
-<tool>confluence_get_page</tool>
-<tool_input>{{"page_id": "123"}}</tool_input>
-<tool>confluence_get_page</tool>
-<tool_input>{{"page_id": "456"}}</tool_input>
-<tool>confluence_get_page</tool>
-<tool_input>{{"page_id": "789"}}</tool_input>
-[STOP HERE - Wait for observations]
-
-NOT THIS (WRONG - One tool at a time):
-Assistant: Let me fetch the first page.
-<tool>confluence_get_page</tool>
-<tool_input>{{"page_id": "123"}}</tool_input>
-[Gets observation, then continues with next tool]
-
-The system will execute all tools in parallel when you output them together. You MUST include ALL tool calls before stopping to wait for observations.
-
 CRITICAL TOOL INPUT FORMAT:
 - For tools that require parameters, ALWAYS use valid JSON format inside <tool_input> tags
 - NEVER include partial XML tags or malformed JSON

@@ -29,14 +29,7 @@ class RedisConversationLogger:
         llm_name="",
         message_id=None,
     ):
-        # Handle both raw Redis client and RedisStorage/SecureRedisService wrapper
-        # This fixes the "RedisStorage object has no attribute 'publish'" error
-        if hasattr(redis_client, 'redis_client'):
-            # It's a RedisStorage or SecureRedisService wrapper - extract the actual client
-            self.redis_client = redis_client.redis_client
-        else:
-            # It's already a raw Redis client
-            self.redis_client = redis_client
+        self.redis_client = redis_client
         # Store reference to the main event loop
         try:
             self.main_loop = asyncio.get_running_loop()

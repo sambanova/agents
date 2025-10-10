@@ -1,11 +1,6 @@
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import structlog
-import litellm
 from agents.components.crewai_llm import CustomLLM
-
-# Enable litellm debug logging to see actual errors
-litellm.set_verbose = True
 from agents.registry.model_registry import model_registry
 from agents.services.structured_output_parser import CustomConverter
 from agents.storage.redis_service import SecureRedisService
@@ -19,8 +14,6 @@ from agents.utils.agent_thought import RedisConversationLogger
 from crewai import Agent, Crew, Process, Task
 from crewai_tools import SerperDevTool
 from pydantic import BaseModel, Field, field_validator
-
-logger = structlog.get_logger(__name__)
 
 
 class NewsItem(BaseModel):
@@ -197,133 +190,41 @@ class FinancialAnalysisCrew:
         redis_client: Optional[SecureRedisService] = None,
         message_id: str = None,
         verbose: bool = True,
-        admin_api_keys: dict = None,
-        message_interceptor = None,
     ):
-        # Use config manager if admin_api_keys are provided
-        logger.info(f"[CREWAI_INIT] admin_api_keys type: {type(admin_api_keys)}, is None: {admin_api_keys is None}")
-        if admin_api_keys:
-            logger.info(f"[CREWAI_INIT] admin_api_keys keys: {list(admin_api_keys.keys())}")
-        if admin_api_keys is not None:
-            from agents.config.llm_config_manager import get_config_manager
-            from agents.utils.llm_provider import get_crewai_llm
-
-            config_manager = get_config_manager()
-
-            # Get task configs for the three models
-            competitor_task = config_manager.get_task_model("financial_competitor_finder", user_id)
-            default_task = config_manager.get_task_model("financial_analysis_main", user_id)
-            aggregator_task = config_manager.get_task_model("financial_aggregator", user_id)
-
-            logger.info(f"[CREWAI_INIT] competitor_task: provider={competitor_task.get('provider')}, model={competitor_task.get('model')}, has_api_key={bool(competitor_task.get('api_key'))}")
-            logger.info(f"[CREWAI_INIT] default_task: provider={default_task.get('provider')}, model={default_task.get('model')}, has_api_key={bool(default_task.get('api_key'))}")
-            logger.info(f"[CREWAI_INIT] aggregator_task: provider={aggregator_task.get('provider')}, model={aggregator_task.get('model')}, has_api_key={bool(aggregator_task.get('api_key'))}")
-
-            # Get LLM instances using config
-            competitor_provider = competitor_task.get("provider", "sambanova")
-            default_provider = default_task.get("provider", "sambanova")
-            aggregator_provider = aggregator_task.get("provider", "sambanova")
-
-            # Get API keys
-            logger.info(f"[API_KEY_DEBUG] admin_api_keys sambanova value: {bool(admin_api_keys.get('sambanova'))}, preview: {admin_api_keys.get('sambanova')[:10] if admin_api_keys.get('sambanova') else 'None'}")
-            logger.info(f"[API_KEY_DEBUG] llm_api_key preview: {llm_api_key[:10] if llm_api_key else 'None'}")
-
-            competitor_api_key = competitor_task.get("api_key") or admin_api_keys.get(competitor_provider, llm_api_key)
-            default_api_key = default_task.get("api_key") or admin_api_keys.get(default_provider, llm_api_key)
-            aggregator_api_key = aggregator_task.get("api_key") or admin_api_keys.get(aggregator_provider, llm_api_key)
-
-            logger.info(f"[API_KEY_DEBUG] aggregator_api_key result: {bool(aggregator_api_key)}, preview: {aggregator_api_key[:10] if aggregator_api_key else 'None'}")
-
-            # Get provider configs
-            competitor_config = config_manager.get_provider_config(competitor_provider, user_id)
-            default_config = config_manager.get_provider_config(default_provider, user_id)
-            aggregator_config = config_manager.get_provider_config(aggregator_provider, user_id)
-
-            logger.info(f"[CREWAI_CONFIG] aggregator_provider={aggregator_provider}")
-            logger.info(f"[CREWAI_CONFIG] aggregator_config base_url: {aggregator_config.get('base_url')}")
-            logger.info(f"[CREWAI_CONFIG] aggregator_task provider_type: {aggregator_task.get('provider_type')}")
-            logger.info(f"[CREWAI_CONFIG] Final provider for aggregator: {aggregator_task.get('provider_type') or aggregator_provider}")
-            logger.info(f"[CREWAI_CONFIG] Final base_url for aggregator: {aggregator_task.get('base_url') or aggregator_config.get('base_url')}")
-
-            self.competitor_finder_llm = get_crewai_llm(
-                provider=competitor_task.get("provider_type") or competitor_provider,
-                model=competitor_task.get("model"),
-                api_key=competitor_api_key,
-                base_url=competitor_task.get("base_url") or competitor_config.get("base_url"),
-                temperature=0.0,
-                max_tokens=8192
-            )
-
-            self.llm = get_crewai_llm(
-                provider=default_task.get("provider_type") or default_provider,
-                model=default_task.get("model"),
-                api_key=default_api_key,
-                base_url=default_task.get("base_url") or default_config.get("base_url"),
-                temperature=0.0,
-                max_tokens=8192
-            )
-
-            self.aggregator_llm = get_crewai_llm(
-                provider=aggregator_task.get("provider_type") or aggregator_provider,
-                model=aggregator_task.get("model"),
-                api_key=aggregator_api_key,
-                base_url=aggregator_task.get("base_url") or aggregator_config.get("base_url"),
-                temperature=0.0,
-                max_tokens=8192
-            )
-
-            logger.info(f"[CREWAI_LLM] Aggregator LLM initialized: model={self.aggregator_llm.model}")
-
-            # Wrap LLMs with message interceptor if provided
-            if message_interceptor:
-                logger.info("Wrapping LLMs with message interceptor")
-                self.competitor_finder_llm = message_interceptor.wrap_llm(self.competitor_finder_llm)
-                self.llm = message_interceptor.wrap_llm(self.llm)
-                self.aggregator_llm = message_interceptor.wrap_llm(self.aggregator_llm)
-        else:
-            # Fallback to old behavior when admin panel is disabled
-            competitor_finder_model_info = model_registry.get_model_info(
-                model_key="llama-3.1-8b", provider=provider
-            )
-            self.competitor_finder_llm = CustomLLM(
-                model=competitor_finder_model_info["crewai_prefix"]
-                + "/"
-                + competitor_finder_model_info["model"],
-                temperature=0.0,
-                max_tokens=8192,
-                api_key=llm_api_key,
-                base_url=competitor_finder_model_info["url"],
-            )
-            model_info = model_registry.get_model_info(
-                model_key="llama-3.1-8b", provider=provider
-            )
-            self.llm = CustomLLM(
-                model=model_info["crewai_prefix"] + "/" + model_info["model"],
-                temperature=0.0,
-                max_tokens=8192,
-                api_key=llm_api_key,
-                base_url=model_info["url"],
-            )
-            aggregator_model_info = model_registry.get_model_info(
-                model_key="llama-4-maverick", provider=provider
-            )
-            self.aggregator_llm = CustomLLM(
-                model=aggregator_model_info["crewai_prefix"]
-                + "/"
-                + aggregator_model_info["model"],
-                temperature=0.0,
-                max_tokens=8192,
-                api_key=llm_api_key,
-                base_url=aggregator_model_info["url"],
-            )
-
-            # Wrap LLMs with message interceptor if provided
-            if message_interceptor:
-                logger.info("Wrapping LLMs with message interceptor (fallback mode)")
-                self.competitor_finder_llm = message_interceptor.wrap_llm(self.competitor_finder_llm)
-                self.llm = message_interceptor.wrap_llm(self.llm)
-                self.aggregator_llm = message_interceptor.wrap_llm(self.aggregator_llm)
-
+        competitor_finder_model_info = model_registry.get_model_info(
+            model_key="llama-3.1-8b", provider=provider
+        )
+        self.competitor_finder_llm = CustomLLM(
+            model=competitor_finder_model_info["crewai_prefix"]
+            + "/"
+            + competitor_finder_model_info["model"],
+            temperature=0.0,
+            max_tokens=8192,
+            api_key=llm_api_key,
+            base_url=competitor_finder_model_info["url"],
+        )
+        model_info = model_registry.get_model_info(
+            model_key="llama-3.1-8b", provider=provider
+        )
+        self.llm = CustomLLM(
+            model=model_info["crewai_prefix"] + "/" + model_info["model"],
+            temperature=0.0,
+            max_tokens=8192,
+            api_key=llm_api_key,
+            base_url=model_info["url"],
+        )
+        aggregator_model_info = model_registry.get_model_info(
+            model_key="llama-4-maverick", provider=provider
+        )
+        self.aggregator_llm = CustomLLM(
+            model=aggregator_model_info["crewai_prefix"]
+            + "/"
+            + aggregator_model_info["model"],
+            temperature=0.0,
+            max_tokens=8192,
+            api_key=llm_api_key,
+            base_url=aggregator_model_info["url"],
+        )
         self.user_id = user_id
         self.run_id = run_id
         self.docs_included = docs_included

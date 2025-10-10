@@ -14,17 +14,11 @@ logger = structlog.get_logger(__name__)
 def get_sambanova_llm(api_key: str, model: str = "Meta-Llama-3.3-70B-Instruct"):
     logger.info("Initializing SambaNova LLM", model=model, llm_provider="sambanova")
 
-    # Adjust max_tokens for Maverick model due to its 16k context limit
-    if "Maverick" in model:
-        max_tokens = 7000  # Reduced from 8192 to leave room for prompts
-    else:
-        max_tokens = 8192
-
     try:
         llm = ChatSambaNovaCloud(
             model=model,
             temperature=0,
-            max_tokens=max_tokens,
+            max_tokens=8192,
             sambanova_api_key=api_key,
         )
 
@@ -32,7 +26,7 @@ def get_sambanova_llm(api_key: str, model: str = "Meta-Llama-3.3-70B-Instruct"):
             "SambaNova LLM initialized successfully",
             model=model,
             llm_provider="sambanova",
-            max_tokens=max_tokens,
+            max_tokens=8192,
         )
 
     except Exception as e:

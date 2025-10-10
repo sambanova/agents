@@ -350,7 +350,6 @@ import { useAuth0 } from '@auth0/auth0-vue'
 import UserAvatar from '@/components/Common/UIComponents/UserAvtar.vue'
   import WorkflowDataItem from '@/components/ChatMain/WorkflowDataItem.vue'
   import { getComponentByAgentType } from '@/utils/componentUtils.js'
-  import UnknownTypeComponent from '@/components/ChatMain/ResponseTypes/UnknownTypeComponent.vue'
 
 // Icons for streaming timeline
 import {
@@ -480,20 +479,6 @@ import { isFinalAgentType } from '@/utils/globalFunctions.js'
     if (!props.data) return {}
     try {
       const parsed = JSON.parse(props.data)
-
-      // If content is a JSON string (e.g., financial analysis data from voice mode), parse it too
-      // This matches the behavior of finalResponseData which handles streaming mode
-      if (parsed && typeof parsed.content === 'string' &&
-          parsed.content.trim().startsWith('{') &&
-          parsed.content.trim().endsWith('}')) {
-        try {
-          parsed.content = JSON.parse(parsed.content)
-        } catch (contentParseError) {
-          console.debug('Content is not valid JSON, keeping as string:', contentParseError)
-          // Keep content as string if parsing fails
-        }
-      }
-
       return parsed || {}
     } catch (error) {
       console.error('Error parsing data in ChatBubble:', error)
@@ -1129,11 +1114,6 @@ async function generateSelectablePDF() {
 
 // Helper function to parse Python-style JSON with single quotes
 function parsePythonStyleJSON(jsonString) {
-  // Return null if input is invalid
-  if (!jsonString || typeof jsonString !== 'string' || jsonString.trim() === '') {
-    return null;
-  }
-
   try {
     // First try regular JSON parsing
     return JSON.parse(jsonString);
@@ -1143,7 +1123,7 @@ function parsePythonStyleJSON(jsonString) {
       // Use a more sophisticated approach to handle Python-style JSON
       // This regex-based approach is more robust for handling nested quotes
       let processedString = jsonString;
-
+      
       // Replace Python-style single quotes with double quotes, but preserve escaped quotes
       // This handles cases like: [{'url': 'https://example.com', 'content': 'The company\'s mission...'}]
       processedString = processedString
@@ -1151,7 +1131,7 @@ function parsePythonStyleJSON(jsonString) {
         .replace(/\\"/g, "'") // Restore escaped quotes back to single quotes
         .replace(/"(\w+)":/g, '"$1":') // Ensure property names are double-quoted
         .replace(/:\s*"([^"]*)"(?=\s*[,}])/g, ':"$1"'); // Ensure string values are properly quoted
-
+      
       return JSON.parse(processedString);
     } catch (e2) {
       // If still failing, try using eval as last resort (safer than before)
@@ -1160,13 +1140,7 @@ function parsePythonStyleJSON(jsonString) {
         const result = eval('(' + jsonString + ')');
         return result;
       } catch (e3) {
-        // Only log detailed error in development mode, otherwise fail silently
-        if (import.meta.env.DEV) {
-          console.warn('Failed to parse JSON, returning null:', {
-            preview: jsonString.substring(0, 100),
-            error: e3.message
-          });
-        }
+        console.error('Failed to parse JSON with all methods:', e3);
         return null;
       }
     }
@@ -1211,13 +1185,7 @@ const userMessageContent = computed(() => {
 // Check if this is a user/human message
 const isUserMessage = computed(() => {
   try {
-    // Check for user_message event (sent when user types a message)
-    if (props.event === 'user_message') {
-      return true;
-    }
-
-    // Check for agent_completion with human type (from backend/loaded conversations)
-    return (props.event === 'agent_completion' &&
+    return (props.event === 'agent_completion' && 
            (parsedData.value?.additional_kwargs?.agent_type === 'human' ||
             parsedData.value?.type === 'HumanMessage'))
   } catch (error) {
@@ -1230,34 +1198,8 @@ const isUserMessage = computed(() => {
 // Decide whether this bubble should be rendered (skip internal or debug-only messages)
 const showBubble = computed(() => {
   try {
-    // For streaming events, only show if there's displayable content
-    if (props.streamingEvents) {
-      // Check if we have any displayable content
-      const hasContent = streamingResponseContent.value &&
-                        streamingResponseContent.value.trim() !== '';
-      const hasComponent = finalResponseComponent.value !== null;
-      const hasSources = toolSources.value && toolSources.value.length > 0;
-      const hasArtifacts = artifacts.value && artifacts.value.length > 0;
-      const hasWorkflow = props.workflowData && props.workflowData.length > 0;
-
-      // For final response types (react_end, etc.), check if they have actual content
-      // Don't show empty final response bubbles
-      if (hasComponent && !hasContent && !hasSources && !hasArtifacts && !hasWorkflow) {
-        // Check if finalResponseData has meaningful content
-        const responseData = finalResponseData.value;
-        const hasResponseContent = responseData &&
-                                   responseData.content &&
-                                   (typeof responseData.content === 'object' ||
-                                    (typeof responseData.content === 'string' && responseData.content.trim() !== ''));
-
-        if (!hasResponseContent) {
-          return false; // Don't show empty final response bubbles
-        }
-      }
-
-      // Only show if we have something to display
-      return hasContent || hasComponent || hasSources || hasArtifacts || hasWorkflow;
-    }
+    // Always show if this bubble carries streamingEvents (status line)
+    if (props.streamingEvents) return true
 
     // Always show user messages
     if (isUserMessage.value) return true

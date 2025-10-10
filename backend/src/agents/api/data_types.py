@@ -60,10 +60,8 @@ class HandoffMessage(BaseAgentMessage):
 class APIKeys(BaseModel):
     sambanova_key: str = ""
     fireworks_key: str = ""
-    together_key: str = ""
     serper_key: str
     exa_key: str
-    paypal_invoicing_email: str = ""
 
 
 class ShareResponse(BaseModel):

@@ -183,9 +183,6 @@ import FullReportModal from '@/components/FullReportModal.vue';
 import ChatAgentSidebar from '@/components/ChatMain/ChatAgentSidebar.vue';
 import { useReportStore } from '@/stores/reportStore';
 import emitterMitt from '@/utils/eventBus.js';
-import axios from 'axios';
-
-const { getAccessTokenSilently } = useAuth0();
 
 const isSidebarCollapsed = ref(false);
 const isMobile = ref(false);
@@ -275,83 +272,13 @@ const currentRunId = ref('');
 // The sessionId that remains consistent for document uploads and searches
 const sessionId = ref('');
 
-onMounted(async () => {
+onMounted(() => {
   // Generate a new session ID
   sessionId.value = uuidv4();
   reportStore.loadSavedReports();
 
-  // Load admin panel configuration if enabled
-  const isAdminPanelEnabled = import.meta.env.VITE_SHOW_ADMIN_PANEL === 'true';
-  if (isAdminPanelEnabled) {
-    try {
-      const token = await getAccessTokenSilently();
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
-      const response = await axios.get(`${apiBaseUrl}/admin/config`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.data && response.data.default_provider) {
-        const providerMapping = {
-          'sambanova': { label: 'SambaNova', value: 'sambanova' },
-          'fireworks': { label: 'Fireworks AI', value: 'fireworks' },
-          'together': { label: 'Together AI', value: 'together' }
-        };
-
-        // Check if the user has API keys configured for the default provider
-        // First, get the API keys
-        const apiKeysResponse = await axios.get('/get_api_keys', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        const apiKeys = apiKeysResponse.data;
-        const selectedProvider = response.data.default_provider;
-
-        // Check if the selected provider has an API key
-        let hasApiKey = false;
-        if (selectedProvider === 'sambanova' && apiKeys.sambanova_key) {
-          hasApiKey = true;
-        } else if (selectedProvider === 'fireworks' && apiKeys.fireworks_key) {
-          hasApiKey = true;
-        } else if (selectedProvider === 'together' && apiKeys.together_key) {
-          hasApiKey = true;
-        }
-
-        if (hasApiKey && providerMapping[selectedProvider]) {
-          // Use the selected provider if it has an API key
-          selectedOption.value = providerMapping[selectedProvider];
-          console.log('Loaded provider from admin config:', selectedOption.value);
-        } else if (!hasApiKey && selectedProvider !== 'sambanova') {
-          // Fall back to SambaNova if the selected provider doesn't have an API key
-          console.warn(`Provider ${selectedProvider} doesn't have an API key, falling back to SambaNova`);
-          selectedOption.value = { label: 'SambaNova', value: 'sambanova' };
-        } else if (providerMapping[selectedProvider]) {
-          // Use the selected provider (this handles SambaNova without key)
-          selectedOption.value = providerMapping[selectedProvider];
-          console.log('Loaded provider from admin config:', selectedOption.value);
-        }
-      }
-    } catch (error) {
-      console.log('Could not load admin config, using default provider:', error.message);
-    }
-  }
-
   // Listen for new chat events
   emitterMitt.on('new-chat', handleNewChat);
-  emitterMitt.on('open-settings', (data) => {
-    console.log('MainLayout received open-settings event:', data);
-    if (headerRef.value) {
-      // Pass the tab key directly
-      const tabName = data?.tab || null;
-      console.log('Calling headerRef.openSettings with tab:', tabName);
-      headerRef.value.openSettings(tabName);
-    } else {
-      console.log('headerRef not available');
-    }
-  });
   window.addEventListener('resize', handleResize);
   handleResize(); // Initial check
 });
@@ -359,7 +286,6 @@ onMounted(async () => {
 onUnmounted(() => {
   // Remove the listener
   emitterMitt.off('new-chat', handleNewChat);
-  emitterMitt.off('open-settings');
   window.removeEventListener('resize', handleResize);
 });
 

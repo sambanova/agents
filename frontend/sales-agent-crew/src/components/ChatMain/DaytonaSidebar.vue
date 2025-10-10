@@ -884,7 +884,7 @@ function processStreamingEvents(events) {
                     fetchArtifactContent(newArtifact);
                     
                     artifactCount++
-                    console.log(`Added Redis file: ${title} (${fileType})`)
+                    console.log(`Added Redis file: ${title} (${fileType}) with ID: ${fileId} for user: ${userId}`)
                   }
                 })
               }

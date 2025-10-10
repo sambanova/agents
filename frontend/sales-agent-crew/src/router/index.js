@@ -4,7 +4,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 const MainLayout = () => import('../views/MainLayout.vue')
 const LoginPage = () => import('../views/LoginPage.vue')
 const TermsOfService = () => import('../views/TermsOfService.vue')
-const OAuthCallback = () => import('../views/OAuthCallback.vue')
 
 const routes = [
   {
@@ -35,12 +34,6 @@ const routes = [
     path: '/callback',
     name: 'callback',
     component: MainLayout
-  },
-  {
-    path: '/oauth-callback',
-    name: 'oauth-callback',
-    component: OAuthCallback,
-    meta: { requiresAuth: false }
   }
   
 ]

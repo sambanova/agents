@@ -169,7 +169,6 @@ class CustomLLM(LLM):
                 logger.info(
                     f"CrewAI LLM {self.model} calling litellm.completion with messages: {message_headers}"
                 )
-                logger.info(f"[LITELLM_PARAMS] model={params.get('model')}, api_base={params.get('api_base')}, api_key={'***' if params.get('api_key') else 'MISSING'}")
                 try:
                     response = litellm.completion(**params)
                 except litellm.APIError as e:
@@ -180,14 +179,11 @@ class CustomLLM(LLM):
                         try:
                             response = litellm.completion(**params)
                         except Exception as retry_e:
-                            logger.error(f"Retry failed: {retry_e}", exc_info=True)
+                            logger.error(f"Retry failed: {retry_e}")
                             raise
                     else:
-                        logger.error(f"Error calling litellm.completion: {e}", exc_info=True)
+                        logger.error(f"Error calling litellm.completion: {e}")
                         raise
-                except Exception as e:
-                    logger.error(f"Unexpected error calling litellm.completion: {type(e).__name__}: {e}", exc_info=True)
-                    raise
                 duration = time.time() - start_time
                 if duration > 10:
                     logger.warning(
@@ -260,12 +256,6 @@ class CustomLLM(LLM):
     def supports_function_calling(self) -> bool:
         try:
             params = get_supported_openai_params(model=self.model)
-            # If litellm doesn't recognize the model, params will be None
-            # For custom models with base_url, assume function calling is supported
-            if params is None:
-                if self.base_url:
-                    return True  # Custom OpenAI-compatible endpoints typically support function calling
-                return False
             return "response_format" in params
         except Exception as e:
             logging.error(f"Failed to get supported params: {str(e)}")
@@ -274,12 +264,6 @@ class CustomLLM(LLM):
     def supports_stop_words(self) -> bool:
         try:
             params = get_supported_openai_params(model=self.model)
-            # If litellm doesn't recognize the model, params will be None
-            # For custom models with base_url, assume stop words are supported
-            if params is None:
-                if self.base_url:
-                    return True  # Custom OpenAI-compatible endpoints typically support stop words
-                return False
             return "stop" in params
         except Exception as e:
             logging.error(f"Failed to get supported params: {str(e)}")

@@ -44,96 +44,13 @@ from agents.utils.logging_utils import setup_logging_context
 from agents.utils.message_interceptor import MessageInterceptor
 from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.output_parsers import BaseOutputParser
 from langchain_core.runnables import RunnableConfig, RunnableLambda
 from langchain_fireworks import ChatFireworks
-from langchain_openai import ChatOpenAI
 from langgraph.constants import Send
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Checkpointer, Command, interrupt
 
 logger = structlog.get_logger(__name__)
-
-
-class CleanContentParser(BaseOutputParser):
-    """
-    Extract only the content field from AIMessage, removing any reasoning artifacts.
-
-    This parser is used to clean up output from reasoning models that may include
-    chain-of-thought reasoning, confidence scores, or meta-commentary in their responses.
-    """
-
-    def parse(self, text: str) -> str:
-        """
-        Parse the output and remove reasoning artifacts wrapped in <step> and <count> tags.
-        When chained after an AIMessage, this extracts just the .content field.
-        """
-        # Log the raw content before filtering
-        logger.info(
-            "[CONTENT_FILTER] Raw section content (first 500 chars)",
-            raw_preview=text[:500] if len(text) > 500 else text
-        )
-
-        # Remove <step>...</step> blocks (multiline)
-        # Pattern: **<step>** or **<step> ** ... </step> or </step>**
-        # More flexible to handle variations from different reasoning models
-        text = re.sub(r'\*\*<step>(?:\s?\*\*)?.*?</step>(?:\*\*)?', '', text, flags=re.DOTALL)
-
-        # Also remove standalone </step> tags that might be left over
-        text = re.sub(r'</step>', '', text, flags=re.IGNORECASE)
-
-        # Remove <count>...</count> lines
-        # Pattern: **<count> N </count>**
-        text = re.sub(r'\*\*<count>.*?</count>\*\*', '', text)
-
-        # Remove standalone number lines (artifacts left over)
-        lines = text.split('\n')
-        cleaned_lines = []
-        filtered_count = 0
-
-        for line in lines:
-            stripped = line.strip()
-
-            # Skip lines that are just numbers (including decimals like 0.9, 0.8)
-            if stripped and re.match(r'^\d+\.?\d*$', stripped):
-                logger.info(
-                    "[CONTENT_FILTER] Filtered decimal line",
-                    original_line=repr(line),
-                    stripped_line=repr(stripped)
-                )
-                filtered_count += 1
-                continue
-
-            # Skip leftover "Sources" headers without content
-            # These should have been extracted already, so any remaining are artifacts
-            lower_stripped = stripped.lower()
-            if lower_stripped in ['sources', 'sources:', '### sources', '## sources']:
-                logger.info(
-                    "[CONTENT_FILTER] Filtered Sources header",
-                    original_line=repr(line)
-                )
-                filtered_count += 1
-                continue
-
-            cleaned_lines.append(line)
-
-        cleaned_text = '\n'.join(cleaned_lines).strip()
-
-        # Log filtering results
-        logger.info(
-            "[CONTENT_FILTER] Cleaned content (first 500 chars)",
-            cleaned_preview=cleaned_text[:500] if len(cleaned_text) > 500 else cleaned_text,
-            original_length=len(text),
-            cleaned_length=len(cleaned_text),
-            filtered_number_lines=filtered_count,
-            reduction_percent=round((1 - len(cleaned_text)/len(text)) * 100, 1) if len(text) > 0 else 0
-        )
-
-        return cleaned_text
-
-    @property
-    def _type(self) -> str:
-        return "clean_content"
 
 
 class LLMTimeoutError(Exception):
@@ -266,7 +183,7 @@ def get_session_id_from_config(config: Configuration) -> Optional[str]:
     process_inputs=lambda x: None,
 )
 async def generate_report_plan(
-    writer_model, planner_model, summary_model, state: ReportState, config: RunnableConfig
+    writer_model, planner_model, state: ReportState, config: RunnableConfig
 ):
     configurable = Configuration.from_runnable_config(config)
     session_id = get_session_id_from_config(configurable)
@@ -284,12 +201,18 @@ async def generate_report_plan(
         report_structure = configurable.report_structure
 
     search_queries_interceptor = MessageInterceptor()
+    fixing_interceptor = MessageInterceptor()
+
+    # Create an intercepted version of the writer model for the fixing parser
+    fixing_writer_model = writer_model | RunnableLambda(
+        fixing_interceptor.capture_and_pass
+    )
 
     structured_llm = (
         writer_model
         | RunnableLambda(search_queries_interceptor.capture_and_pass)
         | OutputFixingParser.from_llm(
-            llm=summary_model,  # Use summary model for fixing
+            llm=fixing_writer_model,  # Use the intercepted model
             parser=PydanticOutputParser(pydantic_object=Queries),
         )
     )
@@ -390,6 +313,10 @@ async def generate_report_plan(
         m.additional_kwargs["agent_type"] = "deep_research_search_queries_plan"
         captured_messages.append(m)
 
+    for m in fixing_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_search_queries_plan_fixed"
+        captured_messages.append(m)
+
     for m in search_sections_interceptor.captured_messages:
         m.additional_kwargs["agent_type"] = "deep_research_search_sections"
         captured_messages.append(m)
@@ -441,7 +368,7 @@ async def human_feedback(
     },
     process_inputs=lambda x: None,
 )
-async def generate_queries(writer_model, summary_model, state: SectionState, config: RunnableConfig):
+async def generate_queries(writer_model, state: SectionState, config: RunnableConfig):
     configurable = Configuration.from_runnable_config(config)
     sec = state["section"]
     session_id = get_session_id_from_config(configurable)
@@ -455,12 +382,18 @@ async def generate_queries(writer_model, summary_model, state: SectionState, con
     logger.info("Generating queries for section")
 
     search_queries_interceptor = MessageInterceptor()
+    fixing_interceptor = MessageInterceptor()
+
+    # Create an intercepted version of the writer model for the fixing parser
+    fixing_writer_model = writer_model | RunnableLambda(
+        fixing_interceptor.capture_and_pass
+    )
 
     structured_llm = (
         writer_model
         | RunnableLambda(search_queries_interceptor.capture_and_pass)
         | OutputFixingParser.from_llm(
-            llm=summary_model,  # Use summary model for fixing
+            llm=fixing_writer_model,  # Use the intercepted model
             parser=PydanticOutputParser(pydantic_object=Queries),
         )
     )
@@ -490,6 +423,10 @@ async def generate_queries(writer_model, summary_model, state: SectionState, con
     captured_message = []
     for m in search_queries_interceptor.captured_messages:
         m.additional_kwargs["agent_type"] = "deep_research_search_queries_section"
+        captured_message.append(m)
+
+    for m in fixing_interceptor.captured_messages:
+        m.additional_kwargs["agent_type"] = "deep_research_search_queries_section_fixed"
         captured_message.append(m)
 
     return {"search_queries": queries.queries, "messages": captured_message}
@@ -584,7 +521,7 @@ async def invoke_llm_with_tracking(
     process_inputs=lambda x: None,
 )
 async def write_section(
-    writer_model, summary_model, state: SectionState, config: RunnableConfig
+    writer_model, state: SectionState, config: RunnableConfig
 ) -> Command[Literal["__end__", "search_web"]]:
     configurable = Configuration.from_runnable_config(config)
     sec = state["section"]
@@ -607,9 +544,8 @@ async def write_section(
         document_summary=doc_summary,
     )
     writer_interceptor = MessageInterceptor()
-    writer_model_with_interceptor = (
-        writer_model
-        | RunnableLambda(writer_interceptor.capture_and_pass)
+    writer_model_with_interceptor = writer_model | RunnableLambda(
+        writer_interceptor.capture_and_pass
     )
 
     content = await invoke_llm_with_tracking(
@@ -623,13 +559,13 @@ async def write_section(
         llm_name=get_model_name(writer_model),
     )
 
-    sec.content = content.content if hasattr(content, 'content') else content
+    sec.content = content.content
     logger.info("Generated content for section", section_name=sec.name)
 
     schema = Feedback.model_json_schema()
     section_grader_schema = json.dumps(schema, indent=2)
 
-    # now we grade - use summary model (stronger) for grading
+    # now we grade
     logger.info("Grading section", section_name=sec.name)
     grader_inst = section_grader_instructions.format(
         section_topic=sec.description,
@@ -638,12 +574,11 @@ async def write_section(
     )
 
     grader_interceptor = MessageInterceptor()
-
     structured_llm = (
-        summary_model
+        writer_model
         | RunnableLambda(grader_interceptor.capture_and_pass)
         | OutputFixingParser.from_llm(
-            llm=summary_model, parser=PydanticOutputParser(pydantic_object=Feedback)
+            llm=writer_model, parser=PydanticOutputParser(pydantic_object=Feedback)
         )
     )
 
@@ -663,12 +598,6 @@ async def write_section(
     for m in grader_interceptor.captured_messages:
         m.additional_kwargs["agent_type"] = "deep_research_grader"
         captured_messages.append(m)
-
-    # Clean reasoning artifacts from section content before adding to completed_sections
-    # This ensures the UI displays clean content as sections stream in
-    if sec.content:
-        parser = CleanContentParser()
-        sec.content = parser.parse(sec.content)
 
     if fb.grade == "pass":
         logger.info("Section passed grading", section_name=sec.name)
@@ -734,9 +663,8 @@ async def write_final_sections(
     )
 
     writer_interceptor = MessageInterceptor()
-    writer_model_with_interceptor = (
-        writer_model
-        | RunnableLambda(writer_interceptor.capture_and_pass)
+    writer_model_with_interceptor = writer_model | RunnableLambda(
+        writer_interceptor.capture_and_pass
     )
 
     content = await invoke_llm_with_tracking(
@@ -750,14 +678,7 @@ async def write_final_sections(
         llm_name=get_model_name(writer_model),
     )
 
-    sec.content = content.content if hasattr(content, 'content') else content
-
-    # Clean reasoning artifacts from final section content before adding to completed_sections
-    # This ensures the UI displays clean content as sections stream in
-    if sec.content:
-        parser = CleanContentParser()
-        sec.content = parser.parse(sec.content)
-
+    sec.content = content.content
     logger.info("Completed final section", section_name=sec.name)
 
     captured_messages = []
@@ -824,14 +745,9 @@ async def compile_final_report(
     for sec in sections:
         content = completed_map.get(sec.name, sec.content or "")
 
-        # 1) strip any sources block (extract BEFORE cleaning reasoning artifacts)
+        # 1) strip any sources block
         cleaned, block_refs = extract_sources_block(content)
-
-        # 2) clean reasoning artifacts from content (after sources extracted)
-        parser = CleanContentParser()
-        cleaned = parser.parse(cleaned)
-
-        # 3) optionally remove bullet lines that contain URLs but are not in sources block
+        # 2) optionally remove bullet lines that contain URLs but are not in sources block
         # if we want to keep inline links in the text, skip this step or tweak it
         final_cleaned, inline_refs = remove_inline_citation_lines(cleaned)
 
@@ -850,21 +766,6 @@ async def compile_final_report(
                 citations=[],  # we skip local citations array
             )
         )
-
-    # Deduplicate citations by URL (keep first occurrence)
-    # This prevents the same source appearing hundreds of times
-    original_citation_count = len(all_citations)
-    seen_urls = {}
-    for citation in all_citations:
-        if citation.url not in seen_urls:
-            seen_urls[citation.url] = citation
-    all_citations = list(seen_urls.values())
-
-    logger.info(
-        "Deduplicated citations",
-        original_count=original_citation_count,
-        unique_count=len(all_citations)
-    )
 
     # build final text
     lines = []
@@ -984,74 +885,88 @@ def create_deep_research_graph(
     user_id: str,
     request_timeout: int = 120,
     checkpointer: Checkpointer = None,
-    api_keys: dict = None,
 ):
     """
     Create and configure the graph for deep research.
 
     Args:
-        api_key: The API key for the LLM provider (for backward compatibility)
+        api_key: The API key for the LLM provider
         provider: The LLM provider to use (fireworks or sambanova)
-        redis_storage: Redis storage for persistence
-        user_id: User ID for configuration lookup
-        request_timeout: Request timeout in seconds
-        checkpointer: Optional checkpointer
-        api_keys: Dictionary of API keys by provider (preferred over api_key)
+        documents: Optional list of documents to process
     """
     logger.info(
         "Creating deep research graph",
         provider=provider,
         request_timeout=request_timeout,
-        user_id=user_id[:8] if user_id else "None",
+    )
+    model_name = "llama-4-maverick"
+    planner_model_config: str = model_registry.get_model_info(
+        model_key=model_name, provider=provider
+    )
+    writer_model_config: str = model_registry.get_model_info(
+        model_key=model_name, provider=provider
+    )
+    summary_model_config: str = model_registry.get_model_info(
+        model_key=model_name, provider=provider
     )
 
-    # Import config manager
-    from agents.config.llm_config_manager import get_config_manager
-    from agents.utils.llm_provider import get_llm_for_task
-
-    config_manager = get_config_manager()
-
-    # If api_keys dict is not provided, create it from single api_key for backward compatibility
-    if api_keys is None:
-        api_keys = {provider: api_key}
-        logger.info(f"Using backward-compatible single API key for provider: {provider}")
-
-    # Get LLM instances using config manager for task-specific models
-    try:
-        writer_model = get_llm_for_task(
-            task="deep_research_writer",
-            api_keys=api_keys,
-            config_manager=config_manager,
-            user_id=user_id
+    if provider == "fireworks":
+        writer_model = ChatFireworks(
+            base_url=writer_model_config["url"],
+            model=writer_model_config["model"],
+            temperature=0,
+            max_tokens=8192,
+            api_key=api_key,
         )
-        logger.info(f"Deep research writer model initialized from config")
-
-        planner_model = get_llm_for_task(
-            task="deep_research_planner",
-            api_keys=api_keys,
-            config_manager=config_manager,
-            user_id=user_id
+        planner_model = ChatFireworks(
+            base_url=planner_model_config["url"],
+            model=planner_model_config["model"],
+            temperature=0,
+            max_tokens=8192,
+            api_key=api_key,
         )
-        logger.info(f"Deep research planner model initialized from config")
-
-        summary_model = get_llm_for_task(
-            task="deep_research_summary",
-            api_keys=api_keys,
-            config_manager=config_manager,
-            user_id=user_id
+        summary_model = ChatFireworks(
+            base_url=summary_model_config["url"],
+            model=summary_model_config["model"],
+            temperature=0,
+            max_tokens=8192,
+            api_key=api_key,
         )
-        logger.info(f"Deep research summary model initialized from config")
-    except Exception as e:
-        logger.error(f"Failed to initialize deep research models from config: {e}", exc_info=True)
-        raise
+    elif provider == "sambanova":
+        writer_model = CustomChatSambaNovaCloud(
+            sambanova_url=writer_model_config["long_url"],
+            model=writer_model_config["model"],
+            temperature=0,
+            max_tokens=8192,
+            sambanova_api_key=api_key,
+            timeout=request_timeout,
+        )
+        planner_model = CustomChatSambaNovaCloud(
+            sambanova_url=planner_model_config["long_url"],
+            model=planner_model_config["model"],
+            temperature=0,
+            max_tokens=8192,
+            sambanova_api_key=api_key,
+            timeout=request_timeout,
+        )
+        summary_model = CustomChatSambaNovaCloud(
+            sambanova_url=summary_model_config["long_url"],
+            model=summary_model_config["model"],
+            temperature=0,
+            max_tokens=8192,
+            sambanova_api_key=api_key,
+            timeout=request_timeout,
+        )
+    else:
+        raise ValueError(f"Unsupported provider: {provider}")
 
     section_builder = StateGraph(SectionState, output=SectionOutputState)
     section_builder.add_node(
-        "generate_queries", functools.partial(generate_queries, writer_model, summary_model)
+        "generate_queries", functools.partial(generate_queries, writer_model)
     )
     section_builder.add_node("search_web", search_web)
     section_builder.add_node(
-        "write_section", functools.partial(write_section, writer_model, summary_model)
+        "write_section", functools.partial(write_section, writer_model)
     )
 
     section_builder.add_edge(START, "generate_queries")
@@ -1066,7 +981,7 @@ def create_deep_research_graph(
     )
     builder.add_node(
         "generate_report_plan",
-        functools.partial(generate_report_plan, writer_model, planner_model, summary_model),
+        functools.partial(generate_report_plan, writer_model, planner_model),
     )
     builder.add_node("human_feedback", human_feedback)
     builder.add_node(

@@ -49,12 +49,6 @@ dependencies = [
   "Unidecode==1.4.0",
   "httpx>=0.28.0,<0.29.0",
   "authlib==1.3.0",
-  "singer-sdk>=0.40.0",
-  "google-auth>=2.35.0",
-  "google-auth-oauthlib>=1.2.0",
-  "google-auth-httplib2>=0.2.0",
-  "google-api-python-client>=2.100.0",
-  "hume>=0.7.0",
 ]
 
 [build-system]
