@@ -25,11 +25,11 @@ BACKEND_REPO = $(shell grep -A4 "backend:" $(VALUES_FILE) | grep "repository:" |
 FRONTEND_REPO = $(shell grep -A4 "frontend:" $(VALUES_FILE) | grep "repository:" | sed 's/.*repository: *//')
 
 # Extract frontend environment variables from values file
-VITE_API_URL = $(shell grep -A21 "frontend:" $(VALUES_FILE) | grep "VITE_API_URL:" | sed 's/.*VITE_API_URL: *//;s/"//g')
-VITE_AUTH0_DOMAIN = $(shell grep -A21 "frontend:" $(VALUES_FILE) | grep "VITE_AUTH0_DOMAIN:" | sed 's/.*VITE_AUTH0_DOMAIN: *//;s/"//g')
-VITE_AUTH0_CLIENT_ID = $(shell grep -A21 "frontend:" $(VALUES_FILE) | grep "VITE_AUTH0_CLIENT_ID:" | sed 's/.*VITE_AUTH0_CLIENT_ID: *//;s/"//g')
-VITE_AUTH0_SCOPES = $(shell grep -A21 "frontend:" $(VALUES_FILE) | grep "VITE_AUTH0_SCOPES:" | sed 's/.*VITE_AUTH0_SCOPES: *//;s/"//g')
-VITE_SHOW_ADMIN_PANEL = $(shell grep -A21 "frontend:" $(VALUES_FILE) | grep "VITE_SHOW_ADMIN_PANEL:" | sed 's/.*VITE_SHOW_ADMIN_PANEL: *//;s/"//g')
+VITE_API_URL = $(shell grep -A25 "frontend:" $(VALUES_FILE) | grep "VITE_API_URL:" | sed 's/.*VITE_API_URL: *//;s/"//g')
+VITE_AUTH0_DOMAIN = $(shell grep -A25 "frontend:" $(VALUES_FILE) | grep "VITE_AUTH0_DOMAIN:" | sed 's/.*VITE_AUTH0_DOMAIN: *//;s/"//g')
+VITE_AUTH0_CLIENT_ID = $(shell grep -A25 "frontend:" $(VALUES_FILE) | grep "VITE_AUTH0_CLIENT_ID:" | sed 's/.*VITE_AUTH0_CLIENT_ID: *//;s/"//g')
+VITE_AUTH0_SCOPES = $(shell grep -A25 "frontend:" $(VALUES_FILE) | grep "VITE_AUTH0_SCOPES:" | sed 's/.*VITE_AUTH0_SCOPES: *//;s/"//g')
+VITE_SHOW_ADMIN_PANEL = $(shell grep -A25 "frontend:" $(VALUES_FILE) | grep "VITE_SHOW_ADMIN_PANEL:" | sed 's/.*VITE_SHOW_ADMIN_PANEL: *//;s/"//g')
 
 # Common variables
 BACKEND_DOCKER_IMAGE = $(BACKEND_REPO)
