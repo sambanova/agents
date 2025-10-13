@@ -97,6 +97,12 @@
     <div v-if="!isVoiceMode && !error && conversationId" class="voice-hint">
       <kbd>Ctrl</kbd>+<kbd>Space</kbd> for voice
     </div>
+    <div v-else-if="isVoiceMode && !error" class="voice-hint">
+      <kbd>Ctrl</kbd>+<kbd>M</kbd> to mute
+    </div>
+    <div v-else-if="!isVoiceMode && error && isSessionEnded" class="voice-hint">
+      <kbd>Ctrl</kbd>+<kbd>Space</kbd> to restart
+    </div>
     <div v-else-if="!isVoiceMode && !error && !conversationId" class="voice-hint text-gray-400">
       Send a message first
     </div>
@@ -171,6 +177,7 @@ async function handleToggleVoice() {
   try {
     // If activating voice mode, emit event first to let parent prepare
     if (!isVoiceMode.value) {
+      console.log('🎤 Starting voice mode from UI interaction')
       emit('voice-mode-starting')
       // Small delay to let parent connect main WebSocket
       await new Promise(resolve => setTimeout(resolve, 500))
@@ -188,14 +195,23 @@ async function handleToggleVoice() {
 
 // Keyboard shortcut
 function handleKeyboardShortcut(event) {
-  // Ctrl+Space or Cmd+Space
+  // Ctrl+Space or Cmd+Space - toggle voice mode
   if ((event.ctrlKey || event.metaKey) && event.code === 'Space') {
+    console.log('⌨️ Ctrl+Space pressed, isVoiceMode:', isVoiceMode.value, 'error:', error.value)
     event.preventDefault()
     handleToggleVoice()
   }
 
+  // Ctrl+M or Cmd+M - toggle mute (only when voice mode is active)
+  if ((event.ctrlKey || event.metaKey) && event.code === 'KeyM' && isVoiceMode.value) {
+    console.log('⌨️ Ctrl+M pressed for mute toggle')
+    event.preventDefault()
+    toggleMute()
+  }
+
   // Escape to stop voice mode
   if (event.code === 'Escape' && isVoiceMode.value) {
+    console.log('⌨️ Escape pressed to stop voice mode')
     handleToggleVoice()
   }
 }
@@ -219,6 +235,7 @@ onUnmounted(() => {
 }
 
 .voice-controls-group {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -300,6 +317,7 @@ onUnmounted(() => {
 
 /* Mute Button */
 .mute-button {
+  position: relative;
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 50%;
@@ -312,6 +330,7 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  pointer-events: auto;
 }
 
 .mute-button:hover {
@@ -392,7 +411,7 @@ onUnmounted(() => {
   padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;
   font-size: 0.875rem;
-  max-width: 300px;
+  max-width: 400px;
   text-align: center;
 }
 
