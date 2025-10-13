@@ -18,6 +18,7 @@ export function useVoiceChat(conversationIdGetter) {
   const agentUpdate = ref('')
   const error = ref(null)
   const audioLevel = ref(0)
+  const isMuted = ref(false) // Mute control for voice input
   const accumulatedProgress = ref([]) // Store progress updates for inclusion in final tool response
 
   // WebSocket and audio references
@@ -574,6 +575,11 @@ export function useVoiceChat(conversationIdGetter) {
       // Stream audio chunks to Hume every 100ms
       mediaRecorder.addEventListener('dataavailable', async (event) => {
         if (event.data.size > 0 && humeSocket) {
+          // Skip sending audio if muted
+          if (isMuted.value) {
+            return
+          }
+
           try {
             const base64Audio = await blobToBase64(event.data)
             humeSocket.sendAudioInput({ data: base64Audio })
@@ -757,6 +763,14 @@ export function useVoiceChat(conversationIdGetter) {
     }
   }
 
+  /**
+   * Toggle mute - stops sending audio to Hume but keeps session active
+   */
+  function toggleMute() {
+    isMuted.value = !isMuted.value
+    console.log(isMuted.value ? '🔇 Microphone muted' : '🔊 Microphone unmuted')
+  }
+
   // Watch for conversation ID changes - reconnect voice WebSocket to new conversation
   watch(conversationIdGetter, async (newId, oldId) => {
     if (!isVoiceMode.value) return // Only care if voice mode is active
@@ -806,11 +820,13 @@ export function useVoiceChat(conversationIdGetter) {
     agentUpdate,
     error,
     audioLevel,
+    isMuted,
     isSupported,
 
     // Methods
     startVoiceMode,
     stopVoiceMode,
     toggleVoiceMode,
+    toggleMute,
   }
 }

@@ -1,16 +1,18 @@
 <template>
   <div class="voice-control-container">
-    <!-- Microphone Button -->
-    <button
-      @click="handleToggleVoice"
-      :disabled="!isSupported || voiceStatus === 'connecting' || !conversationId"
-      :class="[
-        'voice-button',
-        voiceStatusClass,
-        { 'voice-button-active': isVoiceMode }
-      ]"
-      :title="buttonTitle"
-    >
+    <!-- Voice Controls Group -->
+    <div class="voice-controls-group">
+      <!-- Microphone Button -->
+      <button
+        @click="handleToggleVoice"
+        :disabled="!isSupported || voiceStatus === 'connecting' || !conversationId"
+        :class="[
+          'voice-button',
+          voiceStatusClass,
+          { 'voice-button-active': isVoiceMode, 'voice-button-muted': isMuted }
+        ]"
+        :title="buttonTitle"
+      >
       <!-- Microphone Icon -->
       <svg
         v-if="!isVoiceMode"
@@ -51,6 +53,26 @@
         :style="{ transform: `scale(${1 + audioLevel / 100})` }"
       ></div>
     </button>
+
+    <!-- Mute Button (only show when voice mode is active) -->
+    <button
+      v-if="isVoiceMode"
+      @click="toggleMute"
+      class="mute-button"
+      :class="{ 'mute-button-active': isMuted }"
+      :title="isMuted ? 'Unmute microphone' : 'Mute microphone'"
+    >
+      <!-- Muted Icon -->
+      <svg v-if="isMuted" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clip-rule="evenodd" />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+      </svg>
+      <!-- Unmuted Icon -->
+      <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+      </svg>
+    </button>
+  </div>
 
     <!-- Error/Info Message -->
     <div v-if="error" :class="['voice-message', isSessionEnded ? 'voice-info' : 'voice-error']">
@@ -100,8 +122,10 @@ const {
   voiceStatus,
   error,
   audioLevel,
+  isMuted,
   isSupported,
-  toggleVoiceMode
+  toggleVoiceMode,
+  toggleMute
 } = useVoiceChat(() => props.conversationId)
 
 // Computed
@@ -194,6 +218,12 @@ onUnmounted(() => {
   gap: 0.5rem;
 }
 
+.voice-controls-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .voice-button {
   position: relative;
   width: 3rem;
@@ -262,6 +292,46 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border-color: #667eea;
+}
+
+.voice-button-muted {
+  opacity: 0.6;
+}
+
+/* Mute Button */
+.mute-button {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  border: 2px solid #d1d5db;
+  background: white;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.mute-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  background: #f9fafb;
+}
+
+.mute-button:active {
+  transform: scale(0.95);
+}
+
+.mute-button-active {
+  background: #fef2f2;
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.mute-button-active:hover {
+  background: #fee2e2;
 }
 
 /* Audio Level Ring */

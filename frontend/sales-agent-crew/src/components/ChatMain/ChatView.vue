@@ -493,8 +493,9 @@
                     </div>
                     <!-- End Connector Toggle Button -->
 
-                    <!-- Mic Button -->
+                    <!-- Mic Button (Legacy - Hidden) -->
                     <button
+                      v-if="false"
                       type="button"
                       @click="toggleRecording"
                       :disabled="isLoading"
@@ -543,8 +544,9 @@
                   <!-- End Button Group -->
                   <!-- Button Group -->
                   <div class="flex items-center gap-x-1">
-                    <!-- Mic Button -->
+                    <!-- Mic Button (Legacy - Hidden) -->
                     <Tooltip
+                      v-if="false"
                       text="Use voice mode"
                       position="top"
                       color="bg-black text-white"
