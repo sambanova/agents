@@ -1163,17 +1163,13 @@ watch(isVoiceMode, (newValue) => {
 
 // Handle voice mode starting (before activation)
 async function handleVoiceModeStarting() {
-  console.log('Voice mode starting - ensuring conversation and WebSocket ready');
-
   // If no conversation exists, create one first (same pattern as addMessage)
   if (!route.params.id && !isSharedConversation.value) {
     try {
-      console.log('No conversation ID - creating new chat for voice mode');
       await createNewChat();
       await nextTick();
       // After createNewChat, the router push should update the conversation id
       conversationId.value = route.params.id;
-      console.log('✅ New chat created for voice mode:', conversationId.value);
     } catch (error) {
       console.error('Failed to create new chat for voice mode:', error);
       throw new Error('Failed to create conversation for voice mode');
@@ -1184,22 +1180,15 @@ async function handleVoiceModeStarting() {
   if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
     await connectWebSocket();
     await waitForSocketOpen();
-    console.log('✅ Main chat WebSocket ready for voice mode');
-  } else {
-    console.log('✅ Main chat WebSocket already connected');
   }
 }
 
 // Handle voice status changes
 async function handleVoiceStatusChange(event) {
-  console.log('Voice status changed:', event);
-
   // Set isLoading based on voice status to trigger Daytona sidebar and other UI
   if (event.status === 'thinking' || event.status === 'processing') {
-    console.log('Voice mode is processing - setting isLoading=true for Daytona sidebar');
     isLoading.value = true;
   } else if (event.status === 'idle' || event.status === 'listening' || event.status === 'error') {
-    console.log('Voice mode finished processing - setting isLoading=false');
     isLoading.value = false;
   }
 
@@ -1824,20 +1813,10 @@ onMounted(async () => {
 
 // Handler for voice agent triggered events
 function handleVoiceAgentTriggered(event) {
-  console.log('🚀 Voice agent triggered:', event.detail);
-  console.log('[VOICE-DEBUG] handleVoiceAgentTriggered called:', {
-    text: event.detail.text,
-    message_id: event.detail.message_id,
-    currentMsgId_before: currentMsgId.value,
-    messagesData_length: messagesData.value.length,
-    intent: event.detail.intent
-  });
-
   // CRITICAL: Always use the fresh message_id from the agent_triggered event
   // This ensures each new voice query gets its own unique message_id
   // and prevents Query 2 from reusing Query 1's message_id due to race conditions
   currentMsgId.value = event.detail.message_id;
-  console.log('📝 Voice mode currentMsgId set to:', currentMsgId.value);
 
   // Show agent workflow on screen - same as regular chat
   // The conversation will already be displayed in messages
@@ -1848,7 +1827,6 @@ function handleVoiceAgentTriggered(event) {
 // Handler for voice workflow messages - inject into chat UI
 function handleVoiceWorkflowMessage(event) {
   const message = event.detail;
-  console.log('📥 Voice workflow message for chat UI:', message.event || message.type);
 
   try {
     // Ensure message has a valid ID before pushing to messagesData
@@ -1866,24 +1844,17 @@ function handleVoiceWorkflowMessage(event) {
 
 // Handler for Daytona tool call detection in voice mode
 function handleVoiceDaytonaDetected(event) {
-  console.log('🔧 Voice Daytona detected event received:', event.detail);
-
   // In voice mode, when user explicitly invokes Daytona via voice command,
   // we should open the sidebar even if they previously closed it in another context.
   // This is a NEW explicit request from the user.
   // Only skip during initial page load (loading old messages)
   if (!initialLoading.value) {
-    console.log('✅ Opening Daytona sidebar for voice mode (this is a new explicit Daytona invocation)')
     // Reset the closed flag since this is a new explicit Daytona request via voice
     daytonaSidebarClosed.value = false
     showDaytonaSidebar.value = true
     updateCurrentDaytonaEvents()
     // Close artifact canvas if it's open since we're using sidebar now
     showArtifactCanvas.value = false
-  } else {
-    console.log('⏸️ Skipping Daytona sidebar open - still in initial loading:', {
-      initialLoading: initialLoading.value
-    })
   }
 }
 
@@ -2469,30 +2440,11 @@ async function connectWebSocket() {
       try {
         const receivedData = JSON.parse(event.data);
 
-        // VOICE-DEBUG: Comprehensive logging for voice mode debugging
-        console.log('[VOICE-DEBUG] WebSocket message received:', {
-          event: receivedData.event,
-          message_id: receivedData.message_id || receivedData.id,
-          timestamp: receivedData.timestamp,
-          type: receivedData.type,
-          content_preview: receivedData.content?.substring(0, 50) ||
-                          receivedData.data?.content?.substring(0, 50) ||
-                          receivedData.data?.substring?.(0, 50) ||
-                          'no content',
-          agent_type: receivedData.additional_kwargs?.agent_type || receivedData.agent_type
-        });
-
-        // Debug log to verify main WebSocket is receiving events (especially in voice mode)
-        if (receivedData.event && ['llm_stream_chunk', 'think', 'agent_completion'].includes(receivedData.event)) {
-          console.log('[Main WS] Received:', receivedData.event, 'message_id:', receivedData.message_id || receivedData.id || 'none');
-        }
-
         // CRITICAL: Handle stream_start FIRST to set correct message_id for voice mode
         // This event arrives before any messages, ensuring the right ID is used from the start
         if (receivedData.event === 'stream_start') {
           if (receivedData.message_id) {
             currentMsgId.value = receivedData.message_id;
-            console.log('[Voice Mode] stream_start detected - using new message_id:', currentMsgId.value);
           }
           // Don't return - let the event propagate in case other handlers need it
         }
@@ -2527,7 +2479,6 @@ async function connectWebSocket() {
               output_tokens: receivedData.cumulative_usage_metadata.output_tokens || 0,
               total_tokens: receivedData.cumulative_usage_metadata.total_tokens || 0
             };
-            console.log('Updated cumulative token usage:', cumulativeTokenUsage.value);
           }
       
 
@@ -2541,12 +2492,6 @@ async function connectWebSocket() {
           // If we use receivedData.id or receivedData.message_id first, backend might send different IDs
           // for each event, creating separate bubbles instead of grouping!
           const messageId = currentMsgId.value || receivedData.message_id || receivedData.id || `agent_completion_${Date.now()}`;
-
-          console.debug('[ChatView] Message ID:', {
-            agentType,
-            messageId,
-            source: currentMsgId.value ? 'currentMsgId' : (receivedData.message_id ? 'backend message_id' : (receivedData.id ? 'backend id' : 'timestamp'))
-          });
 
           // Validate message ID - must be defined and non-empty
           if (!messageId || messageId === 'undefined' || messageId === 'null') {
@@ -2569,10 +2514,6 @@ async function connectWebSocket() {
           // Note: We should NOT filter based on isIntermediateAgentStep here because
           // those messages need to be added to messagesData for proper streaming grouping
           if (!hasContent && !isFinalResponse && !receivedData.usage_metadata && !receivedData.cumulative_usage_metadata) {
-            console.debug('[ChatView] Skipping empty agent_completion message', {
-              message_id: messageId,
-              agent_type: agentType,
-            });
             return;
           }
 
@@ -2621,14 +2562,6 @@ async function connectWebSocket() {
           }
           
           try {
-            console.log('[VOICE-DEBUG] Pushing agent_completion to messagesData:', {
-              event: messageData.event,
-              message_id: messageData.message_id,
-              timestamp: messageData.timestamp,
-              agent_type: messageData.agent_type,
-              type: messageData.data?.type,
-              messagesData_length_before: messagesData.value.length
-            });
             messagesData.value.push(messageData);
           } catch (error) {
             console.error('Error pushing message data:', error);
@@ -2644,7 +2577,6 @@ async function connectWebSocket() {
           // VOICE MODE FIX: If currentMsgId is not set, this is the start of voice mode streaming
           // Set it now (before processing) so isDaytonaActiveGlobal watch can trigger sidebar opening
           if (!currentMsgId.value && receivedData.message_id) {
-            console.log('[Voice Mode] First stream chunk detected - initializing streaming state', receivedData.message_id);
             currentMsgId.value = receivedData.message_id;
             isLoading.value = true;
           }
@@ -2695,12 +2627,6 @@ async function connectWebSocket() {
                 conversation_id: currentId.value,
                 timestamp: receivedData.timestamp || new Date().toISOString()
               };
-              console.log('[VOICE-DEBUG] Pushing llm_stream_chunk to messagesData:', {
-                event: chunkData.event,
-                message_id: chunkData.message_id,
-                timestamp: chunkData.timestamp,
-                messagesData_length_before: messagesData.value.length
-              });
               messagesData.value.push(chunkData);
 
               // CRITICAL: Track metrics for llm_stream_chunk if it has response_metadata
@@ -2717,7 +2643,6 @@ async function connectWebSocket() {
             }
           }
         } else if (receivedData.event === 'stream_complete') {
-          console.log('Stream complete:', receivedData);
           emit('stream-completed');
           try {
             messagesData.value.push({
@@ -3029,8 +2954,6 @@ const workflowDataByMessageId = computed(() => {
 });
 
 const filteredMessages = computed(() => {
-  console.log('[VOICE-DEBUG] filteredMessages computing, messagesData count:', messagesData.value?.length || 0);
-
   if (!messagesData.value || messagesData.value.length === 0) {
     return [];
   }
@@ -3098,7 +3021,6 @@ const filteredMessages = computed(() => {
       // Skip duplicate user messages - prefer backend version over local
       // If this is a local user_message and we have a backend version with the same message_id, skip it
       if (msg.event === 'user_message' && userMessageIds.get(msgId) === 'backend') {
-        console.debug('Skipping duplicate local user message, backend version exists:', msgId);
         return;
       }
 
@@ -3175,24 +3097,11 @@ const filteredMessages = computed(() => {
       return aTime - bTime;
     });
 
-    console.log('[VOICE-DEBUG] filteredMessages result:', {
-      total_groups: result.length,
-      groups: result.map(r => ({
-        type: r.type || r.event,
-        message_id: r.message_id,
-        timestamp: r.timestamp,
-        events_count: r.events?.length,
-        has_user_message: r.event === 'user_message' || r.type === 'HumanMessage'
-      }))
-    });
-
     return result;
   } catch (error) {
     console.error('Error in filteredMessages computed:', error);
-    console.error('messagesData.value:', messagesData.value);
     // Fallback: return safe messages array filtering out null/undefined values
     const safeMessages = (messagesData.value || []).filter(msg => msg !== null && msg !== undefined);
-    console.log('Returning safe messages:', safeMessages);
     return safeMessages;
   }
 });
@@ -3208,25 +3117,20 @@ const selectedArtifact = ref(null)
 
 // Functions for managing the single DaytonaSidebar
 function closeDaytonaSidebar() {
-  console.log('Manual Daytona sidebar close requested')
   showDaytonaSidebar.value = false
   daytonaSidebarClosed.value = true // Prevent auto-opens until user starts new streaming or manually reopens
 }
 
 function handleOpenDaytonaSidebar(specificEvents = null) {
-  console.log('Manual Daytona sidebar open requested')
   showDaytonaSidebar.value = true
   daytonaSidebarClosed.value = false // Allow future auto-opens since user manually opened
-  
+
   // Use specific events if provided, otherwise collect all events
   if (specificEvents && specificEvents.length > 0) {
-    console.log('Using specific events for this message:', specificEvents.length)
     currentDaytonaEvents.value = specificEvents
   } else {
-    console.log('No specific events provided, collecting all events')
     updateCurrentDaytonaEvents()
   }
-  console.log('Current Daytona events:', currentDaytonaEvents.value.length)
 }
 
 function handleOpenArtifactCanvas(artifact) {
@@ -3277,11 +3181,10 @@ watch(isDaytonaActiveGlobal, (isActive) => {
   // 2. User hasn't manually closed it
   // 3. We're currently actively streaming (not loading historical data)
   // 4. Not during initial page load
-  if (isActive && 
-      !daytonaSidebarClosed.value && 
-      isLoading.value && 
+  if (isActive &&
+      !daytonaSidebarClosed.value &&
+      isLoading.value &&
       !initialLoading.value) {
-    console.log('Auto-opening Daytona sidebar during active streaming')
     showDaytonaSidebar.value = true
     updateCurrentDaytonaEvents()
     // Close artifact canvas if it's open since we're using sidebar now

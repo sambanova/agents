@@ -771,7 +771,6 @@ function processStreamingEvents(events) {
                     // Check if file with this ID already exists to prevent duplicates
                     const existingFile = artifacts.value.find(artifact => artifact.id === fileId)
                     if (existingFile) {
-                      console.log(`Skipping duplicate attachment file with ID: ${fileId}`)
                       return;
                     }
                     
@@ -801,7 +800,6 @@ function processStreamingEvents(events) {
                     fetchArtifactContent(newArtifact);
 
                     artifactCount++
-                    console.log(`Added attachment file: ${title} (${fileType}) with ID: ${fileId}`)
                   }
                 })
               }
@@ -819,7 +817,6 @@ function processStreamingEvents(events) {
                     // Check if file with this exact data URL already exists to prevent duplicates
                     const existingFile = artifacts.value.find(artifact => artifact.url === dataUrl)
                     if (existingFile) {
-                      console.log(`Skipping duplicate data URL image: ${title}`)
                       return;
                     }
                     
@@ -835,7 +832,6 @@ function processStreamingEvents(events) {
                       preview: null
                     })
                     artifactCount++
-                    console.log(`Added data URL image: ${title}`)
                   }
                 })
               }
@@ -854,7 +850,6 @@ function processStreamingEvents(events) {
                     // Check if file with this ID already exists to prevent duplicates
                     const existingFile = artifacts.value.find(artifact => artifact.id === fileId)
                     if (existingFile) {
-                      console.log(`Skipping duplicate Redis file with ID: ${fileId}`)
                       return;
                     }
                     
@@ -882,9 +877,8 @@ function processStreamingEvents(events) {
                     }
                     artifacts.value.push(newArtifact)
                     fetchArtifactContent(newArtifact);
-                    
+
                     artifactCount++
-                    console.log(`Added Redis file: ${title} (${fileType})`)
                   }
                 })
               }

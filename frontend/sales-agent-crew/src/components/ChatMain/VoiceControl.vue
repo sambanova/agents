@@ -177,7 +177,6 @@ async function handleToggleVoice() {
   try {
     // If activating voice mode, emit event first to let parent prepare
     if (!isVoiceMode.value) {
-      console.log('🎤 Starting voice mode from UI interaction')
       emit('voice-mode-starting')
       // Small delay to let parent connect main WebSocket
       await new Promise(resolve => setTimeout(resolve, 500))
@@ -197,21 +196,18 @@ async function handleToggleVoice() {
 function handleKeyboardShortcut(event) {
   // Ctrl+Space or Cmd+Space - toggle voice mode
   if ((event.ctrlKey || event.metaKey) && event.code === 'Space') {
-    console.log('⌨️ Ctrl+Space pressed, isVoiceMode:', isVoiceMode.value, 'error:', error.value)
     event.preventDefault()
     handleToggleVoice()
   }
 
   // Ctrl+M or Cmd+M - toggle mute (only when voice mode is active)
   if ((event.ctrlKey || event.metaKey) && event.code === 'KeyM' && isVoiceMode.value) {
-    console.log('⌨️ Ctrl+M pressed for mute toggle')
     event.preventDefault()
     toggleMute()
   }
 
   // Escape to stop voice mode
   if (event.code === 'Escape' && isVoiceMode.value) {
-    console.log('⌨️ Escape pressed to stop voice mode')
     handleToggleVoice()
   }
 }
