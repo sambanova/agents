@@ -331,11 +331,10 @@ onMounted(async () => {
         } else if (providerMapping[selectedProvider]) {
           // Use the selected provider (this handles SambaNova without key)
           selectedOption.value = providerMapping[selectedProvider];
-          console.log('Loaded provider from admin config:', selectedOption.value);
         }
       }
     } catch (error) {
-      console.log('Could not load admin config, using default provider:', error.message);
+      // Could not load admin config, using default provider
     }
   }
 

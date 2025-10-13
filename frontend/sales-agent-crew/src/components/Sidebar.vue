@@ -222,7 +222,6 @@ onMounted(() => {
     // myFunction(route.params.id)
     // alert(route.params.id)
 
-    console.log("reportStore",reportStore.savedReports)
     // let selectedReport=reportStore.savedReports.filter(r => r.id === route.params.id)
 
     // console.log(selectReport)

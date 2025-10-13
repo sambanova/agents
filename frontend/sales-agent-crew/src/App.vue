@@ -57,8 +57,6 @@ const handleRetry = () => {
 
 // Sync localStorage keys and config to Redis if Redis is empty (e.g., after restart)
 const syncLocalStorageToRedis = async () => {
-  console.log('[SYNC] Checking if localStorage needs to be synced to Redis...')
-
   const token = await getAccessTokenSilently()
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -69,10 +67,8 @@ const syncLocalStorageToRedis = async () => {
       const configResponse = await axios.get(`${apiBaseUrl}/admin/config`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-      console.log('[SYNC] Redis config found')
     } catch (configError) {
       if (configError.response?.status === 404) {
-        console.log('[SYNC] Redis config is empty (404), needs sync')
         needsSync = true
       }
     }
@@ -82,19 +78,16 @@ const syncLocalStorageToRedis = async () => {
       const keysResponse = await axios.get(`${apiBaseUrl}/get_api_keys`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-      console.log('[SYNC] Redis keys found')
       if (!keysResponse.data || !keysResponse.data.sambanova_key) {
         needsSync = true
       }
     } catch (keysError) {
       if (keysError.response?.status === 404) {
-        console.log('[SYNC] Redis keys are empty (404), needs sync')
         needsSync = true
       }
     }
 
     if (!needsSync) {
-      console.log('[SYNC] Redis already has config and keys, no sync needed')
       return
     }
 
@@ -102,7 +95,6 @@ const syncLocalStorageToRedis = async () => {
     const storedKeys = localStorage.getItem('llm_api_keys')
     if (storedKeys) {
       const parsedKeys = JSON.parse(storedKeys)
-      console.log('[SYNC] Syncing API keys from localStorage')
 
       const apiKeysPayload = {
         sambanova_key: parsedKeys.sambanova || '',
@@ -119,14 +111,12 @@ const syncLocalStorageToRedis = async () => {
           'Content-Type': 'application/json'
         }
       })
-      console.log('[SYNC] Successfully synced API keys to Redis')
     }
 
     // Sync LLM config
     const storedConfig = localStorage.getItem('llm_config')
     if (storedConfig) {
       const parsedConfig = JSON.parse(storedConfig)
-      console.log('[SYNC] Found config in localStorage, syncing...')
 
       await axios.post(`${apiBaseUrl}/admin/config`, parsedConfig, {
         headers: {
@@ -134,20 +124,15 @@ const syncLocalStorageToRedis = async () => {
           'Content-Type': 'application/json'
         }
       })
-      console.log('[SYNC] Successfully synced LLM config to Redis')
     }
-
-    console.log('[SYNC] Sync completed successfully')
   } catch (error) {
-    console.error('[SYNC] Failed to sync:', error)
+    console.error('Failed to sync:', error)
   }
 }
 
 // Watch for authentication and loading to complete, then sync
 watch([isAuthenticated, isLoading], async ([authenticated, loading]) => {
-  console.log('[SYNC] Watch triggered - authenticated:', authenticated, 'loading:', loading)
   if (authenticated && !loading) {
-    console.log('[SYNC] User authenticated and not loading, starting sync check...')
     await syncLocalStorageToRedis()
   }
 }, { immediate: true })

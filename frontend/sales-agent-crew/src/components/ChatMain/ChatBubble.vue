@@ -1160,13 +1160,7 @@ function parsePythonStyleJSON(jsonString) {
         const result = eval('(' + jsonString + ')');
         return result;
       } catch (e3) {
-        // Only log detailed error in development mode, otherwise fail silently
-        if (import.meta.env.DEV) {
-          console.warn('Failed to parse JSON, returning null:', {
-            preview: jsonString.substring(0, 100),
-            error: e3.message
-          });
-        }
+        // Fail silently for production
         return null;
       }
     }

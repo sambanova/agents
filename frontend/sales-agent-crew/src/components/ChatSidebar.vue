@@ -302,11 +302,8 @@ function cancelBulkDelete() {
  * On mounted => load local conversation list + decrypt keys
  */
 onMounted(() => {
-  console.log('ChatSidebar mounted, authentication check');
-  
   // Check if user is authenticated before loading data
   if (!isAuthenticated.value) {
-    console.log('Skipping user data loading - user not authenticated');
     return;
   }
 
@@ -365,8 +362,6 @@ async function loadKeys(missingKeysListData) {
   }
 
   if (missingKeysListData) {
-    console.log('missingKeysList', missingKeysListData);
-
     missingKeysList.value = missingKeysListData;
   }
 

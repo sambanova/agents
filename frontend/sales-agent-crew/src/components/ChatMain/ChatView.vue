@@ -852,7 +852,6 @@ const chatName = ref('');
 watch(
   selectedOption,
   (newVal) => {
-    console.log('Selected option changed:', newVal);
     provider.value = newVal.value;
   },
   { immediate: true }
@@ -1056,8 +1055,7 @@ async function loadPreviousChat(convId) {
     initialLoading.value = true;
     // Prevent auto-opening sidebar from historical data
     daytonaSidebarClosed.value = true;
-    console.log('Loading previous chat:', convId);
-    
+
     const resp = await axios.get(
       `${import.meta.env.VITE_API_URL}/chat/history/${convId}`,
       {
@@ -1067,21 +1065,15 @@ async function loadPreviousChat(convId) {
       }
     );
 
-    console.log('Chat history response:', resp.data);
-    
     if (resp.data && resp.data.messages) {
       await filterChat(resp.data);
 
       const lastMessage = messagesData.value[messagesData.value.length - 1];
-      console.log('[ChatView] Inspecting last message on load:', lastMessage);
       if (
         lastMessage &&
         (isFinalAgentType(lastMessage.additional_kwargs?.agent_type) ||
          lastMessage.event === 'stream_complete')
       ) {
-        console.log(
-          '[ChatView] Loaded last message is final, emitting stream-completed.'
-        );
         emit('stream-completed');
       }
     } else {
@@ -1096,7 +1088,6 @@ async function loadPreviousChat(convId) {
     if (!err.message?.includes('content.match is not a function')) {
       // Check if it's a 404 error (conversation not found)
       if (err.response?.status === 404) {
-        console.log('Conversation not found, creating new chat...');
         // Clear the current route and create a new chat
         router.push('/');
         await createNewChat();
@@ -1785,12 +1776,10 @@ onMounted(async () => {
     const routeConversationId = route.params.id;
     conversationId.value = routeConversationId || '';
     currentId.value = routeConversationId || '';
-    
+
     if (routeConversationId) {
-      console.log('Mounting with conversation ID');
       await loadPreviousChat(routeConversationId);
     } else {
-      console.log('Mounting without conversation ID');
       initialLoading.value = false;
     }
   }
