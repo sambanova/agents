@@ -81,11 +81,12 @@
                     >
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                     </svg>
-                    <span class="text-sm font-semibold text-indigo-900">Main Agent (XML Agent)</span>
+                    <span class="text-sm font-semibold text-indigo-900">Main Agent</span>
                     <span class="text-xs text-indigo-600">{{ level.num_calls }} {{ level.num_calls === 1 ? 'call' : 'calls' }}</span>
                   </div>
                   <div class="flex items-center space-x-3">
-                    <span class="text-xs font-medium text-indigo-700">Level 1</span>
+                    <span class="text-xs font-medium text-indigo-700">{{ calculateLevelDuration(level).toFixed(2) }}s</span>
+                    <span class="text-xs font-medium text-gray-500">Level 1</span>
                   </div>
                 </button>
 
@@ -149,7 +150,7 @@
                 </button>
 
                 <!-- Subgraph Agent Breakdown -->
-                <div v-show="expandedLevels[levelIndex]" class="bg-gray-50 p-4">
+                <div v-show="expandedLevels[levelIndex]" class="bg-gray-50 p-4 pl-8">
                   <div v-if="level.agent_breakdown && level.agent_breakdown.length > 0" class="space-y-3">
                     <div
                       v-for="(agent, agentIndex) in level.agent_breakdown"
@@ -359,10 +360,7 @@
       </div>
 
       <!-- Footer -->
-      <div class="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-        <div class="text-xs text-gray-500">
-          Data sourced from LangSmith/Langtrace workflow tracking
-        </div>
+      <div class="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-end">
         <button
           @click="$emit('close')"
           class="px-5 py-2 bg-gradient-to-r from-primary-brandColor to-teal-600 hover:from-teal-600 hover:to-primary-brandColor text-white font-medium rounded-lg transition-all shadow-md hover:shadow-lg"
@@ -436,6 +434,16 @@ function toggleLevel(levelIndex) {
 function toggleSubgraphAgent(levelIndex, agentIndex) {
   const key = `${levelIndex}-${agentIndex}`;
   expandedAgents.value[key] = !expandedAgents.value[key];
+}
+
+// Calculate total duration for a level
+function calculateLevelDuration(level) {
+  if (level.level === 'main_agent' && level.llm_calls) {
+    return level.llm_calls.reduce((sum, call) => sum + call.duration, 0);
+  } else if (level.level === 'subgraph') {
+    return level.subgraph_duration || 0;
+  }
+  return 0;
 }
 
 // Agent color palette - more vibrant and distinct

@@ -104,6 +104,21 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                 num_messages=len(message_interceptor.captured_messages),
             )
 
+            # Debug: Log the breakdown counts to investigate discrepancy
+            logger.info(
+                "[COUNT_DEBUG] Timing breakdown analysis",
+                captured_messages=len(message_interceptor.captured_messages),
+                model_breakdown_count=len(timing_summary.get("model_breakdown", [])),
+                agent_breakdown_count=len(timing_summary.get("agent_breakdown", [])),
+                agent_breakdown_details=[
+                    {
+                        "agent": a.get("agent_name"),
+                        "num_calls": a.get("num_calls"),
+                    }
+                    for a in timing_summary.get("agent_breakdown", [])
+                ],
+            )
+
             # Collect main agent timings from config metadata
             main_agent_calls = []
             if config and "metadata" in config and "main_agent_timing" in config["metadata"]:
