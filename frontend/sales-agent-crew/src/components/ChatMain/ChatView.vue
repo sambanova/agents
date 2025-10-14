@@ -177,12 +177,20 @@
                   <template v-if="getRunSummary(msgItem).total_latency > 0">
                     <!-- Performance Section Divider -->
                     <div class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
-                    
-                    <!-- Total Latency -->
-                    <div class="flex flex-col items-center w-[45px] sm:w-[50px]">
-                      <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).total_latency.toFixed(2) }}s</span>
-                      <span class="text-2xs text-gray-600">latency</span>
-                    </div>
+
+                    <!-- Total Latency - Clickable -->
+                    <button
+                      @click="openLatencyBreakdown(msgItem)"
+                      class="flex flex-col items-center justify-center w-[45px] sm:w-[50px] cursor-pointer hover:bg-gray-100 rounded transition-colors group relative"
+                      :title="getRunSummary(msgItem).model_breakdown.length > 0 ? 'Click to see detailed breakdown' : 'Total latency'"
+                    >
+                      <span class="text-xs font-semibold text-gray-800 group-hover:text-primary-brandColor">{{ getRunSummary(msgItem).total_latency.toFixed(2) }}s</span>
+                      <span class="text-2xs text-gray-600 group-hover:text-primary-brandColor">latency</span>
+                      <!-- Small icon to indicate clickable if breakdown available -->
+                      <svg v-if="getRunSummary(msgItem).model_breakdown.length > 0" class="w-2.5 h-2.5 text-gray-400 group-hover:text-primary-brandColor absolute -bottom-1 right-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
 
                     <!-- Divider -->
                     <div class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
@@ -247,10 +255,19 @@
       />
       
       <!-- Artifact Canvas Modal (fallback for non-Daytona artifacts) -->
-      <ArtifactCanvas 
+      <ArtifactCanvas
         :isOpen="showArtifactCanvas"
         :artifact="selectedArtifact"
         @close="closeArtifactCanvas"
+      />
+
+      <!-- Latency Breakdown Modal -->
+      <LatencyBreakdownModal
+        :isOpen="showLatencyModal"
+        :totalDuration="selectedLatencyData.totalDuration"
+        :modelBreakdown="selectedLatencyData.modelBreakdown"
+        :agentBreakdown="selectedLatencyData.agentBreakdown"
+        @close="closeLatencyModal"
       />
 
       <!-- Documents Section -->
@@ -721,6 +738,7 @@ import DaytonaSidebar from '@/components/ChatMain/DaytonaSidebar.vue';
 import ArtifactCanvas from '@/components/ChatMain/ArtifactCanvas.vue';
 import VoiceControl from '@/components/ChatMain/VoiceControl.vue';
 import VoiceStatusBadge from '@/components/ChatMain/VoiceStatusBadge.vue';
+import LatencyBreakdownModal from '@/components/ChatMain/LatencyBreakdownModal.vue';
 import { isFinalAgentType, shouldExcludeFromGrouping } from '@/utils/globalFunctions.js';
 import { sharing } from '@/services/api.js';
 import { useVoiceChat } from '@/composables/useVoiceChat';
@@ -1246,14 +1264,14 @@ async function filterChat(msgData) {
         const hasModelName = message.response_metadata?.model_name;
 
         if (hasUsageMetadata || hasPerformanceMetrics || hasModelName) {
-          trackRunMetrics(runId, message.usage_metadata, message.response_metadata);
+          trackRunMetrics(runId, message.usage_metadata, message.response_metadata, message.additional_kwargs);
         } else {
           // Still count the event even without usage metadata
-          trackRunMetrics(runId, null, null);
+          trackRunMetrics(runId, null, null, message.additional_kwargs);
         }
       } else {
         // For other events, still count the event even without usage metadata
-        trackRunMetrics(runId, null, null);
+        trackRunMetrics(runId, null, null, null);
       }
     }
   });
@@ -2542,7 +2560,7 @@ async function connectWebSocket() {
             // Track metrics for run summary
             // Use currentMsgId as the run identifier to group all events from this conversation turn
             const runId = currentMsgId.value;
-            trackRunMetrics(runId, receivedData.usage_metadata, receivedData.response_metadata);
+            trackRunMetrics(runId, receivedData.usage_metadata, receivedData.response_metadata, receivedData.additional_kwargs);
           }
           
           // Still store cumulative usage separately for header display
@@ -2600,7 +2618,8 @@ async function connectWebSocket() {
                 trackRunMetrics(
                   streamMessageId,
                   receivedData.usage_metadata,
-                  receivedData.response_metadata
+                  receivedData.response_metadata,
+                  receivedData.additional_kwargs
                 );
               }
             } catch (error) {
@@ -2624,7 +2643,8 @@ async function connectWebSocket() {
                 trackRunMetrics(
                   streamMessageId,
                   receivedData.usage_metadata,
-                  receivedData.response_metadata
+                  receivedData.response_metadata,
+                  receivedData.additional_kwargs
                 );
               }
             } catch (error) {
@@ -3104,6 +3124,14 @@ const daytonaSidebarClosed = ref(false) // Track if user manually closed it
 const showArtifactCanvas = ref(false)
 const selectedArtifact = ref(null)
 
+// Latency breakdown modal state
+const showLatencyModal = ref(false)
+const selectedLatencyData = ref({
+  totalDuration: 0,
+  modelBreakdown: [],
+  agentBreakdown: []
+})
+
 // Functions for managing the single DaytonaSidebar
 function closeDaytonaSidebar() {
   showDaytonaSidebar.value = false
@@ -3134,6 +3162,21 @@ function openArtifact(artifact) {
 function closeArtifactCanvas() {
   showArtifactCanvas.value = false
   selectedArtifact.value = null
+}
+
+// Functions for managing latency breakdown modal
+function openLatencyBreakdown(msgItem) {
+  const summary = getRunSummary(msgItem);
+  selectedLatencyData.value = {
+    totalDuration: summary.total_latency || 0,
+    modelBreakdown: summary.model_breakdown || [],
+    agentBreakdown: summary.agent_breakdown || []
+  };
+  showLatencyModal.value = true;
+}
+
+function closeLatencyModal() {
+  showLatencyModal.value = false;
 }
 
 // Watch for Daytona activity across all messages and manage single sidebar
@@ -3301,9 +3344,9 @@ function getMessageResponseMetadata(msgItem) {
 }
 
 // Function to track metrics for a run_id
-function trackRunMetrics(runId, tokenUsage, responseMetadata) {
+function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs = null) {
   if (!runId) return;
-  
+
   if (!runMetrics.value.has(runId)) {
     runMetrics.value.set(runId, {
       input_tokens: [],
@@ -3313,23 +3356,48 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata) {
       ttfts: [],
       throughputs: [],
       event_count: 0,
-      models: new Map() // Track model names and their counts
+      models: new Map(), // Track model names and their counts
+      workflow_duration: null, // Store workflow-level duration
+      model_breakdown: [], // Store per-model breakdown for waterfall
+      agent_breakdown: [] // Store per-agent breakdown for hierarchical display
     });
   }
-  
+
   const runData = runMetrics.value.get(runId);
-  
+
+  // Check for workflow timing data in additional_kwargs
+  if (additionalKwargs?.workflow_timing) {
+    const timing = additionalKwargs.workflow_timing;
+    runData.workflow_duration = timing.workflow_duration;
+    if (timing.model_breakdown && Array.isArray(timing.model_breakdown)) {
+      runData.model_breakdown = timing.model_breakdown;
+      // Don't overwrite event_count - keep the live-tracked value for UI display
+    }
+    if (timing.agent_breakdown && Array.isArray(timing.agent_breakdown)) {
+      runData.agent_breakdown = timing.agent_breakdown;
+    }
+  }
+
   // Track token usage
   if (tokenUsage) {
     if (tokenUsage.input_tokens > 0) runData.input_tokens.push(tokenUsage.input_tokens);
     if (tokenUsage.output_tokens > 0) runData.output_tokens.push(tokenUsage.output_tokens);
     if (tokenUsage.total_tokens > 0) runData.total_tokens.push(tokenUsage.total_tokens);
   }
-  
+
   // Track performance metrics
   if (responseMetadata?.usage) {
+    // Check if this is workflow-level timing (has total_latency matching workflow_duration)
+    // If so, store it as the workflow duration instead of adding to latencies array
     if (responseMetadata.usage.total_latency > 0) {
-      runData.latencies.push(responseMetadata.usage.total_latency);
+      // Store as workflow duration if it's significantly larger than individual LLM calls
+      // Or if we don't have a workflow duration yet
+      if (!runData.workflow_duration || responseMetadata.usage.total_latency > 5) {
+        runData.workflow_duration = responseMetadata.usage.total_latency;
+      } else {
+        // Otherwise, it's a per-LLM-call latency
+        runData.latencies.push(responseMetadata.usage.total_latency);
+      }
     }
     if (responseMetadata.usage.time_to_first_token > 0) {
       runData.ttfts.push(responseMetadata.usage.time_to_first_token);
@@ -3411,19 +3479,22 @@ function getRunSummary(msgItem) {
   }
   
   const runData = runMetrics.value.get(runId);
-  
+
   // Calculate sums and averages
+  // CRITICAL FIX: Use workflow_duration if available, instead of summing individual latencies
   const summary = {
     input_tokens: runData.input_tokens.reduce((sum, val) => sum + val, 0),
     output_tokens: runData.output_tokens.reduce((sum, val) => sum + val, 0),
     total_tokens: runData.total_tokens.reduce((sum, val) => sum + val, 0),
-    total_latency: runData.latencies.reduce((sum, val) => sum + val, 0),
+    total_latency: runData.workflow_duration !== null ? runData.workflow_duration : runData.latencies.reduce((sum, val) => sum + val, 0),
     total_ttft: runData.ttfts.reduce((sum, val) => sum + val, 0),
     avg_latency: runData.latencies.length > 0 ? runData.latencies.reduce((sum, val) => sum + val, 0) / runData.latencies.length : 0,
     avg_throughput: runData.throughputs.length > 0 ? runData.throughputs.reduce((sum, val) => sum + val, 0) / runData.throughputs.length : 0,
-    event_count: runData.event_count
+    event_count: runData.event_count,
+    model_breakdown: runData.model_breakdown || [], // Include model breakdown for waterfall viz
+    agent_breakdown: runData.agent_breakdown || [] // Include agent breakdown for hierarchical display
   };
-  
+
 
   return summary;
 }

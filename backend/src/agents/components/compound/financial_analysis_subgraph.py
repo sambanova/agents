@@ -83,12 +83,19 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                 "Executing financial analysis crew",
                 inputs=inputs,
             )
-            start_time = time.time()
+            workflow_start_time = time.time()
             result = await crew.execute_financial_analysis(inputs)
-            duration = time.time() - start_time
+            workflow_end_time = time.time()
+            workflow_duration = workflow_end_time - workflow_start_time
+
+            # Get timing summary from interceptor
+            timing_summary = message_interceptor.get_timing_summary()
+
             logger.info(
                 "Financial analysis crew execution completed",
-                duration_ms=round(duration * 1000, 2),
+                workflow_duration_s=round(workflow_duration, 2),
+                total_llm_time_s=round(timing_summary.get("total_duration", 0), 2),
+                num_llm_calls=len(timing_summary.get("model_breakdown", [])),
                 success=True,
             )
 
@@ -108,6 +115,13 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                 "additional_kwargs": {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "agent_type": "financial_analysis_end",
+                    "workflow_timing": {
+                        "workflow_duration": workflow_duration,
+                        "workflow_start_time": workflow_start_time,
+                        "workflow_end_time": workflow_end_time,
+                        "model_breakdown": timing_summary.get("model_breakdown", []),
+                        "agent_breakdown": timing_summary.get("agent_breakdown", []),
+                    },
                 },
             }
 
@@ -123,6 +137,7 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                         "completion_tokens": result[1].get("completion_tokens", 0),
                         "prompt_tokens": result[1].get("prompt_tokens", 0),
                         "total_tokens": result[1].get("total_tokens", 0),
+                        "total_latency": workflow_duration,  # Use workflow duration, not LLM sum
                     }
                 }
 

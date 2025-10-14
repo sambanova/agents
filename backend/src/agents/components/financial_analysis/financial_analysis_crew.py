@@ -277,9 +277,18 @@ class FinancialAnalysisCrew:
             # Wrap LLMs with message interceptor if provided
             if message_interceptor:
                 logger.info("Wrapping LLMs with message interceptor")
-                self.competitor_finder_llm = message_interceptor.wrap_llm(self.competitor_finder_llm)
-                self.llm = message_interceptor.wrap_llm(self.llm)
-                self.aggregator_llm = message_interceptor.wrap_llm(self.aggregator_llm)
+                self.competitor_finder_llm = message_interceptor.wrap_llm(
+                    self.competitor_finder_llm,
+                    agent_name="Enhanced Competitor Finder"
+                )
+                self.llm = message_interceptor.wrap_llm(
+                    self.llm,
+                    agent_name="Analysis Agents"  # Shared by Competitor/Fundamental/Technical/Risk agents
+                )
+                self.aggregator_llm = message_interceptor.wrap_llm(
+                    self.aggregator_llm,
+                    agent_name="News & Aggregation"  # Shared by News and Aggregator agents
+                )
         else:
             # Fallback to old behavior when admin panel is disabled
             competitor_finder_model_info = model_registry.get_model_info(
@@ -320,9 +329,18 @@ class FinancialAnalysisCrew:
             # Wrap LLMs with message interceptor if provided
             if message_interceptor:
                 logger.info("Wrapping LLMs with message interceptor (fallback mode)")
-                self.competitor_finder_llm = message_interceptor.wrap_llm(self.competitor_finder_llm)
-                self.llm = message_interceptor.wrap_llm(self.llm)
-                self.aggregator_llm = message_interceptor.wrap_llm(self.aggregator_llm)
+                self.competitor_finder_llm = message_interceptor.wrap_llm(
+                    self.competitor_finder_llm,
+                    agent_name="Enhanced Competitor Finder"
+                )
+                self.llm = message_interceptor.wrap_llm(
+                    self.llm,
+                    agent_name="Analysis Agents"  # Shared by Competitor/Fundamental/Technical/Risk agents
+                )
+                self.aggregator_llm = message_interceptor.wrap_llm(
+                    self.aggregator_llm,
+                    agent_name="News & Aggregation"  # Shared by News and Aggregator agents
+                )
 
         self.user_id = user_id
         self.run_id = run_id
@@ -330,6 +348,7 @@ class FinancialAnalysisCrew:
         self.verbose = verbose
         self.redis_client = redis_client
         self.message_id = message_id
+        self.message_interceptor = message_interceptor  # Store for agent name tracking
         self._init_agents()
         self._init_tasks()
 
