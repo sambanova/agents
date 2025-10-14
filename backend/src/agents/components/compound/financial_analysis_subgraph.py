@@ -104,6 +104,74 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                 num_messages=len(message_interceptor.captured_messages),
             )
 
+            # Collect main agent timings from config metadata
+            main_agent_calls = []
+            if config and "metadata" in config and "main_agent_timing" in config["metadata"]:
+                main_timing = config["metadata"]["main_agent_timing"]
+                logger.info(
+                    "Retrieved main agent timing from config metadata",
+                    main_timing=main_timing,
+                )
+                main_agent_calls.append({
+                    "node_name": main_timing.get("node_name", "agent_node"),
+                    "agent_name": main_timing.get("agent_name", "XML Agent"),
+                    "model_name": main_timing.get("model_name", "unknown"),
+                    "provider": main_timing.get("model_name", "").split("/")[0] if "/" in main_timing.get("model_name", "") else "sambanova",
+                    "duration": main_timing.get("duration", 0),
+                    "start_offset": 0,  # Main agent always starts at 0
+                })
+            else:
+                logger.warning(
+                    "Main agent timing not found in config metadata",
+                    has_config=config is not None,
+                    has_metadata=config and "metadata" in config,
+                    metadata_keys=list(config["metadata"].keys()) if config and "metadata" in config else None,
+                )
+
+            logger.info(
+                "Collected main agent timings",
+                num_main_agent_calls=len(main_agent_calls),
+            )
+
+            # Create hierarchical timing structure
+            # Calculate total workflow duration including main agent
+            total_workflow_duration = workflow_duration
+            if main_agent_calls:
+                # If we have main agent calls, the total includes them
+                total_workflow_duration = workflow_end_time - (workflow_start_time - sum(c["duration"] for c in main_agent_calls))
+
+            hierarchical_timing = {
+                "workflow_duration": total_workflow_duration,
+                "total_llm_calls": len(main_agent_calls) + len(timing_summary.get("model_breakdown", [])),
+                "levels": []
+            }
+
+            # Add main agent level if there are calls
+            if main_agent_calls:
+                hierarchical_timing["levels"].append({
+                    "level": "main_agent",
+                    "llm_calls": main_agent_calls,
+                    "num_calls": len(main_agent_calls),
+                })
+
+            # Add subgraph level
+            subgraph_start_offset = sum(c["duration"] for c in main_agent_calls) if main_agent_calls else 0
+            hierarchical_timing["levels"].append({
+                "level": "subgraph",
+                "subgraph_name": "Financial Analysis",
+                "subgraph_duration": workflow_duration,
+                "subgraph_start_offset": subgraph_start_offset,
+                "agent_breakdown": timing_summary.get("agent_breakdown", []),
+                "model_breakdown": timing_summary.get("model_breakdown", []),
+                "num_llm_calls": len(timing_summary.get("model_breakdown", [])),
+            })
+
+            logger.info(
+                "Created hierarchical timing structure",
+                total_llm_calls=hierarchical_timing["total_llm_calls"],
+                num_levels=len(hierarchical_timing["levels"]),
+            )
+
             # Create final result message
             # Only include usage_metadata and response_metadata if we have actual values
             # Convert content to JSON string to ensure it's serializable for WebSocket
@@ -115,13 +183,7 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                 "additional_kwargs": {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "agent_type": "financial_analysis_end",
-                    "workflow_timing": {
-                        "workflow_duration": workflow_duration,
-                        "workflow_start_time": workflow_start_time,
-                        "workflow_end_time": workflow_end_time,
-                        "model_breakdown": timing_summary.get("model_breakdown", []),
-                        "agent_breakdown": timing_summary.get("agent_breakdown", []),
-                    },
+                    "workflow_timing": hierarchical_timing,  # Use new hierarchical structure
                 },
             }
 

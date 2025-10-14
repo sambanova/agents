@@ -267,6 +267,7 @@
         :totalDuration="selectedLatencyData.totalDuration"
         :modelBreakdown="selectedLatencyData.modelBreakdown"
         :agentBreakdown="selectedLatencyData.agentBreakdown"
+        :hierarchicalTiming="selectedLatencyData.hierarchicalTiming"
         @close="closeLatencyModal"
       />
 
@@ -3129,7 +3130,8 @@ const showLatencyModal = ref(false)
 const selectedLatencyData = ref({
   totalDuration: 0,
   modelBreakdown: [],
-  agentBreakdown: []
+  agentBreakdown: [],
+  hierarchicalTiming: null  // New: hierarchical timing data
 })
 
 // Functions for managing the single DaytonaSidebar
@@ -3167,10 +3169,15 @@ function closeArtifactCanvas() {
 // Functions for managing latency breakdown modal
 function openLatencyBreakdown(msgItem) {
   const summary = getRunSummary(msgItem);
+
+  // Check if we have hierarchical timing data (new format)
+  const hierarchical = summary.hierarchical_timing || null;
+
   selectedLatencyData.value = {
-    totalDuration: summary.total_latency || 0,
+    totalDuration: hierarchical ? hierarchical.workflow_duration : (summary.total_latency || 0),
     modelBreakdown: summary.model_breakdown || [],
-    agentBreakdown: summary.agent_breakdown || []
+    agentBreakdown: summary.agent_breakdown || [],
+    hierarchicalTiming: hierarchical  // Pass the full hierarchical structure
   };
   showLatencyModal.value = true;
 }
@@ -3369,6 +3376,10 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
   if (additionalKwargs?.workflow_timing) {
     const timing = additionalKwargs.workflow_timing;
     runData.workflow_duration = timing.workflow_duration;
+
+    // Store the complete hierarchical timing structure (new format)
+    runData.hierarchical_timing = timing;
+
     if (timing.model_breakdown && Array.isArray(timing.model_breakdown)) {
       runData.model_breakdown = timing.model_breakdown;
       // Don't overwrite event_count - keep the live-tracked value for UI display
@@ -3492,7 +3503,8 @@ function getRunSummary(msgItem) {
     avg_throughput: runData.throughputs.length > 0 ? runData.throughputs.reduce((sum, val) => sum + val, 0) / runData.throughputs.length : 0,
     event_count: runData.event_count,
     model_breakdown: runData.model_breakdown || [], // Include model breakdown for waterfall viz
-    agent_breakdown: runData.agent_breakdown || [] // Include agent breakdown for hierarchical display
+    agent_breakdown: runData.agent_breakdown || [], // Include agent breakdown for hierarchical display
+    hierarchical_timing: runData.hierarchical_timing || null  // Include new hierarchical timing structure
   };
 
 

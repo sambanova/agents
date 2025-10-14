@@ -465,6 +465,28 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                     content += "</tool_input>"
                     response.content = content
 
+            # Add timing metadata to response for hierarchical tracking
+            if not hasattr(response, "response_metadata") or response.response_metadata is None:
+                response.response_metadata = {}
+
+            if "usage" not in response.response_metadata:
+                response.response_metadata["usage"] = {}
+
+            response.response_metadata["usage"]["total_latency"] = duration
+            response.response_metadata["model_name"] = model_name
+
+            # Store timing data for workflow aggregation
+            if not hasattr(response, "additional_kwargs") or response.additional_kwargs is None:
+                response.additional_kwargs = {}
+
+            response.additional_kwargs["main_agent_timing"] = {
+                "node_name": "agent_node",
+                "agent_name": "XML Agent",
+                "model_name": model_name,
+                "duration": duration,
+                "start_time": start_time,
+            }
+
             return response
 
         except RuntimeError as e:
@@ -1141,6 +1163,24 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 config, node=f"subgraph_{subgraph_name}", subgraph_name=subgraph_name
             )
             logger.info("Subgraph node started")
+
+            # Extract main agent timing from full message history (available here)
+            main_agent_timing = None
+            for msg in messages:
+                if hasattr(msg, 'additional_kwargs') and msg.additional_kwargs:
+                    if 'main_agent_timing' in msg.additional_kwargs:
+                        main_agent_timing = msg.additional_kwargs['main_agent_timing']
+                        logger.info(
+                            "Extracted main agent timing from message history",
+                            timing=main_agent_timing,
+                        )
+                        break
+
+            # Add timing to config metadata for subgraph access
+            if main_agent_timing and config and "metadata" in config:
+                config["metadata"]["main_agent_timing"] = main_agent_timing
+                logger.info("Added main agent timing to config metadata")
+
             last_message = messages[-1]
             # Parse subgraph input
             content = last_message.content

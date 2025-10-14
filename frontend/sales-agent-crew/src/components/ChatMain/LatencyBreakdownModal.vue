@@ -37,20 +37,193 @@
               <div>
                 <span class="text-xs font-medium text-gray-600">Total Workflow Duration</span>
                 <div class="flex items-baseline space-x-2 mt-0.5">
-                  <span class="text-2xl font-bold text-gray-900">{{ totalDuration.toFixed(2) }}</span>
+                  <span class="text-2xl font-bold text-gray-900">{{ workflowDuration.toFixed(2) }}</span>
                   <span class="text-base font-semibold text-gray-500">seconds</span>
                 </div>
               </div>
             </div>
             <div class="text-right">
               <div class="text-xs text-gray-600">Total LLM Calls</div>
-              <div class="text-xl font-bold text-primary-brandColor">{{ modelBreakdown.length }}</div>
+              <div class="text-xl font-bold text-primary-brandColor">{{ totalLLMCalls }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hierarchical Workflow Breakdown (LangSmith-style) -->
+        <div v-if="showHierarchical" class="mb-6">
+          <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+            <svg class="w-5 h-5 mr-2 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" />
+            </svg>
+            Workflow Hierarchy
+          </h3>
+
+          <div class="space-y-4">
+            <!-- Iterate through levels (main_agent, subgraph, etc.) -->
+            <div
+              v-for="(level, levelIndex) in hierarchicalTiming.levels"
+              :key="levelIndex"
+              class="border border-gray-200 rounded-lg overflow-hidden"
+            >
+              <!-- Main Agent Level -->
+              <div v-if="level.level === 'main_agent'">
+                <button
+                  @click="toggleLevel(levelIndex)"
+                  class="w-full px-4 py-3 bg-indigo-50 hover:bg-indigo-100 transition-colors flex items-center justify-between"
+                >
+                  <div class="flex items-center space-x-3">
+                    <svg
+                      class="w-4 h-4 text-indigo-600 transition-transform"
+                      :class="{ 'rotate-90': expandedLevels[levelIndex] }"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                    <span class="text-sm font-semibold text-indigo-900">Main Agent (XML Agent)</span>
+                    <span class="text-xs text-indigo-600">{{ level.num_calls }} {{ level.num_calls === 1 ? 'call' : 'calls' }}</span>
+                  </div>
+                  <div class="flex items-center space-x-3">
+                    <span class="text-xs font-medium text-indigo-700">Level 1</span>
+                  </div>
+                </button>
+
+                <!-- Main Agent LLM Calls -->
+                <div v-show="expandedLevels[levelIndex]" class="px-4 py-3 bg-white space-y-3">
+                  <div
+                    v-for="(call, callIndex) in level.llm_calls"
+                    :key="callIndex"
+                    class="space-y-2"
+                  >
+                    <div class="flex items-center justify-between text-sm">
+                      <div class="flex items-center space-x-2">
+                        <div class="w-2 h-2 rounded-full bg-indigo-500"></div>
+                        <span class="font-medium text-gray-900">{{ call.model_name }}</span>
+                        <span v-if="call.provider" class="text-xs text-gray-500">({{ call.provider }})</span>
+                      </div>
+                      <div class="flex items-center space-x-3 text-xs">
+                        <span class="text-gray-600">{{ call.duration.toFixed(2) }}s</span>
+                      </div>
+                    </div>
+                    <div class="relative h-6 bg-gray-100 rounded-md overflow-hidden">
+                      <div
+                        class="absolute top-0 h-full flex items-center justify-center text-white text-xs font-medium rounded-md bg-indigo-500"
+                        :style="{
+                          left: `${(call.start_offset / workflowDuration) * 100}%`,
+                          width: `${(call.duration / workflowDuration) * 100}%`
+                        }"
+                      >
+                        <span v-if="(call.duration / workflowDuration) > 0.05">
+                          {{ call.duration.toFixed(1) }}s
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Subgraph Level -->
+              <div v-if="level.level === 'subgraph'">
+                <button
+                  @click="toggleLevel(levelIndex)"
+                  class="w-full px-4 py-3 bg-teal-50 hover:bg-teal-100 transition-colors flex items-center justify-between"
+                >
+                  <div class="flex items-center space-x-3">
+                    <svg
+                      class="w-4 h-4 text-teal-600 transition-transform"
+                      :class="{ 'rotate-90': expandedLevels[levelIndex] }"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                    <span class="text-sm font-semibold text-teal-900">{{ level.subgraph_name }}</span>
+                    <span class="text-xs text-teal-600">{{ level.num_llm_calls }} LLM {{ level.num_llm_calls === 1 ? 'call' : 'calls' }}</span>
+                  </div>
+                  <div class="flex items-center space-x-3">
+                    <span class="text-xs font-medium text-teal-700">{{ level.subgraph_duration.toFixed(2) }}s</span>
+                    <span class="text-xs font-medium text-gray-500">Level 2</span>
+                  </div>
+                </button>
+
+                <!-- Subgraph Agent Breakdown -->
+                <div v-show="expandedLevels[levelIndex]" class="bg-gray-50 p-4">
+                  <div v-if="level.agent_breakdown && level.agent_breakdown.length > 0" class="space-y-3">
+                    <div
+                      v-for="(agent, agentIndex) in level.agent_breakdown"
+                      :key="agentIndex"
+                      class="border border-gray-200 rounded-lg overflow-hidden bg-white"
+                    >
+                      <!-- Agent Header -->
+                      <button
+                        @click="toggleSubgraphAgent(levelIndex, agentIndex)"
+                        class="w-full px-4 py-2 bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
+                      >
+                        <div class="flex items-center space-x-3">
+                          <svg
+                            class="w-3 h-3 text-gray-500 transition-transform"
+                            :class="{ 'rotate-90': expandedAgents[`${levelIndex}-${agentIndex}`] }"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                          </svg>
+                          <span class="text-xs font-semibold text-gray-900">{{ agent.agent_name }}</span>
+                          <span class="text-xs text-gray-500">{{ agent.num_calls }} {{ agent.num_calls === 1 ? 'call' : 'calls' }}</span>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                          <span class="text-xs font-medium text-gray-700">{{ agent.total_duration.toFixed(2) }}s</span>
+                          <span class="text-xs font-semibold text-primary-brandColor">{{ agent.percentage.toFixed(1) }}%</span>
+                        </div>
+                      </button>
+
+                      <!-- Agent Calls -->
+                      <div v-show="expandedAgents[`${levelIndex}-${agentIndex}`]" class="px-4 py-2 bg-white space-y-2">
+                        <div
+                          v-for="(call, callIndex) in agent.calls"
+                          :key="callIndex"
+                          class="space-y-1"
+                        >
+                          <div class="flex items-center justify-between text-xs">
+                            <div class="flex items-center space-x-2">
+                              <div class="w-2 h-2 rounded-full" :style="{ backgroundColor: getAgentColor(agentIndex) }"></div>
+                              <span class="font-medium text-gray-900">{{ call.model_name }}</span>
+                              <span v-if="call.provider" class="text-xs text-gray-500">({{ call.provider }})</span>
+                            </div>
+                            <div class="flex items-center space-x-2 text-xs">
+                              <span class="text-gray-600">{{ call.duration.toFixed(2) }}s</span>
+                              <span class="font-medium text-primary-brandColor">{{ call.percentage.toFixed(1) }}%</span>
+                            </div>
+                          </div>
+                          <div class="relative h-5 bg-gray-100 rounded-md overflow-hidden">
+                            <div
+                              class="absolute top-0 h-full flex items-center justify-center text-white text-xs font-medium rounded-md"
+                              :style="{
+                                left: `${(call.start_offset / workflowDuration) * 100}%`,
+                                width: `${(call.duration / workflowDuration) * 100}%`,
+                                backgroundColor: getAgentColor(agentIndex)
+                              }"
+                            >
+                              <span v-if="(call.duration / workflowDuration) > 0.05">
+                                {{ call.duration.toFixed(1) }}s
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <!-- Agent-Based Breakdown (if available) -->
-        <div v-if="agentBreakdown.length > 0" class="mb-6">
+        <div v-else-if="agentBreakdown.length > 0" class="mb-6">
           <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
             <svg class="w-5 h-5 mr-2 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -114,12 +287,12 @@
                     <div
                       class="absolute top-0 h-full flex items-center justify-center text-white text-xs font-medium rounded-md transition-all"
                       :style="{
-                        left: `${(call.start_offset / totalDuration) * 100}%`,
-                        width: `${(call.duration / totalDuration) * 100}%`,
+                        left: `${(call.start_offset / workflowDuration) * 100}%`,
+                        width: `${(call.duration / workflowDuration) * 100}%`,
                         backgroundColor: getAgentColor(index)
                       }"
                     >
-                      <span v-if="(call.duration / totalDuration) > 0.05">
+                      <span v-if="(call.duration / workflowDuration) > 0.05">
                         {{ call.duration.toFixed(1) }}s
                       </span>
                     </div>
@@ -163,11 +336,11 @@
                 class="absolute top-0 h-full flex items-center justify-center text-white text-xs font-medium rounded-md"
                 :class="getColorClass(index)"
                 :style="{
-                  left: `${(model.start_offset / totalDuration) * 100}%`,
-                  width: `${(model.duration / totalDuration) * 100}%`
+                  left: `${(model.start_offset / workflowDuration) * 100}%`,
+                  width: `${(model.duration / workflowDuration) * 100}%`
                 }"
               >
-                <span v-if="(model.duration / totalDuration) > 0.05">
+                <span v-if="(model.duration / workflowDuration) > 0.05">
                   {{ model.duration.toFixed(1) }}s
                 </span>
               </div>
@@ -220,16 +393,49 @@ const props = defineProps({
   agentBreakdown: {
     type: Array,
     default: () => []
+  },
+  hierarchicalTiming: {
+    type: Object,
+    default: null
   }
 });
 
 defineEmits(['close']);
 
-// Track which agents are expanded
+// Computed properties for hierarchical timing
+const showHierarchical = computed(() => {
+  return props.hierarchicalTiming &&
+         props.hierarchicalTiming.levels &&
+         props.hierarchicalTiming.levels.length > 0;
+});
+
+const workflowDuration = computed(() => {
+  return showHierarchical.value
+    ? props.hierarchicalTiming.workflow_duration
+    : props.totalDuration;
+});
+
+const totalLLMCalls = computed(() => {
+  return showHierarchical.value
+    ? props.hierarchicalTiming.total_llm_calls
+    : props.modelBreakdown.length;
+});
+
+// Track which agents/levels are expanded
 const expandedAgents = ref({});
+const expandedLevels = ref({});
 
 function toggleAgent(index) {
   expandedAgents.value[index] = !expandedAgents.value[index];
+}
+
+function toggleLevel(levelIndex) {
+  expandedLevels.value[levelIndex] = !expandedLevels.value[levelIndex];
+}
+
+function toggleSubgraphAgent(levelIndex, agentIndex) {
+  const key = `${levelIndex}-${agentIndex}`;
+  expandedAgents.value[key] = !expandedAgents.value[key];
 }
 
 // Agent color palette - more vibrant and distinct
@@ -266,8 +472,16 @@ function getColorClass(index) {
   return colorClasses[index % colorClasses.length];
 }
 
-// Expand first agent by default
-if (props.agentBreakdown.length > 0) {
+// Expand first agent/level by default
+if (showHierarchical.value && props.hierarchicalTiming.levels.length > 0) {
+  // Expand first level (main agent or first subgraph)
+  expandedLevels.value[0] = true;
+  // If there's a subgraph with agents, expand the first subgraph
+  const firstSubgraphLevel = props.hierarchicalTiming.levels.findIndex(l => l.level === 'subgraph');
+  if (firstSubgraphLevel >= 0) {
+    expandedLevels.value[firstSubgraphLevel] = true;
+  }
+} else if (props.agentBreakdown.length > 0) {
   expandedAgents.value[0] = true;
 }
 </script>
