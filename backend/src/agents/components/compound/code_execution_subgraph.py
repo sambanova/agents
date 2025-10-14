@@ -11,6 +11,7 @@ from typing import Annotated, Dict, List, Optional, TypedDict
 import langsmith as ls
 import structlog
 from agents.components.compound.data_types import LLMType
+from agents.components.compound.timing_aggregator import WorkflowTimingAggregator
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.components.open_deep_research.utils import APIKeyRotator
 from agents.storage.redis_storage import RedisStorage
@@ -33,7 +34,7 @@ from langchain_core.messages import (
     SystemMessage,
     ToolMessage,
 )
-from langchain_core.runnables import RunnableLambda
+from langchain_core.runnables import RunnableConfig, RunnableLambda
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
 from unidecode import unidecode
@@ -132,6 +133,8 @@ class CorrectingExecutorState(TypedDict):
         search_context: Optional[str]
         search_query: Optional[str]
         correction_feedback: Optional[str]
+        workflow_start_time: Optional[float]  # Timestamp when workflow started
+        workflow_timing: Optional[Dict]  # Hierarchical timing structure
     """
 
     code: str
@@ -147,6 +150,8 @@ class CorrectingExecutorState(TypedDict):
     search_query: Optional[str]
     correction_feedback: Optional[str]
     files: Annotated[list[str], add]
+    workflow_start_time: Optional[float]
+    workflow_timing: Optional[Dict]
 
 
 def create_code_execution_graph(
@@ -191,6 +196,8 @@ def create_code_execution_graph(
         """
         Patches the code to fix the error.
         """
+        # Track workflow start time
+        workflow_start_time = state.get("workflow_start_time") or time.time()
 
         try:
             # Strip markdown formatting before processing
@@ -200,6 +207,7 @@ def create_code_execution_graph(
             logger.info("Error cleaning code", error=str(e), exc_info=True)
             return {
                 "steps_taken": ["Error cleaning code: " + str(e)],
+                "workflow_start_time": workflow_start_time,
             }
 
         # Validate the cleaned code
@@ -208,6 +216,7 @@ def create_code_execution_graph(
                 "steps_taken": [
                     "Error: No valid code found after processing input. Please provide valid Python code."
                 ],
+                "workflow_start_time": workflow_start_time,
             }
 
         # Enhanced logging for debugging
@@ -231,11 +240,13 @@ def create_code_execution_graph(
             return {
                 "code": clean_code,
                 "steps_taken": ["Error patching code: " + str(e)],
+                "workflow_start_time": workflow_start_time,
             }
 
         return {
             "code": patched_code,
             "steps_taken": ["Code patched successfully"],
+            "workflow_start_time": workflow_start_time,
         }
 
     async def execute_code(state: CorrectingExecutorState) -> Dict:
@@ -621,10 +632,107 @@ def create_code_execution_graph(
             logger.info("Correction applied successfully. Proceeding to execution.")
             return "execute_code"
 
-    async def cleanup_node(state: CorrectingExecutorState) -> dict:
-        """Clean up the persistent Daytona manager."""
+    async def cleanup_node(state: CorrectingExecutorState, *, config: RunnableConfig = None) -> dict:
+        """Clean up the persistent Daytona manager and build hierarchical timing."""
         await daytona_manager.cleanup()
-        return {}
+
+        # Build hierarchical timing structure
+        workflow_start_time = state.get("workflow_start_time", time.time())
+        workflow_end_time = time.time()
+        workflow_duration = workflow_end_time - workflow_start_time
+
+        # Create timing aggregator
+        timing_aggregator = WorkflowTimingAggregator()
+        timing_aggregator.workflow_start_time = workflow_start_time
+
+        # Extract main agent timing from config metadata (if available)
+        if config and "metadata" in config and "main_agent_timing" in config["metadata"]:
+            main_timing = config["metadata"]["main_agent_timing"]
+            logger.info("Retrieved main agent timing from config metadata", main_timing=main_timing)
+
+            timing_aggregator.add_main_agent_call(
+                node_name=main_timing.get("node_name", "agent_node"),
+                agent_name=main_timing.get("agent_name", "XML Agent"),
+                model_name=main_timing.get("model_name", "unknown"),
+                duration=main_timing.get("duration", 0),
+                start_time=main_timing.get("start_time", workflow_start_time),
+            )
+        else:
+            logger.warning(
+                "Main agent timing not found in config metadata",
+                has_config=config is not None,
+                has_metadata=config and "metadata" in config,
+                metadata_keys=list(config["metadata"].keys()) if config and "metadata" in config else None,
+            )
+
+        # Aggregate timing from captured messages
+        all_messages = state.get("messages", [])
+        agent_timing_map = {}  # agent_name -> {duration, num_calls, model}
+        model_breakdown = []
+
+        for msg in all_messages:
+            if hasattr(msg, 'response_metadata') and msg.response_metadata:
+                usage = msg.response_metadata.get('usage', {})
+                total_latency = usage.get('total_latency', 0)
+
+                # Extract agent type and model info
+                agent_type = msg.additional_kwargs.get('agent_type', 'unknown') if hasattr(msg, 'additional_kwargs') else 'unknown'
+                model_name = msg.response_metadata.get('model_name', 'unknown')
+
+                # Aggregate by agent
+                if agent_type not in agent_timing_map:
+                    agent_timing_map[agent_type] = {
+                        'agent_name': agent_type,
+                        'total_duration': 0,
+                        'num_calls': 0,
+                        'model_name': model_name,
+                    }
+
+                agent_timing_map[agent_type]['total_duration'] += total_latency
+                agent_timing_map[agent_type]['num_calls'] += 1
+
+                # Add to model breakdown
+                model_breakdown.append({
+                    'agent_name': agent_type,
+                    'model_name': model_name,
+                    'provider': model_name.split('/')[0] if '/' in model_name else 'sambanova',
+                    'duration': total_latency,
+                    'start_offset': 0,  # We don't have precise start offsets
+                })
+
+        # Convert agent timing map to list
+        agent_breakdown = [
+            {
+                'agent_name': v['agent_name'],
+                'num_calls': v['num_calls'],
+                'total_duration': v['total_duration'],
+                'model_name': v['model_name'],
+            }
+            for v in agent_timing_map.values()
+        ]
+
+        # Add subgraph timing
+        if agent_breakdown or model_breakdown:
+            subgraph_start_offset = timing_aggregator.main_agent_calls[0]['duration'] if timing_aggregator.main_agent_calls else 0
+            timing_aggregator.add_subgraph_timing(
+                subgraph_name="Code Execution",
+                subgraph_duration=workflow_duration,
+                subgraph_start_time=workflow_start_time,
+                agent_breakdown=agent_breakdown,
+                model_breakdown=model_breakdown,
+            )
+
+        # Get final hierarchical timing structure
+        hierarchical_timing = timing_aggregator.get_hierarchical_timing()
+
+        logger.info(
+            "Created hierarchical timing structure for code execution",
+            total_llm_calls=hierarchical_timing["total_llm_calls"],
+            num_levels=len(hierarchical_timing["levels"]),
+            workflow_duration=round(workflow_duration, 2),
+        )
+
+        return {"workflow_timing": hierarchical_timing}
 
     async def install_packages(state: CorrectingExecutorState) -> Dict:
         """Install the additional packages."""

@@ -113,3 +113,7 @@ class State(TypedDict):
     modification_areas: Annotated[str, lambda left, right: right] = ""
 
     agent_quality_review_retries: Annotated[int, lambda left, right: right] = 0
+
+    # Workflow timing tracking
+    workflow_start_time: Annotated[float, lambda left, right: left or right] = 0
+    workflow_timing: Annotated[dict, lambda left, right: right] = {}

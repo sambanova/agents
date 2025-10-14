@@ -90,6 +90,7 @@ def create_all_subgraphs(
             additional_kwargs={
                 "agent_type": "deep_research_end",
                 "pdf_report": x.get("pdf_report", ""),
+                "workflow_timing": x.get("workflow_timing", {}),
             },
         ),
     }
@@ -122,6 +123,7 @@ def create_all_subgraphs(
                 "agent_type": "tool_response",
                 "timestamp": datetime.now().isoformat(),
                 "files": x["files"],
+                "workflow_timing": x.get("workflow_timing", {}),
             },
             result={"usage": {"total_latency": 0.0}},
         ),
@@ -158,6 +160,7 @@ def create_all_subgraphs(
                     "additional_kwargs": {
                         **(x["internal_messages"][-1].additional_kwargs or {}),
                         "agent_type": "data_science_end",
+                        "workflow_timing": x.get("workflow_timing", {}),
                     }
                 }
             ),

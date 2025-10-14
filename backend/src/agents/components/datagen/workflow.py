@@ -1,9 +1,11 @@
 import re
+import time
 import uuid
 
 import langsmith as ls
 import structlog
 from agents.components.compound.data_types import LLMType
+from agents.components.compound.timing_aggregator import WorkflowTimingAggregator
 from agents.components.datagen.agent.code_agent import create_code_agent
 from agents.components.datagen.agent.hypothesis_agent import create_hypothesis_agent
 from agents.components.datagen.agent.note_agent import create_note_agent
@@ -34,6 +36,7 @@ from agents.components.datagen.state import State
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.storage.redis_storage import RedisStorage
 from langchain_core.messages import AIMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Checkpointer
 
@@ -408,11 +411,116 @@ class WorkflowManager:
 
         self.graph = self.workflow.compile(checkpointer=self.checkpointer)
 
-    async def cleanup_node(self, state: dict) -> dict:
-        """Node to perform cleanup."""
+    async def cleanup_node(self, state: dict, *, config: RunnableConfig = None) -> dict:
+        """Node to perform cleanup and build hierarchical timing."""
         logger.info("Executing cleanup node.")
         await self.cleanup()
-        return {}
+
+        # Build hierarchical timing structure
+        # If workflow_start_time wasn't set, estimate it from messages
+        workflow_start_time = state.get("workflow_start_time", 0)
+        if not workflow_start_time and state.get("internal_messages"):
+            # Fallback: use first message timestamp if available
+            first_msg = state["internal_messages"][0]
+            workflow_start_time = time.time() - 300  # Rough estimate: 5 minutes ago
+        if not workflow_start_time:
+            workflow_start_time = time.time()
+
+        workflow_end_time = time.time()
+        workflow_duration = workflow_end_time - workflow_start_time
+
+        # Create timing aggregator
+        timing_aggregator = WorkflowTimingAggregator()
+        timing_aggregator.workflow_start_time = workflow_start_time
+
+        # Extract main agent timing from config metadata (if available)
+        if config and "metadata" in config and "main_agent_timing" in config["metadata"]:
+            main_timing = config["metadata"]["main_agent_timing"]
+            logger.info("Retrieved main agent timing from config metadata", main_timing=main_timing)
+
+            timing_aggregator.add_main_agent_call(
+                node_name=main_timing.get("node_name", "agent_node"),
+                agent_name=main_timing.get("agent_name", "XML Agent"),
+                model_name=main_timing.get("model_name", "unknown"),
+                duration=main_timing.get("duration", 0),
+                start_time=main_timing.get("start_time", workflow_start_time),
+            )
+        else:
+            logger.warning(
+                "Main agent timing not found in config metadata",
+                has_config=config is not None,
+                has_metadata=config and "metadata" in config,
+                metadata_keys=list(config["metadata"].keys()) if config and "metadata" in config else None,
+            )
+
+        # Aggregate timing from captured messages
+        all_messages = state.get("messages", [])
+        agent_timing_map = {}  # agent_name -> {duration, num_calls, model}
+        model_breakdown = []
+
+        for msg in all_messages:
+            if hasattr(msg, 'response_metadata') and msg.response_metadata:
+                usage = msg.response_metadata.get('usage', {})
+                total_latency = usage.get('total_latency', 0)
+
+                # Extract agent type and model info
+                agent_type = msg.additional_kwargs.get('agent_type', 'unknown') if hasattr(msg, 'additional_kwargs') else 'unknown'
+                model_name = msg.response_metadata.get('model_name', 'unknown')
+
+                # Aggregate by agent
+                if agent_type not in agent_timing_map:
+                    agent_timing_map[agent_type] = {
+                        'agent_name': agent_type,
+                        'total_duration': 0,
+                        'num_calls': 0,
+                        'model_name': model_name,
+                    }
+
+                agent_timing_map[agent_type]['total_duration'] += total_latency
+                agent_timing_map[agent_type]['num_calls'] += 1
+
+                # Add to model breakdown
+                model_breakdown.append({
+                    'agent_name': agent_type,
+                    'model_name': model_name,
+                    'provider': model_name.split('/')[0] if '/' in model_name else 'sambanova',
+                    'duration': total_latency,
+                    'start_offset': 0,  # We don't have precise start offsets
+                })
+
+        # Convert agent timing map to list
+        agent_breakdown = [
+            {
+                'agent_name': v['agent_name'],
+                'num_calls': v['num_calls'],
+                'total_duration': v['total_duration'],
+                'model_name': v['model_name'],
+            }
+            for v in agent_timing_map.values()
+        ]
+
+        # Add subgraph timing
+        if agent_breakdown or model_breakdown:
+            subgraph_start_offset = timing_aggregator.main_agent_calls[0]['duration'] if timing_aggregator.main_agent_calls else 0
+            timing_aggregator.add_subgraph_timing(
+                subgraph_name="Data Science",
+                subgraph_duration=workflow_duration,
+                subgraph_start_time=workflow_start_time,
+                agent_breakdown=agent_breakdown,
+                model_breakdown=model_breakdown,
+            )
+
+        # Get final hierarchical timing structure
+        hierarchical_timing = timing_aggregator.get_hierarchical_timing()
+
+        logger.info(
+            "Created hierarchical timing structure for data science",
+            total_llm_calls=hierarchical_timing["total_llm_calls"],
+            num_levels=len(hierarchical_timing["levels"]),
+            workflow_duration=round(workflow_duration, 2),
+        )
+
+        return {"workflow_timing": hierarchical_timing}
 
     async def cleanup(self):
         """Clean up the persistent Daytona manager."""

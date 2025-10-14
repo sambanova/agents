@@ -1088,12 +1088,11 @@ async function loadPreviousChat(convId) {
       await filterChat(resp.data);
 
       const lastMessage = messagesData.value[messagesData.value.length - 1];
-      if (
-        lastMessage &&
-        (isFinalAgentType(lastMessage.additional_kwargs?.agent_type) ||
-         lastMessage.event === 'stream_complete')
-      ) {
-        emit('stream-completed');
+      if (lastMessage) {
+        const lastKwargs = getAdditionalKwargs(lastMessage);
+        if (isFinalAgentType(lastKwargs.agent_type) || lastMessage.event === 'stream_complete') {
+          emit('stream-completed');
+        }
       }
     } else {
       console.warn('No messages found in chat history response');
@@ -1213,18 +1212,25 @@ watch(
   { deep: true }
 );
 
+// Helper function to safely access additional_kwargs from either location
+// (handles both live WebSocket messages and stored database messages)
+const getAdditionalKwargs = (message) => {
+  return message.additional_kwargs || message.data?.additional_kwargs || {};
+};
+
 async function filterChat(msgData) {
   // First pass: identify conversation turns for run grouping
   let currentRunId = null;
   const messageToRunMap = new Map();
-  
+
   // Sort messages by timestamp to ensure proper ordering
-  const sortedMessages = msgData.messages.sort((a, b) => 
+  const sortedMessages = msgData.messages.sort((a, b) =>
     new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
   );
-  
+
   sortedMessages.forEach(message => {
-    const isUserMessage = message.additional_kwargs?.agent_type === 'human' || message.type === 'HumanMessage';
+    const additionalKwargs = getAdditionalKwargs(message);
+    const isUserMessage = additionalKwargs.agent_type === 'human' || message.type === 'HumanMessage';
     
     if (isUserMessage) {
       // Start a new conversation turn
@@ -1246,11 +1252,12 @@ async function filterChat(msgData) {
 
     if (shouldTrackEvent) {
       const runId = messageToRunMap.get(message.message_id) || message.message_id;
+      const additionalKwargs = getAdditionalKwargs(message);
 
       // Track metrics if they exist (for agent_completion events)
       if (message.event === 'agent_completion') {
         // Debug: Log CrewAI tracking events
-        if (message.additional_kwargs?.agent_type === 'crewai_llm_call') {
+        if (additionalKwargs.agent_type === 'crewai_llm_call') {
           console.log('[ChatView] Found CrewAI tracking event:', {
             model_name: message.response_metadata?.model_name,
             message_id: message.message_id,
@@ -1265,10 +1272,10 @@ async function filterChat(msgData) {
         const hasModelName = message.response_metadata?.model_name;
 
         if (hasUsageMetadata || hasPerformanceMetrics || hasModelName) {
-          trackRunMetrics(runId, message.usage_metadata, message.response_metadata, message.additional_kwargs);
+          trackRunMetrics(runId, message.usage_metadata, message.response_metadata, additionalKwargs);
         } else {
           // Still count the event even without usage metadata
-          trackRunMetrics(runId, null, null, message.additional_kwargs);
+          trackRunMetrics(runId, null, null, additionalKwargs);
         }
       } else {
         // For other events, still count the event even without usage metadata
@@ -1281,11 +1288,13 @@ async function filterChat(msgData) {
     .map(message => {
       // For agent_completion events, handle LangGraph format
       if (message.event === 'agent_completion') {
+        const additionalKwargs = getAdditionalKwargs(message);
+
         // For tool calls and tool results, preserve them for comprehensive audit log and Daytona sidebar
         // but only filter them from main chat display if they're tool-related
         const isToolCall = message.content && typeof message.content === 'string' && (message.content.includes('<tool>') || message.content.includes('<subgraph>'));
-        const isToolResult = Array.isArray(message.content) || (message.additional_kwargs?.agent_type === 'react_tool') || (message.additional_kwargs?.agent_type === 'react_subgraph_DaytonaCodeSandbox');
-        const isToolResponse = message.additional_kwargs?.agent_type === 'tool_response';
+        const isToolResult = Array.isArray(message.content) || (additionalKwargs.agent_type === 'react_tool') || (additionalKwargs.agent_type === 'react_subgraph_DaytonaCodeSandbox');
+        const isToolResponse = additionalKwargs.agent_type === 'tool_response';
 
         // For Daytona sandbox tool calls/results, always preserve them for sidebar processing
         const isDaytonaRelated = (isToolCall && message.content.includes('DaytonaCodeSandbox')) ||
@@ -1293,18 +1302,18 @@ async function filterChat(msgData) {
 
         if (isToolCall || isToolResult || isToolResponse || isDaytonaRelated) {
           // Preserve tool-related messages for comprehensive audit log and Daytona processing
-          
+
           // Create structured data for tool events matching the live streaming format
           const toolData = {
             content: message.content || '',
-            additional_kwargs: message.additional_kwargs || {},
+            additional_kwargs: additionalKwargs,
             response_metadata: message.response_metadata || {},
             type: message.type || 'AIMessage',
             id: message.id || message.message_id,
             name: message.name || null,
-            agent_type: message.additional_kwargs?.agent_type || 'tool'
+            agent_type: additionalKwargs.agent_type || 'tool'
           };
-          
+
           return {
             event: 'agent_completion',
             data: toolData,
@@ -1315,12 +1324,12 @@ async function filterChat(msgData) {
             isDaytonaRelated: isDaytonaRelated
           };
         }
-        
+
         // Only show user messages and final responses in main chat bubbles
-        const isUserMessage = message.additional_kwargs?.agent_type === 'human' || message.type === 'HumanMessage';
-        const isFinalResponse = isFinalAgentType(message.additional_kwargs?.agent_type);
+        const isUserMessage = additionalKwargs.agent_type === 'human' || message.type === 'HumanMessage';
+        const isFinalResponse = isFinalAgentType(additionalKwargs.agent_type);
         const isRegularAIMessage = message.type === 'AIMessage' && !isToolCall && !isToolResult && !isToolResponse;
-        const isReactSubgraph = message.additional_kwargs?.agent_type === 'react_subgraph';
+        const isReactSubgraph = additionalKwargs.agent_type === 'react_subgraph';
         
         if (!isUserMessage && !isFinalResponse && !isRegularAIMessage && !isReactSubgraph) {
           return null; // Filter out intermediate agent responses that aren't tool-related
@@ -1331,7 +1340,7 @@ async function filterChat(msgData) {
           return {
             event: 'agent_completion',
             content: message.content || '',
-            additional_kwargs: message.additional_kwargs || {},
+            additional_kwargs: additionalKwargs,
             response_metadata: message.response_metadata || {},
             type: message.type || 'HumanMessage',
             name: message.name || null,
@@ -1341,15 +1350,15 @@ async function filterChat(msgData) {
             timestamp: message.timestamp || new Date().toISOString()
           };
         }
-        
+
         // For final responses, keep as agent_completion
         const messageContent = {
           content: message.content || '',
-          additional_kwargs: message.additional_kwargs || {},
+          additional_kwargs: additionalKwargs,
           response_metadata: message.response_metadata || {},
           type: message.type || 'AIMessage',
           id: message.id || message.message_id,
-          agent_type: message.additional_kwargs?.agent_type || 'assistant'
+          agent_type: additionalKwargs.agent_type || 'assistant'
         };
         
         const restoredMessage = {
@@ -1479,14 +1488,18 @@ async function filterChat(msgData) {
 
   // Process agent_completion events for workflow metadata (tool calls/results) - ENHANCED FOR PERSISTENCE
   let agentCompletionData = msgData.messages.filter(
-    (message) => message.event === 'agent_completion' && (
-      (message.content && typeof message.content === 'string' && message.content.includes('<tool>')) ||
-      Array.isArray(message.content) ||
-      (message.type === 'LiberalFunctionMessage') ||
-      (message.additional_kwargs?.agent_type === 'react_tool' || message.additional_kwargs?.agent_type === 'react_subgraph_DaytonaCodeSandbox') ||
-      (message.additional_kwargs?.agent_type === 'tool_response') ||
-      (message.name === 'DaytonaCodeSandbox')
-    )
+    (message) => {
+      if (message.event !== 'agent_completion') return false;
+      const msgKwargs = getAdditionalKwargs(message);
+      return (
+        (message.content && typeof message.content === 'string' && message.content.includes('<tool>')) ||
+        Array.isArray(message.content) ||
+        (message.type === 'LiberalFunctionMessage') ||
+        (msgKwargs.agent_type === 'react_tool' || msgKwargs.agent_type === 'react_subgraph_DaytonaCodeSandbox') ||
+        (msgKwargs.agent_type === 'tool_response') ||
+        (message.name === 'DaytonaCodeSandbox')
+      );
+    }
   );
   agentCompletionData.forEach((completion) => {
     try {
@@ -1600,13 +1613,14 @@ async function filterChat(msgData) {
     .filter((message) => message.event === 'agent_completion')
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     .forEach((completion) => {
-      const agentType = completion.additional_kwargs?.agent_type;
+      const completionKwargs = getAdditionalKwargs(completion);
+      const agentType = completionKwargs.agent_type;
       if (agentType === 'deep_research_interrupt') {
         isInDeepResearch.value = true;
       } else if (agentType === 'deep_research_end') {
         isInDeepResearch.value = false;
       }
-      
+
       // Restore data science state
       if (agentType === 'deep_research_interrupt') {
         isInDataScience.value = true;
@@ -1654,10 +1668,10 @@ async function filterChat(msgData) {
   });
 
   let userMessages = messagesData.value
-    .filter((message) => 
-      message.additional_kwargs?.agent_type === 'human' || 
-      message.type === 'HumanMessage'
-    )
+    .filter((message) => {
+      const msgKwargs = getAdditionalKwargs(message);
+      return msgKwargs.agent_type === 'human' || message.type === 'HumanMessage';
+    })
     .sort(
       (a, b) =>
         new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()

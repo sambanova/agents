@@ -12,6 +12,7 @@ import structlog
 from agents.api.data_types import DeepCitation, DeepResearchSection
 from agents.api.utils import generate_report_pdf
 from agents.components.compound.data_types import LLMType
+from agents.components.compound.timing_aggregator import WorkflowTimingAggregator
 from agents.components.open_deep_research.configuration import Configuration, SearchAPI
 from agents.components.open_deep_research.prompts import (
     final_section_writer_instructions,
@@ -809,10 +810,15 @@ async def compile_final_report(
     config: RunnableConfig,
     redis_storage: RedisStorage,
     user_id: str,
+    workflow_start_time: float = None,
 ):
     configurable = Configuration.from_runnable_config(config)
     session_id = get_session_id_from_config(configurable)
     setup_logging_context(config, node="compile_final_report", session_id=session_id)
+
+    # Track workflow timing
+    if workflow_start_time is None:
+        workflow_start_time = time.time()
 
     sections = state["sections"]
     logger.info("Compiling final report", num_sections=len(sections))
@@ -919,7 +925,110 @@ async def compile_final_report(
             error=str(e),
         )
         # Continue without PDF - don't fail the message sending
-    return {"final_report": final_text, "pdf_report": pdf_report_file_id}
+
+    # Build hierarchical timing structure
+    workflow_end_time = time.time()
+    workflow_duration = workflow_end_time - workflow_start_time
+
+    # Collect all captured messages from state
+    all_messages = state.get("messages", [])
+
+    # Create timing aggregator
+    timing_aggregator = WorkflowTimingAggregator()
+    timing_aggregator.workflow_start_time = workflow_start_time
+
+    # Extract main agent timing from config metadata
+    main_agent_calls = []
+    if config and "metadata" in config and "main_agent_timing" in config["metadata"]:
+        main_timing = config["metadata"]["main_agent_timing"]
+        logger.info("Retrieved main agent timing from config metadata", main_timing=main_timing)
+
+        timing_aggregator.add_main_agent_call(
+            node_name=main_timing.get("node_name", "agent_node"),
+            agent_name=main_timing.get("agent_name", "XML Agent"),
+            model_name=main_timing.get("model_name", "unknown"),
+            duration=main_timing.get("duration", 0),
+            start_time=main_timing.get("start_time", workflow_start_time),
+        )
+    else:
+        logger.warning(
+            "Main agent timing not found in config metadata",
+            has_config=config is not None,
+            has_metadata=config and "metadata" in config,
+            metadata_keys=list(config["metadata"].keys()) if config and "metadata" in config else None,
+        )
+
+    # Aggregate timing from all captured messages
+    agent_timing_map = {}  # agent_name -> {duration, num_calls, model}
+    model_breakdown = []
+
+    for msg in all_messages:
+        if hasattr(msg, 'response_metadata') and msg.response_metadata:
+            usage = msg.response_metadata.get('usage', {})
+            total_latency = usage.get('total_latency', 0)
+
+            # Extract agent type and model info
+            agent_type = msg.additional_kwargs.get('agent_type', 'unknown') if hasattr(msg, 'additional_kwargs') else 'unknown'
+            model_name = msg.response_metadata.get('model_name', 'unknown')
+
+            # Aggregate by agent
+            if agent_type not in agent_timing_map:
+                agent_timing_map[agent_type] = {
+                    'agent_name': agent_type,
+                    'total_duration': 0,
+                    'num_calls': 0,
+                    'model_name': model_name,
+                }
+
+            agent_timing_map[agent_type]['total_duration'] += total_latency
+            agent_timing_map[agent_type]['num_calls'] += 1
+
+            # Add to model breakdown
+            model_breakdown.append({
+                'agent_name': agent_type,
+                'model_name': model_name,
+                'provider': model_name.split('/')[0] if '/' in model_name else 'sambanova',
+                'duration': total_latency,
+                'start_offset': 0,  # We don't have precise start offsets for deep research
+            })
+
+    # Convert agent timing map to list
+    agent_breakdown = [
+        {
+            'agent_name': v['agent_name'],
+            'num_calls': v['num_calls'],
+            'total_duration': v['total_duration'],
+            'model_name': v['model_name'],
+        }
+        for v in agent_timing_map.values()
+    ]
+
+    # Add subgraph timing
+    if agent_breakdown or model_breakdown:
+        subgraph_start_offset = timing_aggregator.main_agent_calls[0]['duration'] if timing_aggregator.main_agent_calls else 0
+        timing_aggregator.add_subgraph_timing(
+            subgraph_name="Deep Research",
+            subgraph_duration=workflow_duration,
+            subgraph_start_time=workflow_start_time,
+            agent_breakdown=agent_breakdown,
+            model_breakdown=model_breakdown,
+        )
+
+    # Get final hierarchical timing structure
+    hierarchical_timing = timing_aggregator.get_hierarchical_timing()
+
+    logger.info(
+        "Created hierarchical timing structure for deep research",
+        total_llm_calls=hierarchical_timing["total_llm_calls"],
+        num_levels=len(hierarchical_timing["levels"]),
+        workflow_duration=round(workflow_duration, 2),
+    )
+
+    return {
+        "final_report": final_text,
+        "pdf_report": pdf_report_file_id,
+        "workflow_timing": hierarchical_timing,
+    }
 
 
 async def summarize_documents(
