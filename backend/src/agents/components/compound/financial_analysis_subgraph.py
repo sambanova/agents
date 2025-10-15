@@ -213,9 +213,18 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                 content_type=type(final_message_kwargs.get("content")),
             )
 
-            # Return only the final message
-            # The interceptor messages are already sent in real-time via RedisConversationLogger
-            return [final_message]
+            # Return both the captured messages AND the final message
+            # The captured messages have agent_type="crewai_llm_call" for frontend tracking
+            # This ensures they get streamed to frontend and counted correctly
+            all_messages = list(message_interceptor.captured_messages) + [final_message]
+
+            logger.info(
+                "Returning messages from financial analysis",
+                num_captured_messages=len(message_interceptor.captured_messages),
+                num_total_messages=len(all_messages),
+            )
+
+            return all_messages
         except Exception as e:
             logger.error(
                 "Financial analysis node failed",
