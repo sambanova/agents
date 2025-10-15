@@ -4,19 +4,19 @@
     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm"
     @click.self="$emit('close')"
   >
-    <div class="bg-white rounded-lg shadow-lg max-w-6xl w-full max-h-[90vh] overflow-hidden border border-primary-brandFrame">
-      <!-- Header - Flat purple -->
-      <div class="relative bg-primary-brandColor px-6 py-5">
+    <div class="bg-white rounded-lg shadow-lg max-w-5xl w-full max-h-[90vh] overflow-hidden border border-primary-brandFrame">
+      <!-- Header - White background with purple text -->
+      <div class="relative bg-white px-6 py-4 border-b border-primary-brandFrame">
         <div class="flex items-center justify-between">
           <div>
-            <h2 class="text-2xl font-bold text-white">Latency Breakdown</h2>
-            <p class="text-sm text-white text-opacity-80 mt-1">Detailed timing analysis for this workflow</p>
+            <h2 class="text-xl font-bold text-primary-brandColor">Latency Breakdown</h2>
+            <p class="text-sm text-primary-brandTextSecondary mt-0.5">Detailed timing analysis for this workflow</p>
           </div>
           <button
             @click="$emit('close')"
-            class="text-white hover:text-white hover:text-opacity-80 p-2 rounded-md"
+            class="text-primary-brandTextSecondary hover:text-primary-brandColor p-2 rounded-md"
           >
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -26,11 +26,11 @@
       <!-- Content -->
       <div class="px-6 py-5 overflow-y-auto max-h-[calc(90vh-180px)]">
         <!-- Total Duration Summary Card -->
-        <div class="mb-6 p-5 bg-primary-brandGray rounded-md border border-primary-brandFrame">
+        <div class="mb-6 p-4 rounded-lg border border-primary-brandFrame">
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-3">
-              <div class="p-3 bg-primary-brandColor rounded-md">
-                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="p-2.5 bg-primary-brandColor bg-opacity-10 rounded-lg">
+                <svg class="w-5 h-5 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
@@ -38,21 +38,21 @@
                 <span class="text-xs font-medium text-primary-brandTextSecondary">Total Workflow Duration</span>
                 <div class="flex items-baseline space-x-2 mt-0.5">
                   <span class="text-2xl font-bold text-primary-bodyText">{{ workflowDuration.toFixed(2) }}</span>
-                  <span class="text-base font-semibold text-primary-brandTextSecondary">seconds</span>
+                  <span class="text-sm font-medium text-primary-brandTextSecondary">seconds</span>
                 </div>
               </div>
             </div>
             <div class="text-right">
-              <div class="text-xs text-primary-brandTextSecondary">Total LLM Calls</div>
-              <div class="text-xl font-bold text-primary-brandColor">{{ totalLLMCalls }}</div>
+              <div class="text-xs font-medium text-primary-brandTextSecondary">Total LLM Calls</div>
+              <div class="text-xl font-bold text-primary-brandColor mt-0.5">{{ totalLLMCalls }}</div>
             </div>
           </div>
         </div>
 
         <!-- Hierarchical Workflow Breakdown (LangSmith-style) -->
         <div v-if="showHierarchical" class="mb-6">
-          <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
-            <svg class="w-5 h-5 mr-2 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <h3 class="text-base font-bold text-primary-bodyText mb-3 flex items-center">
+            <svg class="w-4 h-4 mr-2 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" />
             </svg>
             Workflow Hierarchy
@@ -63,7 +63,8 @@
             <div
               v-for="(level, levelIndex) in hierarchicalTiming.levels"
               :key="levelIndex"
-              class="border border-gray-200 rounded-lg overflow-hidden"
+              class="border border-gray-200 rounded-lg overflow-hidden border-l-4"
+              :class="level.level === 'main_agent' ? 'border-l-primary-brandColor' : 'border-l-blue-700'"
             >
               <!-- Main Agent Level -->
               <div v-if="level.level === 'main_agent'">
@@ -234,8 +235,8 @@
 
         <!-- Agent-Based Breakdown (if available) -->
         <div v-else-if="agentBreakdown.length > 0" class="mb-6">
-          <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
-            <svg class="w-5 h-5 mr-2 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <h3 class="text-base font-bold text-primary-bodyText mb-3 flex items-center">
+            <svg class="w-4 h-4 mr-2 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
             Agent Timeline
@@ -245,7 +246,8 @@
             <div
               v-for="(agent, index) in agentBreakdown"
               :key="index"
-              class="border border-gray-200 rounded-lg overflow-hidden"
+              class="border border-gray-200 rounded-lg overflow-hidden border-l-4"
+              :style="{ borderLeftColor: getAgentColor(index) }"
             >
               <!-- Agent Header -->
               <button
@@ -314,19 +316,20 @@
         </div>
 
         <!-- Fallback: Flat Model Breakdown (if no agent breakdown) -->
-        <div v-else-if="modelBreakdown.length > 0" class="space-y-4">
-          <h3 class="text-lg font-bold text-gray-900 mb-3 flex items-center">
-            <svg class="w-5 h-5 mr-2 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div v-else-if="modelBreakdown.length > 0" class="mb-6">
+          <h3 class="text-base font-bold text-primary-bodyText mb-3 flex items-center">
+            <svg class="w-4 h-4 mr-2 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
             Model Calls Timeline
           </h3>
 
-          <div
-            v-for="(model, index) in modelBreakdown"
-            :key="index"
-            class="space-y-2 p-3 rounded-lg hover:bg-gray-50"
-          >
+          <div class="space-y-3">
+            <div
+              v-for="(model, index) in modelBreakdown"
+              :key="index"
+              class="space-y-2 p-3 rounded-lg hover:bg-gray-50"
+            >
             <!-- Model Info -->
             <div class="flex items-center justify-between text-xs">
               <div class="flex-1">
@@ -356,6 +359,7 @@
               </div>
             </div>
           </div>
+        </div>
         </div>
 
         <!-- Empty State -->
@@ -472,34 +476,34 @@ function logMainAgentData(level) {
   return ''; // Return empty string so it doesn't render anything
 }
 
-// Agent color palette - purple-based minimal scheme
+// Agent color palette - purple-based with complementary professional colors
 const agentColors = [
   '#4E226B', // Primary brand purple
+  '#2C5282', // Deep blue - complements purple well
+  '#374151', // Slate gray - neutral but distinct
   '#622B86', // Purple 700
-  '#8138b0', // Mid purple
-  '#974FC7', // Light purple
-  '#667085', // Neutral gray (for variety)
-  '#4A1B5F', // Darker purple
-  '#733195', // Medium purple
-  '#9F5FD4', // Lighter purple
-  '#505866', // Dark gray (for variety)
-  '#7D3FA0'  // Purple accent
+  '#6366F1', // Indigo - modern tech feel
+  '#475569', // Blue-gray - professional
+  '#7C3AED', // Vibrant purple
+  '#64748B', // Slate 500
+  '#8B5CF6', // Purple 500
+  '#1E40AF'  // Blue 800 - deep contrast
 ];
 
 function getAgentColor(index) {
   return agentColors[index % agentColors.length];
 }
 
-// Color classes for flat model breakdown - purple-based minimal
+// Color classes for flat model breakdown - matches agent color palette
 const colorClasses = [
-  'bg-primary-brandColor',
-  'bg-primary-700',
-  'bg-purple-600',
-  'bg-purple-500',
-  'bg-gray-600',
-  'bg-purple-800',
-  'bg-purple-700',
-  'bg-gray-500'
+  'bg-primary-brandColor',   // #4E226B
+  'bg-blue-800',             // Deep blue
+  'bg-gray-700',             // Slate
+  'bg-primary-700',          // Purple 700
+  'bg-indigo-500',           // Indigo
+  'bg-slate-600',            // Blue-gray
+  'bg-purple-600',           // Vibrant purple
+  'bg-slate-500'             // Slate 500
 ];
 
 function getColorClass(index) {
