@@ -4,17 +4,17 @@
     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm"
     @click.self="$emit('close')"
   >
-    <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden border border-gray-200">
-      <!-- Header with gradient -->
-      <div class="relative bg-gradient-to-r from-primary-brandColor to-teal-600 px-6 py-5">
+    <div class="bg-white rounded-lg shadow-lg max-w-6xl w-full max-h-[90vh] overflow-hidden border border-primary-brandFrame">
+      <!-- Header - Flat purple -->
+      <div class="relative bg-primary-brandColor px-6 py-5">
         <div class="flex items-center justify-between">
           <div>
             <h2 class="text-2xl font-bold text-white">Latency Breakdown</h2>
-            <p class="text-sm text-teal-100 mt-1">Detailed timing analysis for this workflow</p>
+            <p class="text-sm text-white text-opacity-80 mt-1">Detailed timing analysis for this workflow</p>
           </div>
           <button
             @click="$emit('close')"
-            class="text-white hover:text-gray-200 transition-colors p-2 hover:bg-white/10 rounded-lg"
+            class="text-white hover:text-white hover:text-opacity-80 p-2 rounded-md"
           >
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -24,26 +24,26 @@
       </div>
 
       <!-- Content -->
-      <div class="px-6 py-5 overflow-y-auto max-h-[calc(85vh-180px)]">
+      <div class="px-6 py-5 overflow-y-auto max-h-[calc(90vh-180px)]">
         <!-- Total Duration Summary Card -->
-        <div class="mb-6 p-5 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border border-gray-200">
+        <div class="mb-6 p-5 bg-primary-brandGray rounded-md border border-primary-brandFrame">
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-3">
-              <div class="p-3 bg-primary-brandColor rounded-lg">
+              <div class="p-3 bg-primary-brandColor rounded-md">
                 <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <div>
-                <span class="text-xs font-medium text-gray-600">Total Workflow Duration</span>
+                <span class="text-xs font-medium text-primary-brandTextSecondary">Total Workflow Duration</span>
                 <div class="flex items-baseline space-x-2 mt-0.5">
-                  <span class="text-2xl font-bold text-gray-900">{{ workflowDuration.toFixed(2) }}</span>
-                  <span class="text-base font-semibold text-gray-500">seconds</span>
+                  <span class="text-2xl font-bold text-primary-bodyText">{{ workflowDuration.toFixed(2) }}</span>
+                  <span class="text-base font-semibold text-primary-brandTextSecondary">seconds</span>
                 </div>
               </div>
             </div>
             <div class="text-right">
-              <div class="text-xs text-gray-600">Total LLM Calls</div>
+              <div class="text-xs text-primary-brandTextSecondary">Total LLM Calls</div>
               <div class="text-xl font-bold text-primary-brandColor">{{ totalLLMCalls }}</div>
             </div>
           </div>
@@ -71,11 +71,11 @@
                 {{ logMainAgentData(level) }}
                 <button
                   @click="toggleLevel(levelIndex)"
-                  class="w-full px-4 py-3 bg-indigo-50 hover:bg-indigo-100 transition-colors flex items-center justify-between"
+                  class="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 flex items-center justify-between"
                 >
                   <div class="flex items-center space-x-3">
                     <svg
-                      class="w-4 h-4 text-indigo-600 transition-transform"
+                      class="w-4 h-4 text-primary-brandColor"
                       :class="{ 'rotate-90': expandedLevels[levelIndex] }"
                       fill="none"
                       stroke="currentColor"
@@ -83,12 +83,12 @@
                     >
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                     </svg>
-                    <span class="text-sm font-semibold text-indigo-900">Main Agent</span>
-                    <span class="text-xs text-indigo-600">{{ level.num_calls }} {{ level.num_calls === 1 ? 'call' : 'calls' }}</span>
+                    <span class="text-sm font-semibold text-primary-bodyText">Main Agent</span>
+                    <span class="text-xs text-primary-brandTextSecondary">{{ level.num_calls }} {{ level.num_calls === 1 ? 'call' : 'calls' }}</span>
                   </div>
                   <div class="flex items-center space-x-3">
-                    <span class="text-xs font-medium text-indigo-700">{{ calculateLevelDuration(level).toFixed(2) }}s</span>
-                    <span class="text-xs font-medium text-gray-500">Level 1</span>
+                    <span class="text-xs font-medium text-primary-brandColor">{{ calculateLevelDuration(level).toFixed(2) }}s</span>
+                    <span class="text-xs font-medium text-primary-brandTextSecondary">Level 1</span>
                   </div>
                 </button>
 
@@ -101,20 +101,20 @@
                   >
                     <div class="flex items-center justify-between text-sm">
                       <div class="flex items-center space-x-2">
-                        <div class="w-2 h-2 rounded-full bg-indigo-500"></div>
-                        <span class="font-medium text-gray-900">{{ call.model_name }}</span>
-                        <span v-if="call.provider" class="text-xs text-gray-500">({{ call.provider }})</span>
+                        <div class="w-2 h-2 rounded-full bg-primary-brandColor"></div>
+                        <span class="font-medium text-primary-bodyText">{{ call.model_name }}</span>
+                        <span v-if="call.provider" class="text-xs text-primary-brandTextSecondary">({{ call.provider }})</span>
                       </div>
                       <div class="flex items-center space-x-3 text-xs">
-                        <span class="text-gray-600">{{ call.duration.toFixed(2) }}s</span>
+                        <span class="text-primary-brandTextSecondary">{{ call.duration.toFixed(2) }}s</span>
                         <span v-if="call.percentage" class="font-medium text-primary-brandColor">{{ call.percentage.toFixed(1) }}%</span>
                       </div>
                     </div>
                     <!-- Bar rendering with defensive checks -->
-                    <div class="relative h-6 bg-gray-100 rounded-md overflow-hidden">
+                    <div class="relative h-7 bg-gray-100 rounded-md overflow-hidden">
                       <div
                         v-if="call.duration > 0 && call.start_offset !== undefined && call.start_offset !== null"
-                        class="absolute top-0 h-full flex items-center justify-center text-white text-xs font-medium rounded-md bg-indigo-500"
+                        class="absolute top-0 h-full flex items-center justify-center text-white text-xs font-medium rounded-md bg-primary-brandColor"
                         :style="{
                           left: `${Math.max(0, (call.start_offset / workflowDuration) * 100)}%`,
                           width: `${Math.max(0.5, (call.duration / workflowDuration) * 100)}%`
@@ -137,11 +137,11 @@
               <div v-if="level.level === 'subgraph'">
                 <button
                   @click="toggleLevel(levelIndex)"
-                  class="w-full px-4 py-3 bg-teal-50 hover:bg-teal-100 transition-colors flex items-center justify-between"
+                  class="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 flex items-center justify-between"
                 >
                   <div class="flex items-center space-x-3">
                     <svg
-                      class="w-4 h-4 text-teal-600 transition-transform"
+                      class="w-4 h-4 text-primary-700"
                       :class="{ 'rotate-90': expandedLevels[levelIndex] }"
                       fill="none"
                       stroke="currentColor"
@@ -149,12 +149,12 @@
                     >
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                     </svg>
-                    <span class="text-sm font-semibold text-teal-900">{{ level.subgraph_name }}</span>
-                    <span class="text-xs text-teal-600">{{ level.num_llm_calls }} LLM {{ level.num_llm_calls === 1 ? 'call' : 'calls' }}</span>
+                    <span class="text-sm font-semibold text-primary-bodyText">{{ level.subgraph_name }}</span>
+                    <span class="text-xs text-primary-brandTextSecondary">{{ level.num_llm_calls }} LLM {{ level.num_llm_calls === 1 ? 'call' : 'calls' }}</span>
                   </div>
                   <div class="flex items-center space-x-3">
-                    <span class="text-xs font-medium text-teal-700">{{ level.subgraph_duration.toFixed(2) }}s</span>
-                    <span class="text-xs font-medium text-gray-500">Level 2</span>
+                    <span class="text-xs font-medium text-primary-700">{{ level.subgraph_duration.toFixed(2) }}s</span>
+                    <span class="text-xs font-medium text-primary-brandTextSecondary">Level 2</span>
                   </div>
                 </button>
 
@@ -169,11 +169,11 @@
                       <!-- Agent Header -->
                       <button
                         @click="toggleSubgraphAgent(levelIndex, agentIndex)"
-                        class="w-full px-4 py-2 bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
+                        class="w-full px-4 py-2 bg-gray-50 hover:bg-gray-100 flex items-center justify-between"
                       >
                         <div class="flex items-center space-x-3">
                           <svg
-                            class="w-3 h-3 text-gray-500 transition-transform"
+                            class="w-3 h-3 text-primary-brandColor"
                             :class="{ 'rotate-90': expandedAgents[`${levelIndex}-${agentIndex}`] }"
                             fill="none"
                             stroke="currentColor"
@@ -181,11 +181,11 @@
                           >
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                           </svg>
-                          <span class="text-xs font-semibold text-gray-900">{{ agent.agent_name }}</span>
-                          <span class="text-xs text-gray-500">{{ agent.num_calls }} {{ agent.num_calls === 1 ? 'call' : 'calls' }}</span>
+                          <span class="text-xs font-semibold text-primary-bodyText">{{ agent.agent_name }}</span>
+                          <span class="text-xs text-primary-brandTextSecondary">{{ agent.num_calls }} {{ agent.num_calls === 1 ? 'call' : 'calls' }}</span>
                         </div>
                         <div class="flex items-center space-x-3">
-                          <span class="text-xs font-medium text-gray-700">{{ agent.total_duration.toFixed(2) }}s</span>
+                          <span class="text-xs font-medium text-primary-brandColor">{{ agent.total_duration.toFixed(2) }}s</span>
                           <span class="text-xs font-semibold text-primary-brandColor">{{ agent.percentage.toFixed(1) }}%</span>
                         </div>
                       </button>
@@ -200,20 +200,20 @@
                           <div class="flex items-center justify-between text-xs">
                             <div class="flex items-center space-x-2">
                               <div class="w-2 h-2 rounded-full" :style="{ backgroundColor: getAgentColor(agentIndex) }"></div>
-                              <span class="font-medium text-gray-900">{{ call.model_name }}</span>
-                              <span v-if="call.provider" class="text-xs text-gray-500">({{ call.provider }})</span>
+                              <span class="font-medium text-primary-bodyText">{{ call.model_name }}</span>
+                              <span v-if="call.provider" class="text-xs text-primary-brandTextSecondary">({{ call.provider }})</span>
                             </div>
                             <div class="flex items-center space-x-2 text-xs">
-                              <span class="text-gray-600">{{ call.duration.toFixed(2) }}s</span>
+                              <span class="text-primary-brandTextSecondary">{{ call.duration.toFixed(2) }}s</span>
                               <span class="font-medium text-primary-brandColor">{{ call.percentage.toFixed(1) }}%</span>
                             </div>
                           </div>
-                          <div class="relative h-5 bg-gray-100 rounded-md overflow-hidden">
+                          <div class="relative h-7 bg-gray-100 rounded-md overflow-hidden">
                             <div
                               class="absolute top-0 h-full flex items-center justify-center text-white text-xs font-medium rounded-md"
                               :style="{
                                 left: `${(call.start_offset / workflowDuration) * 100}%`,
-                                width: `${(call.duration / workflowDuration) * 100}%`,
+                                width: `${Math.max(0.5, (call.duration / workflowDuration) * 100)}%`,
                                 backgroundColor: getAgentColor(agentIndex)
                               }"
                             >
@@ -245,16 +245,16 @@
             <div
               v-for="(agent, index) in agentBreakdown"
               :key="index"
-              class="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
+              class="border border-gray-200 rounded-lg overflow-hidden"
             >
               <!-- Agent Header -->
               <button
                 @click="toggleAgent(index)"
-                class="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
+                class="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 flex items-center justify-between"
               >
                 <div class="flex items-center space-x-3">
                   <svg
-                    class="w-4 h-4 text-gray-500 transition-transform"
+                    class="w-4 h-4 text-primary-brandColor"
                     :class="{ 'rotate-90': expandedAgents[index] }"
                     fill="none"
                     stroke="currentColor"
@@ -262,11 +262,11 @@
                   >
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                   </svg>
-                  <span class="text-sm font-semibold text-gray-900">{{ agent.agent_name }}</span>
-                  <span class="text-xs text-gray-500">{{ agent.num_calls }} {{ agent.num_calls === 1 ? 'call' : 'calls' }}</span>
+                  <span class="text-sm font-semibold text-primary-bodyText">{{ agent.agent_name }}</span>
+                  <span class="text-xs text-primary-brandTextSecondary">{{ agent.num_calls }} {{ agent.num_calls === 1 ? 'call' : 'calls' }}</span>
                 </div>
                 <div class="flex items-center space-x-3">
-                  <span class="text-xs font-medium text-gray-700">{{ agent.total_duration.toFixed(2) }}s</span>
+                  <span class="text-xs font-medium text-primary-brandColor">{{ agent.total_duration.toFixed(2) }}s</span>
                   <span class="text-xs font-semibold text-primary-brandColor">{{ agent.percentage.toFixed(1) }}%</span>
                 </div>
               </button>
@@ -282,23 +282,23 @@
                   <div class="flex items-center justify-between text-sm">
                     <div class="flex items-center space-x-2">
                       <div class="w-2 h-2 rounded-full" :style="{ backgroundColor: getAgentColor(index) }"></div>
-                      <span class="font-medium text-gray-900">{{ call.model_name }}</span>
-                      <span v-if="call.provider" class="text-xs text-gray-500">({{ call.provider }})</span>
+                      <span class="font-medium text-primary-bodyText">{{ call.model_name }}</span>
+                      <span v-if="call.provider" class="text-xs text-primary-brandTextSecondary">({{ call.provider }})</span>
                     </div>
                     <div class="flex items-center space-x-3 text-xs">
-                      <span class="text-gray-600">{{ call.duration.toFixed(2) }}s</span>
+                      <span class="text-primary-brandTextSecondary">{{ call.duration.toFixed(2) }}s</span>
                       <span class="font-medium text-primary-brandColor">{{ call.percentage.toFixed(1) }}%</span>
                     </div>
                   </div>
 
                   <!-- Waterfall Bar -->
-                  <div class="relative h-6 bg-gray-100 rounded-md overflow-hidden">
+                  <div class="relative h-7 bg-gray-100 rounded-md overflow-hidden">
                     <!-- Duration Bar -->
                     <div
-                      class="absolute top-0 h-full flex items-center justify-center text-white text-xs font-medium rounded-md transition-all"
+                      class="absolute top-0 h-full flex items-center justify-center text-white text-xs font-medium rounded-md"
                       :style="{
                         left: `${(call.start_offset / workflowDuration) * 100}%`,
-                        width: `${(call.duration / workflowDuration) * 100}%`,
+                        width: `${Math.max(0.5, (call.duration / workflowDuration) * 100)}%`,
                         backgroundColor: getAgentColor(index)
                       }"
                     >
@@ -325,29 +325,29 @@
           <div
             v-for="(model, index) in modelBreakdown"
             :key="index"
-            class="space-y-2 p-3 rounded-lg hover:bg-gray-50 transition-colors"
+            class="space-y-2 p-3 rounded-lg hover:bg-gray-50"
           >
             <!-- Model Info -->
             <div class="flex items-center justify-between text-xs">
               <div class="flex-1">
-                <span class="font-medium text-gray-900">{{ model.model_name }}</span>
-                <span v-if="model.provider" class="ml-2 text-xs text-gray-500">({{ model.provider }})</span>
+                <span class="font-medium text-primary-bodyText">{{ model.model_name }}</span>
+                <span v-if="model.provider" class="ml-2 text-xs text-primary-brandTextSecondary">({{ model.provider }})</span>
                 <span v-if="model.agent_name" class="ml-2 text-xs text-primary-brandColor">• {{ model.agent_name }}</span>
               </div>
               <div class="flex items-center space-x-3 text-xs">
-                <span class="text-gray-600">{{ model.duration.toFixed(2) }}s</span>
+                <span class="text-primary-brandTextSecondary">{{ model.duration.toFixed(2) }}s</span>
                 <span class="font-medium text-primary-brandColor">{{ model.percentage.toFixed(1) }}%</span>
               </div>
             </div>
 
             <!-- Waterfall Bar -->
-            <div class="relative h-6 bg-gray-100 rounded-md overflow-hidden">
+            <div class="relative h-7 bg-gray-100 rounded-md overflow-hidden">
               <div
                 class="absolute top-0 h-full flex items-center justify-center text-white text-xs font-medium rounded-md"
                 :class="getColorClass(index)"
                 :style="{
                   left: `${(model.start_offset / workflowDuration) * 100}%`,
-                  width: `${(model.duration / workflowDuration) * 100}%`
+                  width: `${Math.max(0.5, (model.duration / workflowDuration) * 100)}%`
                 }"
               >
                 <span v-if="(model.duration / workflowDuration) > 0.05">
@@ -369,10 +369,10 @@
       </div>
 
       <!-- Footer -->
-      <div class="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-end">
+      <div class="px-6 py-4 border-t border-primary-brandFrame bg-primary-brandGray flex items-center justify-end">
         <button
           @click="$emit('close')"
-          class="px-5 py-2 bg-gradient-to-r from-primary-brandColor to-teal-600 hover:from-teal-600 hover:to-primary-brandColor text-white font-medium rounded-lg transition-all shadow-md hover:shadow-lg"
+          class="px-5 py-2 bg-primary-brandColor hover:bg-primary-700 text-white font-medium rounded-lg"
         >
           Close
         </button>
@@ -472,34 +472,34 @@ function logMainAgentData(level) {
   return ''; // Return empty string so it doesn't render anything
 }
 
-// Agent color palette - more vibrant and distinct
+// Agent color palette - purple-based minimal scheme
 const agentColors = [
-  '#26A69A', // Teal (primary brand color)
-  '#5C6BC0', // Indigo
-  '#EC407A', // Pink
-  '#FF7043', // Deep Orange
-  '#AB47BC', // Purple
-  '#42A5F5', // Blue
-  '#66BB6A', // Green
-  '#FFA726', // Orange
-  '#8D6E63', // Brown
-  '#78909C'  // Blue Grey
+  '#4E226B', // Primary brand purple
+  '#622B86', // Purple 700
+  '#8138b0', // Mid purple
+  '#974FC7', // Light purple
+  '#667085', // Neutral gray (for variety)
+  '#4A1B5F', // Darker purple
+  '#733195', // Medium purple
+  '#9F5FD4', // Lighter purple
+  '#505866', // Dark gray (for variety)
+  '#7D3FA0'  // Purple accent
 ];
 
 function getAgentColor(index) {
   return agentColors[index % agentColors.length];
 }
 
-// Color classes for flat model breakdown
+// Color classes for flat model breakdown - purple-based minimal
 const colorClasses = [
-  'bg-teal-500',
-  'bg-indigo-500',
-  'bg-pink-500',
-  'bg-orange-500',
+  'bg-primary-brandColor',
+  'bg-primary-700',
+  'bg-purple-600',
   'bg-purple-500',
-  'bg-blue-500',
-  'bg-green-500',
-  'bg-amber-500'
+  'bg-gray-600',
+  'bg-purple-800',
+  'bg-purple-700',
+  'bg-gray-500'
 ];
 
 function getColorClass(index) {
@@ -521,27 +521,22 @@ if (showHierarchical.value && props.hierarchicalTiming.levels.length > 0) {
 </script>
 
 <style scoped>
-/* Smooth transitions */
-* {
-  transition: all 0.2s ease;
-}
-
-/* Scrollbar styling */
+/* Scrollbar styling - minimal design */
 ::-webkit-scrollbar {
   width: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 10px;
+  background: #F2F4F7;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #26A69A;
-  border-radius: 10px;
+  background: #4E226B;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #1F897F;
+  background: #622B86;
 }
 </style>
