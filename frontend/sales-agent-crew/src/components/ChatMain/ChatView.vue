@@ -3549,13 +3549,40 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
     }
   }
   
+  // DEBUG: Log every message being evaluated for counting
+  console.log('[LLM_COUNT_DEBUG] Evaluating message for counting:', {
+    runId: runId,
+    has_responseMetadata: !!responseMetadata,
+    model_name: responseMetadata?.model_name,
+    has_additionalKwargs: additionalKwargs !== null && additionalKwargs !== undefined,
+    agent_type: additionalKwargs?.agent_type,
+    additional_kwargs_keys: additionalKwargs ? Object.keys(additionalKwargs) : null,
+    // Try to extract message ID if available
+    message_id_from_response: responseMetadata?.id,
+    current_count: runData.event_count
+  });
+
   // Only increment event count if event has both response_metadata and model_name, since we are counting llm calls
   // IMPORTANT: Exclude timing messages (they don't have model_name anymore, but keep this check for backwards compatibility)
   const isTimingMessage = additionalKwargs?.agent_type === 'deep_research_timing' ||
                          additionalKwargs?.agent_type === 'financial_analysis_end';
 
-  if (responseMetadata && responseMetadata.model_name && !isTimingMessage) {
+  // SUPER PRECISE FIX: Filter out messages that have model_name but NO additional_kwargs
+  // These are duplicate messages that lost their metadata when re-streamed by LangGraph's operator.add
+  // Legitimate LLM calls always have additional_kwargs with agent_type or timing metadata
+  const hasAdditionalKwargs = additionalKwargs !== null && additionalKwargs !== undefined;
+  const isDuplicateWithoutMetadata = !hasAdditionalKwargs;
+
+  if (responseMetadata && responseMetadata.model_name && !isTimingMessage && !isDuplicateWithoutMetadata) {
     runData.event_count++;
+
+    console.log('[LLM_COUNT_DEBUG] ✅ COUNTED THIS MESSAGE:', {
+      runId: runId,
+      new_count: runData.event_count,
+      model_name: responseMetadata.model_name,
+      agent_type: additionalKwargs?.agent_type,
+      was_filtered: false
+    });
 
     // Track model usage
     const modelName = responseMetadata.model_name;
@@ -3579,6 +3606,21 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
         message_id: runId
       });
     }
+  } else {
+    // Log why message was NOT counted
+    console.log('[LLM_COUNT_DEBUG] ❌ FILTERED OUT (not counted):', {
+      runId: runId,
+      reason: !responseMetadata ? 'no responseMetadata' :
+              !responseMetadata.model_name ? 'no model_name' :
+              isTimingMessage ? 'is timing message' :
+              isDuplicateWithoutMetadata ? 'duplicate without metadata (no additional_kwargs)' :
+              'unknown',
+      model_name: responseMetadata?.model_name,
+      agent_type: additionalKwargs?.agent_type,
+      isTimingMessage: isTimingMessage,
+      isDuplicateWithoutMetadata: isDuplicateWithoutMetadata,
+      current_count: runData.event_count
+    });
   }
 }
 

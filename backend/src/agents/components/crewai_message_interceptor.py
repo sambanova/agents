@@ -90,6 +90,7 @@ class CrewAIMessageInterceptor:
                     }
                 },
                 additional_kwargs={
+                    "agent_type": "crewai_llm_call",  # Tag for frontend filtering
                     "timing": timing_entry
                 }
             )
