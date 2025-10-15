@@ -962,6 +962,7 @@ async def compile_final_report(
 
     # Aggregate timing from all captured messages
     agent_timing_map = {}  # agent_name -> {duration, num_calls, model}
+    agent_call_counters = {}  # Track call indices per agent
     model_breakdown = []
 
     for msg in all_messages:
@@ -972,6 +973,11 @@ async def compile_final_report(
             # Extract agent type and model info
             agent_type = msg.additional_kwargs.get('agent_type', 'unknown') if hasattr(msg, 'additional_kwargs') else 'unknown'
             model_name = msg.response_metadata.get('model_name', 'unknown')
+
+            # Track call index for this agent
+            if agent_type not in agent_call_counters:
+                agent_call_counters[agent_type] = 0
+            agent_call_counters[agent_type] += 1
 
             # Aggregate by agent
             if agent_type not in agent_timing_map:
@@ -985,22 +991,32 @@ async def compile_final_report(
             agent_timing_map[agent_type]['total_duration'] += total_latency
             agent_timing_map[agent_type]['num_calls'] += 1
 
-            # Add to model breakdown
+            # Add to model breakdown with call_index
             model_breakdown.append({
                 'agent_name': agent_type,
                 'model_name': model_name,
                 'provider': model_name.split('/')[0] if '/' in model_name else 'sambanova',
                 'duration': total_latency,
                 'start_offset': 0,  # We don't have precise start offsets for deep research
+                'call_index': agent_call_counters[agent_type],
             })
 
-    # Convert agent timing map to list
+    # Calculate total duration for percentage calculations
+    total_duration = sum(m['duration'] for m in model_breakdown)
+
+    # Add percentage to model breakdown entries
+    for entry in model_breakdown:
+        entry['percentage'] = (entry['duration'] / total_duration * 100) if total_duration > 0 else 0
+
+    # Convert agent timing map to list with start_offset and percentage
     agent_breakdown = [
         {
             'agent_name': v['agent_name'],
             'num_calls': v['num_calls'],
             'total_duration': v['total_duration'],
             'model_name': v['model_name'],
+            'start_offset': 0,  # We don't have precise start offsets for deep research
+            'percentage': (v['total_duration'] / total_duration * 100) if total_duration > 0 else 0,
         }
         for v in agent_timing_map.values()
     ]
