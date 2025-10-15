@@ -130,15 +130,17 @@ class CrewAIMessageInterceptor:
         total_duration = max(end_times) - min(start_times) if start_times and end_times else 0
         min_start = min(start_times) if start_times else 0
 
-        # Create model breakdown with agent info
+        # Create model breakdown with agent info and proper start_offset
         model_breakdown = []
         for timing in self.model_timings:
+            # Calculate start_offset relative to earliest call
+            start_offset = timing["start_time"] - min_start
             model_breakdown.append({
                 "model_name": timing["model_name"],
                 "provider": timing["provider"],
                 "agent_name": timing["agent_name"],
                 "duration": timing["duration"],
-                "start_offset": timing["start_time"] - min_start,
+                "start_offset": start_offset,  # Preserves concurrency in waterfall
                 "percentage": (timing["duration"] / total_duration * 100) if total_duration > 0 else 0,
                 "call_index": timing.get("call_index", 1)
             })
@@ -156,11 +158,13 @@ class CrewAIMessageInterceptor:
                     "end_time": timing["end_time"]
                 }
 
+            # Calculate start_offset relative to earliest call for concurrency tracking
+            call_start_offset = timing["start_time"] - min_start
             agent_groups[agent_name]["calls"].append({
                 "model_name": timing["model_name"],
                 "provider": timing["provider"],
                 "duration": timing["duration"],
-                "start_offset": timing["start_time"] - min_start,
+                "start_offset": call_start_offset,  # Preserves concurrency in waterfall
                 "percentage": (timing["duration"] / total_duration * 100) if total_duration > 0 else 0
             })
             agent_groups[agent_name]["total_duration"] += timing["duration"]

@@ -984,61 +984,126 @@ async def compile_final_report(
     agent_timing_map = {}  # agent_name -> {duration, num_calls, model, calls: []}
     agent_call_counters = {}  # Track call indices per agent
     model_breakdown = []
-    cumulative_offset = 0  # Track cumulative time for waterfall start_offset
 
+    # Track actual message timestamps to capture concurrency
+    earliest_timestamp = None
+    messages_with_timestamps = []
+
+    # First pass: collect all messages with timestamps
     for msg in all_messages:
         if hasattr(msg, 'response_metadata') and msg.response_metadata:
             usage = msg.response_metadata.get('usage', {})
             total_latency = usage.get('total_latency', 0)
 
-            # Extract agent type and model info
-            agent_type = msg.additional_kwargs.get('agent_type', 'unknown') if hasattr(msg, 'additional_kwargs') else 'unknown'
-            model_name = msg.response_metadata.get('model_name', 'unknown')
+            # Try to get timestamp from message
+            # Check additional_kwargs for timing data from MessageInterceptor
+            timestamp = None
+            if hasattr(msg, 'additional_kwargs') and msg.additional_kwargs:
+                timing = msg.additional_kwargs.get('timing', {})
+                if timing and 'end_time' in timing:
+                    # Use end_time from interceptor and calculate start from duration
+                    timestamp = timing['end_time'] - total_latency
 
-            # Track call index for this agent
-            if agent_type not in agent_call_counters:
-                agent_call_counters[agent_type] = 0
-            agent_call_counters[agent_type] += 1
+            # If no timestamp from interceptor, estimate based on workflow progression
+            # This is less accurate but better than nothing
+            if timestamp is None:
+                timestamp = None  # Will use position-based offset as fallback
 
-            # Aggregate by agent
-            if agent_type not in agent_timing_map:
-                agent_timing_map[agent_type] = {
-                    'agent_name': agent_type,
-                    'total_duration': 0,
-                    'num_calls': 0,
-                    'model_name': model_name,
-                    'calls': [],  # Store individual calls for this agent
-                    'start_time': cumulative_offset,  # Track when this agent first appeared
-                }
-
-            agent_timing_map[agent_type]['total_duration'] += total_latency
-            agent_timing_map[agent_type]['num_calls'] += 1
-
-            # Create individual call entry for this agent's calls array
-            # Use cumulative offset for waterfall visualization
-            call_entry = {
-                'model_name': model_name,
-                'provider': model_name.split('/')[0] if '/' in model_name else 'sambanova',
+            messages_with_timestamps.append({
+                'msg': msg,
+                'timestamp': timestamp,
                 'duration': total_latency,
-                'start_offset': cumulative_offset,  # Use cumulative time for proper waterfall
-                'call_index': agent_call_counters[agent_type],
-            }
-
-            # Add to agent's calls array
-            agent_timing_map[agent_type]['calls'].append(call_entry)
-
-            # Add to model breakdown with call_index and proper start_offset
-            model_breakdown.append({
-                'agent_name': agent_type,
-                'model_name': model_name,
-                'provider': model_name.split('/')[0] if '/' in model_name else 'sambanova',
-                'duration': total_latency,
-                'start_offset': cumulative_offset,  # Use cumulative time for proper waterfall
-                'call_index': agent_call_counters[agent_type],
             })
 
-            # Increment cumulative offset for next call
-            cumulative_offset += total_latency
+            if timestamp is not None and (earliest_timestamp is None or timestamp < earliest_timestamp):
+                earliest_timestamp = timestamp
+
+    # If we have no timestamps, fall back to workflow start time
+    if earliest_timestamp is None:
+        earliest_timestamp = workflow_start_time
+        logger.warning(
+            "No message timestamps found, using workflow start time as baseline",
+            workflow_start_time=workflow_start_time,
+        )
+    else:
+        logger.info(
+            "Found message timestamps for concurrency tracking",
+            earliest_timestamp=earliest_timestamp,
+            num_messages_with_timestamps=sum(1 for m in messages_with_timestamps if m['timestamp'] is not None),
+            total_messages=len(messages_with_timestamps),
+        )
+
+    # Second pass: aggregate with proper start_offset based on timestamps
+    for i, msg_data in enumerate(messages_with_timestamps):
+        msg = msg_data['msg']
+        timestamp = msg_data['timestamp']
+        total_latency = msg_data['duration']
+
+        # Calculate start_offset relative to earliest message
+        if timestamp is not None:
+            start_offset = timestamp - earliest_timestamp
+        else:
+            # Fallback: use position-based estimate (assumes sequential execution)
+            # This is used when MessageInterceptor timing is not available
+            if i == 0:
+                start_offset = 0
+            else:
+                # Use previous message's end time
+                prev_start = messages_with_timestamps[i-1].get('calculated_start', 0)
+                prev_duration = messages_with_timestamps[i-1]['duration']
+                start_offset = prev_start + prev_duration
+
+        # Store calculated start for next iteration
+        msg_data['calculated_start'] = start_offset
+
+        usage = msg.response_metadata.get('usage', {})
+        agent_type = msg.additional_kwargs.get('agent_type', 'unknown') if hasattr(msg, 'additional_kwargs') else 'unknown'
+        model_name = msg.response_metadata.get('model_name', 'unknown')
+
+        # Track call index for this agent
+        if agent_type not in agent_call_counters:
+            agent_call_counters[agent_type] = 0
+        agent_call_counters[agent_type] += 1
+
+        # Aggregate by agent
+        if agent_type not in agent_timing_map:
+            agent_timing_map[agent_type] = {
+                'agent_name': agent_type,
+                'total_duration': 0,
+                'num_calls': 0,
+                'model_name': model_name,
+                'calls': [],  # Store individual calls for this agent
+                'start_time': start_offset,  # Track when this agent first appeared
+            }
+
+        agent_timing_map[agent_type]['total_duration'] += total_latency
+        agent_timing_map[agent_type]['num_calls'] += 1
+
+        # Update agent's start_time if this call started earlier
+        if start_offset < agent_timing_map[agent_type]['start_time']:
+            agent_timing_map[agent_type]['start_time'] = start_offset
+
+        # Create individual call entry with actual timestamp-based offset
+        call_entry = {
+            'model_name': model_name,
+            'provider': model_name.split('/')[0] if '/' in model_name else 'sambanova',
+            'duration': total_latency,
+            'start_offset': start_offset,  # Use actual timestamp for concurrency visualization
+            'call_index': agent_call_counters[agent_type],
+        }
+
+        # Add to agent's calls array
+        agent_timing_map[agent_type]['calls'].append(call_entry)
+
+        # Add to model breakdown with actual start_offset
+        model_breakdown.append({
+            'agent_name': agent_type,
+            'model_name': model_name,
+            'provider': model_name.split('/')[0] if '/' in model_name else 'sambanova',
+            'duration': total_latency,
+            'start_offset': start_offset,  # Use actual timestamp for concurrency visualization
+            'call_index': agent_call_counters[agent_type],
+        })
 
     # Calculate total duration for percentage calculations
     total_duration = sum(m['duration'] for m in model_breakdown)

@@ -135,11 +135,21 @@ class WorkflowTimingAggregator:
 
         levels = []
 
+        # Calculate total duration for percentage calculations
+        total_duration = workflow_duration if workflow_duration > 0 else 1
+
         # Add main agent level if there are calls
         if self.main_agent_calls:
+            # Add percentage to each main agent call
+            main_agent_calls_with_percentage = []
+            for call in self.main_agent_calls:
+                call_with_pct = dict(call)
+                call_with_pct['percentage'] = (call['duration'] / total_duration * 100) if total_duration > 0 else 0
+                main_agent_calls_with_percentage.append(call_with_pct)
+
             levels.append({
                 "level": "main_agent",
-                "llm_calls": self.main_agent_calls,
+                "llm_calls": main_agent_calls_with_percentage,
                 "num_calls": len(self.main_agent_calls),
             })
 
