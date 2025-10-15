@@ -924,15 +924,35 @@ async def compile_final_report(
     )
 
     # Collect all captured messages from state
-    all_messages = state.get("messages", [])
+    all_messages_raw = state.get("messages", [])
 
-    # DEBUG: Check for potential message duplication
+    # DEBUG: Check for potential message duplication BEFORE deduplication
     logger.info(
-        "[DUPLICATION_DEBUG] Checking messages for timing aggregation",
-        total_messages=len(all_messages),
-        message_types=[type(msg).__name__ for msg in all_messages],
-        message_ids=[getattr(msg, 'id', 'NO_ID') for msg in all_messages],
-        num_unique_ids=len(set(getattr(msg, 'id', f'no_id_{i}') for i, msg in enumerate(all_messages))),
+        "[DUPLICATION_DEBUG] Messages BEFORE deduplication",
+        total_messages=len(all_messages_raw),
+        message_types=[type(msg).__name__ for msg in all_messages_raw],
+        message_ids=[getattr(msg, 'id', 'NO_ID') for msg in all_messages_raw],
+        num_unique_ids=len(set(getattr(msg, 'id', f'no_id_{i}') for i, msg in enumerate(all_messages_raw))),
+    )
+
+    # CRITICAL FIX: Deduplicate messages by ID before aggregating timing
+    # This fixes the issue where parallel Send() branches cause message duplication
+    seen_message_ids = set()
+    all_messages = []
+    for msg in all_messages_raw:
+        msg_id = getattr(msg, 'id', None)
+        if msg_id and msg_id not in seen_message_ids:
+            seen_message_ids.add(msg_id)
+            all_messages.append(msg)
+        elif not msg_id:
+            # Keep messages without IDs
+            all_messages.append(msg)
+
+    logger.info(
+        "[DUPLICATION_DEBUG] Messages AFTER deduplication",
+        total_messages_before=len(all_messages_raw),
+        total_messages_after=len(all_messages),
+        duplicates_removed=len(all_messages_raw) - len(all_messages),
     )
 
     # Create timing aggregator with correct workflow start time
@@ -961,7 +981,7 @@ async def compile_final_report(
         )
 
     # Aggregate timing from all captured messages
-    agent_timing_map = {}  # agent_name -> {duration, num_calls, model}
+    agent_timing_map = {}  # agent_name -> {duration, num_calls, model, calls: []}
     agent_call_counters = {}  # Track call indices per agent
     model_breakdown = []
 
@@ -986,10 +1006,23 @@ async def compile_final_report(
                     'total_duration': 0,
                     'num_calls': 0,
                     'model_name': model_name,
+                    'calls': [],  # Store individual calls for this agent
                 }
 
             agent_timing_map[agent_type]['total_duration'] += total_latency
             agent_timing_map[agent_type]['num_calls'] += 1
+
+            # Create individual call entry for this agent's calls array
+            call_entry = {
+                'model_name': model_name,
+                'provider': model_name.split('/')[0] if '/' in model_name else 'sambanova',
+                'duration': total_latency,
+                'start_offset': 0,  # We don't have precise start offsets for deep research
+                'call_index': agent_call_counters[agent_type],
+            }
+
+            # Add to agent's calls array
+            agent_timing_map[agent_type]['calls'].append(call_entry)
 
             # Add to model breakdown with call_index
             model_breakdown.append({
@@ -1008,7 +1041,12 @@ async def compile_final_report(
     for entry in model_breakdown:
         entry['percentage'] = (entry['duration'] / total_duration * 100) if total_duration > 0 else 0
 
-    # Convert agent timing map to list with start_offset and percentage
+    # Add percentage to each call in agent_timing_map
+    for agent_data in agent_timing_map.values():
+        for call in agent_data['calls']:
+            call['percentage'] = (call['duration'] / total_duration * 100) if total_duration > 0 else 0
+
+    # Convert agent timing map to list with start_offset, percentage, and calls array
     agent_breakdown = [
         {
             'agent_name': v['agent_name'],
@@ -1017,6 +1055,7 @@ async def compile_final_report(
             'model_name': v['model_name'],
             'start_offset': 0,  # We don't have precise start offsets for deep research
             'percentage': (v['total_duration'] / total_duration * 100) if total_duration > 0 else 0,
+            'calls': v['calls'],  # Include individual calls array for frontend drill-down
         }
         for v in agent_timing_map.values()
     ]
