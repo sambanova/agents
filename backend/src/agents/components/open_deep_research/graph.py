@@ -2,6 +2,7 @@ import functools
 import json
 import re
 import time
+import uuid
 from typing import Any, List, Literal, Optional, Tuple
 
 import langsmith as ls
@@ -44,7 +45,7 @@ from agents.utils.custom_sambanova import CustomChatSambaNovaCloud
 from agents.utils.logging_utils import setup_logging_context
 from agents.utils.message_interceptor import MessageInterceptor
 from langchain.output_parsers import OutputFixingParser, PydanticOutputParser
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import BaseOutputParser
 from langchain_core.runnables import RunnableConfig, RunnableLambda
 from langchain_fireworks import ChatFireworks
@@ -69,12 +70,6 @@ class CleanContentParser(BaseOutputParser):
         Parse the output and remove reasoning artifacts wrapped in <step> and <count> tags.
         When chained after an AIMessage, this extracts just the .content field.
         """
-        # Log the raw content before filtering
-        logger.info(
-            "[CONTENT_FILTER] Raw section content (first 500 chars)",
-            raw_preview=text[:500] if len(text) > 500 else text
-        )
-
         # Remove <step>...</step> blocks (multiline)
         # Pattern: **<step>** or **<step> ** ... </step> or </step>**
         # More flexible to handle variations from different reasoning models
@@ -90,45 +85,23 @@ class CleanContentParser(BaseOutputParser):
         # Remove standalone number lines (artifacts left over)
         lines = text.split('\n')
         cleaned_lines = []
-        filtered_count = 0
 
         for line in lines:
             stripped = line.strip()
 
             # Skip lines that are just numbers (including decimals like 0.9, 0.8)
             if stripped and re.match(r'^\d+\.?\d*$', stripped):
-                logger.info(
-                    "[CONTENT_FILTER] Filtered decimal line",
-                    original_line=repr(line),
-                    stripped_line=repr(stripped)
-                )
-                filtered_count += 1
                 continue
 
             # Skip leftover "Sources" headers without content
             # These should have been extracted already, so any remaining are artifacts
             lower_stripped = stripped.lower()
             if lower_stripped in ['sources', 'sources:', '### sources', '## sources']:
-                logger.info(
-                    "[CONTENT_FILTER] Filtered Sources header",
-                    original_line=repr(line)
-                )
-                filtered_count += 1
                 continue
 
             cleaned_lines.append(line)
 
         cleaned_text = '\n'.join(cleaned_lines).strip()
-
-        # Log filtering results
-        logger.info(
-            "[CONTENT_FILTER] Cleaned content (first 500 chars)",
-            cleaned_preview=cleaned_text[:500] if len(cleaned_text) > 500 else cleaned_text,
-            original_length=len(text),
-            cleaned_length=len(cleaned_text),
-            filtered_number_lines=filtered_count,
-            reduction_percent=round((1 - len(cleaned_text)/len(text)) * 100, 1) if len(text) > 0 else 0
-        )
 
         return cleaned_text
 
@@ -269,6 +242,9 @@ def get_session_id_from_config(config: Configuration) -> Optional[str]:
 async def generate_report_plan(
     writer_model, planner_model, summary_model, state: ReportState, config: RunnableConfig
 ):
+    # Capture workflow start time at the very beginning
+    workflow_start_time = state.get("workflow_start_time") or time.time()
+
     configurable = Configuration.from_runnable_config(config)
     session_id = get_session_id_from_config(configurable)
     setup_logging_context(config, node="generate_report_plan", session_id=session_id)
@@ -395,7 +371,11 @@ async def generate_report_plan(
         m.additional_kwargs["agent_type"] = "deep_research_search_sections"
         captured_messages.append(m)
 
-    return {"sections": sections, "messages": captured_messages}
+    return {
+        "sections": sections,
+        "messages": captured_messages,
+        "workflow_start_time": workflow_start_time,
+    }
 
 
 async def human_feedback(
@@ -816,9 +796,14 @@ async def compile_final_report(
     session_id = get_session_id_from_config(configurable)
     setup_logging_context(config, node="compile_final_report", session_id=session_id)
 
-    # Track workflow timing
+    # Track workflow timing - get from state if not passed as parameter
     if workflow_start_time is None:
-        workflow_start_time = time.time()
+        workflow_start_time = state.get("workflow_start_time") or time.time()
+        logger.info(
+            "Using workflow_start_time from state",
+            workflow_start_time=workflow_start_time,
+            from_state=state.get("workflow_start_time") is not None,
+        )
 
     sections = state["sections"]
     logger.info("Compiling final report", num_sections=len(sections))
@@ -941,6 +926,15 @@ async def compile_final_report(
     # Collect all captured messages from state
     all_messages = state.get("messages", [])
 
+    # DEBUG: Check for potential message duplication
+    logger.info(
+        "[DUPLICATION_DEBUG] Checking messages for timing aggregation",
+        total_messages=len(all_messages),
+        message_types=[type(msg).__name__ for msg in all_messages],
+        message_ids=[getattr(msg, 'id', 'NO_ID') for msg in all_messages],
+        num_unique_ids=len(set(getattr(msg, 'id', f'no_id_{i}') for i, msg in enumerate(all_messages))),
+    )
+
     # Create timing aggregator with correct workflow start time
     timing_aggregator = WorkflowTimingAggregator()
     timing_aggregator.workflow_start_time = workflow_start_time
@@ -1018,6 +1012,14 @@ async def compile_final_report(
         num_model_calls=len(model_breakdown),
     )
 
+    # DEBUG: Log breakdown details to identify duplication
+    logger.info(
+        "[DUPLICATION_DEBUG] Message aggregation complete",
+        messages_with_timing=sum(1 for msg in all_messages if hasattr(msg, 'response_metadata') and msg.response_metadata and msg.response_metadata.get('usage', {}).get('total_latency')),
+        model_breakdown_count=len(model_breakdown),
+        agent_breakdown_summary={agent['agent_name']: agent['num_calls'] for agent in agent_breakdown},
+    )
+
     # Add subgraph timing
     if agent_breakdown or model_breakdown:
         subgraph_start_offset = timing_aggregator.main_agent_calls[0]['duration'] if timing_aggregator.main_agent_calls else 0
@@ -1042,10 +1044,44 @@ async def compile_final_report(
         duration_match=abs(hierarchical_timing["workflow_duration"] - workflow_duration) < 0.1,
     )
 
+    # CRITICAL DEBUG: Log the exact contents before returning to verify it's non-empty
+    logger.info(
+        "[COMPILE_DEBUG] About to return state with workflow_timing",
+        workflow_timing_keys=list(hierarchical_timing.keys()) if hierarchical_timing else "EMPTY",
+        workflow_timing_is_dict=isinstance(hierarchical_timing, dict),
+        workflow_timing_bool=bool(hierarchical_timing),
+        total_llm_calls=hierarchical_timing.get("total_llm_calls", "MISSING") if hierarchical_timing else "EMPTY_DICT",
+    )
+
+    # Create timing message to carry workflow_timing to frontend (matches financial analysis pattern)
+    # This message will be added to state["messages"] and streamed to frontend with timing data
+    timing_message = AIMessage(
+        content="",  # Empty content, just carrying timing metadata
+        id=str(uuid.uuid4()),
+        additional_kwargs={
+            "agent_type": "deep_research_timing",
+            "workflow_timing": hierarchical_timing,
+        },
+        response_metadata={
+            "model_name": "deep_research",
+            "usage": {
+                "total_latency": workflow_duration
+            },
+        },
+    )
+
+    logger.info(
+        "[COMPILE_DEBUG] Created timing message for deep research",
+        has_workflow_timing="workflow_timing" in timing_message.additional_kwargs,
+        workflow_timing_is_empty=not bool(timing_message.additional_kwargs.get("workflow_timing", {})),
+        total_llm_calls=hierarchical_timing.get("total_llm_calls", 0),
+    )
+
     return {
         "final_report": final_text,
         "pdf_report": pdf_report_file_id,
         "workflow_timing": hierarchical_timing,
+        "messages": [timing_message],  # Add timing message to state messages
     }
 
 

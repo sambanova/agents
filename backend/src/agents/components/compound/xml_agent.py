@@ -723,6 +723,10 @@ Make sure to include both opening and closing tags for both tool and tool_input.
         """
         Aggregate workflow timing from all messages and attach to additional_kwargs.
         This is called from should_continue when routing to "end".
+        Collects timing from:
+        1. Main agent LLM calls (XML agent with DeepSeek)
+        2. Subgraph executions (Deep Research, Data Science, Code Execution, Financial Analysis)
+
         Returns the workflow_duration to update response_metadata.
         """
         # Capture workflow end time IMMEDIATELY
@@ -743,14 +747,32 @@ Make sure to include both opening and closing tags for both tool and tool_input.
         # Start from message AFTER last HumanMessage
         start_index = last_human_index + 1 if last_human_index >= 0 else 0
 
+        # Extract main agent timing and subgraph timing from messages
+        subgraph_timings = []  # List of workflow_timing dicts from subgraphs
+
         for msg in messages[start_index:]:
             if hasattr(msg, 'additional_kwargs') and msg.additional_kwargs:
+                # Extract main agent timing
                 if 'main_agent_timing' in msg.additional_kwargs:
                     timing = msg.additional_kwargs['main_agent_timing']
                     main_agent_calls.append(timing)
                     # Find the earliest agent call start time
                     if timing.get('start_time') and timing['start_time'] < workflow_start_time:
                         workflow_start_time = timing['start_time']
+
+                # Extract subgraph workflow_timing from messages with agent_type ending in '_end'
+                # These are: deep_research_end, data_science_end, financial_analysis_end, etc.
+                agent_type = msg.additional_kwargs.get('agent_type', '')
+                if agent_type.endswith('_end') and 'workflow_timing' in msg.additional_kwargs:
+                    subgraph_timing = msg.additional_kwargs['workflow_timing']
+                    if subgraph_timing and isinstance(subgraph_timing, dict):
+                        subgraph_timings.append(subgraph_timing)
+                        logger.debug(
+                            "Found subgraph timing in message",
+                            agent_type=agent_type,
+                            subgraph_name=subgraph_timing.get('levels', [{}])[0].get('subgraph_name') if len(subgraph_timing.get('levels', [])) > 0 else 'unknown',
+                            num_levels=len(subgraph_timing.get('levels', [])),
+                        )
 
         # If no agent calls found, skip timing aggregation
         if not main_agent_calls:
@@ -759,7 +781,8 @@ Make sure to include both opening and closing tags for both tool and tool_input.
 
         logger.debug(
             "Found current workflow timing",
-            num_calls=len(main_agent_calls),
+            num_main_agent_calls=len(main_agent_calls),
+            num_subgraph_timings=len(subgraph_timings),
             last_human_index=last_human_index,
             start_index=start_index,
             total_messages=len(messages),
@@ -780,6 +803,46 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 start_time=call.get('start_time', workflow_start_time)
             )
 
+        # Merge subgraph timings into the aggregator
+        # Each subgraph timing already has a hierarchical structure with levels
+        for subgraph_timing in subgraph_timings:
+            # Subgraph timing structure has 'levels' array
+            # We need to extract the subgraph level and add it to our aggregator
+            levels = subgraph_timing.get('levels', [])
+
+            for level in levels:
+                # Skip main_agent level from subgraph (we already have it)
+                if level.get('level') == 'main_agent':
+                    continue
+
+                # Add subgraph level to aggregator
+                if level.get('level') == 'subgraph':
+                    subgraph_name = level.get('subgraph_name', 'Unknown Subgraph')
+                    subgraph_duration = level.get('subgraph_duration', 0)
+                    subgraph_start_offset = level.get('subgraph_start_offset', 0)
+
+                    # Calculate subgraph_start_time from offset
+                    # The offset in the subgraph timing is relative to the subgraph's workflow start
+                    # We need to calculate the absolute start time
+                    subgraph_start_time = workflow_start_time + subgraph_start_offset
+
+                    # Add the subgraph timing to aggregator
+                    aggregator.add_subgraph_timing(
+                        subgraph_name=subgraph_name,
+                        subgraph_duration=subgraph_duration,
+                        subgraph_start_time=subgraph_start_time,
+                        agent_breakdown=level.get('agent_breakdown', []),
+                        model_breakdown=level.get('model_breakdown', []),
+                    )
+
+                    logger.debug(
+                        "Added subgraph timing to aggregator",
+                        subgraph_name=subgraph_name,
+                        duration=round(subgraph_duration, 3),
+                        num_agents=len(level.get('agent_breakdown', [])),
+                        num_llm_calls=len(level.get('model_breakdown', [])),
+                    )
+
         # Get hierarchical timing structure with explicit end time
         hierarchical_timing = aggregator.get_hierarchical_timing(workflow_end_time=workflow_end_time)
 
@@ -791,6 +854,8 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             total_llm_calls=hierarchical_timing.get('total_llm_calls', 0),
             workflow_duration=round(hierarchical_timing.get('workflow_duration', 0), 3),
             num_levels=len(hierarchical_timing.get('levels', [])),
+            num_main_agent_calls=len(main_agent_calls),
+            num_subgraphs=len(subgraph_timings),
         )
 
         return hierarchical_timing.get('workflow_duration', 0)

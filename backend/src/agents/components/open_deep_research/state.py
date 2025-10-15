@@ -67,6 +67,7 @@ class ReportState(TypedDict):
     messages: Annotated[
         List[BaseMessage], operator.add
     ]  # List of messages from the agent
+    workflow_start_time: Optional[float]  # Workflow start timestamp for accurate timing
 
 
 class SectionState(TypedDict):

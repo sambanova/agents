@@ -21,6 +21,59 @@ from langgraph.graph import END
 logger = structlog.get_logger(__name__)
 
 
+def _create_deep_research_output(state_output):
+    """
+    Explicit state output mapper for deep research to ensure workflow_timing is properly attached.
+    This avoids the (logger.info or ...) pattern which can be unreliable.
+    """
+    # Debug: Log what we received from the state
+    logger.info(
+        "[STATE_OUTPUT_DEBUG] Deep research state output mapper called",
+        state_keys=list(state_output.keys()) if isinstance(state_output, dict) else "NOT_A_DICT",
+        has_workflow_timing="workflow_timing" in state_output if isinstance(state_output, dict) else False,
+        workflow_timing_is_empty=not bool(state_output.get("workflow_timing", {})) if isinstance(state_output, dict) else True,
+        final_report_length=len(state_output.get("final_report", "")) if isinstance(state_output, dict) else 0,
+    )
+
+    # Extract workflow_timing - ensure it's not an empty dict
+    workflow_timing = state_output.get("workflow_timing", {})
+    if workflow_timing:
+        logger.info(
+            "[STATE_OUTPUT_DEBUG] workflow_timing found in state",
+            num_llm_calls=workflow_timing.get("total_llm_calls", 0),
+            workflow_duration=workflow_timing.get("workflow_duration", 0),
+            num_levels=len(workflow_timing.get("levels", [])),
+        )
+    else:
+        logger.warning("[STATE_OUTPUT_DEBUG] workflow_timing is EMPTY or missing from state!")
+
+    # Create AIMessage with workflow_timing in additional_kwargs (like financial analysis)
+    message = AIMessage(
+        content=state_output["final_report"],
+        name="DeepResearch",
+        response_metadata={
+            "model_name": "deep_research",
+            "usage": {
+                "total_latency": workflow_timing.get("workflow_duration", 0)
+            },
+        },
+        additional_kwargs={
+            "agent_type": "deep_research_end",
+            "pdf_report": state_output.get("pdf_report", ""),
+            "workflow_timing": workflow_timing,  # Store timing in additional_kwargs like financial analysis
+        },
+    )
+
+    # Debug: Verify the message has workflow_timing before returning
+    logger.info(
+        "[STATE_OUTPUT_DEBUG] Created AIMessage for deep research",
+        has_workflow_timing="workflow_timing" in message.additional_kwargs,
+        workflow_timing_in_message_is_empty=not bool(message.additional_kwargs.get("workflow_timing", {})),
+    )
+
+    return message
+
+
 def create_all_subgraphs(
     user_id: str,
     api_key: str,
@@ -84,21 +137,7 @@ def create_all_subgraphs(
             api_keys=admin_api_keys,
         ),
         "state_input_mapper": lambda x: {"topic": x},
-        "state_output_mapper": lambda x: AIMessage(
-            content=x["final_report"],
-            name="DeepResearch",
-            response_metadata={
-                "model_name": "deep_research",
-                "usage": {
-                    "total_latency": x.get("workflow_timing", {}).get("workflow_duration", 0)
-                }
-            },
-            additional_kwargs={
-                "agent_type": "deep_research_end",
-                "pdf_report": x.get("pdf_report", ""),
-                "workflow_timing": x.get("workflow_timing", {}),
-            },
-        ),
+        "state_output_mapper": lambda x: _create_deep_research_output(x),
     }
 
     # 3. DaytonaCodeSandbox Subgraph (Coding Agent)
@@ -135,7 +174,7 @@ def create_all_subgraphs(
                 "agent_type": "tool_response",
                 "timestamp": datetime.now().isoformat(),
                 "files": x["files"],
-                "workflow_timing": x.get("workflow_timing", {}),
+                "workflow_timing": x.get("workflow_timing", {}),  # Store timing in additional_kwargs like financial analysis
             },
             result={"usage": {"total_latency": x.get("workflow_timing", {}).get("workflow_duration", 0)}},
         ),
@@ -178,7 +217,7 @@ def create_all_subgraphs(
                     "additional_kwargs": {
                         **(x["internal_messages"][-1].additional_kwargs or {}),
                         "agent_type": "data_science_end",
-                        "workflow_timing": x.get("workflow_timing", {}),
+                        "workflow_timing": x.get("workflow_timing", {}),  # Store timing in additional_kwargs like financial analysis
                     }
                 }
             ),

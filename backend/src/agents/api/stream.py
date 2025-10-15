@@ -133,13 +133,21 @@ async def astream_state_websocket(
                 converted_msgs = convert_messages_to_dict(new_messages)
                 for msg in converted_msgs:
                     # DEBUG: Log what we're sending via WebSocket
+                    # Check both additional_kwargs (legacy) and response_metadata (new location) for workflow_timing
+                    workflow_timing = (
+                        msg.get("response_metadata", {}).get("workflow_timing") or
+                        msg.get("additional_kwargs", {}).get("workflow_timing")
+                    )
                     logger.info(
                         "DEBUG: Sending agent_completion via WebSocket",
                         msg_type=msg.get("type"),
                         has_additional_kwargs="additional_kwargs" in msg,
                         additional_kwargs_keys=list(msg.get("additional_kwargs", {}).keys()) if "additional_kwargs" in msg else None,
-                        has_workflow_timing=msg.get("additional_kwargs", {}).get("workflow_timing") is not None,
-                        workflow_timing_preview=str(msg.get("additional_kwargs", {}).get("workflow_timing", {}))[:200] if msg.get("additional_kwargs", {}).get("workflow_timing") else None,
+                        has_response_metadata="response_metadata" in msg,
+                        response_metadata_keys=list(msg.get("response_metadata", {}).keys()) if "response_metadata" in msg else None,
+                        has_workflow_timing=workflow_timing is not None,
+                        workflow_timing_preview=str(workflow_timing)[:200] if workflow_timing else None,
+                        workflow_timing_location="response_metadata" if msg.get("response_metadata", {}).get("workflow_timing") else ("additional_kwargs" if msg.get("additional_kwargs", {}).get("workflow_timing") else "none"),
                     )
 
                     await websocket_manager.send_message(
@@ -265,14 +273,20 @@ def convert_messages_to_dict(output_list):
                 msg_dict = item.dict()
 
             # DEBUG: Log what model_dump returns
+            # Check both additional_kwargs (legacy) and response_metadata (new location) for workflow_timing
+            workflow_timing = (
+                msg_dict.get("response_metadata", {}).get("workflow_timing") or
+                msg_dict.get("additional_kwargs", {}).get("workflow_timing")
+            )
             logger.info(
                 "DEBUG: convert_messages_to_dict model_dump",
                 msg_type=item.__class__.__name__,
                 has_additional_kwargs="additional_kwargs" in msg_dict,
                 additional_kwargs_keys=list(msg_dict.get("additional_kwargs", {}).keys()) if "additional_kwargs" in msg_dict else None,
-                has_workflow_timing=msg_dict.get("additional_kwargs", {}).get("workflow_timing") is not None,
                 has_response_metadata="response_metadata" in msg_dict,
                 response_metadata_keys=list(msg_dict.get("response_metadata", {}).keys()) if "response_metadata" in msg_dict else None,
+                has_workflow_timing=workflow_timing is not None,
+                workflow_timing_location="response_metadata" if msg_dict.get("response_metadata", {}).get("workflow_timing") else ("additional_kwargs" if msg_dict.get("additional_kwargs", {}).get("workflow_timing") else "none"),
             )
 
             # Add the message type

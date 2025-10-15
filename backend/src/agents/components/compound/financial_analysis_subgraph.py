@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import langsmith as ls
 import structlog
 from agents.components.compound.data_types import LiberalAIMessage
+from agents.components.compound.timing_aggregator import WorkflowTimingAggregator
 from agents.components.compound.util import extract_api_key
 from agents.components.crewai_message_interceptor import CrewAIMessageInterceptor
 from agents.components.financial_analysis.financial_analysis_crew import (
@@ -119,22 +120,26 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                 ],
             )
 
-            # Collect main agent timings from config metadata
-            main_agent_calls = []
+            # Create timing aggregator
+            timing_aggregator = WorkflowTimingAggregator()
+            timing_aggregator.workflow_start_time = workflow_start_time
+
+            # Extract main agent timing from config metadata (if available)
             if config and "metadata" in config and "main_agent_timing" in config["metadata"]:
                 main_timing = config["metadata"]["main_agent_timing"]
                 logger.info(
                     "Retrieved main agent timing from config metadata",
                     main_timing=main_timing,
                 )
-                main_agent_calls.append({
-                    "node_name": main_timing.get("node_name", "agent_node"),
-                    "agent_name": main_timing.get("agent_name", "XML Agent"),
-                    "model_name": main_timing.get("model_name", "unknown"),
-                    "provider": main_timing.get("model_name", "").split("/")[0] if "/" in main_timing.get("model_name", "") else "sambanova",
-                    "duration": main_timing.get("duration", 0),
-                    "start_offset": 0,  # Main agent always starts at 0
-                })
+
+                timing_aggregator.add_main_agent_call(
+                    node_name=main_timing.get("node_name", "agent_node"),
+                    agent_name=main_timing.get("agent_name", "XML Agent"),
+                    model_name=main_timing.get("model_name", "unknown"),
+                    provider=main_timing.get("model_name", "").split("/")[0] if "/" in main_timing.get("model_name", "") else "sambanova",
+                    duration=main_timing.get("duration", 0),
+                    start_time=main_timing.get("start_time", workflow_start_time),
+                )
             else:
                 logger.warning(
                     "Main agent timing not found in config metadata",
@@ -143,48 +148,28 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                     metadata_keys=list(config["metadata"].keys()) if config and "metadata" in config else None,
                 )
 
-            logger.info(
-                "Collected main agent timings",
-                num_main_agent_calls=len(main_agent_calls),
-            )
+            # Aggregate subgraph timing from interceptor
+            agent_breakdown = timing_summary.get("agent_breakdown", [])
+            model_breakdown = timing_summary.get("model_breakdown", [])
 
-            # Create hierarchical timing structure
-            # Calculate total workflow duration including main agent
-            total_workflow_duration = workflow_duration
-            if main_agent_calls:
-                # If we have main agent calls, the total includes them
-                total_workflow_duration = workflow_end_time - (workflow_start_time - sum(c["duration"] for c in main_agent_calls))
+            # Add subgraph timing to aggregator
+            if agent_breakdown or model_breakdown:
+                timing_aggregator.add_subgraph_timing(
+                    subgraph_name="Financial Analysis",
+                    subgraph_duration=workflow_duration,
+                    subgraph_start_time=workflow_start_time,
+                    agent_breakdown=agent_breakdown,
+                    model_breakdown=model_breakdown,
+                )
 
-            hierarchical_timing = {
-                "workflow_duration": total_workflow_duration,
-                "total_llm_calls": len(main_agent_calls) + len(timing_summary.get("model_breakdown", [])),
-                "levels": []
-            }
-
-            # Add main agent level if there are calls
-            if main_agent_calls:
-                hierarchical_timing["levels"].append({
-                    "level": "main_agent",
-                    "llm_calls": main_agent_calls,
-                    "num_calls": len(main_agent_calls),
-                })
-
-            # Add subgraph level
-            subgraph_start_offset = sum(c["duration"] for c in main_agent_calls) if main_agent_calls else 0
-            hierarchical_timing["levels"].append({
-                "level": "subgraph",
-                "subgraph_name": "Financial Analysis",
-                "subgraph_duration": workflow_duration,
-                "subgraph_start_offset": subgraph_start_offset,
-                "agent_breakdown": timing_summary.get("agent_breakdown", []),
-                "model_breakdown": timing_summary.get("model_breakdown", []),
-                "num_llm_calls": len(timing_summary.get("model_breakdown", [])),
-            })
+            # Get final hierarchical timing structure
+            hierarchical_timing = timing_aggregator.get_hierarchical_timing(workflow_end_time=workflow_end_time)
 
             logger.info(
-                "Created hierarchical timing structure",
-                total_llm_calls=hierarchical_timing["total_llm_calls"],
-                num_levels=len(hierarchical_timing["levels"]),
+                "Created hierarchical timing structure for financial analysis",
+                total_llm_calls=hierarchical_timing.get("total_llm_calls", 0),
+                num_levels=len(hierarchical_timing.get("levels", [])),
+                workflow_duration=round(workflow_duration, 2),
             )
 
             # Create final result message
