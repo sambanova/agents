@@ -1281,28 +1281,6 @@ async function filterChat(msgData) {
       }
       // Track metrics if they exist (for agent_completion events)
       else if (message.event === 'agent_completion') {
-        // CRITICAL DEBUG: Log what additionalKwargs contains
-        console.log('[TIMING_DEBUG] Processing agent_completion event:', {
-          message_id: message.message_id,
-          runId: runId,
-          agent_type: additionalKwargs?.agent_type,
-          has_workflow_timing: !!additionalKwargs?.workflow_timing,
-          workflow_timing: additionalKwargs?.workflow_timing,
-          additionalKwargs_keys: additionalKwargs ? Object.keys(additionalKwargs) : null,
-          raw_message_additional_kwargs: message.additional_kwargs,
-          raw_message_data_additional_kwargs: message.data?.additional_kwargs
-        });
-
-        // Debug: Log CrewAI tracking events
-        if (additionalKwargs.agent_type === 'crewai_llm_call') {
-          console.log('[ChatView] Found CrewAI tracking event:', {
-            model_name: message.response_metadata?.model_name,
-            message_id: message.message_id,
-            runId: runId,
-            response_metadata: message.response_metadata
-          });
-        }
-
         // Check if we have token usage, performance metrics, or model name to track
         const hasUsageMetadata = message.usage_metadata;
         const hasPerformanceMetrics = message.response_metadata?.usage;
@@ -3223,29 +3201,10 @@ function closeArtifactCanvas() {
 
 // Functions for managing latency breakdown modal
 function openLatencyBreakdown(msgItem) {
-  console.log('[TIMING_DEBUG] openLatencyBreakdown called:', {
-    msgItem_message_id: msgItem.message_id,
-    msgItem_type: msgItem.type
-  });
-
   const summary = getRunSummary(msgItem);
-
-  console.log('[TIMING_DEBUG] openLatencyBreakdown got summary:', {
-    has_hierarchical_timing: !!summary.hierarchical_timing,
-    hierarchical_timing: summary.hierarchical_timing,
-    summary_keys: Object.keys(summary)
-  });
 
   // Check if we have hierarchical timing data (new format)
   const hierarchical = summary.hierarchical_timing || null;
-
-  console.log('[TIMING_DEBUG] openLatencyBreakdown extracted hierarchical:', {
-    has_hierarchical: !!hierarchical,
-    hierarchical_data: hierarchical,
-    workflow_duration: hierarchical?.workflow_duration,
-    total_llm_calls: hierarchical?.total_llm_calls,
-    num_levels: hierarchical?.levels?.length || 0
-  });
 
   selectedLatencyData.value = {
     totalDuration: hierarchical ? hierarchical.workflow_duration : (summary.total_latency || 0),
@@ -3253,12 +3212,6 @@ function openLatencyBreakdown(msgItem) {
     agentBreakdown: summary.agent_breakdown || [],
     hierarchicalTiming: hierarchical  // Pass the full hierarchical structure
   };
-
-  console.log('[TIMING_DEBUG] openLatencyBreakdown set selectedLatencyData:', {
-    selectedLatencyData: selectedLatencyData.value,
-    has_hierarchicalTiming: !!selectedLatencyData.value.hierarchicalTiming,
-    hierarchicalTiming: selectedLatencyData.value.hierarchicalTiming
-  });
 
   showLatencyModal.value = true;
 }
@@ -3458,28 +3411,10 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
   if (additionalKwargs?.workflow_timing) {
     const timing = additionalKwargs.workflow_timing;
 
-    console.log('[TIMING_DEBUG] trackRunMetrics received workflow_timing:', {
-      runId: runId,
-      has_timing: !!timing,
-      workflow_duration: timing.workflow_duration,
-      total_llm_calls: timing.total_llm_calls,
-      num_levels: timing.levels?.length || 0,
-      levels: timing.levels,
-      raw_timing: JSON.stringify(timing),
-      agent_type: additionalKwargs.agent_type
-    });
-
     runData.workflow_duration = timing.workflow_duration;
 
     // Store the complete hierarchical timing structure (new format)
     runData.hierarchical_timing = timing;
-
-    console.log('[TIMING_DEBUG] Stored hierarchical_timing in runData:', {
-      runId: runId,
-      stored_timing: runData.hierarchical_timing,
-      total_llm_calls: runData.hierarchical_timing?.total_llm_calls,
-      num_levels: runData.hierarchical_timing?.levels?.length || 0
-    });
 
     if (timing.model_breakdown && Array.isArray(timing.model_breakdown)) {
       runData.model_breakdown = timing.model_breakdown;
@@ -3495,14 +3430,6 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
                            additionalKwargs.agent_type === 'financial_analysis_end';
 
     if (isTimingMessage && timing.total_llm_calls) {
-      console.log('[LIVE_COUNT_FIX] Detected timing message, using authoritative count:', {
-        runId: runId,
-        agent_type: additionalKwargs.agent_type,
-        authoritative_count: timing.total_llm_calls,
-        previous_live_count: runData.event_count,
-        will_update_workflowData: true
-      });
-
       // Update the event_count with authoritative deduplicated count
       runData.event_count = timing.total_llm_calls;
 
@@ -3531,22 +3458,8 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
           // Also update runData.models to match
           runData.models.set(modelName, count);
         });
-
-        console.log('[LIVE_COUNT_FIX] Updated workflowData with deduplicated counts:', {
-          runId: runId,
-          agent_type: additionalKwargs.agent_type,
-          model_counts: Object.fromEntries(modelCounts),
-          workflowData_entries: workflowData.value.filter(item => item.message_id === runId)
-        });
       }
     }
-  } else {
-    console.log('[TIMING_DEBUG] trackRunMetrics NO workflow_timing found:', {
-      runId: runId,
-      has_additionalKwargs: !!additionalKwargs,
-      additionalKwargs_keys: additionalKwargs ? Object.keys(additionalKwargs) : null,
-      has_workflow_timing: additionalKwargs?.workflow_timing !== undefined
-    });
   }
 
   // Track token usage
@@ -3577,19 +3490,6 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
       runData.throughputs.push(responseMetadata.usage.completion_tokens_per_sec);
     }
   }
-  
-  // DEBUG: Log every message being evaluated for counting
-  console.log('[LLM_COUNT_DEBUG] Evaluating message for counting:', {
-    runId: runId,
-    has_responseMetadata: !!responseMetadata,
-    model_name: responseMetadata?.model_name,
-    has_additionalKwargs: additionalKwargs !== null && additionalKwargs !== undefined,
-    agent_type: additionalKwargs?.agent_type,
-    additional_kwargs_keys: additionalKwargs ? Object.keys(additionalKwargs) : null,
-    // Try to extract message ID if available
-    message_id_from_response: responseMetadata?.id,
-    current_count: runData.event_count
-  });
 
   // Only increment event count if event has both response_metadata and model_name, since we are counting llm calls
   // IMPORTANT: Exclude timing messages (they don't have model_name anymore, but keep this check for backwards compatibility)
@@ -3609,14 +3509,6 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
 
   if (responseMetadata && responseMetadata.model_name && !isTimingMessage && !isDuplicateWithoutMetadata && !isBatchCrewAIMessage) {
     runData.event_count++;
-
-    console.log('[LLM_COUNT_DEBUG] ✅ COUNTED THIS MESSAGE:', {
-      runId: runId,
-      new_count: runData.event_count,
-      model_name: responseMetadata.model_name,
-      agent_type: additionalKwargs?.agent_type,
-      was_filtered: false
-    });
 
     // Track model usage
     const modelName = responseMetadata.model_name;
@@ -3640,32 +3532,11 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
         message_id: runId
       });
     }
-  } else {
-    // Log why message was NOT counted
-    console.log('[LLM_COUNT_DEBUG] ❌ FILTERED OUT (not counted):', {
-      runId: runId,
-      reason: !responseMetadata ? 'no responseMetadata' :
-              !responseMetadata.model_name ? 'no model_name' :
-              isTimingMessage ? 'is timing message' :
-              isDuplicateWithoutMetadata ? 'duplicate without metadata (no additional_kwargs)' :
-              'unknown',
-      model_name: responseMetadata?.model_name,
-      agent_type: additionalKwargs?.agent_type,
-      isTimingMessage: isTimingMessage,
-      isDuplicateWithoutMetadata: isDuplicateWithoutMetadata,
-      current_count: runData.event_count
-    });
   }
 }
 
 // Function to get run summary for display
 function getRunSummary(msgItem) {
-  console.log('[TIMING_DEBUG] getRunSummary called:', {
-    msgItem_type: msgItem.type,
-    msgItem_message_id: msgItem.message_id,
-    msgItem_keys: Object.keys(msgItem)
-  });
-
   // For final messages, we want to show the summary for the entire conversation turn
   // Find the run ID by looking backwards in messagesData to find the user message that started this turn
   let runId = null;
@@ -3682,30 +3553,28 @@ function getRunSummary(msgItem) {
     // Look backwards to find the user message that started this conversation turn
     for (let i = currentMessageIndex; i >= 0; i--) {
       const msg = messagesData.value[i];
-      const isUserMessage = msg.additional_kwargs?.agent_type === 'human' || 
+      const isUserMessage = msg.additional_kwargs?.agent_type === 'human' ||
                            msg.type === 'HumanMessage' ||
-                           (msg.type === 'streaming_group' && msg.events?.some(e => 
+                           (msg.type === 'streaming_group' && msg.events?.some(e =>
                              e.additional_kwargs?.agent_type === 'human' || e.type === 'HumanMessage'
                            ));
-      
+
       if (isUserMessage) {
         runId = msg.message_id;
         break;
       }
     }
-    
+
     // Fallback to the message's own ID
     if (!runId) {
       runId = msgItem.message_id;
     }
   }
-  
 
-  
   if (!runId || !runMetrics.value.has(runId)) {
     return { input_tokens: 0, output_tokens: 0, total_tokens: 0, event_count: 0 };
   }
-  
+
   const runData = runMetrics.value.get(runId);
 
   // Calculate sums and averages
@@ -3723,15 +3592,6 @@ function getRunSummary(msgItem) {
     agent_breakdown: runData.agent_breakdown || [], // Include agent breakdown for hierarchical display
     hierarchical_timing: runData.hierarchical_timing || null  // Include new hierarchical timing structure
   };
-
-  console.log('[TIMING_DEBUG] getRunSummary returning:', {
-    runId: runId,
-    has_hierarchical_timing: !!summary.hierarchical_timing,
-    hierarchical_timing: summary.hierarchical_timing,
-    total_llm_calls: summary.hierarchical_timing?.total_llm_calls,
-    num_levels: summary.hierarchical_timing?.levels?.length || 0,
-    levels: summary.hierarchical_timing?.levels
-  });
 
   return summary;
 }
