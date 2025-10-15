@@ -1248,14 +1248,39 @@ async function filterChat(msgData) {
   // Second pass: track ALL metrics for ALL messages BEFORE filtering
   sortedMessages.forEach(message => {
     // Count events that contribute to the conversation run
-    const shouldTrackEvent = ['agent_completion', 'llm_stream_chunk', 'stream_complete'].includes(message.event);
+    const shouldTrackEvent = ['agent_completion', 'llm_stream_chunk', 'stream_complete', 'think'].includes(message.event);
 
     if (shouldTrackEvent) {
       const runId = messageToRunMap.get(message.message_id) || message.message_id;
       const additionalKwargs = getAdditionalKwargs(message);
 
+      // Track metrics for think events (CrewAI agent thoughts from Financial Analysis only)
+      if (message.event === 'think') {
+        try {
+          const dataParsed = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
+          // ONLY track Financial Analysis workflow think events (not deep research)
+          if (dataParsed.metadata && dataParsed.metadata.llm_name && dataParsed.metadata.workflow_name === "Financial Analysis") {
+            trackRunMetrics(
+              runId,
+              null,  // No usage_metadata in think events
+              {
+                model_name: dataParsed.metadata.llm_name,
+                usage: {
+                  total_latency: dataParsed.metadata.duration || 0
+                }
+              },
+              {
+                agent_type: "crewai_think_event",  // Same tag as live events
+                agent_name: dataParsed.agent_name
+              }
+            );
+          }
+        } catch (error) {
+          console.error('Error tracking think event metrics on reload:', error);
+        }
+      }
       // Track metrics if they exist (for agent_completion events)
-      if (message.event === 'agent_completion') {
+      else if (message.event === 'agent_completion') {
         // CRITICAL DEBUG: Log what additionalKwargs contains
         console.log('[TIMING_DEBUG] Processing agent_completion event:', {
           message_id: message.message_id,
@@ -2715,8 +2740,8 @@ async function connectWebSocket() {
           emit('agentThoughtsDataChanged', agentThoughtsData.value);
 
           // CRITICAL: Track metrics from think events for model counts
-          // Financial analysis workflow uses think events with metadata.llm_name
-          if (dataParsed.metadata && dataParsed.metadata.llm_name) {
+          // ONLY track Financial Analysis workflow think events (not deep research)
+          if (dataParsed.metadata && dataParsed.metadata.llm_name && dataParsed.metadata.workflow_name === "Financial Analysis") {
             const runId = receivedData.message_id || currentMsgId.value;
             trackRunMetrics(
               runId,
@@ -2728,7 +2753,7 @@ async function connectWebSocket() {
                 }
               },
               {
-                agent_type: "crewai_llm_call",  // Tag to pass the filter for live counts
+                agent_type: "crewai_think_event",  // Tag for live think events (different from batch "crewai_llm_call")
                 agent_name: dataParsed.agent_name
               }
             );
@@ -3577,7 +3602,12 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
   const hasAdditionalKwargs = additionalKwargs !== null && additionalKwargs !== undefined;
   const isDuplicateWithoutMetadata = !hasAdditionalKwargs;
 
-  if (responseMetadata && responseMetadata.model_name && !isTimingMessage && !isDuplicateWithoutMetadata) {
+  // CRITICAL FIX: Filter out batch CrewAI messages from graph state (agent_type === "crewai_llm_call")
+  // We already count these live via think events (agent_type === "crewai_think_event")
+  // Batch messages arrive at the end and would create duplicates
+  const isBatchCrewAIMessage = additionalKwargs?.agent_type === 'crewai_llm_call';
+
+  if (responseMetadata && responseMetadata.model_name && !isTimingMessage && !isDuplicateWithoutMetadata && !isBatchCrewAIMessage) {
     runData.event_count++;
 
     console.log('[LLM_COUNT_DEBUG] ✅ COUNTED THIS MESSAGE:', {
