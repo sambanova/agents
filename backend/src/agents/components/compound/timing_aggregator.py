@@ -96,9 +96,14 @@ class WorkflowTimingAggregator:
             num_llm_calls=subgraph_llm_count,
         )
 
-    def get_hierarchical_timing(self) -> Dict[str, Any]:
+    def get_hierarchical_timing(self, workflow_end_time: Optional[float] = None) -> Dict[str, Any]:
         """
         Get complete hierarchical timing structure.
+
+        Args:
+            workflow_end_time: Optional end time for workflow. If provided, uses this to calculate
+                             duration (workflow_end_time - workflow_start_time). If not provided,
+                             uses time.time() - workflow_start_time (current behavior).
 
         Returns structure matching LangSmith:
         {
@@ -122,7 +127,11 @@ class WorkflowTimingAggregator:
             ]
         }
         """
-        workflow_duration = time.time() - self.workflow_start_time
+        # Calculate workflow duration
+        if workflow_end_time is not None:
+            workflow_duration = workflow_end_time - self.workflow_start_time
+        else:
+            workflow_duration = time.time() - self.workflow_start_time
 
         levels = []
 
@@ -154,6 +163,7 @@ class WorkflowTimingAggregator:
             num_levels=len(levels),
             main_agent_calls=len(self.main_agent_calls),
             num_subgraphs=len(self.subgraph_timings),
+            used_provided_end_time=workflow_end_time is not None,
         )
 
         return result

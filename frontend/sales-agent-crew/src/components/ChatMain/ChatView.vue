@@ -1256,6 +1256,18 @@ async function filterChat(msgData) {
 
       // Track metrics if they exist (for agent_completion events)
       if (message.event === 'agent_completion') {
+        // CRITICAL DEBUG: Log what additionalKwargs contains
+        console.log('[TIMING_DEBUG] Processing agent_completion event:', {
+          message_id: message.message_id,
+          runId: runId,
+          agent_type: additionalKwargs?.agent_type,
+          has_workflow_timing: !!additionalKwargs?.workflow_timing,
+          workflow_timing: additionalKwargs?.workflow_timing,
+          additionalKwargs_keys: additionalKwargs ? Object.keys(additionalKwargs) : null,
+          raw_message_additional_kwargs: message.additional_kwargs,
+          raw_message_data_additional_kwargs: message.data?.additional_kwargs
+        });
+
         // Debug: Log CrewAI tracking events
         if (additionalKwargs.agent_type === 'crewai_llm_call') {
           console.log('[ChatView] Found CrewAI tracking event:', {
@@ -3182,10 +3194,29 @@ function closeArtifactCanvas() {
 
 // Functions for managing latency breakdown modal
 function openLatencyBreakdown(msgItem) {
+  console.log('[TIMING_DEBUG] openLatencyBreakdown called:', {
+    msgItem_message_id: msgItem.message_id,
+    msgItem_type: msgItem.type
+  });
+
   const summary = getRunSummary(msgItem);
+
+  console.log('[TIMING_DEBUG] openLatencyBreakdown got summary:', {
+    has_hierarchical_timing: !!summary.hierarchical_timing,
+    hierarchical_timing: summary.hierarchical_timing,
+    summary_keys: Object.keys(summary)
+  });
 
   // Check if we have hierarchical timing data (new format)
   const hierarchical = summary.hierarchical_timing || null;
+
+  console.log('[TIMING_DEBUG] openLatencyBreakdown extracted hierarchical:', {
+    has_hierarchical: !!hierarchical,
+    hierarchical_data: hierarchical,
+    workflow_duration: hierarchical?.workflow_duration,
+    total_llm_calls: hierarchical?.total_llm_calls,
+    num_levels: hierarchical?.levels?.length || 0
+  });
 
   selectedLatencyData.value = {
     totalDuration: hierarchical ? hierarchical.workflow_duration : (summary.total_latency || 0),
@@ -3193,6 +3224,13 @@ function openLatencyBreakdown(msgItem) {
     agentBreakdown: summary.agent_breakdown || [],
     hierarchicalTiming: hierarchical  // Pass the full hierarchical structure
   };
+
+  console.log('[TIMING_DEBUG] openLatencyBreakdown set selectedLatencyData:', {
+    selectedLatencyData: selectedLatencyData.value,
+    has_hierarchicalTiming: !!selectedLatencyData.value.hierarchicalTiming,
+    hierarchicalTiming: selectedLatencyData.value.hierarchicalTiming
+  });
+
   showLatencyModal.value = true;
 }
 
@@ -3380,7 +3418,8 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
       models: new Map(), // Track model names and their counts
       workflow_duration: null, // Store workflow-level duration
       model_breakdown: [], // Store per-model breakdown for waterfall
-      agent_breakdown: [] // Store per-agent breakdown for hierarchical display
+      agent_breakdown: [], // Store per-agent breakdown for hierarchical display
+      hierarchical_timing: null // Store complete hierarchical timing structure
     });
   }
 
@@ -3389,10 +3428,28 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
   // Check for workflow timing data in additional_kwargs
   if (additionalKwargs?.workflow_timing) {
     const timing = additionalKwargs.workflow_timing;
+
+    console.log('[TIMING_DEBUG] trackRunMetrics received workflow_timing:', {
+      runId: runId,
+      has_timing: !!timing,
+      workflow_duration: timing.workflow_duration,
+      total_llm_calls: timing.total_llm_calls,
+      num_levels: timing.levels?.length || 0,
+      levels: timing.levels,
+      raw_timing: JSON.stringify(timing)
+    });
+
     runData.workflow_duration = timing.workflow_duration;
 
     // Store the complete hierarchical timing structure (new format)
     runData.hierarchical_timing = timing;
+
+    console.log('[TIMING_DEBUG] Stored hierarchical_timing in runData:', {
+      runId: runId,
+      stored_timing: runData.hierarchical_timing,
+      total_llm_calls: runData.hierarchical_timing?.total_llm_calls,
+      num_levels: runData.hierarchical_timing?.levels?.length || 0
+    });
 
     if (timing.model_breakdown && Array.isArray(timing.model_breakdown)) {
       runData.model_breakdown = timing.model_breakdown;
@@ -3401,6 +3458,13 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
     if (timing.agent_breakdown && Array.isArray(timing.agent_breakdown)) {
       runData.agent_breakdown = timing.agent_breakdown;
     }
+  } else {
+    console.log('[TIMING_DEBUG] trackRunMetrics NO workflow_timing found:', {
+      runId: runId,
+      has_additionalKwargs: !!additionalKwargs,
+      additionalKwargs_keys: additionalKwargs ? Object.keys(additionalKwargs) : null,
+      has_workflow_timing: additionalKwargs?.workflow_timing !== undefined
+    });
   }
 
   // Track token usage
@@ -3463,19 +3527,25 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
 
 // Function to get run summary for display
 function getRunSummary(msgItem) {
+  console.log('[TIMING_DEBUG] getRunSummary called:', {
+    msgItem_type: msgItem.type,
+    msgItem_message_id: msgItem.message_id,
+    msgItem_keys: Object.keys(msgItem)
+  });
+
   // For final messages, we want to show the summary for the entire conversation turn
   // Find the run ID by looking backwards in messagesData to find the user message that started this turn
   let runId = null;
-  
+
   if (msgItem.type === 'streaming_group') {
     runId = msgItem.message_id;
   } else {
     // For individual messages, find the conversation turn they belong to
-    const currentMessageIndex = messagesData.value.findIndex(msg => 
-      msg.message_id === msgItem.message_id || 
+    const currentMessageIndex = messagesData.value.findIndex(msg =>
+      msg.message_id === msgItem.message_id ||
       (msg.type === 'streaming_group' && msg.message_id === msgItem.message_id)
     );
-    
+
     // Look backwards to find the user message that started this conversation turn
     for (let i = currentMessageIndex; i >= 0; i--) {
       const msg = messagesData.value[i];
@@ -3521,6 +3591,14 @@ function getRunSummary(msgItem) {
     hierarchical_timing: runData.hierarchical_timing || null  // Include new hierarchical timing structure
   };
 
+  console.log('[TIMING_DEBUG] getRunSummary returning:', {
+    runId: runId,
+    has_hierarchical_timing: !!summary.hierarchical_timing,
+    hierarchical_timing: summary.hierarchical_timing,
+    total_llm_calls: summary.hierarchical_timing?.total_llm_calls,
+    num_levels: summary.hierarchical_timing?.levels?.length || 0,
+    levels: summary.hierarchical_timing?.levels
+  });
 
   return summary;
 }

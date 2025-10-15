@@ -9,6 +9,7 @@ import langsmith as ls
 import structlog
 from agents.components.compound.data_types import LiberalFunctionMessage, LLMType
 from agents.components.compound.prompts import xml_template
+from agents.components.compound.timing_aggregator import WorkflowTimingAggregator
 from agents.components.compound.util import extract_api_key, extract_api_keys, extract_user_id
 from agents.utils.logging_utils import setup_logging_context
 from langchain.tools import BaseTool
@@ -718,6 +719,60 @@ Make sure to include both opening and closing tags for both tool and tool_input.
 
         # Define the function that determines whether to continue or not
 
+    def _aggregate_and_attach_workflow_timing(messages, additional_kwargs):
+        """
+        Aggregate workflow timing from all messages and attach to additional_kwargs.
+        This is called from should_continue when routing to "end".
+        """
+        # Capture workflow end time IMMEDIATELY
+        workflow_end_time = time.time()
+
+        # Extract main agent timing from all messages
+        main_agent_calls = []
+        workflow_start_time = workflow_end_time  # Initialize, will be updated to earliest
+
+        for msg in messages:
+            if hasattr(msg, 'additional_kwargs') and msg.additional_kwargs:
+                if 'main_agent_timing' in msg.additional_kwargs:
+                    timing = msg.additional_kwargs['main_agent_timing']
+                    main_agent_calls.append(timing)
+                    # Find the earliest agent call start time
+                    if timing.get('start_time') and timing['start_time'] < workflow_start_time:
+                        workflow_start_time = timing['start_time']
+
+        # If no agent calls found, skip timing aggregation
+        if not main_agent_calls:
+            logger.debug("No main agent timing data found, skipping workflow timing")
+            return
+
+        # Initialize timing aggregator with the correct workflow start time
+        aggregator = WorkflowTimingAggregator()
+        aggregator.workflow_start_time = workflow_start_time
+
+        # Add main agent calls to aggregator
+        for call in main_agent_calls:
+            aggregator.add_main_agent_call(
+                node_name=call.get('node_name', 'agent_node'),
+                agent_name=call.get('agent_name', 'XML Agent'),
+                model_name=call.get('model_name', 'unknown'),
+                provider=call.get('provider', 'sambanova'),
+                duration=call.get('duration', 0),
+                start_time=call.get('start_time', workflow_start_time)
+            )
+
+        # Get hierarchical timing structure with explicit end time
+        hierarchical_timing = aggregator.get_hierarchical_timing(workflow_end_time=workflow_end_time)
+
+        # Attach to additional_kwargs (will be on the final message)
+        additional_kwargs['workflow_timing'] = hierarchical_timing
+
+        logger.info(
+            "Aggregated workflow timing in should_continue",
+            total_llm_calls=hierarchical_timing.get('total_llm_calls', 0),
+            workflow_duration=round(hierarchical_timing.get('workflow_duration', 0), 3),
+            num_levels=len(hierarchical_timing.get('levels', [])),
+        )
+
     def should_continue(messages):
         last_message = messages[-1]
         content = last_message.content
@@ -756,16 +811,24 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                     additional_kwargs["error_type"] = "non_existent_subgraph"
                     last_message.additional_kwargs = additional_kwargs
                     last_message.content = f"I am not able to route to the {subgraph_name} subgraph as it is not available"
+                    # Aggregate timing before returning "end"
+                    _aggregate_and_attach_workflow_timing(messages, additional_kwargs)
+                    last_message.additional_kwargs = additional_kwargs
                     return "end"
             except (IndexError, ValueError):
                 pass
 
             # If we can't extract subgraph name, treat as end
             additional_kwargs["agent_type"] = "react_end"
+            # Aggregate timing before returning "end"
+            _aggregate_and_attach_workflow_timing(messages, additional_kwargs)
             last_message.additional_kwargs = additional_kwargs
             return "end"
         else:
+            # This is the normal end case - aggregate workflow timing
             additional_kwargs["agent_type"] = "react_end"
+            # Aggregate timing before returning "end"
+            _aggregate_and_attach_workflow_timing(messages, additional_kwargs)
             last_message.additional_kwargs = additional_kwargs
             return "end"
 

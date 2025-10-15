@@ -2,11 +2,14 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+import structlog
 from agents.api.websocket_interface import WebSocketInterface
 from langchain.schema.messages import HumanMessage
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import Runnable, RunnableConfig
 from langgraph.types import Command, Interrupt
+
+logger = structlog.get_logger(__name__)
 
 
 async def astream_state_websocket(
@@ -129,6 +132,15 @@ async def astream_state_websocket(
 
                 converted_msgs = convert_messages_to_dict(new_messages)
                 for msg in converted_msgs:
+                    # DEBUG: Log what we're sending via WebSocket
+                    logger.info(
+                        "DEBUG: Sending agent_completion via WebSocket",
+                        msg_type=msg.get("type"),
+                        has_additional_kwargs="additional_kwargs" in msg,
+                        additional_kwargs_keys=list(msg.get("additional_kwargs", {}).keys()) if "additional_kwargs" in msg else None,
+                        has_workflow_timing=msg.get("additional_kwargs", {}).get("workflow_timing") is not None,
+                        workflow_timing_preview=str(msg.get("additional_kwargs", {}).get("workflow_timing", {}))[:200] if msg.get("additional_kwargs", {}).get("workflow_timing") else None,
+                    )
 
                     await websocket_manager.send_message(
                         user_id,
@@ -251,6 +263,17 @@ def convert_messages_to_dict(output_list):
             else:
                 # Pydantic v1 style
                 msg_dict = item.dict()
+
+            # DEBUG: Log what model_dump returns
+            logger.info(
+                "DEBUG: convert_messages_to_dict model_dump",
+                msg_type=item.__class__.__name__,
+                has_additional_kwargs="additional_kwargs" in msg_dict,
+                additional_kwargs_keys=list(msg_dict.get("additional_kwargs", {}).keys()) if "additional_kwargs" in msg_dict else None,
+                has_workflow_timing=msg_dict.get("additional_kwargs", {}).get("workflow_timing") is not None,
+                has_response_metadata="response_metadata" in msg_dict,
+                response_metadata_keys=list(msg_dict.get("response_metadata", {}).keys()) if "response_metadata" in msg_dict else None,
+            )
 
             # Add the message type
             msg_dict["type"] = item.__class__.__name__

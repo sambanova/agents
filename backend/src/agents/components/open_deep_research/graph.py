@@ -927,13 +927,21 @@ async def compile_final_report(
         # Continue without PDF - don't fail the message sending
 
     # Build hierarchical timing structure
+    # CRITICAL: Capture workflow end time IMMEDIATELY to ensure accurate duration
     workflow_end_time = time.time()
     workflow_duration = workflow_end_time - workflow_start_time
+
+    logger.info(
+        "Deep research workflow timing captured",
+        workflow_start_time=workflow_start_time,
+        workflow_end_time=workflow_end_time,
+        workflow_duration=round(workflow_duration, 2),
+    )
 
     # Collect all captured messages from state
     all_messages = state.get("messages", [])
 
-    # Create timing aggregator
+    # Create timing aggregator with correct workflow start time
     timing_aggregator = WorkflowTimingAggregator()
     timing_aggregator.workflow_start_time = workflow_start_time
 
@@ -1003,6 +1011,13 @@ async def compile_final_report(
         for v in agent_timing_map.values()
     ]
 
+    logger.info(
+        "Aggregated timing from messages",
+        num_messages=len(all_messages),
+        num_agents=len(agent_breakdown),
+        num_model_calls=len(model_breakdown),
+    )
+
     # Add subgraph timing
     if agent_breakdown or model_breakdown:
         subgraph_start_offset = timing_aggregator.main_agent_calls[0]['duration'] if timing_aggregator.main_agent_calls else 0
@@ -1014,14 +1029,17 @@ async def compile_final_report(
             model_breakdown=model_breakdown,
         )
 
-    # Get final hierarchical timing structure
-    hierarchical_timing = timing_aggregator.get_hierarchical_timing()
+    # Get final hierarchical timing structure with explicit end time to prevent recalculation
+    # CRITICAL: Pass workflow_end_time to prevent get_hierarchical_timing() from recalculating
+    hierarchical_timing = timing_aggregator.get_hierarchical_timing(workflow_end_time=workflow_end_time)
 
     logger.info(
         "Created hierarchical timing structure for deep research",
         total_llm_calls=hierarchical_timing["total_llm_calls"],
         num_levels=len(hierarchical_timing["levels"]),
-        workflow_duration=round(workflow_duration, 2),
+        workflow_duration_calculated=round(hierarchical_timing["workflow_duration"], 2),
+        workflow_duration_actual=round(workflow_duration, 2),
+        duration_match=abs(hierarchical_timing["workflow_duration"] - workflow_duration) < 0.1,
     )
 
     return {
