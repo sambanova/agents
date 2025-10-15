@@ -67,6 +67,8 @@
             >
               <!-- Main Agent Level -->
               <div v-if="level.level === 'main_agent'">
+                <!-- Debug logging for main agent data -->
+                {{ logMainAgentData(level) }}
                 <button
                   @click="toggleLevel(levelIndex)"
                   class="w-full px-4 py-3 bg-indigo-50 hover:bg-indigo-100 transition-colors flex items-center justify-between"
@@ -105,19 +107,26 @@
                       </div>
                       <div class="flex items-center space-x-3 text-xs">
                         <span class="text-gray-600">{{ call.duration.toFixed(2) }}s</span>
+                        <span v-if="call.percentage" class="font-medium text-primary-brandColor">{{ call.percentage.toFixed(1) }}%</span>
                       </div>
                     </div>
+                    <!-- Bar rendering with defensive checks -->
                     <div class="relative h-6 bg-gray-100 rounded-md overflow-hidden">
                       <div
+                        v-if="call.duration > 0 && call.start_offset !== undefined && call.start_offset !== null"
                         class="absolute top-0 h-full flex items-center justify-center text-white text-xs font-medium rounded-md bg-indigo-500"
                         :style="{
-                          left: `${(call.start_offset / workflowDuration) * 100}%`,
-                          width: `${(call.duration / workflowDuration) * 100}%`
+                          left: `${Math.max(0, (call.start_offset / workflowDuration) * 100)}%`,
+                          width: `${Math.max(0.5, (call.duration / workflowDuration) * 100)}%`
                         }"
                       >
                         <span v-if="(call.duration / workflowDuration) > 0.05">
                           {{ call.duration.toFixed(1) }}s
                         </span>
+                      </div>
+                      <!-- Debug: Show warning if bar can't render -->
+                      <div v-else class="text-xs text-gray-400 px-2 py-1">
+                        ⚠️ Missing timing data (duration: {{ call.duration }}, start_offset: {{ call.start_offset }})
                       </div>
                     </div>
                   </div>
@@ -444,6 +453,23 @@ function calculateLevelDuration(level) {
     return level.subgraph_duration || 0;
   }
   return 0;
+}
+
+// Debug: Log main agent data structure
+function logMainAgentData(level) {
+  if (level.llm_calls && level.llm_calls.length > 0) {
+    console.log('[MAIN_AGENT_BAR_DEBUG] Main agent level data:', {
+      num_calls: level.num_calls,
+      llm_calls_count: level.llm_calls.length,
+      first_call: level.llm_calls[0],
+      has_duration: level.llm_calls[0]?.duration !== undefined,
+      has_start_offset: level.llm_calls[0]?.start_offset !== undefined,
+      duration_value: level.llm_calls[0]?.duration,
+      start_offset_value: level.llm_calls[0]?.start_offset,
+      workflow_duration: workflowDuration.value,
+    });
+  }
+  return ''; // Return empty string so it doesn't render anything
 }
 
 // Agent color palette - more vibrant and distinct

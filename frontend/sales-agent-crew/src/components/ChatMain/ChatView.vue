@@ -3436,7 +3436,8 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
       total_llm_calls: timing.total_llm_calls,
       num_levels: timing.levels?.length || 0,
       levels: timing.levels,
-      raw_timing: JSON.stringify(timing)
+      raw_timing: JSON.stringify(timing),
+      agent_type: additionalKwargs.agent_type
     });
 
     runData.workflow_duration = timing.workflow_duration;
@@ -3457,6 +3458,58 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
     }
     if (timing.agent_breakdown && Array.isArray(timing.agent_breakdown)) {
       runData.agent_breakdown = timing.agent_breakdown;
+    }
+
+    // LIVE COUNT FIX: If this is a timing message from deep_research_timing or financial_analysis_end agent,
+    // use its authoritative deduplicated count instead of live-counted duplicates
+    const isTimingMessage = additionalKwargs.agent_type === 'deep_research_timing' ||
+                           additionalKwargs.agent_type === 'financial_analysis_end';
+
+    if (isTimingMessage && timing.total_llm_calls) {
+      console.log('[LIVE_COUNT_FIX] Detected timing message, using authoritative count:', {
+        runId: runId,
+        agent_type: additionalKwargs.agent_type,
+        authoritative_count: timing.total_llm_calls,
+        previous_live_count: runData.event_count,
+        will_update_workflowData: true
+      });
+
+      // Update the event_count with authoritative deduplicated count
+      runData.event_count = timing.total_llm_calls;
+
+      // Update workflowData entries to reflect the correct deduplicated count
+      // We need to replace the live-counted values with the authoritative breakdown
+      if (timing.model_breakdown && timing.model_breakdown.length > 0) {
+        // Clear existing entries for this run
+        workflowData.value = workflowData.value.filter(item => item.message_id !== runId);
+
+        // Group model_breakdown by model_name to get per-model counts
+        const modelCounts = new Map();
+        timing.model_breakdown.forEach(breakdown => {
+          const modelName = breakdown.model_name;
+          const currentCount = modelCounts.get(modelName) || 0;
+          modelCounts.set(modelName, currentCount + 1);
+        });
+
+        // Add new entries with correct deduplicated counts
+        modelCounts.forEach((count, modelName) => {
+          workflowData.value.push({
+            llm_name: modelName,
+            count: count,
+            message_id: runId
+          });
+
+          // Also update runData.models to match
+          runData.models.set(modelName, count);
+        });
+
+        console.log('[LIVE_COUNT_FIX] Updated workflowData with deduplicated counts:', {
+          runId: runId,
+          agent_type: additionalKwargs.agent_type,
+          model_counts: Object.fromEntries(modelCounts),
+          workflowData_entries: workflowData.value.filter(item => item.message_id === runId)
+        });
+      }
     }
   } else {
     console.log('[TIMING_DEBUG] trackRunMetrics NO workflow_timing found:', {
@@ -3497,7 +3550,11 @@ function trackRunMetrics(runId, tokenUsage, responseMetadata, additionalKwargs =
   }
   
   // Only increment event count if event has both response_metadata and model_name, since we are counting llm calls
-  if (responseMetadata && responseMetadata.model_name) {
+  // IMPORTANT: Exclude timing messages (they don't have model_name anymore, but keep this check for backwards compatibility)
+  const isTimingMessage = additionalKwargs?.agent_type === 'deep_research_timing' ||
+                         additionalKwargs?.agent_type === 'financial_analysis_end';
+
+  if (responseMetadata && responseMetadata.model_name && !isTimingMessage) {
     runData.event_count++;
 
     // Track model usage

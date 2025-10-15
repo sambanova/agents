@@ -147,6 +147,13 @@ class WorkflowTimingAggregator:
                 call_with_pct['percentage'] = (call['duration'] / total_duration * 100) if total_duration > 0 else 0
                 main_agent_calls_with_percentage.append(call_with_pct)
 
+            logger.info(
+                "[MAIN_AGENT_DEBUG] Main agent llm_calls structure",
+                num_calls=len(main_agent_calls_with_percentage),
+                first_call_keys=list(main_agent_calls_with_percentage[0].keys()) if main_agent_calls_with_percentage else [],
+                first_call_sample=main_agent_calls_with_percentage[0] if main_agent_calls_with_percentage else None,
+            )
+
             levels.append({
                 "level": "main_agent",
                 "llm_calls": main_agent_calls_with_percentage,

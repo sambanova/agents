@@ -1033,6 +1033,16 @@ async def compile_final_report(
             total_messages=len(messages_with_timestamps),
         )
 
+    # Sort messages by timestamp (start time) to preserve execution order for waterfall
+    # Messages with timestamps come first (sorted by time), then messages without timestamps
+    messages_with_timestamps.sort(key=lambda x: (x['timestamp'] is None, x['timestamp'] if x['timestamp'] else 0))
+
+    logger.info(
+        "[CONCURRENCY_DEBUG] Messages sorted by timestamp",
+        num_with_timestamps=sum(1 for m in messages_with_timestamps if m['timestamp'] is not None),
+        first_3_timestamps=[m['timestamp'] for m in messages_with_timestamps[:3] if m['timestamp']],
+    )
+
     # Second pass: aggregate with proper start_offset based on timestamps
     for i, msg_data in enumerate(messages_with_timestamps):
         msg = msg_data['msg']
@@ -1183,6 +1193,7 @@ async def compile_final_report(
 
     # Create timing message to carry workflow_timing to frontend (matches financial analysis pattern)
     # This message will be added to state["messages"] and streamed to frontend with timing data
+    # IMPORTANT: Do NOT include model_name in response_metadata - that causes frontend to count this as an LLM call
     timing_message = AIMessage(
         content="",  # Empty content, just carrying timing metadata
         id=str(uuid.uuid4()),
@@ -1191,7 +1202,7 @@ async def compile_final_report(
             "workflow_timing": hierarchical_timing,
         },
         response_metadata={
-            "model_name": "deep_research",
+            # Do not include model_name here - frontend counts messages with model_name as LLM calls
             "usage": {
                 "total_latency": workflow_duration
             },
@@ -1203,6 +1214,15 @@ async def compile_final_report(
         has_workflow_timing="workflow_timing" in timing_message.additional_kwargs,
         workflow_timing_is_empty=not bool(timing_message.additional_kwargs.get("workflow_timing", {})),
         total_llm_calls=hierarchical_timing.get("total_llm_calls", 0),
+        agent_type=timing_message.additional_kwargs.get("agent_type"),
+        message_id=timing_message.id,
+    )
+
+    logger.info(
+        "[LIVE_COUNT_FIX] Timing message contains authoritative LLM count",
+        total_llm_calls_deduplicated=hierarchical_timing.get("total_llm_calls", 0),
+        agent_type_for_frontend_filter="deep_research_timing",
+        message_will_stream_to_frontend=True,
     )
 
     return {
