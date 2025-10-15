@@ -2726,6 +2726,10 @@ async function connectWebSocket() {
                 usage: {
                   total_latency: dataParsed.metadata.duration || 0
                 }
+              },
+              {
+                agent_type: "crewai_llm_call",  // Tag to pass the filter for live counts
+                agent_name: dataParsed.agent_name
               }
             );
           }
