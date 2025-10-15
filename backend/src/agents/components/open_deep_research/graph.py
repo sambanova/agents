@@ -984,6 +984,7 @@ async def compile_final_report(
     agent_timing_map = {}  # agent_name -> {duration, num_calls, model, calls: []}
     agent_call_counters = {}  # Track call indices per agent
     model_breakdown = []
+    cumulative_offset = 0  # Track cumulative time for waterfall start_offset
 
     for msg in all_messages:
         if hasattr(msg, 'response_metadata') and msg.response_metadata:
@@ -1007,32 +1008,37 @@ async def compile_final_report(
                     'num_calls': 0,
                     'model_name': model_name,
                     'calls': [],  # Store individual calls for this agent
+                    'start_time': cumulative_offset,  # Track when this agent first appeared
                 }
 
             agent_timing_map[agent_type]['total_duration'] += total_latency
             agent_timing_map[agent_type]['num_calls'] += 1
 
             # Create individual call entry for this agent's calls array
+            # Use cumulative offset for waterfall visualization
             call_entry = {
                 'model_name': model_name,
                 'provider': model_name.split('/')[0] if '/' in model_name else 'sambanova',
                 'duration': total_latency,
-                'start_offset': 0,  # We don't have precise start offsets for deep research
+                'start_offset': cumulative_offset,  # Use cumulative time for proper waterfall
                 'call_index': agent_call_counters[agent_type],
             }
 
             # Add to agent's calls array
             agent_timing_map[agent_type]['calls'].append(call_entry)
 
-            # Add to model breakdown with call_index
+            # Add to model breakdown with call_index and proper start_offset
             model_breakdown.append({
                 'agent_name': agent_type,
                 'model_name': model_name,
                 'provider': model_name.split('/')[0] if '/' in model_name else 'sambanova',
                 'duration': total_latency,
-                'start_offset': 0,  # We don't have precise start offsets for deep research
+                'start_offset': cumulative_offset,  # Use cumulative time for proper waterfall
                 'call_index': agent_call_counters[agent_type],
             })
+
+            # Increment cumulative offset for next call
+            cumulative_offset += total_latency
 
     # Calculate total duration for percentage calculations
     total_duration = sum(m['duration'] for m in model_breakdown)
@@ -1053,7 +1059,7 @@ async def compile_final_report(
             'num_calls': v['num_calls'],
             'total_duration': v['total_duration'],
             'model_name': v['model_name'],
-            'start_offset': 0,  # We don't have precise start offsets for deep research
+            'start_offset': v['start_time'],  # Use tracked start time for waterfall
             'percentage': (v['total_duration'] / total_duration * 100) if total_duration > 0 else 0,
             'calls': v['calls'],  # Include individual calls array for frontend drill-down
         }
@@ -1061,18 +1067,20 @@ async def compile_final_report(
     ]
 
     logger.info(
-        "Aggregated timing from messages",
-        num_messages=len(all_messages),
+        "Aggregated timing from messages (AFTER deduplication)",
+        num_messages_deduplicated=len(all_messages),
         num_agents=len(agent_breakdown),
         num_model_calls=len(model_breakdown),
+        total_duration=round(total_duration, 2),
     )
 
-    # DEBUG: Log breakdown details to identify duplication
+    # DEBUG: Log breakdown details with call counts per agent
     logger.info(
-        "[DUPLICATION_DEBUG] Message aggregation complete",
+        "[DUPLICATION_DEBUG] Message aggregation complete (deduplicated counts)",
         messages_with_timing=sum(1 for msg in all_messages if hasattr(msg, 'response_metadata') and msg.response_metadata and msg.response_metadata.get('usage', {}).get('total_latency')),
         model_breakdown_count=len(model_breakdown),
         agent_breakdown_summary={agent['agent_name']: agent['num_calls'] for agent in agent_breakdown},
+        total_llm_calls_in_subgraph=len(model_breakdown),
     )
 
     # Add subgraph timing
