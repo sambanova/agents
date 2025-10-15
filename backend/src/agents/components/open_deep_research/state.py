@@ -51,6 +51,7 @@ class ReportStateInput(TypedDict):
 class ReportStateOutput(TypedDict):
     final_report: str  # Final report
     pdf_report: Optional[str]  # List of files from the agent
+    workflow_timing: Optional[dict]  # Hierarchical workflow timing data
 
 
 class ReportState(TypedDict):

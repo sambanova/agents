@@ -723,15 +723,27 @@ Make sure to include both opening and closing tags for both tool and tool_input.
         """
         Aggregate workflow timing from all messages and attach to additional_kwargs.
         This is called from should_continue when routing to "end".
+        Returns the workflow_duration to update response_metadata.
         """
         # Capture workflow end time IMMEDIATELY
         workflow_end_time = time.time()
 
-        # Extract main agent timing from all messages
+        # Find the last HumanMessage to determine where current workflow starts
+        # Only aggregate timing from messages AFTER the last HumanMessage
+        last_human_index = -1
+        for i in range(len(messages) - 1, -1, -1):
+            if isinstance(messages[i], HumanMessage):
+                last_human_index = i
+                break
+
+        # Extract main agent timing ONLY from current workflow (after last HumanMessage)
         main_agent_calls = []
         workflow_start_time = workflow_end_time  # Initialize, will be updated to earliest
 
-        for msg in messages:
+        # Start from message AFTER last HumanMessage
+        start_index = last_human_index + 1 if last_human_index >= 0 else 0
+
+        for msg in messages[start_index:]:
             if hasattr(msg, 'additional_kwargs') and msg.additional_kwargs:
                 if 'main_agent_timing' in msg.additional_kwargs:
                     timing = msg.additional_kwargs['main_agent_timing']
@@ -742,8 +754,16 @@ Make sure to include both opening and closing tags for both tool and tool_input.
 
         # If no agent calls found, skip timing aggregation
         if not main_agent_calls:
-            logger.debug("No main agent timing data found, skipping workflow timing")
-            return
+            logger.debug("No main agent timing data found in current workflow, skipping workflow timing")
+            return None
+
+        logger.debug(
+            "Found current workflow timing",
+            num_calls=len(main_agent_calls),
+            last_human_index=last_human_index,
+            start_index=start_index,
+            total_messages=len(messages),
+        )
 
         # Initialize timing aggregator with the correct workflow start time
         aggregator = WorkflowTimingAggregator()
@@ -772,6 +792,8 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             workflow_duration=round(hierarchical_timing.get('workflow_duration', 0), 3),
             num_levels=len(hierarchical_timing.get('levels', [])),
         )
+
+        return hierarchical_timing.get('workflow_duration', 0)
 
     def should_continue(messages):
         last_message = messages[-1]
@@ -812,8 +834,15 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                     last_message.additional_kwargs = additional_kwargs
                     last_message.content = f"I am not able to route to the {subgraph_name} subgraph as it is not available"
                     # Aggregate timing before returning "end"
-                    _aggregate_and_attach_workflow_timing(messages, additional_kwargs)
+                    workflow_duration = _aggregate_and_attach_workflow_timing(messages, additional_kwargs)
                     last_message.additional_kwargs = additional_kwargs
+                    # Update response_metadata to reflect full workflow duration (for frontend summary)
+                    if workflow_duration and hasattr(last_message, 'response_metadata'):
+                        if last_message.response_metadata is None:
+                            last_message.response_metadata = {}
+                        if 'usage' not in last_message.response_metadata:
+                            last_message.response_metadata['usage'] = {}
+                        last_message.response_metadata['usage']['total_latency'] = workflow_duration
                     return "end"
             except (IndexError, ValueError):
                 pass
@@ -821,15 +850,29 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             # If we can't extract subgraph name, treat as end
             additional_kwargs["agent_type"] = "react_end"
             # Aggregate timing before returning "end"
-            _aggregate_and_attach_workflow_timing(messages, additional_kwargs)
+            workflow_duration = _aggregate_and_attach_workflow_timing(messages, additional_kwargs)
             last_message.additional_kwargs = additional_kwargs
+            # Update response_metadata to reflect full workflow duration (for frontend summary)
+            if workflow_duration and hasattr(last_message, 'response_metadata'):
+                if last_message.response_metadata is None:
+                    last_message.response_metadata = {}
+                if 'usage' not in last_message.response_metadata:
+                    last_message.response_metadata['usage'] = {}
+                last_message.response_metadata['usage']['total_latency'] = workflow_duration
             return "end"
         else:
             # This is the normal end case - aggregate workflow timing
             additional_kwargs["agent_type"] = "react_end"
             # Aggregate timing before returning "end"
-            _aggregate_and_attach_workflow_timing(messages, additional_kwargs)
+            workflow_duration = _aggregate_and_attach_workflow_timing(messages, additional_kwargs)
             last_message.additional_kwargs = additional_kwargs
+            # Update response_metadata to reflect full workflow duration (for frontend summary)
+            if workflow_duration and hasattr(last_message, 'response_metadata'):
+                if last_message.response_metadata is None:
+                    last_message.response_metadata = {}
+                if 'usage' not in last_message.response_metadata:
+                    last_message.response_metadata['usage'] = {}
+                last_message.response_metadata['usage']['total_latency'] = workflow_duration
             return "end"
 
     # Define the function to execute tools

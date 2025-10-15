@@ -87,6 +87,12 @@ def create_all_subgraphs(
         "state_output_mapper": lambda x: AIMessage(
             content=x["final_report"],
             name="DeepResearch",
+            response_metadata={
+                "model_name": "deep_research",
+                "usage": {
+                    "total_latency": x.get("workflow_timing", {}).get("workflow_duration", 0)
+                }
+            },
             additional_kwargs={
                 "agent_type": "deep_research_end",
                 "pdf_report": x.get("pdf_report", ""),
@@ -119,13 +125,19 @@ def create_all_subgraphs(
         "state_output_mapper": lambda x: LiberalFunctionMessage(
             name="DaytonaCodeSandbox",
             content="\n".join(x["steps_taken"]),
+            response_metadata={
+                "model_name": "code_execution",
+                "usage": {
+                    "total_latency": x.get("workflow_timing", {}).get("workflow_duration", 0)
+                }
+            },
             additional_kwargs={
                 "agent_type": "tool_response",
                 "timestamp": datetime.now().isoformat(),
                 "files": x["files"],
                 "workflow_timing": x.get("workflow_timing", {}),
             },
-            result={"usage": {"total_latency": 0.0}},
+            result={"usage": {"total_latency": x.get("workflow_timing", {}).get("workflow_duration", 0)}},
         ),
     }
 
@@ -157,6 +169,12 @@ def create_all_subgraphs(
             },
             "state_output_mapper": lambda x: x["internal_messages"][-1].model_copy(
                 update={
+                    "response_metadata": {
+                        "model_name": "data_science",
+                        "usage": {
+                            "total_latency": x.get("workflow_timing", {}).get("workflow_duration", 0)
+                        }
+                    },
                     "additional_kwargs": {
                         **(x["internal_messages"][-1].additional_kwargs or {}),
                         "agent_type": "data_science_end",
