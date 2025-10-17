@@ -2,20 +2,23 @@
   <div class="voice-control-container">
     <!-- Voice Controls Group -->
     <div class="voice-controls-group">
-      <!-- Microphone Button -->
+      <!-- Unified Voice Button (Start/Stop Only) -->
       <button
-        @click="handleToggleVoice"
+        @click="handleButtonClick"
         :disabled="!isSupported || voiceStatus === 'connecting' || !conversationId"
         :class="[
           'voice-button',
           voiceStatusClass,
-          { 'voice-button-active': isVoiceMode, 'voice-button-muted': isMuted }
+          {
+            'voice-button-active': isVoiceMode,
+            'voice-button-muted': isVoiceMode && isMuted
+          }
         ]"
         :title="buttonTitle"
       >
-      <!-- Microphone Icon -->
+      <!-- Microphone Icon (Always show mic icon unless speaking) -->
       <svg
-        v-if="!isVoiceMode"
+        v-if="voiceStatus !== 'speaking'"
         class="w-6 h-6"
         fill="none"
         stroke="currentColor"
@@ -29,18 +32,8 @@
         />
       </svg>
 
-      <!-- Stop Icon -->
-      <svg
-        v-else-if="isVoiceMode && voiceStatus !== 'speaking'"
-        class="w-6 h-6"
-        fill="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <rect x="6" y="6" width="12" height="12" rx="2" />
-      </svg>
-
-      <!-- Speaking Animation -->
-      <div v-else class="speaking-animation">
+      <!-- Speaking Animation (Agent responding) -->
+      <div v-else-if="voiceStatus === 'speaking'" class="speaking-animation">
         <span></span>
         <span></span>
         <span></span>
@@ -48,7 +41,7 @@
 
       <!-- Audio Level Indicator (Pulsing Ring) -->
       <div
-        v-if="isVoiceMode && audioLevel > 0"
+        v-if="isVoiceMode && audioLevel > 0 && !isMuted"
         class="audio-level-ring"
         :style="{ transform: `scale(${1 + audioLevel / 100})` }"
       ></div>
@@ -59,18 +52,25 @@
       v-if="isVoiceMode"
       @click="toggleMute"
       class="mute-button"
-      :class="{ 'mute-button-active': isMuted }"
-      :title="isMuted ? 'Unmute microphone' : 'Mute microphone'"
+      :class="{ 'mute-button-muted': isMuted }"
+      :title="isMuted ? 'Unmute microphone (Ctrl+M)' : 'Mute microphone (Ctrl+M)'"
     >
-      <!-- Muted Icon -->
-      <svg v-if="isMuted" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clip-rule="evenodd" />
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+      <!-- Microphone Icon -->
+      <svg
+        class="w-5 h-5"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+        />
       </svg>
-      <!-- Unmuted Icon -->
-      <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-      </svg>
+      <!-- Red slash ALWAYS visible to indicate it's the mute button -->
+      <div class="mute-slash"></div>
     </button>
   </div>
 
@@ -95,10 +95,13 @@
 
     <!-- Keyboard Shortcut Hint -->
     <div v-if="!isVoiceMode && !error && conversationId" class="voice-hint">
-      <kbd>Ctrl</kbd>+<kbd>Space</kbd> for voice
+      Click or <kbd>Ctrl</kbd>+<kbd>Space</kbd> to start
     </div>
     <div v-else-if="isVoiceMode && !error" class="voice-hint">
-      <kbd>Ctrl</kbd>+<kbd>M</kbd> to mute
+      <span v-if="voiceStatus === 'speaking'" class="text-green-600">Agent speaking</span>
+      <span v-else-if="isMuted" class="text-red-500">Muted</span>
+      <span v-else class="text-blue-600">Listening</span>
+      · Click to stop
     </div>
     <div v-else-if="!isVoiceMode && error && isSessionEnded" class="voice-hint">
       <kbd>Ctrl</kbd>+<kbd>Space</kbd> to restart
@@ -160,44 +163,55 @@ const buttonTitle = computed(() => {
     return 'Send a message first to start voice mode'
   }
 
-  const statusTitles = {
-    idle: 'Start voice mode (Ctrl+Space)',
-    connecting: 'Connecting...',
-    listening: 'Listening... Click to stop',
-    speaking: 'Speaking... Click to stop',
-    thinking: 'Processing... Click to stop',
-    error: 'Voice error - Click to retry'
+  // Simple: Start or Stop
+  if (!isVoiceMode.value) {
+    return 'Start voice mode (Click or Ctrl+Space)'
   }
 
-  return statusTitles[voiceStatus.value] || 'Toggle voice mode'
+  return 'Stop voice mode (Click or Ctrl+Space)'
 })
 
 // Methods
-async function handleToggleVoice() {
+async function handleButtonClick() {
   try {
-    // If activating voice mode, emit event first to let parent prepare
+    // Simple: Always toggle voice mode on/off
     if (!isVoiceMode.value) {
+      // Starting voice mode
       emit('voice-mode-starting')
       // Small delay to let parent connect main WebSocket
       await new Promise(resolve => setTimeout(resolve, 500))
     }
 
+    // Toggle voice mode (start or stop)
     await toggleVoiceMode()
     emit('voice-status-changed', {
       isActive: isVoiceMode.value,
       status: voiceStatus.value
     })
   } catch (err) {
-    console.error('Voice toggle error:', err)
+    console.error('Voice button click error:', err)
   }
 }
 
 // Keyboard shortcut
-function handleKeyboardShortcut(event) {
-  // Ctrl+Space or Cmd+Space - toggle voice mode
+async function handleKeyboardShortcut(event) {
+  // Ctrl+Space or Cmd+Space - toggle voice mode on/off
   if ((event.ctrlKey || event.metaKey) && event.code === 'Space') {
     event.preventDefault()
-    handleToggleVoice()
+    try {
+      if (!isVoiceMode.value) {
+        // Start voice mode
+        emit('voice-mode-starting')
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+      await toggleVoiceMode()
+      emit('voice-status-changed', {
+        isActive: isVoiceMode.value,
+        status: voiceStatus.value
+      })
+    } catch (err) {
+      console.error('Voice toggle error:', err)
+    }
   }
 
   // Ctrl+M or Cmd+M - toggle mute (only when voice mode is active)
@@ -208,7 +222,15 @@ function handleKeyboardShortcut(event) {
 
   // Escape to stop voice mode
   if (event.code === 'Escape' && isVoiceMode.value) {
-    handleToggleVoice()
+    try {
+      await toggleVoiceMode()
+      emit('voice-status-changed', {
+        isActive: isVoiceMode.value,
+        status: voiceStatus.value
+      })
+    } catch (err) {
+      console.error('Voice toggle error:', err)
+    }
   }
 }
 
@@ -251,6 +273,7 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  pointer-events: auto;
 }
 
 .voice-button:hover:not(:disabled) {
@@ -307,8 +330,10 @@ onUnmounted(() => {
   border-color: #667eea;
 }
 
+/* Show red border when muted */
 .voice-button-muted {
-  opacity: 0.6;
+  border-color: #ef4444 !important;
+  border-width: 3px;
 }
 
 /* Mute Button */
@@ -317,8 +342,8 @@ onUnmounted(() => {
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 50%;
-  border: 2px solid #d1d5db;
-  background: white;
+  border: 2px solid #fca5a5;
+  background: #fef2f2;
   color: #6b7280;
   display: flex;
   align-items: center;
@@ -332,21 +357,33 @@ onUnmounted(() => {
 .mute-button:hover {
   transform: scale(1.05);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-  background: #f9fafb;
+  border-color: #9ca3af;
 }
 
 .mute-button:active {
   transform: scale(0.95);
 }
 
-.mute-button-active {
-  background: #fef2f2;
+.mute-button-muted {
+  background: #fecaca;
   border-color: #ef4444;
   color: #ef4444;
+  border-width: 3px;
 }
 
-.mute-button-active:hover {
-  background: #fee2e2;
+.mute-button-muted:hover {
+  background: #fca5a5;
+}
+
+/* Red slash overlay for muted state */
+.mute-slash {
+  position: absolute;
+  width: 2.125rem;
+  height: 0.15rem;
+  background: #ef4444;
+  transform: rotate(-45deg);
+  border-radius: 999px;
+  pointer-events: none;
 }
 
 /* Audio Level Ring */
