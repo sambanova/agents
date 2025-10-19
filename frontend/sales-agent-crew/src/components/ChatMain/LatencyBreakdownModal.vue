@@ -902,7 +902,7 @@ function getColorClass(index) {
 // Helper function to detect if an event's end position is near the timeline edge
 function isNearTimelineEnd(event) {
   const endPercent = ((event.start_offset + event.duration) / workflowDuration.value) * 100;
-  return endPercent > 90; // If bar ends after 90% of timeline
+  return endPercent > 85; // If bar ends after 85% of timeline (adjusted to catch more overflows)
 }
 
 // Expand first agent/level by default
