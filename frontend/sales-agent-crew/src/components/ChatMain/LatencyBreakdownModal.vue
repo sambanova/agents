@@ -24,7 +24,7 @@
       </div>
 
       <!-- Content -->
-      <div class="px-6 py-5 overflow-y-auto max-h-[calc(90vh-180px)]">
+      <div class="pl-6 pr-20 py-5 overflow-y-auto max-h-[calc(90vh-180px)]">
         <!-- Total Duration Summary Card -->
         <div class="mb-6 p-4 rounded-lg border border-primary-brandFrame">
           <div class="flex items-center justify-between">
