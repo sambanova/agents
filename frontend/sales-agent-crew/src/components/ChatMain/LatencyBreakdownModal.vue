@@ -74,8 +74,6 @@
             >
               <!-- Main Agent Level -->
               <div v-if="level.level === 'main_agent'">
-                <!-- Debug logging for main agent data -->
-                {{ logMainAgentData(level) }}
                 <button
                   @click="toggleLevel(levelIndex)"
                   class="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 flex items-center justify-between"
@@ -570,23 +568,6 @@ function calculateLevelDuration(level) {
     return level.subgraph_duration || 0;
   }
   return 0;
-}
-
-// Debug: Log main agent data structure
-function logMainAgentData(level) {
-  if (level.llm_calls && level.llm_calls.length > 0) {
-    console.log('[MAIN_AGENT_BAR_DEBUG] Main agent level data:', {
-      num_calls: level.num_calls,
-      llm_calls_count: level.llm_calls.length,
-      first_call: level.llm_calls[0],
-      has_duration: level.llm_calls[0]?.duration !== undefined,
-      has_start_offset: level.llm_calls[0]?.start_offset !== undefined,
-      duration_value: level.llm_calls[0]?.duration,
-      start_offset_value: level.llm_calls[0]?.start_offset,
-      workflow_duration: workflowDuration.value,
-    });
-  }
-  return ''; // Return empty string so it doesn't render anything
 }
 
 // Agent color palette - purple-based with complementary professional colors
