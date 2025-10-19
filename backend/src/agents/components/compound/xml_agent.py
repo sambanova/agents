@@ -788,9 +788,48 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             total_messages=len(messages),
         )
 
-        # Initialize timing aggregator with the correct workflow start time
+        # CRITICAL FIX: Find earliest start time across ALL events (agent + tools) before initializing aggregator
+        # First pass through tools to find earliest tool start time
+        for msg in messages[start_index:]:
+            if isinstance(msg, LiberalFunctionMessage):
+                timing = msg.additional_kwargs.get('tool_timing')
+                if not timing:
+                    continue
+
+                # Skip financial_analysis and deep_research subgraph messages (they're separate workflows)
+                agent_type = msg.additional_kwargs.get('agent_type', '')
+                if 'financial_analysis' in agent_type or 'deep_research' in agent_type:
+                    continue
+
+                # Update workflow_start_time if tool started earlier
+                if timing.get('is_parallel'):
+                    for tool in timing['tools']:
+                        if tool.get('start_time') and tool['start_time'] < workflow_start_time:
+                            workflow_start_time = tool['start_time']
+                            logger.debug(
+                                "Updated workflow_start_time from parallel tool",
+                                tool_name=tool['tool_name'],
+                                start_time=tool['start_time'],
+                            )
+                else:
+                    if timing.get('start_time') and timing['start_time'] < workflow_start_time:
+                        workflow_start_time = timing['start_time']
+                        logger.debug(
+                            "Updated workflow_start_time from single tool",
+                            tool_name=timing['tool_name'],
+                            start_time=timing['start_time'],
+                        )
+
+        # Now initialize timing aggregator with the CORRECT workflow start time
         aggregator = WorkflowTimingAggregator()
         aggregator.workflow_start_time = workflow_start_time
+
+        logger.info(
+            "Initialized aggregator with corrected workflow_start_time",
+            workflow_start_time=workflow_start_time,
+            workflow_end_time=workflow_end_time,
+            duration=round(workflow_end_time - workflow_start_time, 3),
+        )
 
         # Add main agent calls to aggregator
         for call in main_agent_calls:
@@ -844,30 +883,9 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                     )
 
         # Aggregate tool timings from current workflow
+        # Now calculate offsets with the CORRECTED workflow_start_time
         tool_timings = []
         parallel_group_counter = 0
-
-        # First pass: collect all tool timings and find earliest start time
-        for msg in messages[start_index:]:
-            if isinstance(msg, LiberalFunctionMessage):
-                timing = msg.additional_kwargs.get('tool_timing')
-                if not timing:
-                    continue
-
-                # Skip financial_analysis and deep_research subgraph messages (they're separate workflows)
-                # We check agent_type to identify these
-                agent_type = msg.additional_kwargs.get('agent_type', '')
-                if 'financial_analysis' in agent_type or 'deep_research' in agent_type:
-                    continue
-
-                # Update workflow_start_time if tool started earlier
-                if timing.get('is_parallel'):
-                    for tool in timing['tools']:
-                        if tool.get('start_time') and tool['start_time'] < workflow_start_time:
-                            workflow_start_time = tool['start_time']
-                else:
-                    if timing.get('start_time') and timing['start_time'] < workflow_start_time:
-                        workflow_start_time = timing['start_time']
 
         # Second pass: now calculate offsets with correct workflow_start_time
         for msg in messages[start_index:]:

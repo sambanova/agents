@@ -294,9 +294,15 @@
                       :class="getToolBarClass(tool)"
                       :style="getToolBarStyle(tool)"
                     >
-                      <span>{{ tool.duration.toFixed(2) }}s</span>
+                      <!-- Only show text inside bar if it's wide enough (> 5% of timeline) -->
+                      <span v-if="(tool.duration / workflowDuration) > 0.05">{{ tool.duration.toFixed(2) }}s</span>
                     </div>
                   </div>
+
+                  <!-- For small bars (< 5%), show duration as a label to the right (like LangSmith) -->
+                  <span v-if="(tool.duration / workflowDuration) <= 0.05" class="text-xs text-gray-600 whitespace-nowrap min-w-[50px]">
+                    {{ tool.duration.toFixed(2) }}s
+                  </span>
 
                   <span v-if="tool.parallel_group" class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-md whitespace-nowrap">
                     Parallel {{ tool.parallel_group }}
