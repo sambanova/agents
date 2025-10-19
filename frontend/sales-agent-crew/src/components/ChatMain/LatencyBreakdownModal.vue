@@ -4,7 +4,7 @@
     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm"
     @click.self="$emit('close')"
   >
-    <div class="bg-white rounded-lg shadow-lg max-w-5xl w-full max-h-[90vh] overflow-hidden border border-primary-brandFrame">
+    <div class="bg-white rounded-lg shadow-lg max-w-6xl w-full max-h-[90vh] overflow-hidden border border-primary-brandFrame">
       <!-- Header - White background with purple text -->
       <div class="relative bg-white px-6 py-4 border-b border-primary-brandFrame">
         <div class="flex items-center justify-between">
@@ -137,13 +137,12 @@
                       }"
                     >
                       <!-- Content INSIDE bar - truncate name ONLY if near end -->
-                      <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium"
-                           :class="isNearTimelineEnd(event) ? 'overflow-hidden w-full' : 'whitespace-nowrap'">
+                      <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium whitespace-nowrap">
                         <svg class="w-3 h-3 flex-shrink-0 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                         </svg>
-                        <span :class="isNearTimelineEnd(event) ? 'truncate' : ''">{{ event.model_name }}</span>
-                        <span class="text-gray-600 flex-shrink-0" :class="isNearTimelineEnd(event) ? 'whitespace-nowrap' : ''">- {{ event.duration.toFixed(2) }}s</span>
+                        <span>{{ isNearTimelineEnd(event) ? event.model_name.substring(0, 7) + '...' : event.model_name }}</span>
+                        <span class="text-gray-600 flex-shrink-0">- {{ event.duration.toFixed(2) }}s</span>
                       </div>
                     </div>
                   </div>
@@ -174,8 +173,8 @@
                         <svg class="w-3 h-3 flex-shrink-0 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
                         </svg>
-                        <span>{{ event.tool_name }}</span>
-                        <span class="text-gray-600">- {{ event.duration.toFixed(2) }}s</span>
+                        <span>{{ isNearTimelineEnd(event) ? event.tool_name.substring(0, 7) + '...' : event.tool_name }}</span>
+                        <span class="text-gray-600 flex-shrink-0">- {{ event.duration.toFixed(2) }}s</span>
                       </div>
                     </div>
                   </div>
@@ -272,13 +271,12 @@
                           }"
                         >
                           <!-- Content INSIDE bar - truncate name ONLY if near end -->
-                          <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium"
-                               :class="isNearTimelineEnd(call) ? 'overflow-hidden w-full' : 'whitespace-nowrap'">
+                          <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium whitespace-nowrap">
                             <svg class="w-3 h-3 flex-shrink-0 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                             </svg>
-                            <span :class="isNearTimelineEnd(call) ? 'truncate' : ''">{{ call.model_name }}</span>
-                            <span class="text-gray-600 flex-shrink-0" :class="isNearTimelineEnd(call) ? 'whitespace-nowrap' : ''">- {{ call.duration.toFixed(2) }}s</span>
+                            <span>{{ isNearTimelineEnd(call) ? call.model_name.substring(0, 7) + '...' : call.model_name }}</span>
+                            <span class="text-gray-600 flex-shrink-0">- {{ call.duration.toFixed(2) }}s</span>
                           </div>
                         </div>
                         <!-- Debug: Show warning if bar can't render -->
@@ -374,13 +372,12 @@
                                 }"
                               >
                                 <!-- Content INSIDE bar - truncate name ONLY if near end -->
-                                <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium"
-                                     :class="isNearTimelineEnd(call) ? 'overflow-hidden w-full' : 'whitespace-nowrap'">
+                                <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium whitespace-nowrap">
                                   <svg class="w-3 h-3 flex-shrink-0 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                                   </svg>
-                                  <span :class="isNearTimelineEnd(call) ? 'truncate' : ''">{{ call.model_name }}</span>
-                                  <span class="text-gray-600 flex-shrink-0" :class="isNearTimelineEnd(call) ? 'whitespace-nowrap' : ''">- {{ call.duration.toFixed(2) }}s</span>
+                                  <span>{{ isNearTimelineEnd(call) ? call.model_name.substring(0, 7) + '...' : call.model_name }}</span>
+                                  <span class="text-gray-600 flex-shrink-0">- {{ call.duration.toFixed(2) }}s</span>
                                 </div>
                               </div>
                             </div>
@@ -469,9 +466,9 @@
                       <svg class="w-3 h-3 flex-shrink-0 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
                       </svg>
-                      <span>{{ tool.tool_name }}</span>
-                      <span class="text-gray-600">- {{ tool.duration.toFixed(2) }}s</span>
-                      <span v-if="tool.parallel_group" class="text-gray-600">• P{{ tool.parallel_group }}</span>
+                      <span>{{ isNearTimelineEnd(tool) ? tool.tool_name.substring(0, 7) + '...' : tool.tool_name }}</span>
+                      <span class="text-gray-600 flex-shrink-0">- {{ tool.duration.toFixed(2) }}s</span>
+                      <span v-if="tool.parallel_group" class="text-gray-600 flex-shrink-0">• P{{ tool.parallel_group }}</span>
                     </div>
                   </div>
                 </div>
