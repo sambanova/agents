@@ -107,11 +107,6 @@
             >
               <!-- LLM Call Event - Compact single row -->
               <div v-if="event.type === 'llm_call'" class="flex items-center h-8">
-                <!-- Duration label on left -->
-                <div class="w-16 text-xs text-gray-600 text-right pr-2">
-                  {{ event.duration.toFixed(2) }}s
-                </div>
-
                 <!-- Waterfall container -->
                 <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
                   <!-- LLM Bar with content inside -->
@@ -124,11 +119,11 @@
                   >
                     <!-- Content INSIDE bar, flows to right when narrow -->
                     <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap">
-                      <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                       </svg>
                       <span>{{ event.model_name }}</span>
-                      <span class="text-white text-opacity-70">• {{ event.category }}</span>
+                      <span class="text-white text-opacity-70">- {{ event.duration.toFixed(2) }}s</span>
                     </div>
                   </div>
                 </div>
@@ -141,26 +136,8 @@
 
               <!-- Tool Call Event - Compact single row -->
               <div v-else class="flex items-center h-8">
-                <!-- Duration label on left -->
-                <div class="w-16 text-xs text-gray-600 text-right pr-2">
-                  {{ event.duration.toFixed(2) }}s
-                </div>
-
                 <!-- Waterfall container -->
                 <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
-                  <!-- For very small bars, show duration text before bar -->
-                  <span
-                    v-if="(event.duration / workflowDuration) <= 0.015"
-                    class="absolute text-xs font-medium text-gray-700 whitespace-nowrap pr-1"
-                    :style="{
-                      left: `${(event.start_offset / workflowDuration) * 100}%`,
-                      top: '50%',
-                      transform: 'translate(-100%, -50%)',
-                    }"
-                  >
-                    {{ event.duration.toFixed(2) }}s
-                  </span>
-
                   <!-- Tool Bar with content inside -->
                   <div
                     class="absolute h-full rounded-sm flex items-center px-2 bg-opacity-85"
@@ -172,12 +149,12 @@
                   >
                     <!-- Content INSIDE bar, flows to right when narrow -->
                     <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap">
-                      <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
                       <span>{{ event.tool_name }}</span>
-                      <span v-if="event.parallel_group" class="text-white text-opacity-70">• P{{ event.parallel_group }}</span>
+                      <span class="text-white text-opacity-70">- {{ event.duration.toFixed(2) }}s</span>
                     </div>
                   </div>
                 </div>
@@ -237,41 +214,41 @@
                 </button>
 
                 <!-- Main Agent LLM Calls -->
-                <div v-show="expandedLevels[levelIndex]" class="px-4 py-3 bg-white space-y-3">
+                <div v-show="expandedLevels[levelIndex]" class="px-4 py-3 bg-white space-y-1">
                   <div
                     v-for="(call, callIndex) in level.llm_calls"
                     :key="callIndex"
-                    class="space-y-2"
+                    class="flex items-center h-8"
                   >
-                    <div class="flex items-center justify-between text-sm">
-                      <div class="flex items-center space-x-2">
-                        <div class="w-2 h-2 rounded-full bg-primary-brandColor"></div>
-                        <span class="font-medium text-primary-bodyText">{{ call.model_name }}</span>
-                        <span v-if="call.provider" class="text-xs text-primary-brandTextSecondary">({{ call.provider }})</span>
-                      </div>
-                      <div class="flex items-center space-x-3 text-xs">
-                        <span class="text-primary-brandTextSecondary">{{ call.duration.toFixed(2) }}s</span>
-                        <span v-if="call.percentage" class="font-medium text-primary-brandColor">{{ call.percentage.toFixed(1) }}%</span>
-                      </div>
-                    </div>
-                    <!-- Bar rendering with defensive checks -->
-                    <div class="relative h-7 bg-gray-100 rounded-md overflow-hidden">
+                    <!-- Waterfall container -->
+                    <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
+                      <!-- LLM Bar with content inside -->
                       <div
                         v-if="call.duration > 0 && call.start_offset !== undefined && call.start_offset !== null"
-                        class="absolute top-0 h-full flex items-center justify-center text-white text-xs font-medium rounded-md bg-primary-brandColor"
+                        class="absolute h-full rounded-sm flex items-center px-2 bg-primary-brandColor bg-opacity-90"
                         :style="{
                           left: `${Math.max(0, (call.start_offset / workflowDuration) * 100)}%`,
-                          width: `${Math.max(0.5, (call.duration / workflowDuration) * 100)}%`
+                          width: `${Math.max(2, (call.duration / workflowDuration) * 100)}%`
                         }"
                       >
-                        <span v-if="(call.duration / workflowDuration) > 0.05">
-                          {{ call.duration.toFixed(1) }}s
-                        </span>
+                        <!-- Content INSIDE bar, flows to right when narrow -->
+                        <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap">
+                          <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                          </svg>
+                          <span>{{ call.model_name }}</span>
+                          <span class="text-white text-opacity-70">- {{ call.duration.toFixed(2) }}s</span>
+                        </div>
                       </div>
                       <!-- Debug: Show warning if bar can't render -->
                       <div v-else class="text-xs text-gray-400 px-2 py-1">
                         ⚠️ Missing timing data (duration: {{ call.duration }}, start_offset: {{ call.start_offset }})
                       </div>
+                    </div>
+
+                    <!-- Percentage on right -->
+                    <div class="w-12 text-xs text-primary-brandColor text-right pl-2">
+                      {{ call.percentage ? call.percentage.toFixed(1) + '%' : '' }}
                     </div>
                   </div>
                 </div>
@@ -335,36 +312,37 @@
                       </button>
 
                       <!-- Agent Calls -->
-                      <div v-show="expandedAgents[`${levelIndex}-${agentIndex}`]" class="px-4 py-2 bg-white space-y-2">
+                      <div v-show="expandedAgents[`${levelIndex}-${agentIndex}`]" class="px-4 py-2 bg-white space-y-1">
                         <div
                           v-for="(call, callIndex) in agent.calls"
                           :key="callIndex"
-                          class="space-y-1"
+                          class="flex items-center h-8"
                         >
-                          <div class="flex items-center justify-between text-xs">
-                            <div class="flex items-center space-x-2">
-                              <div class="w-2 h-2 rounded-full" :style="{ backgroundColor: getAgentColor(agentIndex) }"></div>
-                              <span class="font-medium text-primary-bodyText">{{ call.model_name }}</span>
-                              <span v-if="call.provider" class="text-xs text-primary-brandTextSecondary">({{ call.provider }})</span>
-                            </div>
-                            <div class="flex items-center space-x-2 text-xs">
-                              <span class="text-primary-brandTextSecondary">{{ call.duration.toFixed(2) }}s</span>
-                              <span class="font-medium text-primary-brandColor">{{ call.percentage.toFixed(1) }}%</span>
-                            </div>
-                          </div>
-                          <div class="relative h-7 bg-gray-100 rounded-md overflow-hidden">
+                          <!-- Waterfall container -->
+                          <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
+                            <!-- LLM Bar with content inside -->
                             <div
-                              class="absolute top-0 h-full flex items-center justify-center text-white text-xs font-medium rounded-md"
+                              class="absolute h-full rounded-sm flex items-center px-2 bg-opacity-90"
                               :style="{
                                 left: `${(call.start_offset / workflowDuration) * 100}%`,
-                                width: `${Math.max(0.5, (call.duration / workflowDuration) * 100)}%`,
+                                width: `${Math.max(2, (call.duration / workflowDuration) * 100)}%`,
                                 backgroundColor: getAgentColor(agentIndex)
                               }"
                             >
-                              <span v-if="(call.duration / workflowDuration) > 0.05">
-                                {{ call.duration.toFixed(1) }}s
-                              </span>
+                              <!-- Content INSIDE bar, flows to right when narrow -->
+                              <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap">
+                                <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                </svg>
+                                <span>{{ call.model_name }}</span>
+                                <span class="text-white text-opacity-70">- {{ call.duration.toFixed(2) }}s</span>
+                              </div>
                             </div>
+                          </div>
+
+                          <!-- Percentage on right -->
+                          <div class="w-12 text-xs text-right pl-2" :style="{ color: getAgentColor(agentIndex) }">
+                            {{ call.percentage.toFixed(1) }}%
                           </div>
                         </div>
                       </div>
@@ -406,63 +384,40 @@
             </svg>
           </button>
 
-          <div v-show="expandedToolsSection" class="space-y-2">
+          <div v-show="expandedToolsSection" class="space-y-1">
             <div
               v-for="(tool, idx) in toolTimings"
               :key="idx"
-              class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors"
+              class="relative"
             >
-              <div class="space-y-2">
-                <!-- Tool name and duration (like Main Agent style) -->
-                <div class="flex items-center justify-between text-sm">
-                  <div class="flex items-center space-x-2">
-                    <svg
-                      class="w-4 h-4"
-                      :class="tool.is_subgraph ? 'text-blue-600' : 'text-orange-600'"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span class="font-medium text-primary-bodyText">{{ tool.tool_name }}</span>
-                    <span v-if="tool.parallel_group" class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-md whitespace-nowrap">
-                      Parallel {{ tool.parallel_group }}
-                    </span>
-                    <span v-if="tool.is_subgraph" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-md whitespace-nowrap">
-                      Subgraph
-                    </span>
-                  </div>
-                  <!-- Duration - ALWAYS visible on the right -->
-                  <div class="flex items-center space-x-3 text-xs">
-                    <span class="text-gray-600">{{ tool.duration.toFixed(2) }}s</span>
+              <div class="flex items-center h-8">
+                <!-- Waterfall container -->
+                <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
+                  <!-- Tool Bar with content inside -->
+                  <div
+                    class="absolute h-full rounded-sm flex items-center px-2 bg-opacity-85"
+                    :class="tool.is_subgraph ? 'bg-blue-500' : 'bg-orange-500'"
+                    :style="{
+                      left: `${(tool.start_offset / workflowDuration) * 100}%`,
+                      width: `${Math.max(2, (tool.duration / workflowDuration) * 100)}%`
+                    }"
+                  >
+                    <!-- Content INSIDE bar, flows to right when narrow -->
+                    <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap">
+                      <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <span>{{ tool.tool_name }}</span>
+                      <span class="text-white text-opacity-70">- {{ tool.duration.toFixed(2) }}s</span>
+                      <span v-if="tool.parallel_group" class="text-white text-opacity-70">• P{{ tool.parallel_group }}</span>
+                    </div>
                   </div>
                 </div>
 
-                <!-- Waterfall bar -->
-                <div class="relative h-7 bg-gray-100 rounded-md overflow-visible">
-                  <!-- For small bars, show duration text to the left of the bar (LangSmith-style) -->
-                  <span
-                    v-if="(tool.duration / workflowDuration) <= 0.05"
-                    class="absolute text-xs font-medium text-gray-700 whitespace-nowrap pr-1"
-                    :style="{
-                      left: `${(tool.start_offset / workflowDuration) * 100}%`,
-                      top: '50%',
-                      transform: 'translate(-100%, -50%)',
-                    }"
-                  >
-                    {{ tool.duration.toFixed(2) }}s
-                  </span>
-
-                  <div
-                    class="absolute h-full rounded-md flex items-center justify-center text-white text-xs font-medium"
-                    :class="getToolBarClass(tool)"
-                    :style="getToolBarStyle(tool)"
-                  >
-                    <!-- Only show text inside bar if it's wide enough -->
-                    <span v-if="(tool.duration / workflowDuration) > 0.05">{{ tool.duration.toFixed(2) }}s</span>
-                  </div>
+                <!-- Percentage on right -->
+                <div class="w-12 text-xs text-orange-600 text-right pl-2">
+                  {{ ((tool.duration / workflowDuration) * 100).toFixed(1) }}%
                 </div>
               </div>
             </div>
@@ -510,40 +465,37 @@
               </button>
 
               <!-- Agent Calls (Collapsible) -->
-              <div v-show="expandedAgents[index]" class="px-4 py-3 bg-white space-y-3">
+              <div v-show="expandedAgents[index]" class="px-4 py-3 bg-white space-y-1">
                 <div
                   v-for="(call, callIndex) in agent.calls"
                   :key="callIndex"
-                  class="space-y-2"
+                  class="flex items-center h-8"
                 >
-                  <!-- Model Info -->
-                  <div class="flex items-center justify-between text-sm">
-                    <div class="flex items-center space-x-2">
-                      <div class="w-2 h-2 rounded-full" :style="{ backgroundColor: getAgentColor(index) }"></div>
-                      <span class="font-medium text-primary-bodyText">{{ call.model_name }}</span>
-                      <span v-if="call.provider" class="text-xs text-primary-brandTextSecondary">({{ call.provider }})</span>
-                    </div>
-                    <div class="flex items-center space-x-3 text-xs">
-                      <span class="text-primary-brandTextSecondary">{{ call.duration.toFixed(2) }}s</span>
-                      <span class="font-medium text-primary-brandColor">{{ call.percentage.toFixed(1) }}%</span>
-                    </div>
-                  </div>
-
-                  <!-- Waterfall Bar -->
-                  <div class="relative h-7 bg-gray-100 rounded-md overflow-hidden">
-                    <!-- Duration Bar -->
+                  <!-- Waterfall container -->
+                  <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
+                    <!-- LLM Bar with content inside -->
                     <div
-                      class="absolute top-0 h-full flex items-center justify-center text-white text-xs font-medium rounded-md"
+                      class="absolute h-full rounded-sm flex items-center px-2 bg-opacity-90"
                       :style="{
                         left: `${(call.start_offset / workflowDuration) * 100}%`,
-                        width: `${Math.max(0.5, (call.duration / workflowDuration) * 100)}%`,
+                        width: `${Math.max(2, (call.duration / workflowDuration) * 100)}%`,
                         backgroundColor: getAgentColor(index)
                       }"
                     >
-                      <span v-if="(call.duration / workflowDuration) > 0.05">
-                        {{ call.duration.toFixed(1) }}s
-                      </span>
+                      <!-- Content INSIDE bar, flows to right when narrow -->
+                      <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap">
+                        <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        <span>{{ call.model_name }}</span>
+                        <span class="text-white text-opacity-70">- {{ call.duration.toFixed(2) }}s</span>
+                      </div>
                     </div>
+                  </div>
+
+                  <!-- Percentage on right -->
+                  <div class="w-12 text-xs text-right pl-2" :style="{ color: getAgentColor(index) }">
+                    {{ call.percentage.toFixed(1) }}%
                   </div>
                 </div>
               </div>
@@ -560,42 +512,39 @@
             Model Calls Timeline
           </h3>
 
-          <div class="space-y-3">
+          <div class="space-y-1">
             <div
               v-for="(model, index) in modelBreakdown"
               :key="index"
-              class="space-y-2 p-3 rounded-lg hover:bg-gray-50"
+              class="flex items-center h-8"
             >
-            <!-- Model Info -->
-            <div class="flex items-center justify-between text-xs">
-              <div class="flex-1">
-                <span class="font-medium text-primary-bodyText">{{ model.model_name }}</span>
-                <span v-if="model.provider" class="ml-2 text-xs text-primary-brandTextSecondary">({{ model.provider }})</span>
-                <span v-if="model.agent_name" class="ml-2 text-xs text-primary-brandColor">• {{ model.agent_name }}</span>
+              <!-- Waterfall container -->
+              <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
+                <!-- LLM Bar with content inside -->
+                <div
+                  class="absolute h-full rounded-sm flex items-center px-2 bg-primary-brandColor bg-opacity-90"
+                  :style="{
+                    left: `${(model.start_offset / workflowDuration) * 100}%`,
+                    width: `${Math.max(2, (model.duration / workflowDuration) * 100)}%`
+                  }"
+                >
+                  <!-- Content INSIDE bar, flows to right when narrow -->
+                  <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap">
+                    <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    <span>{{ model.model_name }}</span>
+                    <span class="text-white text-opacity-70">- {{ model.duration.toFixed(2) }}s</span>
+                  </div>
+                </div>
               </div>
-              <div class="flex items-center space-x-3 text-xs">
-                <span class="text-primary-brandTextSecondary">{{ model.duration.toFixed(2) }}s</span>
-                <span class="font-medium text-primary-brandColor">{{ model.percentage.toFixed(1) }}%</span>
-              </div>
-            </div>
 
-            <!-- Waterfall Bar -->
-            <div class="relative h-7 bg-gray-100 rounded-md overflow-hidden">
-              <div
-                class="absolute top-0 h-full flex items-center justify-center text-white text-xs font-medium rounded-md"
-                :class="getColorClass(index)"
-                :style="{
-                  left: `${(model.start_offset / workflowDuration) * 100}%`,
-                  width: `${Math.max(0.5, (model.duration / workflowDuration) * 100)}%`
-                }"
-              >
-                <span v-if="(model.duration / workflowDuration) > 0.05">
-                  {{ model.duration.toFixed(1) }}s
-                </span>
+              <!-- Percentage on right -->
+              <div class="w-12 text-xs text-primary-brandColor text-right pl-2">
+                {{ model.percentage.toFixed(1) }}%
               </div>
             </div>
           </div>
-        </div>
         </div>
 
         </div>
