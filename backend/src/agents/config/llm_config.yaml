@@ -215,7 +215,7 @@ task_models:
   code_execution:
     provider: sambanova
     model: DeepSeek-V3-0324
-    description: "Code execution and debugging agent"
+    description: "Code error analysis and fixing agent"
 
   # Financial Analysis Subgraph (Crew)
   financial_analysis_main:

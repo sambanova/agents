@@ -401,7 +401,7 @@ def create_code_execution_graph(
 
                 config_manager = get_config_manager()
                 llm = get_llm_for_task(
-                    task="code_execution_agent",
+                    task="code_execution",
                     api_keys=api_keys,
                     config_manager=config_manager,
                     user_id=user_id
