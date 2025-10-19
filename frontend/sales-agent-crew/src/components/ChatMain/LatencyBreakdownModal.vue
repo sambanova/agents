@@ -42,9 +42,15 @@
                 </div>
               </div>
             </div>
-            <div class="text-right">
-              <div class="text-xs font-medium text-primary-brandTextSecondary">Total LLM Calls</div>
-              <div class="text-xl font-bold text-primary-brandColor mt-0.5">{{ totalLLMCalls }}</div>
+            <div class="flex items-center gap-6">
+              <div class="text-right">
+                <div class="text-xs font-medium text-primary-brandTextSecondary">Total LLM Calls</div>
+                <div class="text-xl font-bold text-primary-brandColor mt-0.5">{{ totalLLMCalls }}</div>
+              </div>
+              <div v-if="toolTimings.length > 0" class="text-right">
+                <div class="text-xs font-medium text-primary-brandTextSecondary">Total Tool Calls</div>
+                <div class="text-xl font-bold text-orange-600 mt-0.5">{{ toolTimings.length }}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -227,6 +233,76 @@
                       </div>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tool Calls Timeline Section (for hierarchical timing only) -->
+        <div v-if="showHierarchical && toolTimings.length > 0" class="mb-6">
+          <button
+            @click="toggleToolsSection"
+            class="w-full flex items-center justify-between mb-3 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <div class="flex items-center space-x-2">
+              <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span class="text-base font-bold text-primary-bodyText">Tool Calls Timeline</span>
+              <span class="text-sm text-primary-brandTextSecondary">
+                ({{ toolTimings.length }} total{{ parallelToolCount > 0 ? `, ${parallelToolCount} parallel` : '' }})
+              </span>
+            </div>
+            <svg
+              class="w-5 h-5 text-primary-brandColor transition-transform"
+              :class="{ 'rotate-180': expandedToolsSection }"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          <div v-show="expandedToolsSection" class="space-y-2">
+            <div
+              v-for="(tool, idx) in toolTimings"
+              :key="idx"
+              class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors"
+            >
+              <div class="flex items-center gap-2 mb-2">
+                <svg
+                  class="w-4 h-4"
+                  :class="tool.is_subgraph ? 'text-blue-600' : 'text-orange-600'"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span class="text-sm font-medium text-primary-bodyText min-w-[180px]">{{ tool.tool_name }}</span>
+
+                <div class="flex-1 flex items-center gap-2">
+                  <!-- Waterfall bar -->
+                  <div class="flex-1 relative h-7 bg-gray-100 rounded-md overflow-hidden">
+                    <div
+                      class="absolute h-full rounded-md flex items-center justify-center text-white text-xs font-medium"
+                      :class="getToolBarClass(tool)"
+                      :style="getToolBarStyle(tool)"
+                    >
+                      <span>{{ tool.duration.toFixed(2) }}s</span>
+                    </div>
+                  </div>
+
+                  <span v-if="tool.parallel_group" class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-md whitespace-nowrap">
+                    Parallel {{ tool.parallel_group }}
+                  </span>
+                  <span v-if="tool.is_subgraph" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-md whitespace-nowrap">
+                    Subgraph
+                  </span>
                 </div>
               </div>
             </div>
@@ -435,6 +511,17 @@ const totalLLMCalls = computed(() => {
 // Track which agents/levels are expanded
 const expandedAgents = ref({});
 const expandedLevels = ref({});
+const expandedToolsSection = ref(true); // Expanded by default
+
+// Computed properties for tool timings
+const toolTimings = computed(() => {
+  if (!props.hierarchicalTiming?.tool_timings) return [];
+  return props.hierarchicalTiming.tool_timings;
+});
+
+const parallelToolCount = computed(() => {
+  return props.hierarchicalTiming?.parallel_tool_calls || 0;
+});
 
 function toggleAgent(index) {
   expandedAgents.value[index] = !expandedAgents.value[index];
@@ -447,6 +534,32 @@ function toggleLevel(levelIndex) {
 function toggleSubgraphAgent(levelIndex, agentIndex) {
   const key = `${levelIndex}-${agentIndex}`;
   expandedAgents.value[key] = !expandedAgents.value[key];
+}
+
+function toggleToolsSection() {
+  expandedToolsSection.value = !expandedToolsSection.value;
+}
+
+// Tool bar styling functions
+function getToolBarStyle(tool) {
+  const totalDuration = workflowDuration.value;
+  const startPercent = (tool.start_offset / totalDuration) * 100;
+  const widthPercent = (tool.duration / totalDuration) * 100;
+
+  return {
+    left: `${startPercent}%`,
+    width: `${Math.max(0.5, widthPercent)}%`,
+  };
+}
+
+function getToolBarClass(tool) {
+  if (tool.is_subgraph) {
+    return 'bg-blue-500';  // DaytonaCodeSandbox - blue
+  } else if (tool.parallel_group) {
+    return 'bg-purple-500';  // Parallel tools - purple
+  } else {
+    return 'bg-orange-500';  // Regular tools - orange
+  }
 }
 
 // Calculate total duration for a level

@@ -843,8 +843,55 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                         num_llm_calls=len(level.get('model_breakdown', [])),
                     )
 
+        # Aggregate tool timings from current workflow
+        tool_timings = []
+        parallel_group_counter = 0
+
+        for msg in messages[start_index:]:
+            if isinstance(msg, LiberalFunctionMessage):
+                timing = msg.additional_kwargs.get('tool_timing')
+                if not timing:
+                    continue
+
+                # Skip financial_analysis and deep_research subgraph messages (they're separate workflows)
+                # We check agent_type to identify these
+                agent_type = msg.additional_kwargs.get('agent_type', '')
+                if 'financial_analysis' in agent_type or 'deep_research' in agent_type:
+                    continue
+
+                # Handle parallel tools
+                if timing.get('is_parallel'):
+                    parallel_group_counter += 1
+                    for tool in timing['tools']:
+                        tool_timings.append({
+                            "tool_name": tool['tool_name'],
+                            "duration": tool['duration'],
+                            "start_offset": tool['start_time'] - workflow_start_time,
+                            "timestamp": msg.additional_kwargs.get('timestamp'),
+                            "success": True,
+                            "parallel_group": parallel_group_counter,
+                        })
+                else:
+                    # Single tool or DaytonaCodeSandbox
+                    tool_timings.append({
+                        "tool_name": timing['tool_name'],
+                        "duration": timing['duration'],
+                        "start_offset": timing['start_time'] - workflow_start_time,
+                        "timestamp": msg.additional_kwargs.get('timestamp'),
+                        "success": timing.get('success', True),
+                        "parallel_group": None,
+                        "is_subgraph": timing.get('is_subgraph', False),
+                    })
+
         # Get hierarchical timing structure with explicit end time
         hierarchical_timing = aggregator.get_hierarchical_timing(workflow_end_time=workflow_end_time)
+
+        # Add tool timing information to hierarchical_timing
+        hierarchical_timing['total_tool_calls'] = len(tool_timings)
+        hierarchical_timing['parallel_tool_calls'] = sum(
+            1 for t in tool_timings if t.get('parallel_group') is not None
+        )
+        hierarchical_timing['tool_timings'] = tool_timings
 
         # Attach to additional_kwargs (will be on the final message)
         additional_kwargs['workflow_timing'] = hierarchical_timing
@@ -856,6 +903,9 @@ Make sure to include both opening and closing tags for both tool and tool_input.
             num_levels=len(hierarchical_timing.get('levels', [])),
             num_main_agent_calls=len(main_agent_calls),
             num_subgraphs=len(subgraph_timings),
+            total_tool_calls=len(tool_timings),
+            parallel_groups=parallel_group_counter,
+            tool_names=[t['tool_name'] for t in tool_timings],
         )
 
         return hierarchical_timing.get('workflow_duration', 0)
@@ -1172,10 +1222,16 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                         "agent_type": "tool_response",
                         "error_type": "tool_execution_error",
+                        "tool_timing": {
+                            "tool_name": _tool,
+                            "duration": duration,
+                            "start_time": start_time,
+                            "success": False,
+                        },
                     },
                 )
 
-            # Create function message
+            # Create function message with tool timing
             function_message = LiberalFunctionMessage(
                 content=response if len(response) > 0 else "No response from tool",
                 response_metadata={"usage": {"total_latency": duration}},
@@ -1183,6 +1239,12 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 additional_kwargs={
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "agent_type": "tool_response",
+                    "tool_timing": {
+                        "tool_name": action.tool,
+                        "duration": duration,
+                        "start_time": start_time,
+                        "success": True,
+                    },
                 },
             )
             return function_message
@@ -1319,6 +1381,17 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 "agent_type": "tool_response",
                 "parallel_tools": [t[0] for t in tool_calls],
                 "num_tools": len(tool_calls),
+                "tool_timing": {
+                    "is_parallel": True,
+                    "tools": [
+                        {
+                            "tool_name": tool_name,
+                            "duration": duration,  # All parallel tools share the same duration
+                            "start_time": start_time,
+                        }
+                        for tool_name, _ in tool_calls
+                    ],
+                },
             },
         )
 
@@ -1379,7 +1452,28 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 success=True,
             )
 
-            return state_output_mapper(result)
+            # Map the result using state_output_mapper
+            mapped_result = state_output_mapper(result)
+
+            # For DaytonaCodeSandbox, add tool_timing to track it like an inline tool
+            if subgraph_name == "DaytonaCodeSandbox":
+                # mapped_result should be a message - add tool_timing to its additional_kwargs
+                if hasattr(mapped_result, 'additional_kwargs'):
+                    if mapped_result.additional_kwargs is None:
+                        mapped_result.additional_kwargs = {}
+                    mapped_result.additional_kwargs["tool_timing"] = {
+                        "tool_name": "DaytonaCodeSandbox",
+                        "duration": duration,
+                        "start_time": start_time,
+                        "success": True,
+                        "is_subgraph": True,
+                    }
+                    logger.info(
+                        "Added tool_timing for DaytonaCodeSandbox",
+                        duration=round(duration, 3),
+                    )
+
+            return mapped_result
 
         return subgraph_entry_node
 
