@@ -227,7 +227,7 @@
 
                     <!-- Tool Calls Count -->
                     <div class="flex flex-col items-center w-[40px] sm:w-[50px]">
-                      <span class="text-xs font-semibold text-orange-600">{{ getToolCallsCount(msgItem) }}</span>
+                      <span class="text-xs font-semibold text-gray-800">{{ getToolCallsCount(msgItem) }}</span>
                       <span class="text-2xs text-gray-600">tool calls</span>
                     </div>
                   </template>
@@ -239,7 +239,7 @@
 
                     <!-- Parallel Tool Calls Count -->
                     <div class="flex flex-col items-center w-[40px] sm:w-[50px]">
-                      <span class="text-xs font-semibold text-purple-600">{{ getParallelToolCallsCount(msgItem) }}</span>
+                      <span class="text-xs font-semibold text-gray-800">{{ getParallelToolCallsCount(msgItem) }}</span>
                       <span class="text-2xs text-gray-600">parallel</span>
                     </div>
                   </template>
