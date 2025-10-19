@@ -225,14 +225,9 @@ class FinancialAnalysisCrew:
             aggregator_provider = aggregator_task.get("provider", "sambanova")
 
             # Get API keys
-            logger.info(f"[API_KEY_DEBUG] admin_api_keys sambanova value: {bool(admin_api_keys.get('sambanova'))}, preview: {admin_api_keys.get('sambanova')[:10] if admin_api_keys.get('sambanova') else 'None'}")
-            logger.info(f"[API_KEY_DEBUG] llm_api_key preview: {llm_api_key[:10] if llm_api_key else 'None'}")
-
             competitor_api_key = competitor_task.get("api_key") or admin_api_keys.get(competitor_provider, llm_api_key)
             default_api_key = default_task.get("api_key") or admin_api_keys.get(default_provider, llm_api_key)
             aggregator_api_key = aggregator_task.get("api_key") or admin_api_keys.get(aggregator_provider, llm_api_key)
-
-            logger.info(f"[API_KEY_DEBUG] aggregator_api_key result: {bool(aggregator_api_key)}, preview: {aggregator_api_key[:10] if aggregator_api_key else 'None'}")
 
             # Get provider configs
             competitor_config = config_manager.get_provider_config(competitor_provider, user_id)

@@ -298,17 +298,10 @@ class LLMConfigManager:
         Returns:
             Dict with provider, model, and optionally base_url information
         """
-        # Debug logging
-        logger.info(f"[TASK_MODEL_DEBUG] get_task_model called with task={task}, user_id={user_id[:8] if user_id else None}")
-        logger.info(f"[TASK_MODEL_DEBUG] user_id in self._user_overrides: {user_id in self._user_overrides if user_id else False}")
-        logger.info(f"[TASK_MODEL_DEBUG] Available user_ids in overrides: {[uid[:8] for uid in self._user_overrides.keys()]}")
-
         # Check user overrides first
         if user_id and user_id in self._user_overrides:
             user_config = self._user_overrides[user_id].get("task_models", {})
-            logger.info(f"[TASK_MODEL_DEBUG] Task: {task}, available tasks: {list(user_config.keys())}")
             if task in user_config:
-                logger.info(f"[TASK_MODEL_DEBUG] Found task {task} in user_config: {user_config[task]}")
                 result = user_config[task].copy()
 
                 # Check if the provider is a custom provider (either via custom_provider field or by checking the provider name)
@@ -326,18 +319,6 @@ class LLMConfigManager:
                         api_key_from_dict = custom_api_keys.get(f"custom_{provider_name}")
 
                         result["api_key"] = api_key_from_provider or api_key_from_dict
-
-                        logger.info(f"[API_KEY_DEBUG] Task {task}, Provider {provider_name}")
-                        logger.info(f"[API_KEY_DEBUG]   apiKey from provider object: {bool(api_key_from_provider)}")
-                        if api_key_from_provider:
-                            logger.info(f"[API_KEY_DEBUG]   provider object key preview: {api_key_from_provider[:8]}...{api_key_from_provider[-4:]}")
-                        logger.info(f"[API_KEY_DEBUG]   apiKey from custom_api_keys: {bool(api_key_from_dict)}")
-                        if api_key_from_dict:
-                            logger.info(f"[API_KEY_DEBUG]   custom_api_keys key preview: {api_key_from_dict[:8]}...{api_key_from_dict[-4:]}")
-                        logger.info(f"[API_KEY_DEBUG]   final api_key: {bool(result.get('api_key'))}")
-                        if result.get('api_key'):
-                            logger.info(f"[API_KEY_DEBUG]   final key preview: {result.get('api_key')[:8]}...{result.get('api_key')[-4:]}")
-
                         result["provider"] = provider_name  # Set provider to the custom provider name
                         result["provider_type"] = custom_prov.get("providerType", "openai")
                         logger.debug(f"Task {task} using custom provider {provider_name} with type {result.get('provider_type')}, base_url={result.get('base_url')}")

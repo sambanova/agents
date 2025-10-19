@@ -64,11 +64,6 @@ def get_llm(
             # If custom base_url provided, use sambanova_url parameter
             if base_url:
                 sambanova_kwargs["sambanova_url"] = base_url
-                logger.info(f"[SAMBANOVA_INIT] Using custom SambaNova URL: {base_url}")
-            else:
-                logger.info(f"[SAMBANOVA_INIT] Using default SambaNova URL (no base_url provided)")
-
-            logger.info(f"[SAMBANOVA_INIT] Initializing with kwargs: model={sambanova_kwargs.get('model')}, has_custom_url={bool(base_url)}, api_key_preview={api_key[:8]}...{api_key[-4:]}")
 
             llm = ChatSambaNovaCloud(**sambanova_kwargs)
 
@@ -118,16 +113,6 @@ def get_llm(
             if not base_url:
                 raise ValueError(f"Custom provider {provider} requires a base_url")
 
-            logger.info(
-                f"[CUSTOM_OPENAI] Using custom OpenAI-compatible provider",
-                provider=provider,
-                base_url=base_url,
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                api_key_preview=f"{api_key[:8]}...{api_key[-4:]}"
-            )
-
             llm = ChatOpenAI(
                 model=model,
                 temperature=temperature,
@@ -135,8 +120,6 @@ def get_llm(
                 api_key=api_key,
                 base_url=base_url,
             )
-
-            logger.info(f"[CUSTOM_OPENAI] ChatOpenAI initialized successfully")
 
         logger.info(
             "LLM initialized successfully",
@@ -208,20 +191,9 @@ def get_llm_for_task(
     logger.info(f"Provider: {provider}, Provider Type: {provider_type}, Actual Provider for LLM: {actual_provider}, Base URL: {base_url}")
 
     # Get the appropriate API key
-    logger.info(f"[API_KEY_DEBUG] api_keys dict type: {type(api_keys)}")
-    if isinstance(api_keys, dict):
-        logger.info(f"[API_KEY_DEBUG] api_keys dict keys: {list(api_keys.keys())}")
-        for key in api_keys:
-            if api_keys[key]:
-                logger.info(f"[API_KEY_DEBUG] api_keys[{key}] preview: {api_keys[key][:8]}...{api_keys[key][-4:]}")
-
     # If task has a specific API key (from custom provider), use it first
     if task_specific_api_key:
         api_key = task_specific_api_key
-        logger.info(f"[API_KEY_DEBUG] Using task-specific API key for custom provider")
-        logger.info(f"[API_KEY_DEBUG] API key value present: {bool(api_key)}")
-        logger.info(f"[API_KEY_DEBUG] API key length: {len(api_key) if api_key else 0}")
-        logger.info(f"[API_KEY_DEBUG] API key preview: {api_key[:8]}...{api_key[-4:] if len(api_key) > 12 else ''}")
     # For backward compatibility, if only a string key is provided, assume it's for SambaNova
     elif isinstance(api_keys, str):
         api_key = api_keys
