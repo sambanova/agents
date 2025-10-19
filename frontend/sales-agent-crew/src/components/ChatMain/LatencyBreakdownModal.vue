@@ -49,11 +49,132 @@
               </div>
               <div v-if="toolTimings.length > 0" class="text-right">
                 <div class="text-xs font-medium text-primary-brandTextSecondary">Total Tool Calls</div>
-                <div class="text-xl font-bold text-orange-600 mt-0.5">{{ toolTimings.length }}</div>
+                <div class="text-xl font-bold text-purple-600 mt-0.5">{{ toolTimings.length }}</div>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- View Mode Toggle -->
+        <div v-if="showHierarchical" class="mb-4 flex items-center justify-between bg-gray-50 rounded-lg p-2">
+          <span class="text-sm font-medium text-gray-700">Timeline View:</span>
+          <div class="inline-flex rounded-lg border border-gray-200 bg-white">
+            <button
+              @click="viewMode = 'integrated'"
+              class="px-4 py-1.5 text-sm font-medium rounded-l-lg transition-colors"
+              :class="viewMode === 'integrated' ? 'bg-primary-brandColor text-white' : 'text-gray-700 hover:bg-gray-50'"
+            >
+              Integrated
+            </button>
+            <button
+              @click="viewMode = 'separated'"
+              class="px-4 py-1.5 text-sm font-medium rounded-r-lg transition-colors"
+              :class="viewMode === 'separated' ? 'bg-primary-brandColor text-white' : 'text-gray-700 hover:bg-gray-50'"
+            >
+              Separated
+            </button>
+          </div>
+        </div>
+
+        <!-- INTEGRATED VIEW: All events chronologically -->
+        <div v-if="viewMode === 'integrated' && showHierarchical" class="mb-6">
+          <h3 class="text-base font-bold text-primary-bodyText mb-3 flex items-center">
+            <svg class="w-4 h-4 mr-2 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Complete Workflow Timeline
+            <span class="ml-2 text-sm text-gray-500">({{ integratedTimeline.length }} total events)</span>
+          </h3>
+
+          <div class="space-y-2">
+            <div
+              v-for="(event, idx) in integratedTimeline"
+              :key="idx"
+              class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors"
+            >
+              <!-- LLM Call Event -->
+              <div v-if="event.type === 'llm_call'" class="space-y-2">
+                <div class="flex items-center justify-between text-sm">
+                  <div class="flex items-center space-x-2">
+                    <div class="w-2 h-2 rounded-full bg-primary-brandColor"></div>
+                    <span class="font-medium text-primary-bodyText">{{ event.model_name }}</span>
+                    <span v-if="event.provider" class="text-xs text-primary-brandTextSecondary">({{ event.provider }})</span>
+                    <span class="text-xs bg-primary-brandColor bg-opacity-10 text-primary-brandColor px-2 py-1 rounded-md">
+                      {{ event.category }}
+                    </span>
+                  </div>
+                  <div class="flex items-center space-x-3 text-xs">
+                    <span class="text-primary-brandTextSecondary">{{ event.duration.toFixed(2) }}s</span>
+                    <span v-if="event.percentage" class="font-medium text-primary-brandColor">{{ event.percentage.toFixed(1) }}%</span>
+                  </div>
+                </div>
+                <!-- Waterfall bar for LLM call -->
+                <div class="relative h-7 bg-gray-100 rounded-md overflow-hidden">
+                  <div
+                    class="absolute h-full rounded-md flex items-center justify-center text-white text-xs font-medium bg-primary-brandColor"
+                    :style="{
+                      left: `${(event.start_offset / workflowDuration) * 100}%`,
+                      width: `${Math.max(0.5, (event.duration / workflowDuration) * 100)}%`
+                    }"
+                  >
+                    <span v-if="(event.duration / workflowDuration) > 0.05">{{ event.duration.toFixed(2) }}s</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tool Call Event -->
+              <div v-else class="space-y-2">
+                <div class="flex items-center justify-between text-sm">
+                  <div class="flex items-center space-x-2">
+                    <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span class="font-medium text-primary-bodyText">{{ event.tool_name }}</span>
+                    <span v-if="event.parallel_group" class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-md whitespace-nowrap">
+                      Parallel {{ event.parallel_group }}
+                    </span>
+                    <span v-if="event.is_subgraph" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-md whitespace-nowrap">
+                      Subgraph
+                    </span>
+                  </div>
+                  <div class="flex items-center space-x-3 text-xs">
+                    <span class="text-gray-600">{{ event.duration.toFixed(2) }}s</span>
+                  </div>
+                </div>
+                <!-- Waterfall bar for tool call -->
+                <div class="relative h-7 bg-gray-100 rounded-md overflow-visible">
+                  <!-- For small bars, show duration text to the left -->
+                  <span
+                    v-if="(event.duration / workflowDuration) <= 0.05"
+                    class="absolute text-xs font-medium text-gray-700 whitespace-nowrap pr-1"
+                    :style="{
+                      left: `${(event.start_offset / workflowDuration) * 100}%`,
+                      top: '50%',
+                      transform: 'translate(-100%, -50%)',
+                    }"
+                  >
+                    {{ event.duration.toFixed(2) }}s
+                  </span>
+
+                  <div
+                    class="absolute h-full rounded-md flex items-center justify-center text-white text-xs font-medium"
+                    :class="event.is_subgraph ? 'bg-blue-500' : 'bg-purple-400'"
+                    :style="{
+                      left: `${(event.start_offset / workflowDuration) * 100}%`,
+                      width: `${Math.max(0.5, (event.duration / workflowDuration) * 100)}%`
+                    }"
+                  >
+                    <span v-if="(event.duration / workflowDuration) > 0.05">{{ event.duration.toFixed(2) }}s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SEPARATED VIEW: Original layout with LLM calls and tools in separate sections -->
+        <div v-if="viewMode === 'separated'">
 
         <!-- Hierarchical Workflow Breakdown (LangSmith-style) -->
         <div v-if="showHierarchical" class="mb-6">
@@ -245,7 +366,7 @@
           >
             <div class="flex items-center justify-between flex-1">
               <div class="flex items-center space-x-2">
-                <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
@@ -254,7 +375,7 @@
                   ({{ toolTimings.length }} total{{ numParallelGroups > 0 ? `, ${numParallelGroups} parallel ${numParallelGroups === 1 ? 'call' : 'calls'} calling ${parallelToolCount} ${parallelToolCount === 1 ? 'tool' : 'tools'}` : '' }})
                 </span>
               </div>
-              <span class="text-xs font-medium text-orange-600 mr-2">{{ totalToolTime.toFixed(2) }}s</span>
+              <span class="text-xs font-medium text-purple-600 mr-2">{{ totalToolTime.toFixed(2) }}s</span>
             </div>
             <svg
               class="w-5 h-5 text-primary-brandColor transition-transform"
@@ -279,7 +400,7 @@
                   <div class="flex items-center space-x-2">
                     <svg
                       class="w-4 h-4"
-                      :class="tool.is_subgraph ? 'text-blue-600' : 'text-orange-600'"
+                      :class="tool.is_subgraph ? 'text-blue-600' : 'text-purple-600'"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -302,7 +423,20 @@
                 </div>
 
                 <!-- Waterfall bar -->
-                <div class="relative h-7 bg-gray-100 rounded-md overflow-hidden">
+                <div class="relative h-7 bg-gray-100 rounded-md overflow-visible">
+                  <!-- For small bars, show duration text to the left of the bar (LangSmith-style) -->
+                  <span
+                    v-if="(tool.duration / workflowDuration) <= 0.05"
+                    class="absolute text-xs font-medium text-gray-700 whitespace-nowrap pr-1"
+                    :style="{
+                      left: `${(tool.start_offset / workflowDuration) * 100}%`,
+                      top: '50%',
+                      transform: 'translate(-100%, -50%)',
+                    }"
+                  >
+                    {{ tool.duration.toFixed(2) }}s
+                  </span>
+
                   <div
                     class="absolute h-full rounded-md flex items-center justify-center text-white text-xs font-medium"
                     :class="getToolBarClass(tool)"
@@ -445,6 +579,9 @@
           </div>
         </div>
         </div>
+
+        </div>
+        <!-- End of SEPARATED VIEW -->
       </div>
 
       <!-- Footer -->
@@ -512,6 +649,9 @@ const expandedAgents = ref({});
 const expandedLevels = ref({});
 const expandedToolsSection = ref(true); // Expanded by default
 
+// View mode toggle for integrated vs separated timeline
+const viewMode = ref('separated'); // 'separated' or 'integrated'
+
 // Computed properties for tool timings
 const toolTimings = computed(() => {
   if (!props.hierarchicalTiming?.tool_timings) return [];
@@ -532,6 +672,47 @@ const totalToolTime = computed(() => {
   return props.hierarchicalTiming.tool_timings.reduce((sum, tool) => sum + tool.duration, 0);
 });
 
+// Integrated timeline combining LLM calls and tool calls chronologically
+const integratedTimeline = computed(() => {
+  if (!showHierarchical.value) return [];
+
+  const events = [];
+
+  // Add all main agent LLM calls
+  props.hierarchicalTiming.levels.forEach(level => {
+    if (level.level === 'main_agent' && level.llm_calls) {
+      level.llm_calls.forEach(call => {
+        events.push({
+          type: 'llm_call',
+          category: 'Main Agent',
+          ...call,
+        });
+      });
+    }
+    // Add subgraph LLM calls
+    if (level.level === 'subgraph' && level.model_breakdown) {
+      level.model_breakdown.forEach(call => {
+        events.push({
+          type: 'llm_call',
+          category: level.subgraph_name,
+          ...call,
+        });
+      });
+    }
+  });
+
+  // Add all tool calls
+  toolTimings.value.forEach(tool => {
+    events.push({
+      type: 'tool_call',
+      ...tool,
+    });
+  });
+
+  // Sort chronologically by start_offset
+  return events.sort((a, b) => a.start_offset - b.start_offset);
+});
+
 function toggleAgent(index) {
   expandedAgents.value[index] = !expandedAgents.value[index];
 }
@@ -549,6 +730,10 @@ function toggleToolsSection() {
   expandedToolsSection.value = !expandedToolsSection.value;
 }
 
+function toggleViewMode() {
+  viewMode.value = viewMode.value === 'separated' ? 'integrated' : 'separated';
+}
+
 // Tool bar styling functions
 function getToolBarStyle(tool) {
   const totalDuration = workflowDuration.value;
@@ -564,10 +749,8 @@ function getToolBarStyle(tool) {
 function getToolBarClass(tool) {
   if (tool.is_subgraph) {
     return 'bg-blue-500';  // DaytonaCodeSandbox - blue
-  } else if (tool.parallel_group) {
-    return 'bg-purple-500';  // Parallel tools - purple
   } else {
-    return 'bg-orange-500';  // Regular tools - orange
+    return 'bg-purple-400';  // All tools - lighter purple
   }
 }
 
