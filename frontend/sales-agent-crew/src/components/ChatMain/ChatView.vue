@@ -2182,18 +2182,15 @@ function cleanTranscription(transcribedText) {
 
 async function handleFileUpload(event) {
   const files = Array.from(event.target.files || []);
-  console.log('[ChatView] Upload triggered, files:', files.length);
   if (files.length === 0) return;
 
   isUploading.value = true;
   try {
     for (const file of files) {
-      console.log('[ChatView] Uploading file:', file.name, 'size:', file.size, 'type:', file.type);
       const formData = new FormData();
       formData.append('file', file);
 
       const uploadUrl = `${import.meta.env.VITE_API_URL}/upload`;
-      console.log('[ChatView] Upload URL:', uploadUrl);
 
       const response = await axios.post(
         uploadUrl,
@@ -2205,15 +2202,12 @@ async function handleFileUpload(event) {
         }
       );
 
-      console.log('[ChatView] Upload response:', response.status, response.data);
-
       const document = response.data.document || response.data.file;
       if (!document) {
         console.error('[ChatView] No document in response:', response.data);
         throw new Error('Invalid upload response - no document returned');
       }
 
-      console.log('[ChatView] Document uploaded:', document.file_id);
       uploadedDocuments.value.unshift(document);
       if (!selectedDocuments.value.includes(document.file_id)) {
         selectedDocuments.value.push(document.file_id);
@@ -2221,7 +2215,6 @@ async function handleFileUpload(event) {
     }
 
     await loadUserDocuments();
-    console.log('[ChatView] Upload complete, total documents:', uploadedDocuments.value.length);
   } catch (error) {
     console.error('[ChatView] Upload error:', error);
     console.error('[ChatView] Error details:', {
@@ -2366,15 +2359,11 @@ const addMessage = async () => {
     resume: shouldResume,
   };
 
-  console.log('[ChatView] selectedDocuments.value:', selectedDocuments.value);
-  console.log('[ChatView] uploadedDocuments.value:', uploadedDocuments.value);
-
   if (selectedDocuments.value && selectedDocuments.value.length > 0) {
     messagePayload.document_ids = selectedDocuments.value
       .map((docId) => {
         // Find the full document object from uploadedDocuments
         const fullDoc = uploadedDocuments.value.find(doc => doc.file_id === docId);
-        console.log('[ChatView] Processing docId:', docId, 'Found fullDoc:', fullDoc);
         if (fullDoc) {
           return {
             format: fullDoc.format || 'unknown',
@@ -2386,15 +2375,12 @@ const addMessage = async () => {
         return null;
       })
       .filter(doc => doc !== null);
-    console.log('[ChatView] Final document_ids in payload:', messagePayload.document_ids);
   } else {
-    console.log('[ChatView] No selectedDocuments, setting document_ids to []');
     messagePayload.document_ids = [];
   }
 
   if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
     try {
-      console.log('Socket not connected. Connecting...');
       connectWebSocket();
       await waitForSocketOpen();
 
@@ -2411,8 +2397,6 @@ const addMessage = async () => {
       if (messagesData.value.length === 1) {
         emitterMitt.emit('refresh-chat-list');
       }
-
-      console.log('Message sent after connecting:', messagePayload);
     } catch (error) {
       errorMessage.value = 'WebSocket connection error occurred.';
       isLoading.value = false;
@@ -2483,7 +2467,6 @@ async function connectWebSocket() {
     const fullUrl = `${WEBSOCKET_URL}?conversation_id=${currentId.value}`;
     socket.value = new WebSocket(fullUrl);
     socket.value.onopen = () => {
-      console.log('WebSocket connection opened');
       socket.value.send(
         JSON.stringify({
           type: 'auth',
