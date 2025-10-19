@@ -235,7 +235,7 @@
                 </button>
 
                 <!-- Main Agent LLM Calls -->
-                <div v-show="expandedLevels[levelIndex]" class="px-4 py-3 bg-white">
+                <div v-show="expandedLevels[levelIndex]" class="pl-4 pr-20 py-3 bg-white">
                   <!-- Time Scale Ruler -->
                   <div class="relative h-6 mb-1 border-b border-gray-300">
                     <div
@@ -353,7 +353,7 @@
                       </button>
 
                       <!-- Agent Calls -->
-                      <div v-show="expandedAgents[`${levelIndex}-${agentIndex}`]" class="px-4 py-2 bg-white space-y-1">
+                      <div v-show="expandedAgents[`${levelIndex}-${agentIndex}`]" class="pl-4 pr-20 py-2 bg-white space-y-1">
                         <div
                           v-for="(call, callIndex) in agent.calls"
                           :key="callIndex"
@@ -427,7 +427,7 @@
             </svg>
           </button>
 
-          <div v-show="expandedToolsSection" class="px-4 py-3 bg-white">
+          <div v-show="expandedToolsSection" class="pl-4 pr-20 py-3 bg-white">
             <!-- Time Scale Ruler -->
             <div class="relative h-6 mb-1 border-b border-gray-300">
               <div
