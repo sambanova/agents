@@ -124,8 +124,8 @@
             >
               <!-- LLM Call Event - Compact single row -->
               <div v-if="event.type === 'llm_call'" class="flex items-center h-8">
-                <!-- Waterfall container -->
-                <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
+                <!-- Waterfall container - full width minus space for percentage -->
+                <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible mr-20">
                   <!-- LLM Bar with content inside -->
                   <div
                     class="absolute h-full rounded-sm flex items-center px-2 bg-purple-200"
@@ -145,16 +145,16 @@
                   </div>
                 </div>
 
-                <!-- Percentage on right -->
-                <div class="w-12 text-xs text-primary-brandColor text-right pl-2">
+                <!-- Percentage - regular flex item -->
+                <div class="w-16 text-xs text-primary-brandColor text-right flex-shrink-0">
                   {{ event.percentage ? event.percentage.toFixed(1) + '%' : '' }}
                 </div>
               </div>
 
               <!-- Tool Call Event - Compact single row -->
               <div v-else class="flex items-center h-8">
-                <!-- Waterfall container -->
-                <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
+                <!-- Waterfall container - full width minus space for percentage -->
+                <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible mr-20">
                   <!-- Tool Bar with content inside -->
                   <div
                     class="absolute h-full rounded-sm flex items-center px-2"
@@ -175,8 +175,8 @@
                   </div>
                 </div>
 
-                <!-- Percentage on right (like LLM calls) -->
-                <div class="w-12 text-xs text-primary-brandColor text-right pl-2">
+                <!-- Percentage - regular flex item -->
+                <div class="w-16 text-xs text-primary-brandColor text-right flex-shrink-0">
                   {{ event.percentage ? event.percentage.toFixed(1) + '%' : '' }}
                 </div>
               </div>
@@ -252,8 +252,8 @@
                     :key="callIndex"
                     class="flex items-center h-8"
                   >
-                    <!-- Waterfall container -->
-                    <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
+                    <!-- Waterfall container - full width minus space for percentage -->
+                    <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible mr-20">
                       <!-- LLM Bar with content inside -->
                       <div
                         v-if="call.duration > 0 && call.start_offset !== undefined && call.start_offset !== null"
@@ -278,8 +278,8 @@
                       </div>
                     </div>
 
-                    <!-- Percentage on right -->
-                    <div class="w-12 text-xs text-primary-brandColor text-right pl-2">
+                    <!-- Percentage - regular flex item -->
+                    <div class="w-16 text-xs text-primary-brandColor text-right flex-shrink-0">
                       {{ call.percentage ? call.percentage.toFixed(1) + '%' : '' }}
                     </div>
                   </div>
@@ -351,8 +351,8 @@
                           :key="callIndex"
                           class="flex items-center h-8"
                         >
-                          <!-- Waterfall container -->
-                          <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
+                          <!-- Waterfall container - full width minus space for percentage -->
+                          <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible mr-20">
                             <!-- LLM Bar with content inside -->
                             <div
                               class="absolute h-full rounded-sm flex items-center px-2 bg-blue-200"
@@ -372,8 +372,8 @@
                             </div>
                           </div>
 
-                          <!-- Percentage on right -->
-                          <div class="w-12 text-xs text-blue-600 text-right pl-2">
+                          <!-- Percentage - regular flex item -->
+                          <div class="w-16 text-xs text-blue-600 text-right flex-shrink-0">
                             {{ call.percentage ? call.percentage.toFixed(1) + '%' : '' }}
                           </div>
                         </div>
@@ -440,7 +440,7 @@
             >
               <div class="flex items-center h-8">
                 <!-- Waterfall container -->
-                <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
+                <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible max-w-[92%]">
                   <!-- Tool Bar with content inside -->
                   <div
                     class="absolute h-full rounded-sm flex items-center px-2"
@@ -462,8 +462,8 @@
                   </div>
                 </div>
 
-                <!-- Percentage on right -->
-                <div class="w-12 text-xs text-primary-brandColor text-right pl-2">
+                <!-- Percentage on right - pushed beyond timeline -->
+                <div class="w-16 text-xs text-primary-brandColor text-right pl-8">
                   {{ (tool.duration && workflowDuration) ? ((tool.duration / workflowDuration) * 100).toFixed(1) + '%' : '' }}
                 </div>
               </div>
