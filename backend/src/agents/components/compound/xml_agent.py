@@ -847,6 +847,7 @@ Make sure to include both opening and closing tags for both tool and tool_input.
         tool_timings = []
         parallel_group_counter = 0
 
+        # First pass: collect all tool timings and find earliest start time
         for msg in messages[start_index:]:
             if isinstance(msg, LiberalFunctionMessage):
                 timing = msg.additional_kwargs.get('tool_timing')
@@ -855,6 +856,27 @@ Make sure to include both opening and closing tags for both tool and tool_input.
 
                 # Skip financial_analysis and deep_research subgraph messages (they're separate workflows)
                 # We check agent_type to identify these
+                agent_type = msg.additional_kwargs.get('agent_type', '')
+                if 'financial_analysis' in agent_type or 'deep_research' in agent_type:
+                    continue
+
+                # Update workflow_start_time if tool started earlier
+                if timing.get('is_parallel'):
+                    for tool in timing['tools']:
+                        if tool.get('start_time') and tool['start_time'] < workflow_start_time:
+                            workflow_start_time = tool['start_time']
+                else:
+                    if timing.get('start_time') and timing['start_time'] < workflow_start_time:
+                        workflow_start_time = timing['start_time']
+
+        # Second pass: now calculate offsets with correct workflow_start_time
+        for msg in messages[start_index:]:
+            if isinstance(msg, LiberalFunctionMessage):
+                timing = msg.additional_kwargs.get('tool_timing')
+                if not timing:
+                    continue
+
+                # Skip financial_analysis and deep_research subgraph messages (they're separate workflows)
                 agent_type = msg.additional_kwargs.get('agent_type', '')
                 if 'financial_analysis' in agent_type or 'deep_research' in agent_type:
                     continue
