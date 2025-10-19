@@ -46,12 +46,12 @@
               <div class="text-right">
                 <div class="text-xs font-medium text-primary-brandTextSecondary">Total LLM Calls</div>
                 <div class="text-xl font-bold text-primary-brandColor mt-0.5">{{ totalLLMCalls }}</div>
-                <div v-if="totalLLMTime > 0" class="text-xs text-gray-500 mt-0.5">{{ totalLLMTime.toFixed(2) }}s</div>
+                <div v-if="totalLLMTime > 0" class="text-sm text-gray-700 font-medium mt-0.5">{{ totalLLMTime.toFixed(2) }}s</div>
               </div>
               <div v-if="toolTimings.length > 0" class="text-right">
                 <div class="text-xs font-medium text-primary-brandTextSecondary">Total Tool Calls</div>
                 <div class="text-xl font-bold text-orange-600 mt-0.5">{{ toolTimings.length }}</div>
-                <div v-if="totalToolTime > 0" class="text-xs text-gray-500 mt-0.5">{{ totalToolTime.toFixed(2) }}s</div>
+                <div v-if="totalToolTime > 0" class="text-sm text-gray-700 font-medium mt-0.5">{{ totalToolTime.toFixed(2) }}s</div>
               </div>
             </div>
           </div>
@@ -94,7 +94,7 @@
               <div class="w-3 h-3 rounded-sm bg-primary-brandColor bg-opacity-90"></div>
               <span class="text-gray-600">LLM Calls ({{ hierarchicalTiming.total_llm_calls }})</span>
             </div>
-            <div class="flex items-center space-x-1.5">
+            <div v-if="toolTimings.length > 0" class="flex items-center space-x-1.5">
               <div class="w-3 h-3 rounded-sm bg-orange-500 bg-opacity-85"></div>
               <span class="text-gray-600">Tool Calls ({{ toolTimings.length }} total{{ numParallelGroups > 0 ? `, ${numParallelGroups} parallel ${numParallelGroups === 1 ? 'call' : 'calls'} calling ${parallelToolCount} ${parallelToolCount === 1 ? 'tool' : 'tools'}` : '' }})</span>
             </div>
@@ -176,7 +176,7 @@
                 </div>
 
                 <!-- Percentage on right (like LLM calls) -->
-                <div class="w-12 text-xs text-orange-600 text-right pl-2">
+                <div class="w-12 text-xs text-primary-brandColor text-right pl-2">
                   {{ event.percentage ? event.percentage.toFixed(1) + '%' : '' }}
                 </div>
               </div>
@@ -463,7 +463,7 @@
                 </div>
 
                 <!-- Percentage on right -->
-                <div class="w-12 text-xs text-orange-600 text-right pl-2">
+                <div class="w-12 text-xs text-primary-brandColor text-right pl-2">
                   {{ (tool.duration && workflowDuration) ? ((tool.duration / workflowDuration) * 100).toFixed(1) + '%' : '' }}
                 </div>
               </div>
