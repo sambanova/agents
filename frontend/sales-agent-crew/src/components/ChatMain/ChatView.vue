@@ -213,12 +213,36 @@
 
                   <!-- Divider -->
                   <div class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
-                  
-                  <!-- Event Count -->
+
+                  <!-- LLM Calls Count - Now using hierarchical timing if available -->
                   <div class="flex flex-col items-center w-[40px] sm:w-[50px]">
-                    <span class="text-xs font-semibold text-gray-800">{{ getRunSummary(msgItem).event_count }}</span>
+                    <span class="text-xs font-semibold text-gray-800">{{ getLLMCallsCount(msgItem) }}</span>
                     <span class="text-2xs text-gray-600">LLM calls</span>
                   </div>
+
+                  <!-- Tool Calls Box - Only show if we have tool timing data -->
+                  <template v-if="getToolCallsCount(msgItem) > 0">
+                    <!-- Divider -->
+                    <div class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
+
+                    <!-- Tool Calls Count -->
+                    <div class="flex flex-col items-center w-[40px] sm:w-[50px]">
+                      <span class="text-xs font-semibold text-orange-600">{{ getToolCallsCount(msgItem) }}</span>
+                      <span class="text-2xs text-gray-600">tool calls</span>
+                    </div>
+                  </template>
+
+                  <!-- Parallel Tool Calls - Only show if we have parallel tools -->
+                  <template v-if="getParallelToolCallsCount(msgItem) > 0">
+                    <!-- Divider -->
+                    <div class="h-4 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent hidden sm:block"></div>
+
+                    <!-- Parallel Tool Calls Count -->
+                    <div class="flex flex-col items-center w-[40px] sm:w-[50px]">
+                      <span class="text-xs font-semibold text-purple-600">{{ getParallelToolCallsCount(msgItem) }}</span>
+                      <span class="text-2xs text-gray-600">parallel</span>
+                    </div>
+                  </template>
                 </div>
               </div>
             </div>
@@ -3600,6 +3624,41 @@ function getRunSummary(msgItem) {
   };
 
   return summary;
+}
+
+// Get LLM calls count - prefer hierarchical timing data if available
+function getLLMCallsCount(msgItem) {
+  const summary = getRunSummary(msgItem);
+
+  // Use hierarchical_timing.total_llm_calls if available (more accurate)
+  if (summary.hierarchical_timing && summary.hierarchical_timing.total_llm_calls !== undefined) {
+    return summary.hierarchical_timing.total_llm_calls;
+  }
+
+  // Fallback to event_count
+  return summary.event_count || 0;
+}
+
+// Get tool calls count from hierarchical timing
+function getToolCallsCount(msgItem) {
+  const summary = getRunSummary(msgItem);
+
+  if (summary.hierarchical_timing && summary.hierarchical_timing.total_tool_calls !== undefined) {
+    return summary.hierarchical_timing.total_tool_calls;
+  }
+
+  return 0;
+}
+
+// Get parallel tool calls count from hierarchical timing
+function getParallelToolCallsCount(msgItem) {
+  const summary = getRunSummary(msgItem);
+
+  if (summary.hierarchical_timing && summary.hierarchical_timing.parallel_tool_calls !== undefined) {
+    return summary.hierarchical_timing.parallel_tool_calls;
+  }
+
+  return 0;
 }
 
 // Get model data from workflowData array for display
