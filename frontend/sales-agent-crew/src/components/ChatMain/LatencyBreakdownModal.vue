@@ -273,43 +273,44 @@
               :key="idx"
               class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors"
             >
-              <div class="flex items-center gap-2 mb-2">
-                <svg
-                  class="w-4 h-4"
-                  :class="tool.is_subgraph ? 'text-blue-600' : 'text-orange-600'"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span class="text-sm font-medium text-primary-bodyText min-w-[180px]">{{ tool.tool_name }}</span>
-
-                <div class="flex-1 flex items-center gap-2">
-                  <!-- Waterfall bar -->
-                  <div class="flex-1 relative h-7 bg-gray-100 rounded-md overflow-hidden">
-                    <div
-                      class="absolute h-full rounded-md flex items-center justify-center text-white text-xs font-medium"
-                      :class="getToolBarClass(tool)"
-                      :style="getToolBarStyle(tool)"
+              <div class="space-y-2">
+                <!-- Tool name and duration (like Main Agent style) -->
+                <div class="flex items-center justify-between text-sm">
+                  <div class="flex items-center space-x-2">
+                    <svg
+                      class="w-4 h-4"
+                      :class="tool.is_subgraph ? 'text-blue-600' : 'text-orange-600'"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
                     >
-                      <!-- Only show text inside bar if it's wide enough (> 5% of timeline) -->
-                      <span v-if="(tool.duration / workflowDuration) > 0.05">{{ tool.duration.toFixed(2) }}s</span>
-                    </div>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span class="font-medium text-primary-bodyText">{{ tool.tool_name }}</span>
+                    <span v-if="tool.parallel_group" class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-md whitespace-nowrap">
+                      Parallel {{ tool.parallel_group }}
+                    </span>
+                    <span v-if="tool.is_subgraph" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-md whitespace-nowrap">
+                      Subgraph
+                    </span>
                   </div>
+                  <!-- Duration - ALWAYS visible on the right -->
+                  <div class="flex items-center space-x-3 text-xs">
+                    <span class="text-gray-600">{{ tool.duration.toFixed(2) }}s</span>
+                  </div>
+                </div>
 
-                  <!-- For small bars (< 5%), show duration as a label to the right (like LangSmith) -->
-                  <span v-if="(tool.duration / workflowDuration) <= 0.05" class="text-xs text-gray-600 whitespace-nowrap min-w-[50px]">
-                    {{ tool.duration.toFixed(2) }}s
-                  </span>
-
-                  <span v-if="tool.parallel_group" class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-md whitespace-nowrap">
-                    Parallel {{ tool.parallel_group }}
-                  </span>
-                  <span v-if="tool.is_subgraph" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-md whitespace-nowrap">
-                    Subgraph
-                  </span>
+                <!-- Waterfall bar -->
+                <div class="relative h-7 bg-gray-100 rounded-md overflow-hidden">
+                  <div
+                    class="absolute h-full rounded-md flex items-center justify-center text-white text-xs font-medium"
+                    :class="getToolBarClass(tool)"
+                    :style="getToolBarStyle(tool)"
+                  >
+                    <!-- Only show text inside bar if it's wide enough -->
+                    <span v-if="(tool.duration / workflowDuration) > 0.05">{{ tool.duration.toFixed(2) }}s</span>
+                  </div>
                 </div>
               </div>
             </div>
