@@ -69,6 +69,7 @@ Get the following API keys to setup the Agents application.
    - [Tavily API key](https://tavily.com/) for deep research capabilities (required)
    - [Daytona API key](https://www.daytona.io/) for secure code execution sandbox (required)
    - [Clerk](https://clerk.com/) for authentication (you'll need both publishable and secret keys)
+   - [Hume API key and Secret key](https://www.hume.ai/) for voice interaction capabilities (required for voice features)
    - [LangSmith API key](https://langsmith.com/) for optional usage tracking and monitoring (optional)
 
 >**Note**: The system supports multiple LLM providers including SambaNova's DeepSeek V3, Llama 3.3 70B, Llama Maverick, and DeepSeek R1 models.
@@ -182,7 +183,21 @@ Follow the steps below to install the backend for the Agents application.
    
    # Code Execution
    DAYTONA_API_KEY=your_daytona_api_key  # Required for secure code execution sandbox
-   
+
+   # Voice Interaction
+   HUME_API_KEY=your_hume_api_key  # Required for voice features
+   HUME_SECRET_KEY=your_hume_secret_key  # Required for voice features
+   HUME_CONFIG_ID=your_hume_config_id  # Required: Voice configuration ID from Hume platform
+   VOICE_MODE_ENABLED=true  # Set to "false" to disable voice mode features
+
+   # OAuth Integrations (Optional - app works without these, just without the specific connectors)
+   GOOGLE_CLIENT_ID=your_google_client_id  # Optional: For Google integration
+   GOOGLE_CLIENT_SECRET=your_google_client_secret  # Optional: For Google integration
+   NOTION_CLIENT_ID=your_notion_client_id  # Optional: For Notion integration
+   NOTION_CLIENT_SECRET=your_notion_client_secret  # Optional: For Notion integration
+   ATLASSIAN_CLIENT_ID=your_atlassian_client_id  # Optional: For Atlassian integration
+   ATLASSIAN_CLIENT_SECRET=your_atlassian_client_secret  # Optional: For Atlassian integration
+
    # System Configuration
    ENABLE_USER_KEYS=true  # Set to "false" to use only environment API keys
    REDIS_MASTER_SALT=your_redis_encryption_salt  # For encrypting user data
@@ -231,6 +246,61 @@ You can access the settings modal to configure the API keys mentioned in the [pr
 1. Get your publishable key and secret key.
 1. Configure your JWT issuer URL.
 1. Add these values to your environment variables as shown above.
+
+### Hume voice configuration setup
+
+To enable voice interaction capabilities, you need to set up a Hume AI account and configure a voice profile:
+
+1. Sign up for a Hume AI account at [platform.hume.ai](https://platform.hume.ai/).
+1. Navigate to the [API Keys section](https://platform.hume.ai/settings/keys) in your Hume dashboard.
+1. Create a new API key and secret key.
+1. Go to the [EVI Configurations](https://platform.hume.ai/evi-configurations) section to create a voice configuration:
+   - Create a new configuration
+   - Configure voice settings (voice type, language, etc.)
+   - Customize system prompts and behavior as needed
+   - Save and copy the Configuration ID
+1. Add the API key, secret key, and configuration ID to your backend `.env` file as shown in the environment variables section above.
+
+For detailed instructions on creating and customizing voice configurations, refer to the [Hume AI Documentation](https://dev.hume.ai/docs).
+
+### (Optional) OAuth applications setup
+
+The application can integrate with Google, Notion, and Atlassian services through optional connectors. **Note: These are optional - the app will work without them, just without the specific connector features.** If you want to enable these integrations, create OAuth applications for each service:
+
+#### Google OAuth Setup
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
+1. Create a new project or select an existing one.
+1. Navigate to **APIs & Services** > **Credentials**.
+1. Click **Create Credentials** > **OAuth 2.0 Client ID**.
+1. Configure the OAuth consent screen if prompted.
+1. Select **Web application** as the application type.
+1. Add authorized redirect URIs for your application.
+1. Copy the **Client ID** and **Client Secret**.
+1. Add these to your backend `.env` file as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
+For more details, see [Google OAuth 2.0 Setup Guide](https://developers.google.com/identity/protocols/oauth2).
+
+#### Notion OAuth Setup
+1. Go to [Notion Developers](https://www.notion.so/my-integrations).
+1. Click **New integration** or **Create new integration**.
+1. Fill in the integration details (name, logo, etc.).
+1. Under **Capabilities**, configure the permissions your application needs.
+1. Under **OAuth Domain & URIs**, add your redirect URIs.
+1. Copy the **OAuth client ID** and **OAuth client secret**.
+1. Add these to your backend `.env` file as `NOTION_CLIENT_ID` and `NOTION_CLIENT_SECRET`.
+
+For more details, see [Notion Authorization Guide](https://developers.notion.com/docs/authorization).
+
+#### Atlassian OAuth Setup
+1. Go to the [Atlassian Developer Console](https://developer.atlassian.com/console/myapps/).
+1. Click **Create** > **OAuth 2.0 integration**.
+1. Fill in the app details and permissions.
+1. Add your callback URL under **Authorization callback URL**.
+1. Configure the required scopes for your application (Jira, Confluence, etc.).
+1. Copy the **Client ID** and **Client Secret**.
+1. Add these to your backend `.env` file as `ATLASSIAN_CLIENT_ID` and `ATLASSIAN_CLIENT_SECRET`.
+
+For more details, see [Atlassian OAuth 2.0 Guide](https://developer.atlassian.com/cloud/jira/platform/oauth-2-3lo-apps/).
 
 ### (Optional) LangTrace integration
 
