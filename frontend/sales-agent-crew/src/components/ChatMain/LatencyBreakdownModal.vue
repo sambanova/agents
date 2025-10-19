@@ -250,7 +250,7 @@
               </svg>
               <span class="text-base font-bold text-primary-bodyText">Tool Calls Timeline</span>
               <span class="text-sm text-primary-brandTextSecondary">
-                ({{ toolTimings.length }} total{{ parallelToolCount > 0 ? `, ${parallelToolCount} parallel` : '' }})
+                ({{ toolTimings.length }} total{{ numParallelGroups > 0 ? `, ${numParallelGroups} parallel ${numParallelGroups === 1 ? 'call' : 'calls'} calling ${parallelToolCount} ${parallelToolCount === 1 ? 'tool' : 'tools'}` : '' }})
               </span>
             </div>
             <svg
@@ -506,6 +506,10 @@ const expandedToolsSection = ref(true); // Expanded by default
 const toolTimings = computed(() => {
   if (!props.hierarchicalTiming?.tool_timings) return [];
   return props.hierarchicalTiming.tool_timings;
+});
+
+const numParallelGroups = computed(() => {
+  return props.hierarchicalTiming?.num_parallel_groups || 0;
 });
 
 const parallelToolCount = computed(() => {

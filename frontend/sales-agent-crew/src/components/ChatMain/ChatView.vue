@@ -3637,8 +3637,9 @@ function getToolCallsCount(msgItem) {
 function getParallelToolCallsCount(msgItem) {
   const summary = getRunSummary(msgItem);
 
-  if (summary.hierarchical_timing && summary.hierarchical_timing.parallel_tool_calls !== undefined) {
-    return summary.hierarchical_timing.parallel_tool_calls;
+  // Show number of parallel groups (e.g., 3 groups), not total tools in parallel
+  if (summary.hierarchical_timing && summary.hierarchical_timing.num_parallel_groups !== undefined) {
+    return summary.hierarchical_timing.num_parallel_groups;
   }
 
   return 0;

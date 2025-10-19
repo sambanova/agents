@@ -888,9 +888,13 @@ Make sure to include both opening and closing tags for both tool and tool_input.
 
         # Add tool timing information to hierarchical_timing
         hierarchical_timing['total_tool_calls'] = len(tool_timings)
-        hierarchical_timing['parallel_tool_calls'] = sum(
-            1 for t in tool_timings if t.get('parallel_group') is not None
-        )
+
+        # Count both parallel groups and tools called in parallel
+        tools_in_parallel = sum(1 for t in tool_timings if t.get('parallel_group') is not None)
+        num_parallel_groups = parallel_group_counter  # Number of unique parallel groups
+
+        hierarchical_timing['num_parallel_groups'] = num_parallel_groups
+        hierarchical_timing['parallel_tool_calls'] = tools_in_parallel
         hierarchical_timing['tool_timings'] = tool_timings
 
         # Attach to additional_kwargs (will be on the final message)
