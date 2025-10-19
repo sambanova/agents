@@ -821,9 +821,6 @@ async function createNewChat() {
     console.error('Error creating new chat:', err);
     errorMessage.value =
       'Failed to create new conversation. Check keys or console.';
-    console.log('🔧 [LOADING] Setting isLoading=false (ERROR: create new chat)', {
-      isDaytonaActive: isDaytonaActiveGlobal.value
-    });
     isLoading.value = false;
   }
 }
@@ -971,11 +968,6 @@ watch(
       plannerTextData.value = [];
       searchQuery.value = '';
       chatName.value = '';
-      console.log('🔧 [LOADING] Setting isLoading=false (Route change - clearing data)', {
-        newId,
-        oldId,
-        isDaytonaActive: isDaytonaActiveGlobal.value
-      });
       isLoading.value = false;
       cumulativeTokenUsage.value = {
         input_tokens: 0,
@@ -1067,9 +1059,6 @@ async function loadSharedConversation() {
     messagesData.value = [];
   } finally {
     initialLoading.value = false;
-    console.log('🔧 [LOADING] Setting isLoading=false (loadSharedConversation finally)', {
-      isDaytonaActive: isDaytonaActiveGlobal.value
-    });
     isLoading.value = false;
     statusText.value = '';
   }
@@ -1127,9 +1116,6 @@ async function loadPreviousChat(convId) {
     messagesData.value = [];
   } finally {
     initialLoading.value = false;
-    console.log('🔧 [LOADING] Setting isLoading=false (loadPreviousChat finally)', {
-      isDaytonaActive: isDaytonaActiveGlobal.value
-    });
     isLoading.value = false;
     // Clear any status text that might be showing "generating" or "processing"
     statusText.value = '';
@@ -1817,9 +1803,6 @@ async function loadKeys() {
     console.error('Error loading keys:', error);
     errorMessage.value = 'Error loading API keys';
     showErrorModal.value = true;
-    console.log('🔧 [LOADING] Setting isLoading=false (ERROR: loading keys)', {
-      isDaytonaActive: isDaytonaActiveGlobal.value
-    });
     isLoading.value = false;
   }
 }
@@ -2281,9 +2264,6 @@ function waitForSocketOpen(timeout = 5000) {
       if (elapsed >= timeout) {
         clearInterval(checkInterval);
         errorMessage.value = 'WebSocket connection error occurred.';
-        console.log('🔧 [LOADING] Setting isLoading=false (Socket timeout)', {
-          isDaytonaActive: isDaytonaActiveGlobal.value
-        });
         isLoading.value = false;
         reject(new Error('Socket connection timeout'));
       }
@@ -2314,9 +2294,6 @@ const addMessage = async () => {
     } catch (error) {
       console.error('Failed to create new chat:', error);
       errorMessage.value = 'Failed to create new conversation. Please try again.';
-      console.log('🔧 [LOADING] Setting isLoading=false (Failed create chat)', {
-        isDaytonaActive: isDaytonaActiveGlobal.value
-      });
       isLoading.value = false;
       return;
     }
@@ -2628,18 +2605,12 @@ async function connectWebSocket() {
             messagesData.value.push(messageData);
           } catch (error) {
             console.error('Error pushing message data:', error);
-            console.log('🔧 [LOADING] Setting isLoading=false (ERROR: push message data)', {
-              isDaytonaActive: isDaytonaActiveGlobal.value
-            });
             isLoading.value = false;
             return;
           }
           
           // Set loading to false when we receive a final response
           if (isFinalResponse) {
-            console.log('🔧 [LOADING] Setting isLoading=false (FINAL RESPONSE)', {
-              isDaytonaActive: isDaytonaActiveGlobal.value
-            });
             isLoading.value = false;
           }
         } else if (receivedData.event === 'llm_stream_chunk') {
@@ -2726,10 +2697,6 @@ async function connectWebSocket() {
           } catch (error) {
             console.error('Error adding stream complete message:', error);
           }
-          console.log('🔧 [LOADING] Setting isLoading=false (STREAM COMPLETE)', {
-            isDaytonaActive: isDaytonaActiveGlobal.value,
-            receivedData
-          });
           isLoading.value = false;
 
           // CRITICAL: Reset currentMsgId for voice mode so next query uses fresh backend message_id
@@ -2791,9 +2758,6 @@ async function connectWebSocket() {
             AutoScrollToBottom();
           } catch (e) {
             console.log('model error', e);
-            console.log('🔧 [LOADING] Setting isLoading=false (ERROR: think event)', {
-              isDaytonaActive: isDaytonaActiveGlobal.value
-            });
             isLoading.value = false;
           }
         } else if (receivedData.event === 'planner') {
@@ -2819,9 +2783,6 @@ async function connectWebSocket() {
         AutoScrollToBottom();
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
-        console.log('🔧 [LOADING] Setting isLoading=false (ERROR: parsing WebSocket)', {
-          isDaytonaActive: isDaytonaActiveGlobal.value
-        });
         isLoading.value = false;
       }
     };
@@ -2830,23 +2791,14 @@ async function connectWebSocket() {
       if (!manualSocketClose.value)
         errorMessage.value = 'WebSocket connection error occurred.';
 
-      console.log('🔧 [LOADING] Setting isLoading=false (ERROR: WebSocket error)', {
-        isDaytonaActive: isDaytonaActiveGlobal.value
-      });
       isLoading.value = false;
     };
     socket.value.onclose = () => {
       console.log('WebSocket closed, attempting to reconnect...');
-      console.log('🔧 [LOADING] Setting isLoading=false (WebSocket close)', {
-        isDaytonaActive: isDaytonaActiveGlobal.value
-      });
       isLoading.value = false;
     };
   } catch (error) {
     console.error('WebSocket connection error:', error);
-    console.log('🔧 [LOADING] Setting isLoading=false (ERROR: WebSocket connection)', {
-      isDaytonaActive: isDaytonaActiveGlobal.value
-    });
     isLoading.value = false;
   }
 }
@@ -3278,23 +3230,17 @@ const isDaytonaActiveGlobal = computed(() => {
       return msg.events.some(event => {
         // Check for Daytona tool calls in streaming content
         if (event.event === 'llm_stream_chunk' && event.data?.content) {
-          const hasDaytona = event.data.content.includes('<tool>DaytonaCodeSandbox</tool>') ||
-                             event.data.content.includes('<subgraph>DaytonaCodeSandbox</subgraph>')
-          if (hasDaytona) {
-            console.log('🔍 [DAYTONA] Detected in llm_stream_chunk:', event.data.content.substring(0, 100))
-          }
-          return hasDaytona
+          return event.data.content.includes('<tool>DaytonaCodeSandbox</tool>') ||
+                 event.data.content.includes('<subgraph>DaytonaCodeSandbox</subgraph>')
         }
 
         // Check for Daytona tool results
         if (event.event === 'agent_completion' && event.data?.name === 'DaytonaCodeSandbox') {
-          console.log('🔍 [DAYTONA] Detected in agent_completion, name:', event.data.name)
           return true
         }
 
         // Check our custom flag for loaded conversations
         if (event.isDaytonaRelated) {
-          console.log('🔍 [DAYTONA] Detected via isDaytonaRelated flag')
           return true
         }
 
@@ -3304,20 +3250,11 @@ const isDaytonaActiveGlobal = computed(() => {
     return false
   })
 
-  console.log('🔍 [DAYTONA] isDaytonaActiveGlobal computed result:', result)
   return result
 })
 
 // Watch for Daytona activity and automatically open sidebar
 watch(isDaytonaActiveGlobal, (isActive) => {
-  console.log('🔍 [DAYTONA WATCH] Triggered with:', {
-    isActive,
-    isLoading: isLoading.value,
-    initialLoading: initialLoading.value,
-    daytonaSidebarClosed: daytonaSidebarClosed.value,
-    showDaytonaSidebar: showDaytonaSidebar.value
-  })
-
   // Only auto-open the sidebar if:
   // 1. Daytona activity is detected
   // 2. User hasn't manually closed it
@@ -3327,18 +3264,10 @@ watch(isDaytonaActiveGlobal, (isActive) => {
       !daytonaSidebarClosed.value &&
       isLoading.value &&
       !initialLoading.value) {
-    console.log('✅ [DAYTONA WATCH] All conditions met - OPENING SIDEBAR')
     showDaytonaSidebar.value = true
     updateCurrentDaytonaEvents()
     // Close artifact canvas if it's open since we're using sidebar now
     showArtifactCanvas.value = false
-  } else {
-    console.log('❌ [DAYTONA WATCH] Conditions NOT met - sidebar will not open', {
-      'isActive (must be true)': isActive,
-      '!daytonaSidebarClosed (must be true)': !daytonaSidebarClosed.value,
-      'isLoading (must be true)': isLoading.value,
-      '!initialLoading (must be true)': !initialLoading.value
-    })
   }
 })
 
@@ -3363,7 +3292,6 @@ function updateCurrentDaytonaEvents() {
     }
   })
   currentDaytonaEvents.value = allDaytonaEvents
-  console.log('🔍 [DAYTONA] updateCurrentDaytonaEvents - found events:', allDaytonaEvents.length)
 }
 
 // Function to check if a message is a final message that should show current token usage
