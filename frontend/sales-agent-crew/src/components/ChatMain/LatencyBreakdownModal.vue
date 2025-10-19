@@ -49,7 +49,7 @@
               </div>
               <div v-if="toolTimings.length > 0" class="text-right">
                 <div class="text-xs font-medium text-primary-brandTextSecondary">Total Tool Calls</div>
-                <div class="text-xl font-bold text-purple-600 mt-0.5">{{ toolTimings.length }}</div>
+                <div class="text-xl font-bold text-orange-600 mt-0.5">{{ toolTimings.length }}</div>
               </div>
             </div>
           </div>
@@ -76,7 +76,7 @@
           </div>
         </div>
 
-        <!-- INTEGRATED VIEW: All events chronologically -->
+        <!-- INTEGRATED VIEW: All events chronologically (LangSmith-style) -->
         <div v-if="viewMode === 'integrated' && showHierarchical" class="mb-6">
           <h3 class="text-base font-bold text-primary-bodyText mb-3 flex items-center">
             <svg class="w-4 h-4 mr-2 text-primary-brandColor" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -86,67 +86,74 @@
             <span class="ml-2 text-sm text-gray-500">({{ integratedTimeline.length }} total events)</span>
           </h3>
 
-          <div class="space-y-2">
+          <!-- Event type legend -->
+          <div class="flex items-center space-x-4 text-xs mb-3 pb-2 border-b border-gray-200">
+            <div class="flex items-center space-x-1.5">
+              <div class="w-3 h-3 rounded-sm bg-primary-brandColor bg-opacity-90"></div>
+              <span class="text-gray-600">LLM Calls ({{ hierarchicalTiming.total_llm_calls }})</span>
+            </div>
+            <div class="flex items-center space-x-1.5">
+              <div class="w-3 h-3 rounded-sm bg-orange-500 bg-opacity-85"></div>
+              <span class="text-gray-600">Tool Calls ({{ toolTimings.length }})</span>
+            </div>
+          </div>
+
+          <!-- Compact waterfall timeline -->
+          <div class="space-y-1">
             <div
               v-for="(event, idx) in integratedTimeline"
               :key="idx"
-              class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors"
+              class="relative"
             >
-              <!-- LLM Call Event -->
-              <div v-if="event.type === 'llm_call'" class="space-y-2">
-                <div class="flex items-center justify-between text-sm">
-                  <div class="flex items-center space-x-2">
-                    <div class="w-2 h-2 rounded-full bg-primary-brandColor"></div>
-                    <span class="font-medium text-primary-bodyText">{{ event.model_name }}</span>
-                    <span v-if="event.provider" class="text-xs text-primary-brandTextSecondary">({{ event.provider }})</span>
-                    <span class="text-xs bg-primary-brandColor bg-opacity-10 text-primary-brandColor px-2 py-1 rounded-md">
-                      {{ event.category }}
-                    </span>
-                  </div>
-                  <div class="flex items-center space-x-3 text-xs">
-                    <span class="text-primary-brandTextSecondary">{{ event.duration.toFixed(2) }}s</span>
-                    <span v-if="event.percentage" class="font-medium text-primary-brandColor">{{ event.percentage.toFixed(1) }}%</span>
-                  </div>
+              <!-- LLM Call Event - Compact single row -->
+              <div v-if="event.type === 'llm_call'" class="flex items-center h-8">
+                <!-- Duration label on left -->
+                <div class="w-16 text-xs text-gray-600 text-right pr-2">
+                  {{ event.duration.toFixed(2) }}s
                 </div>
-                <!-- Waterfall bar for LLM call -->
-                <div class="relative h-7 bg-gray-100 rounded-md overflow-hidden">
+
+                <!-- Waterfall container -->
+                <div class="flex-1 relative h-8 bg-gray-50 rounded-sm">
+                  <!-- LLM Bar with content inside -->
                   <div
-                    class="absolute h-full rounded-md flex items-center justify-center text-white text-xs font-medium bg-primary-brandColor"
+                    class="absolute h-full rounded-sm flex items-center px-2 bg-primary-brandColor bg-opacity-90"
                     :style="{
                       left: `${(event.start_offset / workflowDuration) * 100}%`,
-                      width: `${Math.max(0.5, (event.duration / workflowDuration) * 100)}%`
+                      width: `${Math.max(2, (event.duration / workflowDuration) * 100)}%`
                     }"
                   >
-                    <span v-if="(event.duration / workflowDuration) > 0.05">{{ event.duration.toFixed(2) }}s</span>
+                    <!-- Content INSIDE bar (show if wide enough) -->
+                    <div
+                      v-if="(event.duration / workflowDuration) > 0.04"
+                      class="flex items-center space-x-1.5 text-white text-xs font-medium overflow-hidden w-full"
+                    >
+                      <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                      <span class="truncate">{{ event.model_name }}</span>
+                      <span class="text-white text-opacity-70 text-xs ml-auto flex-shrink-0">{{ event.category }}</span>
+                    </div>
                   </div>
+                </div>
+
+                <!-- Percentage on right -->
+                <div class="w-12 text-xs text-primary-brandColor text-right pl-2">
+                  {{ event.percentage ? event.percentage.toFixed(1) + '%' : '' }}
                 </div>
               </div>
 
-              <!-- Tool Call Event -->
-              <div v-else class="space-y-2">
-                <div class="flex items-center justify-between text-sm">
-                  <div class="flex items-center space-x-2">
-                    <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span class="font-medium text-primary-bodyText">{{ event.tool_name }}</span>
-                    <span v-if="event.parallel_group" class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-md whitespace-nowrap">
-                      Parallel {{ event.parallel_group }}
-                    </span>
-                    <span v-if="event.is_subgraph" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-md whitespace-nowrap">
-                      Subgraph
-                    </span>
-                  </div>
-                  <div class="flex items-center space-x-3 text-xs">
-                    <span class="text-gray-600">{{ event.duration.toFixed(2) }}s</span>
-                  </div>
+              <!-- Tool Call Event - Compact single row -->
+              <div v-else class="flex items-center h-8">
+                <!-- Duration label on left -->
+                <div class="w-16 text-xs text-gray-600 text-right pr-2">
+                  {{ event.duration.toFixed(2) }}s
                 </div>
-                <!-- Waterfall bar for tool call -->
-                <div class="relative h-7 bg-gray-100 rounded-md overflow-visible">
-                  <!-- For small bars, show duration text to the left -->
+
+                <!-- Waterfall container -->
+                <div class="flex-1 relative h-8 bg-gray-50 rounded-sm">
+                  <!-- For very small bars, show duration text before bar -->
                   <span
-                    v-if="(event.duration / workflowDuration) <= 0.05"
+                    v-if="(event.duration / workflowDuration) <= 0.015"
                     class="absolute text-xs font-medium text-gray-700 whitespace-nowrap pr-1"
                     :style="{
                       left: `${(event.start_offset / workflowDuration) * 100}%`,
@@ -157,17 +164,32 @@
                     {{ event.duration.toFixed(2) }}s
                   </span>
 
+                  <!-- Tool Bar with content inside -->
                   <div
-                    class="absolute h-full rounded-md flex items-center justify-center text-white text-xs font-medium"
-                    :class="event.is_subgraph ? 'bg-blue-500' : 'bg-purple-400'"
+                    class="absolute h-full rounded-sm flex items-center px-2 bg-opacity-85"
+                    :class="event.is_subgraph ? 'bg-blue-500' : 'bg-orange-500'"
                     :style="{
                       left: `${(event.start_offset / workflowDuration) * 100}%`,
-                      width: `${Math.max(0.5, (event.duration / workflowDuration) * 100)}%`
+                      width: `${Math.max(2, (event.duration / workflowDuration) * 100)}%`
                     }"
                   >
-                    <span v-if="(event.duration / workflowDuration) > 0.05">{{ event.duration.toFixed(2) }}s</span>
+                    <!-- Content INSIDE bar (only show if wide enough) -->
+                    <div
+                      v-if="(event.duration / workflowDuration) > 0.03"
+                      class="flex items-center space-x-1.5 text-white text-xs font-medium overflow-hidden w-full"
+                    >
+                      <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <span class="truncate">{{ event.tool_name }}</span>
+                      <span v-if="event.parallel_group" class="text-white text-opacity-70 text-xs ml-auto flex-shrink-0">P{{ event.parallel_group }}</span>
+                    </div>
                   </div>
                 </div>
+
+                <!-- Empty space on right for alignment with LLM rows -->
+                <div class="w-12"></div>
               </div>
             </div>
           </div>
@@ -366,7 +388,7 @@
           >
             <div class="flex items-center justify-between flex-1">
               <div class="flex items-center space-x-2">
-                <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
@@ -375,7 +397,7 @@
                   ({{ toolTimings.length }} total{{ numParallelGroups > 0 ? `, ${numParallelGroups} parallel ${numParallelGroups === 1 ? 'call' : 'calls'} calling ${parallelToolCount} ${parallelToolCount === 1 ? 'tool' : 'tools'}` : '' }})
                 </span>
               </div>
-              <span class="text-xs font-medium text-purple-600 mr-2">{{ totalToolTime.toFixed(2) }}s</span>
+              <span class="text-xs font-medium text-orange-600 mr-2">{{ totalToolTime.toFixed(2) }}s</span>
             </div>
             <svg
               class="w-5 h-5 text-primary-brandColor transition-transform"
@@ -400,7 +422,7 @@
                   <div class="flex items-center space-x-2">
                     <svg
                       class="w-4 h-4"
-                      :class="tool.is_subgraph ? 'text-blue-600' : 'text-purple-600'"
+                      :class="tool.is_subgraph ? 'text-blue-600' : 'text-orange-600'"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -750,7 +772,7 @@ function getToolBarClass(tool) {
   if (tool.is_subgraph) {
     return 'bg-blue-500';  // DaytonaCodeSandbox - blue
   } else {
-    return 'bg-purple-400';  // All tools - lighter purple
+    return 'bg-orange-500';  // All tools - orange
   }
 }
 
