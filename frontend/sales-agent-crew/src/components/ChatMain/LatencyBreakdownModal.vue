@@ -113,7 +113,7 @@
                 </div>
 
                 <!-- Waterfall container -->
-                <div class="flex-1 relative h-8 bg-gray-50 rounded-sm">
+                <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
                   <!-- LLM Bar with content inside -->
                   <div
                     class="absolute h-full rounded-sm flex items-center px-2 bg-primary-brandColor bg-opacity-90"
@@ -122,16 +122,13 @@
                       width: `${Math.max(2, (event.duration / workflowDuration) * 100)}%`
                     }"
                   >
-                    <!-- Content INSIDE bar (show if wide enough) -->
-                    <div
-                      v-if="(event.duration / workflowDuration) > 0.04"
-                      class="flex items-center space-x-1.5 text-white text-xs font-medium overflow-hidden w-full"
-                    >
+                    <!-- Content INSIDE bar, flows to right when narrow -->
+                    <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap">
                       <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                       </svg>
-                      <span class="truncate">{{ event.model_name }}</span>
-                      <span class="text-white text-opacity-70 text-xs ml-auto flex-shrink-0">{{ event.category }}</span>
+                      <span>{{ event.model_name }}</span>
+                      <span class="text-white text-opacity-70">• {{ event.category }}</span>
                     </div>
                   </div>
                 </div>
@@ -150,7 +147,7 @@
                 </div>
 
                 <!-- Waterfall container -->
-                <div class="flex-1 relative h-8 bg-gray-50 rounded-sm">
+                <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
                   <!-- For very small bars, show duration text before bar -->
                   <span
                     v-if="(event.duration / workflowDuration) <= 0.015"
@@ -173,23 +170,22 @@
                       width: `${Math.max(2, (event.duration / workflowDuration) * 100)}%`
                     }"
                   >
-                    <!-- Content INSIDE bar (only show if wide enough) -->
-                    <div
-                      v-if="(event.duration / workflowDuration) > 0.03"
-                      class="flex items-center space-x-1.5 text-white text-xs font-medium overflow-hidden w-full"
-                    >
+                    <!-- Content INSIDE bar, flows to right when narrow -->
+                    <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap">
                       <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
-                      <span class="truncate">{{ event.tool_name }}</span>
-                      <span v-if="event.parallel_group" class="text-white text-opacity-70 text-xs ml-auto flex-shrink-0">P{{ event.parallel_group }}</span>
+                      <span>{{ event.tool_name }}</span>
+                      <span v-if="event.parallel_group" class="text-white text-opacity-70">• P{{ event.parallel_group }}</span>
                     </div>
                   </div>
                 </div>
 
-                <!-- Empty space on right for alignment with LLM rows -->
-                <div class="w-12"></div>
+                <!-- Percentage on right (like LLM calls) -->
+                <div class="w-12 text-xs text-orange-600 text-right pl-2">
+                  {{ event.percentage ? event.percentage.toFixed(1) + '%' : '' }}
+                </div>
               </div>
             </div>
           </div>
@@ -727,6 +723,7 @@ const integratedTimeline = computed(() => {
   toolTimings.value.forEach(tool => {
     events.push({
       type: 'tool_call',
+      percentage: (tool.duration / workflowDuration.value) * 100,  // Calculate percentage for tools
       ...tool,
     });
   });
