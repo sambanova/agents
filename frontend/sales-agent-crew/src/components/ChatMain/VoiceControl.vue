@@ -19,7 +19,7 @@
       <!-- Microphone Icon (Always show mic icon unless speaking) -->
       <svg
         v-if="voiceStatus !== 'speaking'"
-        class="w-6 h-6"
+        class="w-5 h-5"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -57,7 +57,7 @@
     >
       <!-- Microphone Icon -->
       <svg
-        class="w-5 h-5"
+        class="w-4 h-4"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -93,20 +93,20 @@
       <span>{{ error }}</span>
     </div>
 
-    <!-- Keyboard Shortcut Hint -->
-    <div v-if="!isVoiceMode && !error && conversationId" class="voice-hint">
+    <!-- Keyboard Shortcut Hint - Hidden for cleaner UI (status shown in VoiceStatusBadge) -->
+    <div v-if="false" class="voice-hint">
       Click or <kbd>Ctrl</kbd>+<kbd>Space</kbd> to start
     </div>
-    <div v-else-if="isVoiceMode && !error" class="voice-hint">
+    <div v-else-if="false" class="voice-hint">
       <span v-if="voiceStatus === 'speaking'" class="text-green-600">Agent speaking</span>
       <span v-else-if="isMuted" class="text-red-500">Muted</span>
       <span v-else class="text-blue-600">Listening</span>
       · Click to stop
     </div>
-    <div v-else-if="!isVoiceMode && error && isSessionEnded" class="voice-hint">
+    <div v-else-if="false" class="voice-hint">
       <kbd>Ctrl</kbd>+<kbd>Space</kbd> to restart
     </div>
-    <div v-else-if="!isVoiceMode && !error && !conversationId" class="voice-hint text-gray-400">
+    <div v-else-if="false" class="voice-hint text-gray-400">
       Send a message first
     </div>
   </div>
@@ -247,7 +247,7 @@ onUnmounted(() => {
 .voice-control-container {
   position: relative;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   gap: 0.5rem;
 }
@@ -261,24 +261,24 @@ onUnmounted(() => {
 
 .voice-button {
   position: relative;
-  width: 3rem;
-  height: 3rem;
+  width: 2.5rem;
+  height: 2.5rem;
   border-radius: 50%;
-  border: 2px solid #e5e7eb;
-  background: white;
+  border: none;
+  background: transparent;
   color: #6b7280;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
   pointer-events: auto;
 }
 
 .voice-button:hover:not(:disabled) {
-  transform: scale(1.05);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  background: #f3f4f6;
+  border-radius: 0.5rem;
 }
 
 .voice-button:active:not(:disabled) {
@@ -292,72 +292,64 @@ onUnmounted(() => {
 
 /* Status Colors */
 .status-idle {
-  border-color: #d1d5db;
   color: #6b7280;
 }
 
 .status-connecting {
-  border-color: #fbbf24;
   color: #f59e0b;
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 .status-listening {
-  border-color: #3b82f6;
   color: #3b82f6;
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 .status-speaking {
-  border-color: #10b981;
   color: #10b981;
 }
 
 .status-thinking {
-  border-color: #f59e0b;
   color: #f59e0b;
   animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 .status-error {
-  border-color: #ef4444;
   color: #ef4444;
 }
 
 .voice-button-active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #667eea;
   color: white;
-  border-color: #667eea;
+  border-radius: 0.5rem;
 }
 
-/* Show red border when muted */
+/* Show red color when muted */
 .voice-button-muted {
-  border-color: #ef4444 !important;
-  border-width: 3px;
+  color: #ef4444 !important;
 }
 
 /* Mute Button */
 .mute-button {
   position: relative;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2rem;
+  height: 2rem;
   border-radius: 50%;
-  border: 2px solid #fca5a5;
-  background: #fef2f2;
+  border: none;
+  background: transparent;
   color: #6b7280;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
   pointer-events: auto;
 }
 
 .mute-button:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-  border-color: #9ca3af;
+  background: #f3f4f6;
+  border-radius: 0.5rem;
 }
 
 .mute-button:active {
@@ -365,20 +357,18 @@ onUnmounted(() => {
 }
 
 .mute-button-muted {
-  background: #fecaca;
-  border-color: #ef4444;
   color: #ef4444;
-  border-width: 3px;
 }
 
 .mute-button-muted:hover {
-  background: #fca5a5;
+  background: #fef2f2;
+  border-radius: 0.5rem;
 }
 
 /* Red slash overlay for muted state */
 .mute-slash {
   position: absolute;
-  width: 2.125rem;
+  width: 1.75rem;
   height: 0.15rem;
   background: #ef4444;
   transform: rotate(-45deg);
@@ -389,13 +379,13 @@ onUnmounted(() => {
 /* Audio Level Ring */
 .audio-level-ring {
   position: absolute;
-  top: -4px;
-  left: -4px;
-  right: -4px;
-  bottom: -4px;
-  border-radius: 50%;
-  border: 2px solid #3b82f6;
-  opacity: 0.5;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 0.5rem;
+  background: rgba(59, 130, 246, 0.1);
+  opacity: 0.8;
   transition: transform 0.1s ease;
   pointer-events: none;
 }
@@ -438,14 +428,22 @@ onUnmounted(() => {
 
 /* Message Styles */
 .voice-message {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 0.5rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;
   font-size: 0.875rem;
-  max-width: 400px;
+  max-width: 300px;
   text-align: center;
+  white-space: nowrap;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 50;
 }
 
 .voice-error {

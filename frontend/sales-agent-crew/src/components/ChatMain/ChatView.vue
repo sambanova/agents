@@ -117,7 +117,7 @@
         <transition-group
           name="chat"
           tag="ul"
-          class="mt-16 max-w-4xl w-full mx-auto space-y-5"
+          class="mt-16 pb-32 max-w-4xl w-full mx-auto space-y-5"
         >
           <!-- Chat Bubble -->
           <li v-for="msgItem in filteredMessages" :key="msgItem.message_id || msgItem.id || msgItem.timestamp || Math.random()">
@@ -561,7 +561,7 @@
                   </div>
                   <!-- End Button Group -->
                   <!-- Button Group -->
-                  <div class="flex items-center gap-x-1">
+                  <div class="flex items-center gap-x-2 pr-2">
                     <!-- Mic Button (Legacy - Hidden) -->
                     <Tooltip
                       v-if="false"
