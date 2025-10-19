@@ -94,7 +94,22 @@
             </div>
             <div class="flex items-center space-x-1.5">
               <div class="w-3 h-3 rounded-sm bg-orange-500 bg-opacity-85"></div>
-              <span class="text-gray-600">Tool Calls ({{ toolTimings.length }})</span>
+              <span class="text-gray-600">Tool Calls ({{ toolTimings.length }} total{{ numParallelGroups > 0 ? `, ${numParallelGroups} parallel ${numParallelGroups === 1 ? 'call' : 'calls'} calling ${parallelToolCount} ${parallelToolCount === 1 ? 'tool' : 'tools'}` : '' }})</span>
+            </div>
+          </div>
+
+          <!-- Time Scale Ruler -->
+          <div class="relative h-6 mb-1 border-b border-gray-300">
+            <div
+              v-for="(marker, idx) in timeScaleMarkers"
+              :key="idx"
+              class="absolute flex flex-col items-center"
+              :style="{ left: `${marker.position}%`, transform: 'translateX(-50%)' }"
+            >
+              <!-- Tick mark -->
+              <div class="w-px h-2 bg-gray-400"></div>
+              <!-- Time label -->
+              <span class="text-xs text-gray-500 mt-0.5">{{ marker.label }}</span>
             </div>
           </div>
 
@@ -118,7 +133,7 @@
                     }"
                   >
                     <!-- Content INSIDE bar, flows to right when narrow -->
-                    <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap">
+                    <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap" style="text-shadow: 0 0 4px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);">
                       <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                       </svg>
@@ -148,7 +163,7 @@
                     }"
                   >
                     <!-- Content INSIDE bar, flows to right when narrow -->
-                    <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap">
+                    <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap" style="text-shadow: 0 0 4px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);">
                       <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -214,7 +229,23 @@
                 </button>
 
                 <!-- Main Agent LLM Calls -->
-                <div v-show="expandedLevels[levelIndex]" class="px-4 py-3 bg-white space-y-1">
+                <div v-show="expandedLevels[levelIndex]" class="px-4 py-3 bg-white">
+                  <!-- Time Scale Ruler -->
+                  <div class="relative h-6 mb-1 border-b border-gray-300">
+                    <div
+                      v-for="(marker, idx) in timeScaleMarkers"
+                      :key="idx"
+                      class="absolute flex flex-col items-center"
+                      :style="{ left: `${marker.position}%`, transform: 'translateX(-50%)' }"
+                    >
+                      <!-- Tick mark -->
+                      <div class="w-px h-2 bg-gray-400"></div>
+                      <!-- Time label -->
+                      <span class="text-xs text-gray-500 mt-0.5">{{ marker.label }}</span>
+                    </div>
+                  </div>
+
+                  <div class="space-y-1">
                   <div
                     v-for="(call, callIndex) in level.llm_calls"
                     :key="callIndex"
@@ -232,7 +263,7 @@
                         }"
                       >
                         <!-- Content INSIDE bar, flows to right when narrow -->
-                        <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap">
+                        <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap" style="text-shadow: 0 0 4px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);">
                           <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                           </svg>
@@ -250,6 +281,7 @@
                     <div class="w-12 text-xs text-primary-brandColor text-right pl-2">
                       {{ call.percentage ? call.percentage.toFixed(1) + '%' : '' }}
                     </div>
+                  </div>
                   </div>
                 </div>
               </div>
@@ -330,7 +362,7 @@
                               }"
                             >
                               <!-- Content INSIDE bar, flows to right when narrow -->
-                              <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap">
+                              <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap" style="text-shadow: 0 0 4px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);">
                                 <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                                 </svg>
@@ -342,7 +374,7 @@
 
                           <!-- Percentage on right -->
                           <div class="w-12 text-xs text-right pl-2" :style="{ color: getAgentColor(agentIndex) }">
-                            {{ call.percentage.toFixed(1) }}%
+                            {{ call.percentage ? call.percentage.toFixed(1) + '%' : '' }}
                           </div>
                         </div>
                       </div>
@@ -356,9 +388,10 @@
 
         <!-- Tool Calls Timeline Section (for hierarchical timing only) -->
         <div v-if="showHierarchical && toolTimings.length > 0" class="mb-6">
+          <div class="border border-gray-200 rounded-lg overflow-hidden border-l-4 border-l-orange-600">
           <button
             @click="toggleToolsSection"
-            class="w-full flex items-center justify-between mb-3 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+            class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100"
           >
             <div class="flex items-center justify-between flex-1">
               <div class="flex items-center space-x-2">
@@ -384,7 +417,23 @@
             </svg>
           </button>
 
-          <div v-show="expandedToolsSection" class="space-y-1">
+          <div v-show="expandedToolsSection" class="px-4 py-3 bg-white">
+            <!-- Time Scale Ruler -->
+            <div class="relative h-6 mb-1 border-b border-gray-300">
+              <div
+                v-for="(marker, idx) in timeScaleMarkers"
+                :key="idx"
+                class="absolute flex flex-col items-center"
+                :style="{ left: `${marker.position}%`, transform: 'translateX(-50%)' }"
+              >
+                <!-- Tick mark -->
+                <div class="w-px h-2 bg-gray-400"></div>
+                <!-- Time label -->
+                <span class="text-xs text-gray-500 mt-0.5">{{ marker.label }}</span>
+              </div>
+            </div>
+
+            <div class="space-y-1">
             <div
               v-for="(tool, idx) in toolTimings"
               :key="idx"
@@ -403,7 +452,7 @@
                     }"
                   >
                     <!-- Content INSIDE bar, flows to right when narrow -->
-                    <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap">
+                    <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap" style="text-shadow: 0 0 4px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);">
                       <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -417,10 +466,12 @@
 
                 <!-- Percentage on right -->
                 <div class="w-12 text-xs text-orange-600 text-right pl-2">
-                  {{ ((tool.duration / workflowDuration) * 100).toFixed(1) }}%
+                  {{ (tool.duration && workflowDuration) ? ((tool.duration / workflowDuration) * 100).toFixed(1) + '%' : '' }}
                 </div>
               </div>
             </div>
+            </div>
+          </div>
           </div>
         </div>
 
@@ -483,7 +534,7 @@
                       }"
                     >
                       <!-- Content INSIDE bar, flows to right when narrow -->
-                      <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap">
+                      <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap" style="text-shadow: 0 0 4px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);">
                         <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                         </svg>
@@ -495,7 +546,7 @@
 
                   <!-- Percentage on right -->
                   <div class="w-12 text-xs text-right pl-2" :style="{ color: getAgentColor(index) }">
-                    {{ call.percentage.toFixed(1) }}%
+                    {{ call.percentage ? call.percentage.toFixed(1) + '%' : '' }}
                   </div>
                 </div>
               </div>
@@ -529,7 +580,7 @@
                   }"
                 >
                   <!-- Content INSIDE bar, flows to right when narrow -->
-                  <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap">
+                  <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap" style="text-shadow: 0 0 4px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);">
                     <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                     </svg>
@@ -541,7 +592,7 @@
 
               <!-- Percentage on right -->
               <div class="w-12 text-xs text-primary-brandColor text-right pl-2">
-                {{ model.percentage.toFixed(1) }}%
+                {{ model.percentage ? model.percentage.toFixed(1) + '%' : '' }}
               </div>
             </div>
           </div>
@@ -679,6 +730,59 @@ const integratedTimeline = computed(() => {
 
   // Sort chronologically by start_offset
   return events.sort((a, b) => a.start_offset - b.start_offset);
+});
+
+// Time scale markers for waterfall timeline
+const timeScaleMarkers = computed(() => {
+  const duration = workflowDuration.value;
+  if (duration === 0) return [];
+
+  // Determine appropriate time increment based on duration
+  let increment;
+  if (duration < 5) {
+    increment = 1;  // 1s increments for very short workflows
+  } else if (duration < 15) {
+    increment = 2;  // 2s increments
+  } else if (duration < 30) {
+    increment = 5;  // 5s increments
+  } else if (duration < 60) {
+    increment = 10;  // 10s increments
+  } else if (duration < 120) {
+    increment = 20;  // 20s increments
+  } else if (duration < 300) {
+    increment = 30;  // 30s increments
+  } else {
+    increment = 60;  // 60s increments for long workflows
+  }
+
+  const markers = [];
+  // Always start with 0
+  markers.push({
+    time: 0,
+    position: 0,
+    label: '0s'
+  });
+
+  // Add markers at each increment
+  for (let time = increment; time < duration; time += increment) {
+    markers.push({
+      time,
+      position: (time / duration) * 100,
+      label: `${time}s`
+    });
+  }
+
+  // Add final marker if it's not too close to the last one
+  const lastMarkerTime = markers[markers.length - 1].time;
+  if (duration - lastMarkerTime > increment * 0.3) {
+    markers.push({
+      time: duration,
+      position: 100,
+      label: `${duration.toFixed(1)}s`
+    });
+  }
+
+  return markers;
 });
 
 function toggleAgent(index) {
