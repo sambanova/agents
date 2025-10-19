@@ -46,10 +46,12 @@
               <div class="text-right">
                 <div class="text-xs font-medium text-primary-brandTextSecondary">Total LLM Calls</div>
                 <div class="text-xl font-bold text-primary-brandColor mt-0.5">{{ totalLLMCalls }}</div>
+                <div v-if="totalLLMTime > 0" class="text-xs text-gray-500 mt-0.5">{{ totalLLMTime.toFixed(2) }}s</div>
               </div>
               <div v-if="toolTimings.length > 0" class="text-right">
                 <div class="text-xs font-medium text-primary-brandTextSecondary">Total Tool Calls</div>
                 <div class="text-xl font-bold text-orange-600 mt-0.5">{{ toolTimings.length }}</div>
+                <div v-if="totalToolTime > 0" class="text-xs text-gray-500 mt-0.5">{{ totalToolTime.toFixed(2) }}s</div>
               </div>
             </div>
           </div>
@@ -126,19 +128,19 @@
                 <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
                   <!-- LLM Bar with content inside -->
                   <div
-                    class="absolute h-full rounded-sm flex items-center px-2 bg-primary-brandColor bg-opacity-90"
+                    class="absolute h-full rounded-sm flex items-center px-2 bg-purple-200"
                     :style="{
                       left: `${(event.start_offset / workflowDuration) * 100}%`,
                       width: `${Math.max(2, (event.duration / workflowDuration) * 100)}%`
                     }"
                   >
-                    <!-- Content INSIDE bar, flows to right when narrow -->
-                    <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap" style="text-shadow: 0 0 4px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);">
-                      <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <!-- Content INSIDE bar with dark text -->
+                    <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium whitespace-nowrap">
+                      <svg class="w-3 h-3 flex-shrink-0 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                       </svg>
                       <span>{{ event.model_name }}</span>
-                      <span class="text-white text-opacity-70">- {{ event.duration.toFixed(2) }}s</span>
+                      <span class="text-gray-600">- {{ event.duration.toFixed(2) }}s</span>
                     </div>
                   </div>
                 </div>
@@ -155,21 +157,20 @@
                 <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
                   <!-- Tool Bar with content inside -->
                   <div
-                    class="absolute h-full rounded-sm flex items-center px-2 bg-opacity-85"
-                    :class="event.is_subgraph ? 'bg-blue-500' : 'bg-orange-500'"
+                    class="absolute h-full rounded-sm flex items-center px-2"
+                    :class="event.is_subgraph ? 'bg-blue-200' : 'bg-orange-200'"
                     :style="{
                       left: `${(event.start_offset / workflowDuration) * 100}%`,
                       width: `${Math.max(2, (event.duration / workflowDuration) * 100)}%`
                     }"
                   >
-                    <!-- Content INSIDE bar, flows to right when narrow -->
-                    <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap" style="text-shadow: 0 0 4px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);">
-                      <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <!-- Content INSIDE bar with dark text -->
+                    <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium whitespace-nowrap">
+                      <svg class="w-3 h-3 flex-shrink-0 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
                       </svg>
                       <span>{{ event.tool_name }}</span>
-                      <span class="text-white text-opacity-70">- {{ event.duration.toFixed(2) }}s</span>
+                      <span class="text-gray-600">- {{ event.duration.toFixed(2) }}s</span>
                     </div>
                   </div>
                 </div>
@@ -256,19 +257,19 @@
                       <!-- LLM Bar with content inside -->
                       <div
                         v-if="call.duration > 0 && call.start_offset !== undefined && call.start_offset !== null"
-                        class="absolute h-full rounded-sm flex items-center px-2 bg-primary-brandColor bg-opacity-90"
+                        class="absolute h-full rounded-sm flex items-center px-2 bg-purple-200"
                         :style="{
                           left: `${Math.max(0, (call.start_offset / workflowDuration) * 100)}%`,
                           width: `${Math.max(2, (call.duration / workflowDuration) * 100)}%`
                         }"
                       >
-                        <!-- Content INSIDE bar, flows to right when narrow -->
-                        <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap" style="text-shadow: 0 0 4px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);">
-                          <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <!-- Content INSIDE bar with dark text -->
+                        <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium whitespace-nowrap">
+                          <svg class="w-3 h-3 flex-shrink-0 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                           </svg>
                           <span>{{ call.model_name }}</span>
-                          <span class="text-white text-opacity-70">- {{ call.duration.toFixed(2) }}s</span>
+                          <span class="text-gray-600">- {{ call.duration.toFixed(2) }}s</span>
                         </div>
                       </div>
                       <!-- Debug: Show warning if bar can't render -->
@@ -354,26 +355,25 @@
                           <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
                             <!-- LLM Bar with content inside -->
                             <div
-                              class="absolute h-full rounded-sm flex items-center px-2 bg-opacity-90"
+                              class="absolute h-full rounded-sm flex items-center px-2 bg-blue-200"
                               :style="{
                                 left: `${(call.start_offset / workflowDuration) * 100}%`,
-                                width: `${Math.max(2, (call.duration / workflowDuration) * 100)}%`,
-                                backgroundColor: getAgentColor(agentIndex)
+                                width: `${Math.max(2, (call.duration / workflowDuration) * 100)}%`
                               }"
                             >
-                              <!-- Content INSIDE bar, flows to right when narrow -->
-                              <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap" style="text-shadow: 0 0 4px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);">
-                                <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <!-- Content INSIDE bar with dark text -->
+                              <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium whitespace-nowrap">
+                                <svg class="w-3 h-3 flex-shrink-0 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                                 </svg>
                                 <span>{{ call.model_name }}</span>
-                                <span class="text-white text-opacity-70">- {{ call.duration.toFixed(2) }}s</span>
+                                <span class="text-gray-600">- {{ call.duration.toFixed(2) }}s</span>
                               </div>
                             </div>
                           </div>
 
                           <!-- Percentage on right -->
-                          <div class="w-12 text-xs text-right pl-2" :style="{ color: getAgentColor(agentIndex) }">
+                          <div class="w-12 text-xs text-blue-600 text-right pl-2">
                             {{ call.percentage ? call.percentage.toFixed(1) + '%' : '' }}
                           </div>
                         </div>
@@ -396,8 +396,7 @@
             <div class="flex items-center justify-between flex-1">
               <div class="flex items-center space-x-2">
                 <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
                 </svg>
                 <span class="text-base font-bold text-primary-bodyText">Tool Calls Timeline</span>
                 <span class="text-sm text-primary-brandTextSecondary">
@@ -444,22 +443,21 @@
                 <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
                   <!-- Tool Bar with content inside -->
                   <div
-                    class="absolute h-full rounded-sm flex items-center px-2 bg-opacity-85"
-                    :class="tool.is_subgraph ? 'bg-blue-500' : 'bg-orange-500'"
+                    class="absolute h-full rounded-sm flex items-center px-2"
+                    :class="tool.is_subgraph ? 'bg-blue-200' : 'bg-orange-200'"
                     :style="{
                       left: `${(tool.start_offset / workflowDuration) * 100}%`,
                       width: `${Math.max(2, (tool.duration / workflowDuration) * 100)}%`
                     }"
                   >
-                    <!-- Content INSIDE bar, flows to right when narrow -->
-                    <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap" style="text-shadow: 0 0 4px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);">
-                      <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <!-- Content INSIDE bar with dark text -->
+                    <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium whitespace-nowrap">
+                      <svg class="w-3 h-3 flex-shrink-0 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
                       </svg>
                       <span>{{ tool.tool_name }}</span>
-                      <span class="text-white text-opacity-70">- {{ tool.duration.toFixed(2) }}s</span>
-                      <span v-if="tool.parallel_group" class="text-white text-opacity-70">• P{{ tool.parallel_group }}</span>
+                      <span class="text-gray-600">- {{ tool.duration.toFixed(2) }}s</span>
+                      <span v-if="tool.parallel_group" class="text-gray-600">• P{{ tool.parallel_group }}</span>
                     </div>
                   </div>
                 </div>
@@ -526,26 +524,25 @@
                   <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
                     <!-- LLM Bar with content inside -->
                     <div
-                      class="absolute h-full rounded-sm flex items-center px-2 bg-opacity-90"
+                      class="absolute h-full rounded-sm flex items-center px-2 bg-purple-200"
                       :style="{
                         left: `${(call.start_offset / workflowDuration) * 100}%`,
-                        width: `${Math.max(2, (call.duration / workflowDuration) * 100)}%`,
-                        backgroundColor: getAgentColor(index)
+                        width: `${Math.max(2, (call.duration / workflowDuration) * 100)}%`
                       }"
                     >
-                      <!-- Content INSIDE bar, flows to right when narrow -->
-                      <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap" style="text-shadow: 0 0 4px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);">
-                        <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <!-- Content INSIDE bar with dark text -->
+                      <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium whitespace-nowrap">
+                        <svg class="w-3 h-3 flex-shrink-0 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                         </svg>
                         <span>{{ call.model_name }}</span>
-                        <span class="text-white text-opacity-70">- {{ call.duration.toFixed(2) }}s</span>
+                        <span class="text-gray-600">- {{ call.duration.toFixed(2) }}s</span>
                       </div>
                     </div>
                   </div>
 
                   <!-- Percentage on right -->
-                  <div class="w-12 text-xs text-right pl-2" :style="{ color: getAgentColor(index) }">
+                  <div class="w-12 text-xs text-primary-brandColor text-right pl-2">
                     {{ call.percentage ? call.percentage.toFixed(1) + '%' : '' }}
                   </div>
                 </div>
@@ -573,19 +570,19 @@
               <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible">
                 <!-- LLM Bar with content inside -->
                 <div
-                  class="absolute h-full rounded-sm flex items-center px-2 bg-primary-brandColor bg-opacity-90"
+                  class="absolute h-full rounded-sm flex items-center px-2 bg-purple-200"
                   :style="{
                     left: `${(model.start_offset / workflowDuration) * 100}%`,
                     width: `${Math.max(2, (model.duration / workflowDuration) * 100)}%`
                   }"
                 >
-                  <!-- Content INSIDE bar, flows to right when narrow -->
-                  <div class="flex items-center space-x-1.5 text-white text-xs font-medium whitespace-nowrap" style="text-shadow: 0 0 4px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);">
-                    <svg class="w-3 h-3 flex-shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <!-- Content INSIDE bar with dark text -->
+                  <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium whitespace-nowrap">
+                    <svg class="w-3 h-3 flex-shrink-0 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                     </svg>
                     <span>{{ model.model_name }}</span>
-                    <span class="text-white text-opacity-70">- {{ model.duration.toFixed(2) }}s</span>
+                    <span class="text-gray-600">- {{ model.duration.toFixed(2) }}s</span>
                   </div>
                 </div>
               </div>
@@ -660,6 +657,27 @@ const totalLLMCalls = computed(() => {
   return showHierarchical.value
     ? props.hierarchicalTiming.total_llm_calls
     : props.modelBreakdown.length;
+});
+
+// Total LLM calling time (sum of all LLM durations)
+const totalLLMTime = computed(() => {
+  if (!showHierarchical.value) {
+    // Fallback to modelBreakdown if available
+    return props.modelBreakdown.reduce((sum, model) => sum + (model.duration || 0), 0);
+  }
+
+  let total = 0;
+
+  // Sum all LLM calls from all levels
+  props.hierarchicalTiming.levels?.forEach(level => {
+    if (level.level === 'main_agent' && level.llm_calls) {
+      total += level.llm_calls.reduce((sum, call) => sum + call.duration, 0);
+    } else if (level.level === 'subgraph' && level.model_breakdown) {
+      total += level.model_breakdown.reduce((sum, call) => sum + call.duration, 0);
+    }
+  });
+
+  return total;
 });
 
 // Track which agents/levels are expanded
