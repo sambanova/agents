@@ -124,23 +124,25 @@
             >
               <!-- LLM Call Event - Compact single row -->
               <div v-if="event.type === 'llm_call'" class="flex items-center h-8">
-                <!-- Waterfall container - full width minus space for percentage -->
+                <!-- Waterfall container - full width with reserved space for percentage -->
                 <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible mr-20">
-                  <!-- LLM Bar with content inside -->
+                  <!-- LLM Bar -->
                   <div
                     class="absolute h-full rounded-sm flex items-center px-2 bg-purple-200"
+                    :class="isNearTimelineEnd(event) ? 'overflow-hidden' : ''"
                     :style="{
                       left: `${(event.start_offset / workflowDuration) * 100}%`,
                       width: `${Math.max(2, (event.duration / workflowDuration) * 100)}%`
                     }"
                   >
-                    <!-- Content INSIDE bar with dark text -->
-                    <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium whitespace-nowrap">
+                    <!-- Content INSIDE bar - truncate name ONLY if near end -->
+                    <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium"
+                         :class="isNearTimelineEnd(event) ? 'overflow-hidden w-full' : 'whitespace-nowrap'">
                       <svg class="w-3 h-3 flex-shrink-0 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                       </svg>
-                      <span>{{ event.model_name }}</span>
-                      <span class="text-gray-600">- {{ event.duration.toFixed(2) }}s</span>
+                      <span :class="isNearTimelineEnd(event) ? 'truncate' : ''">{{ event.model_name }}</span>
+                      <span class="text-gray-600 flex-shrink-0" :class="isNearTimelineEnd(event) ? 'whitespace-nowrap' : ''">- {{ event.duration.toFixed(2) }}s</span>
                     </div>
                   </div>
                 </div>
@@ -153,7 +155,7 @@
 
               <!-- Tool Call Event - Compact single row -->
               <div v-else class="flex items-center h-8">
-                <!-- Waterfall container - full width minus space for percentage -->
+                <!-- Waterfall container - full width with reserved space for percentage -->
                 <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible mr-20">
                   <!-- Tool Bar with content inside -->
                   <div
@@ -252,24 +254,26 @@
                     :key="callIndex"
                     class="flex items-center h-8"
                   >
-                    <!-- Waterfall container - full width minus space for percentage -->
+                    <!-- Waterfall container - full width with reserved space for percentage -->
                     <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible mr-20">
                       <!-- LLM Bar with content inside -->
                       <div
                         v-if="call.duration > 0 && call.start_offset !== undefined && call.start_offset !== null"
                         class="absolute h-full rounded-sm flex items-center px-2 bg-purple-200"
+                        :class="isNearTimelineEnd(call) ? 'overflow-hidden' : ''"
                         :style="{
                           left: `${Math.max(0, (call.start_offset / workflowDuration) * 100)}%`,
                           width: `${Math.max(2, (call.duration / workflowDuration) * 100)}%`
                         }"
                       >
-                        <!-- Content INSIDE bar with dark text -->
-                        <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium whitespace-nowrap">
+                        <!-- Content INSIDE bar - truncate name ONLY if near end -->
+                        <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium"
+                             :class="isNearTimelineEnd(call) ? 'overflow-hidden w-full' : 'whitespace-nowrap'">
                           <svg class="w-3 h-3 flex-shrink-0 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                           </svg>
-                          <span>{{ call.model_name }}</span>
-                          <span class="text-gray-600">- {{ call.duration.toFixed(2) }}s</span>
+                          <span :class="isNearTimelineEnd(call) ? 'truncate' : ''">{{ call.model_name }}</span>
+                          <span class="text-gray-600 flex-shrink-0" :class="isNearTimelineEnd(call) ? 'whitespace-nowrap' : ''">- {{ call.duration.toFixed(2) }}s</span>
                         </div>
                       </div>
                       <!-- Debug: Show warning if bar can't render -->
@@ -351,29 +355,31 @@
                           :key="callIndex"
                           class="flex items-center h-8"
                         >
-                          <!-- Waterfall container - full width minus space for percentage -->
+                          <!-- Waterfall container - full width with reserved space for percentage -->
                           <div class="flex-1 relative h-8 bg-gray-50 rounded-sm overflow-visible mr-20">
                             <!-- LLM Bar with content inside -->
                             <div
                               class="absolute h-full rounded-sm flex items-center px-2 bg-blue-200"
+                              :class="isNearTimelineEnd(call) ? 'overflow-hidden' : ''"
                               :style="{
                                 left: `${(call.start_offset / workflowDuration) * 100}%`,
                                 width: `${Math.max(2, (call.duration / workflowDuration) * 100)}%`
                               }"
                             >
-                              <!-- Content INSIDE bar with dark text -->
-                              <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium whitespace-nowrap">
+                              <!-- Content INSIDE bar - truncate name ONLY if near end -->
+                              <div class="flex items-center space-x-1.5 text-gray-800 text-xs font-medium"
+                                   :class="isNearTimelineEnd(call) ? 'overflow-hidden w-full' : 'whitespace-nowrap'">
                                 <svg class="w-3 h-3 flex-shrink-0 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                                 </svg>
-                                <span>{{ call.model_name }}</span>
-                                <span class="text-gray-600">- {{ call.duration.toFixed(2) }}s</span>
+                                <span :class="isNearTimelineEnd(call) ? 'truncate' : ''">{{ call.model_name }}</span>
+                                <span class="text-gray-600 flex-shrink-0" :class="isNearTimelineEnd(call) ? 'whitespace-nowrap' : ''">- {{ call.duration.toFixed(2) }}s</span>
                               </div>
                             </div>
                           </div>
 
                           <!-- Percentage - regular flex item -->
-                          <div class="w-16 text-xs text-blue-600 text-right flex-shrink-0">
+                          <div class="w-16 text-xs text-primary-brandColor text-right flex-shrink-0">
                             {{ call.percentage ? call.percentage.toFixed(1) + '%' : '' }}
                           </div>
                         </div>
@@ -886,6 +892,12 @@ const colorClasses = [
 
 function getColorClass(index) {
   return colorClasses[index % colorClasses.length];
+}
+
+// Helper function to detect if an event's end position is near the timeline edge
+function isNearTimelineEnd(event) {
+  const endPercent = ((event.start_offset + event.duration) / workflowDuration.value) * 100;
+  return endPercent > 90; // If bar ends after 90% of timeline
 }
 
 // Expand first agent/level by default
