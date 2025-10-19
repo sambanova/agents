@@ -235,7 +235,7 @@
                 </button>
 
                 <!-- Main Agent LLM Calls -->
-                <div v-show="expandedLevels[levelIndex]" class="pl-4 pr-20 py-3 bg-white">
+                <div v-show="expandedLevels[levelIndex]" class="pl-4 pr-28 py-3 bg-white">
                   <!-- Time Scale Ruler -->
                   <div class="relative h-6 mb-1 border-b border-gray-300">
                     <div
@@ -287,7 +287,7 @@
                     </div>
 
                     <!-- Percentage - absolutely positioned outside timeline -->
-                    <div class="absolute top-0 right-0 transform translate-x-full pl-2 h-8 flex items-center text-xs text-primary-brandColor">
+                    <div class="absolute top-0 right-0 transform translate-x-full pl-12 h-8 flex items-center text-xs text-primary-brandColor">
                       {{ call.percentage ? call.percentage.toFixed(1) + '%' : '' }}
                     </div>
                   </div>
@@ -353,7 +353,7 @@
                       </button>
 
                       <!-- Agent Calls -->
-                      <div v-show="expandedAgents[`${levelIndex}-${agentIndex}`]" class="pl-4 pr-20 py-2 bg-white space-y-1">
+                      <div v-show="expandedAgents[`${levelIndex}-${agentIndex}`]" class="pl-4 pr-28 py-2 bg-white space-y-1">
                         <div
                           v-for="(call, callIndex) in agent.calls"
                           :key="callIndex"
@@ -384,7 +384,7 @@
                           </div>
 
                           <!-- Percentage - absolutely positioned outside timeline -->
-                          <div class="absolute top-0 right-0 transform translate-x-full pl-2 h-8 flex items-center text-xs text-primary-brandColor">
+                          <div class="absolute top-0 right-0 transform translate-x-full pl-12 h-8 flex items-center text-xs text-primary-brandColor">
                             {{ call.percentage ? call.percentage.toFixed(1) + '%' : '' }}
                           </div>
                         </div>
@@ -427,7 +427,7 @@
             </svg>
           </button>
 
-          <div v-show="expandedToolsSection" class="pl-4 pr-20 py-3 bg-white">
+          <div v-show="expandedToolsSection" class="pl-4 pr-28 py-3 bg-white">
             <!-- Time Scale Ruler -->
             <div class="relative h-6 mb-1 border-b border-gray-300">
               <div
@@ -475,7 +475,7 @@
               </div>
 
               <!-- Percentage - absolutely positioned outside timeline -->
-              <div class="absolute top-0 right-0 transform translate-x-full pl-2 h-8 flex items-center text-xs text-primary-brandColor">
+              <div class="absolute top-0 right-0 transform translate-x-full pl-12 h-8 flex items-center text-xs text-primary-brandColor">
                 {{ (tool.duration && workflowDuration) ? ((tool.duration / workflowDuration) * 100).toFixed(1) + '%' : '' }}
               </div>
             </div>
@@ -902,7 +902,7 @@ function getColorClass(index) {
 // Helper function to detect if an event's end position is near the timeline edge
 function isNearTimelineEnd(event) {
   const endPercent = ((event.start_offset + event.duration) / workflowDuration.value) * 100;
-  return endPercent > 85; // If bar ends after 85% of timeline (adjusted to catch more overflows)
+  return endPercent > 90; // If bar ends after 90% of timeline
 }
 
 // Expand first agent/level by default
