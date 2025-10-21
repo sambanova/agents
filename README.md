@@ -254,7 +254,7 @@ To enable voice interaction capabilities, you need to set up a Hume AI account a
 1. Sign up for a Hume AI account at [platform.hume.ai](https://platform.hume.ai/).
 1. Navigate to the [API Keys section](https://platform.hume.ai/settings/keys) in your Hume dashboard.
 1. Create a new API key and secret key.
-1. Go to the [EVI Configurations](https://platform.hume.ai/evi-configurations) section to create a voice configuration:
+1. Go to the [EVI Configurations](https://platform.hume.ai/) section to create a voice configuration:
    - Create a new configuration
    - Configure voice settings (voice type, language, etc.)
    - Customize system prompts and behavior as needed
