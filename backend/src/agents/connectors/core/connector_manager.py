@@ -400,10 +400,14 @@ class ConnectorManager:
                 # Get token with automatic refresh
                 token = await connector.get_user_token(user_id, auto_refresh=True)
                 if not token:
+                    # Update connector status to ERROR when no valid token
+                    await connector._update_user_connector_status(user_id, ConnectorStatus.ERROR)
+
                     logger.warning(
-                        "No valid token available for connector",
+                        "No valid token available for connector - status updated to ERROR",
                         user_id=user_id,
-                        provider=provider_id
+                        provider=provider_id,
+                        action_required="User must reconnect via settings"
                     )
                     continue
 

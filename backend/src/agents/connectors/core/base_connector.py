@@ -578,12 +578,27 @@ class BaseOAuthConnector(ABC):
                 )
                 token = await self.refresh_user_token(user_id)
             except Exception as e:
+                error_msg = str(e)
                 logger.error(
                     "Failed to auto-refresh token",
                     user_id=user_id,
                     provider=self.config.provider_id,
-                    error=str(e)
+                    error=error_msg
                 )
+
+                # Check if it's a permanent failure (invalid_grant, revoked, etc.)
+                # These indicate the refresh token is no longer valid and user must reconnect
+                if any(keyword in error_msg.lower() for keyword in ["invalid_grant", "revoked", "token has been expired"]):
+                    # Update status to EXPIRED - user needs to reconnect
+                    await self._update_user_connector_status(user_id, ConnectorStatus.EXPIRED)
+                    logger.warning(
+                        "Refresh token invalid - user must reconnect",
+                        user_id=user_id,
+                        provider=self.config.provider_id,
+                        error_type="invalid_grant",
+                        action_required="User must reconnect via settings"
+                    )
+
                 # Return original token if still valid
                 if not token.is_expired:
                     return token
