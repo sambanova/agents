@@ -42,7 +42,7 @@ def get_llm(
 
     try:
         if provider == "sambanova":
-            from langchain_sambanova import ChatSambaNovaCloud
+            from langchain_sambanova import ChatSambaNova
 
             # Adjust max_tokens for specific models
             if max_tokens is None:
@@ -53,7 +53,7 @@ def get_llm(
                 else:
                     max_tokens = 8192  # Default
 
-            # Build kwargs for ChatSambaNovaCloud
+            # Build kwargs for ChatSambaNova
             sambanova_kwargs = {
                 "model": model,
                 "temperature": temperature,
@@ -63,9 +63,9 @@ def get_llm(
 
             # If custom base_url provided, use sambanova_url parameter
             if base_url:
-                sambanova_kwargs["sambanova_url"] = base_url
+                sambanova_kwargs["base_url"] = base_url
 
-            llm = ChatSambaNovaCloud(**sambanova_kwargs)
+            llm = ChatSambaNova(**sambanova_kwargs)
 
         elif provider == "fireworks":
             from langchain_fireworks import ChatFireworks

@@ -18,7 +18,7 @@ from langchain_core.runnables import (
     RunnableSerializable,
 )
 from langchain_redis import RedisVectorStore
-from langchain_sambanova import SambaNovaCloudEmbeddings, SambaStudioEmbeddings
+from langchain_sambanova import SambaNovaEmbeddings
 from langchain_text_splitters import TextSplitter, TokenTextSplitter
 from pydantic import BaseModel, ConfigDict
 from redisvl.index import SearchIndex
@@ -35,7 +35,7 @@ class RedisHybridRetriever(BaseRetriever, BaseModel):
     """
 
     search_index: SearchIndex
-    embedding_model: SambaNovaCloudEmbeddings
+    embedding_model: SambaNovaEmbeddings
     filter_expr: FilterExpression
 
     class Config:
@@ -70,10 +70,9 @@ def create_user_vector_store(
 ) -> RedisVectorStore:
     # Initialize vector store with shared Redis client
     vstore = RedisVectorStore(
-        embeddings=SambaNovaCloudEmbeddings(
+        embeddings=SambaNovaEmbeddings(
             model="E5-Mistral-7B-Instruct",
-            sambanova_api_key=api_key,
-            batch_size=32,
+            api_key=api_key,
         ),
         index_name="sambanova-rag-index",
         metadata_schema=[
