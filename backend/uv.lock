@@ -96,7 +96,7 @@ requires-dist = [
     { name = "langchain-community", specifier = "==0.3.14" },
     { name = "langchain-fireworks", specifier = "==0.3.0" },
     { name = "langchain-redis", specifier = "==0.2.2" },
-    { name = "langchain-sambanova", specifier = "==0.1.5" },
+    { name = "langchain-sambanova", specifier = ">=0.2.0" },
     { name = "langgraph", specifier = "==0.4.5" },
     { name = "langgraph", specifier = ">=0.2.55" },
     { name = "langgraph-checkpoint-redis", specifier = "==0.0.6" },
@@ -2961,17 +2961,16 @@ wheels = [
 
 [[package]]
 name = "langchain-sambanova"
-version = "0.1.5"
+version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "langchain" },
     { name = "langchain-core" },
-    { name = "sseclient-py" },
+    { name = "sambanova" },
     { name = "types-requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/69/a9/4aab3dd39f8bf2f6fb4aa38460618d0385580febcd6925bce4f61e1b2cbb/langchain_sambanova-0.1.5.tar.gz", hash = "sha256:bf029c36600c8248bb45da831ca729767285e94395473e3b1ac51f5f65bf81aa", size = 25798, upload-time = "2025-05-06T17:55:06.603Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/64/40/86353140d6cde74c5668def4b1733add9b722c80439cf82e028d63d70ac0/langchain_sambanova-1.0.0.tar.gz", hash = "sha256:b0412fc8f58acd1059894833a8c80e8f1b64dec942545482d395e54cd9fec7dd", size = 19287, upload-time = "2025-10-22T16:29:26.123Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e1/f8/1d890c4e4891867e12fa852092636e709b963fc6eb22ad2630c62c9dcd1c/langchain_sambanova-0.1.5-py3-none-any.whl", hash = "sha256:6c9eec70facca8b9cacfc9f28e65de98394f71a14cf8500d8a4ed73ad8bf2f4b", size = 26821, upload-time = "2025-05-06T17:55:04.961Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/7a/b7ac69fdeb3a6e5930dbbf610d75f253a6e83dc967e69b78152be1cbfc4f/langchain_sambanova-1.0.0-py3-none-any.whl", hash = "sha256:8c856106b80b6eab6b37cb9cb85c24319c715a650cd6d0c5caef5a8b159e6825", size = 19686, upload-time = "2025-10-22T16:29:25.037Z" },
 ]
 
 [[package]]
@@ -5278,6 +5277,23 @@ wheels = [
 ]
 
 [[package]]
+name = "sambanova"
+version = "1.1.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "distro" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "sniffio" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a1/42/639af16d858fb3ea383da3d4af1d2e4eaff2f19b2f0ac58e51ae80a6e90b/sambanova-1.1.5.tar.gz", hash = "sha256:9294dafeeb97e88f72edf1bbbbd7c3649d68cd7dbdb5937ae7a71e04fe3b3308", size = 120805, upload-time = "2025-10-24T00:58:16.895Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ee/e4/ca693d59ffe108646c8d7dcec4d3ec9f1046932ba3b1953637b970e62bd2/sambanova-1.1.5-py3-none-any.whl", hash = "sha256:906229c5b2198e3dd8f1a1a72bc2e0c2a9a4f2ea81a828e2b995cf009c8c4945", size = 111837, upload-time = "2025-10-24T00:58:15.527Z" },
+]
+
+[[package]]
 name = "schema"
 version = "0.7.7"
 source = { registry = "https://pypi.org/simple" }
@@ -5605,15 +5621,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/71/a4/80d2a11af59fe75b48230846989e93979c892d3a20016b42bb44edb9e398/sse_starlette-2.2.1.tar.gz", hash = "sha256:54470d5f19274aeed6b2d473430b08b4b379ea851d953b11d7f1c4a2c118b419", size = 17376, upload-time = "2024-12-25T09:09:30.616Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d9/e0/5b8bd393f27f4a62461c5cf2479c75a2cc2ffa330976f9f00f5f6e4f50eb/sse_starlette-2.2.1-py3-none-any.whl", hash = "sha256:6410a3d3ba0c89e7675d4c273a301d64649c03a5ef1ca101f10b47f895fd0e99", size = 10120, upload-time = "2024-12-25T09:09:26.761Z" },
-]
-
-[[package]]
-name = "sseclient-py"
-version = "1.8.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e8/ed/3df5ab8bb0c12f86c28d0cadb11ed1de44a92ed35ce7ff4fd5518a809325/sseclient-py-1.8.0.tar.gz", hash = "sha256:c547c5c1a7633230a38dc599a21a2dc638f9b5c297286b48b46b935c71fac3e8", size = 7791, upload-time = "2023-09-01T19:39:20.45Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/49/58/97655efdfeb5b4eeab85b1fc5d3fa1023661246c2ab2a26ea8e47402d4f2/sseclient_py-1.8.0-py2.py3-none-any.whl", hash = "sha256:4ecca6dc0b9f963f8384e9d7fd529bf93dd7d708144c4fb5da0e0a1a926fee83", size = 8828, upload-time = "2023-09-01T19:39:17.627Z" },
 ]
 
 [[package]]

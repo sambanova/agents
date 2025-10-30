@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 import httpx
 import structlog
 from langchain_fireworks import ChatFireworks
-from langchain_sambanova import ChatSambaNovaCloud
+from langchain_sambanova import ChatSambaNova
 
 logger = structlog.get_logger(__name__)
 
@@ -21,11 +21,11 @@ def get_sambanova_llm(api_key: str, model: str = "Meta-Llama-3.3-70B-Instruct"):
         max_tokens = 8192
 
     try:
-        llm = ChatSambaNovaCloud(
+        llm = ChatSambaNova(
             model=model,
             temperature=0,
             max_tokens=max_tokens,
-            sambanova_api_key=api_key,
+            api_key=api_key,
         )
 
         logger.info(
