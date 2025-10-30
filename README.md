@@ -127,8 +127,6 @@ Follow the steps below to install the backend for the Agents application.
 
    cd backend
    uv sync
-   uv pip install -e .
-   # activate the virtual environment
    source .venv/bin/activate
    ```
 
