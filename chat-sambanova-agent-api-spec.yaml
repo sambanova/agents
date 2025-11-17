@@ -1,0 +1,810 @@
+openapi: 3.1.0
+info:
+  title: Sambanova Agents Service
+  description:  >-
+    Service for Sambanova agents
+  version: 0.0.1
+  termsOfService: https://sambanova.ai/cloud-end-user-license-agreement
+  contact:
+    email: info@sambanova.ai
+    name: SambaNova information
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+externalDocs:
+  description: >-
+     Find out more in the official SambaNova docs
+  url: https://docs.sambanova.ai/cloud/api-reference/overview
+servers:
+  - url: https://chat.sambanova.ai/api
+components:
+############################
+# SECURITY DEFINITIONS
+############################
+  securitySchemes:
+    api_key:
+      type: http
+      description: SambaNova API Key
+      scheme: bearer
+      bearerFormat: apiKey
+############################
+# BASE SCHEMAS DEFINITIONS
+############################
+  schemas:
+    DatascienceAgentRequest:
+      title: DatascienceAgentRequest
+      type: object
+      description: Request for data science agent json object
+      additionalProperties: false
+      properties:
+        files:
+          description: One or more files to be analyzed.
+          items:
+            format: binary
+            type: string
+          title: Files
+          type: array
+        prompt:
+          description: The main prompt for the data science agent.
+          title: Prompt
+          type: string
+      required:
+        - prompt
+        - files
+      examples:
+        - prompt: "Perform exploratory data analysis on this dataset"
+          files: "@dataset.csv"
+    DatascienceAgentInteractiveRequest:
+      title: DatascienceAgentInteractiveRequest
+      type: object
+      description: Request for data science interactive agent json object
+      additionalProperties: false
+      properties:
+        file_ids_json:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: A JSON string of file IDs, required for resuming a session
+          title: File Ids Json
+        files:
+          anyOf:
+            - items:
+                format: binary
+                type: string
+              type: array
+            - type: 'null'
+          description: file to upload
+          title: Files
+        prompt:
+          title: Prompt
+          description: The main prompt for the data science interactive agent
+          type: string
+        resume:
+          default: false
+          title: Resume
+          description: Whether to describe the results or not
+          type: boolean
+        thread_id:
+          anyOf:
+            - type: string
+            - type: 'null'
+          title: Thread Id
+          description: thread id for persistent context
+      required:
+        - prompt
+      examples:
+        - prompt: "Perform exploratory data analysis on this dataset"
+          files: "@dataset.csv"
+          resume: false
+    CodingAgentInteractiveRequest:
+      title: CodingAgentInteractiveRequest
+      type: object
+      description: Request for coding interactive agent json object
+      additionalProperties: false
+      properties:
+        code:
+          title: Code
+          description: Code to run
+          type: string
+        prompt:
+          title: Prompt
+          description: The main prompt for the coding interactive agent
+          type: string
+        resume:
+          default: false
+          title: Resume
+          description: Whether to describe the results or not
+          type: boolean
+        thread_id:
+          anyOf:
+            - type: string
+            - type: 'null'
+          title: Thread Id
+          description: thread id for persistent context
+      required:
+        - prompt
+        - code
+      examples:
+        - prompt: "Fix the base case issue"
+          code: "def fib(n):\n    if n <= 1: return n\n    return fib(n-1) + fib(n-2)"
+          thread_id: "thread-abc123"
+          resume: true
+    CodingAgentRequest:
+      title: CodingAgentRequest
+      type: object
+      description: Request for coding agent json object
+      additionalProperties: false
+      properties:
+        code:
+          title: Code
+          description: Code to run
+          type: string
+        prompt:
+          title: Prompt
+          description: The main prompt for the coding agent
+          type: string
+      required:
+        - prompt
+        - code
+      examples:
+        - prompt: "Run this code and explain the output"
+          code: "import numpy as np\nimport matplotlib.pyplot as plt\n\nx = np.linspace(0, 2*np.pi, 100)\ny = np.sin(x)\nplt.plot(x, y)\nplt.savefig(\"sine_wave.png\")\nprint(\"Chart created!\")"
+    DeepResearchInteractiveRequest:
+      title: DeepResearchInteractiveRequest
+      type: object
+      description: Request for deep research interactive agent json object
+      additionalProperties: false
+      properties:
+        prompt:
+          title: Prompt
+          description: The main prompt for the deep research interactive agent
+          type: string
+        resume:
+          default: false
+          title: Resume
+          description: Whether to describe the results or not
+          type: boolean
+        thread_id:
+          anyOf:
+            - type: string
+            - type: 'null'
+          title: Thread Id
+          description: thread id for persistent context
+      required:
+        - prompt
+      examples:
+        - prompt: "Research AI accelerator market"
+          resume: false
+        - prompt: "approve"
+          thread_id: "thread-abc123"
+          resume: true
+    DeepResearchRequest:
+      title: DeepResearchRequest
+      type: object
+      description: Request for deep research agent json object
+      additionalProperties: false
+      properties:
+        prompt:
+          title: Prompt
+          description: The main prompt for the deep research agent
+          type: string
+      required:
+        - prompt
+      examples:
+        - prompt: "Conduct research on quantum computing advances in 2024"
+    FinancialAnalysisInteractiveRequest:
+      title: FinancialAnalysisInteractiveRequest
+      type: object
+      description: Request for financial interactive agent json object
+      additionalProperties: false
+      properties:
+        prompt:
+          title: Prompt
+          description: The main prompt for the financial interactive agent
+          type: string
+        resume:
+          default: false
+          title: Resume
+          description: Whether to describe the results or not
+          type: boolean
+        thread_id:
+          anyOf:
+            - type: string
+            - type: 'null'
+          title: Thread Id
+          description: thread id for persistent context
+      required:
+        - prompt
+      examples:
+        - prompt: "Perform a financial analysis of Apple"
+    FinancialAnalysisRequest:
+      title: FinancialAnalysisRequest
+      type: object
+      description: Request for  financial agent json object
+      additionalProperties: false
+      properties:
+        prompt:
+          title: Prompt
+          description: The main prompt for the financial agent
+          type: string
+      required:
+        - prompt
+      examples:
+        - prompt: "Perform a financial analysis of Apple"
+    HTTPValidationError:
+      title: HTTPValidationError
+      type: object
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          title: Detail
+          type: array
+    MainAgentInteractiveRequest:
+      title: MainAgentInteractiveRequest
+      type: object
+      description: Request for main interactive agent json object
+      additionalProperties: false
+      properties:
+        prompt:
+          title: Prompt
+          description: The main prompt for the main interactive agent
+          type: string
+        resume:
+          default: false
+          title: Resume
+          description: Whether to describe the results or not
+          type: boolean
+        thread_id:
+          anyOf:
+            - type: string
+            - type: 'null'
+          title: Thread Id
+          description: thread id for persistent context
+      required:
+        - prompt
+      examples:
+        - prompt: "Create a bar chart for Q1 sales"
+          resume: false 
+        - prompt: "Now create a pie chart showing the distribution"
+          resume: true
+          thread_id: "thread-abc"
+    MainAgentRequest:
+      type: object
+      title: MainAgentRequest
+      description: Request for  main agent json object
+      additionalProperties: false
+      properties:
+        prompt: 
+          title: prompt
+          description: The main prompt for the main agent
+          type: string
+      required:
+        - prompt
+      examples:
+        - prompt: "Create a bar chart for Q1 sales"
+          resume: false
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+              - type: string
+              - type: integer
+          title: Location
+          type: array
+        msg:
+          title: Message
+          type: string
+        type:
+          title: Error Type
+          type: string
+      required:
+        - loc
+        - msg
+        - type
+      title: ValidationError
+      type: object
+
+    BaseAgentResponse:
+      type: object
+      title: Base agent response object
+      description: Base agent response object
+      additionalProperties: false
+      properties:
+        status: 
+          title: status
+          description: status of agent gereneration
+          type: string
+        result:
+          title: result
+          description: results description
+          type: string
+        artifacts:
+          title: artifacts
+          description: generated artifacts
+          type: array
+          items:
+            type: string
+            description: id of generated artifact
+        thread_id:
+          title: thread_id
+          description: thread id for persistent context
+          type: string
+      required:
+        - status
+        - result
+        - artifacts
+        - thread_id
+      example:
+        status: success
+        result: I've created the bar chart...
+        artifacts: 
+          - file-id-123
+        thread_id: thread-abc
+    
+    AgentResponse:
+      type: object
+      title: Agent Response Object
+      description: Unified schema for agent responses, including success and interrupt states.
+      additionalProperties: false
+      properties:
+        status:
+          title: status
+          description: status of agent gereneration
+          type: string
+        result:
+          title: Result
+          description: results description
+          type: string
+        artifacts:
+          title: Artifacts
+          description: List of generated artifact IDs (e.g., files, images, reports)
+          type: array
+          items:
+            type: string
+            description: ID of a generated artifact
+        file_ids:
+          title: File IDs
+          description: Optional list of file identifiers associated with the response
+          type: array
+          items:
+            type: string
+            description: ID of an uploaded or generated file
+        thread_id:
+          title: Thread ID
+          description: Identifier for maintaining persistent conversation or context
+          type: string
+        interrupt:
+          title: Interrupt
+          description: Information about an interrupt event requiring user action
+          type: object
+          properties:
+            type:
+              title: Type
+              description: Type of interrupt (e.g., approval)
+              type: string
+            message:
+              title: Message
+              description: Plan or information message for the user
+              type: string
+          required:
+            - type
+            - message
+      required:
+        - status
+        - thread_id
+      example:
+        status: interrupt
+        thread_id: thread-a
+
+    DataScienceAgentHTMLResponse:
+      type: object
+      title: Data Science Agent HTML Response
+      description: Generated HTML report for exploratory data analysis (EDA)
+      additionalProperties: false
+      properties:
+        content_type:
+          title: content_type
+          description: MIME type of the generated report (should be 'text/html')
+          type: string
+          example: text/html
+        title:
+          title: title
+          description: Title of the analysis report
+          type: string
+          example: Data Science Analysis Report
+        html:
+          title: html
+          description: Full HTML content of the generated report
+          type: string
+          example: |
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Data Science Analysis Report</title>
+              <style>/* Professional styling */</style>
+            </head>
+            <body>
+              <h1>Exploratory Data Analysis Report</h1>
+              <h2>Dataset Overview</h2>
+              <p>The dataset contains 1,000 rows and 15 columns...</p>
+              <h2>Statistical Summary</h2>
+              <table><!-- Summary statistics --></table>
+              <h2>Visualizations</h2>
+              <img src="data:image/png;base64,..." alt="Distribution Plot">
+              <img src="data:image/png;base64,..." alt="Correlation Heatmap">
+              <h2>Key Findings</h2>
+              <ul>
+                <li>Strong correlation between features X and Y</li>
+                <li>Missing values detected in column Z</li>
+              </ul>
+            </body>
+            </html>
+      required:
+        - content_type
+        - title
+        - html
+############################
+# PATH DEFINITIONS
+############################
+paths:
+  /agent/coding:
+    post:
+      tags:
+        - Agents
+      summary: Coding Agent
+      description: |
+        Fire-and-forget coding agent API.
+        The coding agent can execute Python code in a sandbox environment, fix errors, and provide results.
+
+        Submits code with an optional prompt and returns the execution result in a single call.
+      operationId: coding_agent_agent_coding_post
+      security:
+        - api_key: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CodingAgentRequest"
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseAgentResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+  /agent/coding/interactive:
+    post:
+      tags:
+        - Agents
+      summary: Coding Agent Interactive
+      description: |
+        Interactive coding agent API for iterative code development.
+        The coding agent can execute Python code in a sandbox environment, fix errors, and provide results.
+
+        Step 1: Submit code with prompt, get thread_id and execution result.
+        Step 2: Continue with thread_id and resume=true to iterate on code.
+      operationId: coding_agent_interactive_agent_coding_interactive_post
+      security:
+        - api_key: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CodingAgentInteractiveRequest"
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseAgentResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+
+  /agent/datascience:
+    post:
+      description: 'Fire-and-forget data science API.
+
+        Submits a prompt and returns the final report in a single call.'
+      operationId: datascience_agent_and_report_agent_datascience_post
+      security:
+        - api_key: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DatascienceAgentRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataScienceAgentHTMLResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Datascience Agent And Report
+      tags:
+      - Analysis
+  /agent/datascience/interactive:
+    post:
+      description: 'Two-step interactive data science API:
+
+        Step 1: Submit prompt and files, get thread_id and hypothesis for approval.
+
+        Step 2: Submit prompt with thread_id, file_ids_json, and resume=true to get
+        the final report.'
+      operationId: datascience_interactive_agent_datascience_interactive_post
+      security:
+        - api_key: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DatascienceAgentInteractiveRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Datascience Interactive
+
+  /agent/deepresearch:
+    post:
+      description: 'Fire-and-forget deep research API.
+
+        Submits a prompt and returns the final report in a single call.'
+      operationId: deepresearch_agent_agent_deepresearch_post
+      security:
+        - api_key: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeepResearchRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseAgentResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Deepresearch Agent
+  /agent/deepresearch/interactive:
+    post:
+      description: 'Two-step interactive deep research API:
+
+        Step 1: Submit prompt, get thread_id and research plan for approval.
+
+        Step 2: Submit prompt with thread_id and resume=true to get the final report.'
+      operationId: deepresearch_interactive_agent_agent_deepresearch_interactive_post
+      security:
+        - api_key: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeepResearchInteractiveRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Deepresearch Interactive Agent
+
+  /agent/financialanalysis:
+    post:
+      tags:
+        - Agents
+      summary: Financial Analysis Agent
+      description: |
+        Fire-and-forget financial analysis agent API.
+        The financial analysis agent can analyze stocks, companies, and financial data.
+
+        Submits a prompt and returns the financial analysis report in a single call.
+      operationId: financial_analysis_agent_agent_financialanalysis_post
+      security:
+        - api_key: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinancialAnalysisRequest"
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseAgentResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+
+  /agent/financialanalysis/interactive:
+    post:
+      tags:
+        - Agents
+      summary: Financial Analysis Agent Interactive
+      description: |
+        Interactive financial analysis agent API for follow-up questions.
+        The financial analysis agent can analyze stocks, companies, and financial data.
+
+        Step 1: Submit prompt, get thread_id and initial analysis.
+        Step 2: Continue with thread_id and resume=true for follow-up questions.
+      operationId: financial_analysis_agent_interactive_agent_financialanalysis_interactive_post
+      security:
+        - api_key: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinancialAnalysisInteractiveRequest"
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseAgentResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+  
+  /agent/files/{file_id}:
+    get:
+      tags:
+        - Agents
+      summary: Download Agent File
+      description: |
+        Download a file generated by an agent using Bearer token authentication.
+        This endpoint allows API users to download files (artifacts) returned by agent APIs.
+
+        Security: Files are scoped to users - you can only download your own files.
+        The storage layer verifies file ownership before returning data.
+      operationId: download_agent_file_agent_files__file_id__get
+      parameters:
+        - in: path
+          name: file_id
+          required: true
+          schema:
+            title: File Id
+            type: string
+            description: file id to get artifact
+      security:
+        - api_key: []
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+  
+  /agent/mainagent:
+    post:
+      tags:
+        - Agents
+      summary: Main Agent
+      description: |
+        Fire-and-forget main agent API.\nThe main agent is a general-purpose AI assistant that can coordinate with subagents\n(coding, financial analysis, deep research, data science) to complete complex tasks.\n\nSubmits a prompt and returns the final response in a single call.
+      operationId: main_agent_agent_mainagent_post
+      security:
+        - api_key: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MainAgentRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseAgentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+
+  /agent/mainagent/interactive:
+    post:
+      tags:
+        - Agents
+      summary: Main Agent Interactive
+      description: |
+        Interactive main agent API for multi-turn conversations.
+        The main agent is a general-purpose AI assistant that can coordinate with subagents
+        (coding, financial analysis, deep research, data science) to complete complex tasks.
+
+        Step 1: Submit prompt, get thread_id and initial response.
+        Step 2: Continue conversation with thread_id and resume=true.
+      operationId: main_agent_interactive_agent_mainagent_interactive_post
+      security:
+        - api_key: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MainAgentInteractiveRequest"
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseAgentResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+
+############################
+# GLOBAL SECURITY
+############################
+security:
+  - api_key: []
