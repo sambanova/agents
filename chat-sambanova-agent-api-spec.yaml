@@ -96,6 +96,10 @@ components:
         - prompt: "Perform exploratory data analysis on this dataset"
           files: "@dataset.csv"
           resume: false
+        - prompt: "approve"
+          thread_id: "thread-abc123"
+          file_ids_json: ["file-id-1", "file-id-2"]
+          resume: true
     CodingAgentInteractiveRequest:
       title: CodingAgentInteractiveRequest
       type: object
@@ -125,6 +129,9 @@ components:
         - prompt
         - code
       examples:
+        - prompt: "Create a function to calculate fibonacci"
+          code: "def fib(n):\n    return fib(n-1) + fib(n-2)"
+          resume: false
         - prompt: "Fix the base case issue"
           code: "def fib(n):\n    if n <= 1: return n\n    return fib(n-1) + fib(n-2)"
           thread_id: "thread-abc123"
@@ -547,6 +554,8 @@ paths:
       - Analysis
   /agent/datascience/interactive:
     post:
+      tags:
+        - Analysis
       description: 'Two-step interactive data science API:
 
         Step 1: Submit prompt and files, get thread_id and hypothesis for approval.
@@ -579,6 +588,8 @@ paths:
 
   /agent/deepresearch:
     post:
+      tags:
+      - Agents
       description: 'Fire-and-forget deep research API.
 
         Submits a prompt and returns the final report in a single call.'
@@ -607,6 +618,8 @@ paths:
       summary: Deepresearch Agent
   /agent/deepresearch/interactive:
     post:
+      tags:
+      - Agents
       description: 'Two-step interactive deep research API:
 
         Step 1: Submit prompt, get thread_id and research plan for approval.
