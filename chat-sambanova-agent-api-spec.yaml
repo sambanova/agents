@@ -473,7 +473,7 @@ paths:
   /agent/coding:
     post:
       tags:
-        - SubAgents
+        - Subagents
       summary: Coding Agent
       description: |
         Fire-and-forget coding agent API.
