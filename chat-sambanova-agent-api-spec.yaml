@@ -470,6 +470,71 @@ components:
 # PATH DEFINITIONS
 ############################
 paths:
+  /agent/mainagent:
+    post:
+      tags:
+        - Main Agent
+      summary: Main Agent
+      description: |
+        Fire-and-forget main agent API.\nThe main agent is a general-purpose AI assistant that can coordinate with subagents\n(coding, financial analysis, deep research, data science) to complete complex tasks.\n\nSubmits a prompt and returns the final response in a single call.
+      operationId: main_agent_agent_mainagent_post
+      security:
+        - api_key: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MainAgentRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseAgentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+
+  /agent/mainagent/interactive:
+    post:
+      tags:
+        - Main Agent Interactive
+      summary: Main Agent Interactive
+      description: |
+        Interactive main agent API for multi-turn conversations.
+        The main agent is a general-purpose AI assistant that can coordinate with subagents
+        (coding, financial analysis, deep research, data science) to complete complex tasks.
+
+        Step 1: Submit prompt, get thread_id and initial response.
+        Step 2: Continue conversation with thread_id and resume=true.
+      operationId: main_agent_interactive_agent_mainagent_interactive_post
+      security:
+        - api_key: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MainAgentInteractiveRequest"
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseAgentResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+
   /agent/coding:
     post:
       tags:
@@ -758,71 +823,6 @@ paths:
           content:
             application/json:
               schema: {}
-        "422":
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HTTPValidationError"
-  
-  /agent/mainagent:
-    post:
-      tags:
-        - Main Agent
-      summary: Main Agent
-      description: |
-        Fire-and-forget main agent API.\nThe main agent is a general-purpose AI assistant that can coordinate with subagents\n(coding, financial analysis, deep research, data science) to complete complex tasks.\n\nSubmits a prompt and returns the final response in a single call.
-      operationId: main_agent_agent_mainagent_post
-      security:
-        - api_key: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MainAgentRequest'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BaseAgentResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HTTPValidationError"
-
-  /agent/mainagent/interactive:
-    post:
-      tags:
-        - Main Agent Interactive
-      summary: Main Agent Interactive
-      description: |
-        Interactive main agent API for multi-turn conversations.
-        The main agent is a general-purpose AI assistant that can coordinate with subagents
-        (coding, financial analysis, deep research, data science) to complete complex tasks.
-
-        Step 1: Submit prompt, get thread_id and initial response.
-        Step 2: Continue conversation with thread_id and resume=true.
-      operationId: main_agent_interactive_agent_mainagent_interactive_post
-      security:
-        - api_key: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/MainAgentInteractiveRequest"
-      responses:
-        "200":
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BaseAgentResponse'
         "422":
           description: Validation Error
           content:
