@@ -476,7 +476,7 @@ paths:
         - Main Agent
       summary: Main Agent
       description: |
-        Fire-and-forget main agent API.\nThe main agent is a general-purpose AI assistant that can coordinate with subagents\n(coding, financial analysis, deep research, data science) to complete complex tasks.\n\nSubmits a prompt and returns the final response in a single call.
+        Fire-and-forget main agent API. The main agent is a general-purpose AI assistant that can coordinate with subagents (coding, financial analysis, deep research, data science) to complete complex tasks. Submits a prompt and returns the final response in a single call.
       operationId: main_agent_agent_mainagent_post
       security:
         - api_key: []
