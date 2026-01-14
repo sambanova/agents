@@ -702,7 +702,7 @@ CRITICAL: Use DaytonaCodeSandbox subgraph ONLY when code execution is required (
                 "graph": create_deep_research_graph(
                     api_key=api_keys.sambanova_key,
                     provider="sambanova",
-                    request_timeout=120,
+                    request_timeout=600,
                     redis_storage=self.message_storage,
                     user_id=user_id,
                 ),
