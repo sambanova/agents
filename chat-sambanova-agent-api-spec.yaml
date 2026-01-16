@@ -476,7 +476,7 @@ paths:
         - Main Agent
       summary: Main Agent
       description: |
-        Fire-and-forget main agent API. The main agent is a general-purpose AI assistant that can coordinate with subagents (coding, financial analysis, deep research, data science) to complete complex tasks. Submits a prompt and returns the final response in a single call.
+        The main agent is a general-purpose AI assistant that coordinates with specialized subagents (coding, financial analysis, deep research, and data science) to complete complex tasks. This fire-and-forget endpoint submits a prompt and returns the final response in a single call.
       operationId: main_agent_agent_mainagent_post
       security:
         - api_key: []
@@ -506,9 +506,7 @@ paths:
         - Main Agent Interactive
       summary: Main Agent Interactive
       description: |
-        Interactive main agent API for multi-turn conversations.
-        The main agent is a general-purpose AI assistant that can coordinate with subagents
-        (coding, financial analysis, deep research, data science) to complete complex tasks.
+        The main agent is a general-purpose AI assistant that coordinates with specialized subagents (coding, financial analysis, deep research, and data science) to complete complex tasks. This interactive endpoint supports multi-turn conversations with persistent context.
 
         Step 1: Submit prompt, get thread_id and initial response.
         Step 2: Continue conversation with thread_id and resume=true.
@@ -541,10 +539,7 @@ paths:
         - Subagents
       summary: Coding Agent
       description: |
-        Fire-and-forget coding agent API.
-        The coding agent can execute Python code in a sandbox environment, fix errors, and provide results.
-
-        Submits code with an optional prompt and returns the execution result in a single call.
+        The coding agent executes Python code in a sandboxed environment, fixes errors, and returns results. This fire-and-forget endpoint submits a prompt and returns the final response in a single call.
       operationId: coding_agent_agent_coding_post
       security:
         - api_key: []
@@ -573,8 +568,7 @@ paths:
         - Subagents Interactive
       summary: Coding Agent Interactive
       description: |
-        Interactive coding agent API for iterative code development.
-        The coding agent can execute Python code in a sandbox environment, fix errors, and provide results.
+        The coding agent executes Python code in a sandboxed environment, fixes errors, and returns results. This interactive endpoint supports multi-turn conversations for iterative code development.
 
         Step 1: Submit code with prompt, get thread_id and execution result.
         Step 2: Continue with thread_id and resume=true to iterate on code.
@@ -605,9 +599,8 @@ paths:
     post:
       tags:
       - Subagents
-      description: 'Fire-and-forget data science API.
-
-        Submits a prompt and returns the final report in a single call.'
+      description: |
+        The data science agent analyzes datasets, generates visualizations, and produces comprehensive reports. This fire-and-forget endpoint submits a prompt and returns the final report in a single call.
       operationId: datascience_agent_and_report_agent_datascience_post
       security:
         - api_key: []
@@ -635,12 +628,11 @@ paths:
     post:
       tags:
         - Subagents Interactive
-      description: 'Two-step interactive data science API:
-
-        Step 1: Submit prompt and files, get thread_id and hypothesis for approval.
-
-        Step 2: Submit prompt with thread_id, file_ids_json, and resume=true to get
-        the final report.'
+      description: |
+        The data science agent analyzes datasets, generates visualizations, and produces comprehensive reports. This interactive endpoint uses a two-step workflow:
+        
+        1. Submit a prompt and files to receive a thread_id and hypothesis for approval
+        2. Submit a prompt with thread_id, file_ids_json, and resume=true to generate the final report
       operationId: datascience_interactive_agent_datascience_interactive_post
       security:
         - api_key: []
@@ -669,9 +661,11 @@ paths:
     post:
       tags:
       - Subagents
-      description: 'Fire-and-forget deep research API.
-
-        Submits a prompt and returns the final report in a single call.'
+      description: |
+        The deep research agent conducts multi-iteration research and produces comprehensive reports. This interactive endpoint uses a two-step workflow:
+        
+        1. Submit a prompt to receive a thread_id and research plan for approval
+        2. Submit a prompt with thread_id and resume=true to generate the final report
       operationId: deepresearch_agent_agent_deepresearch_post
       security:
         - api_key: []
@@ -734,10 +728,7 @@ paths:
         - Subagents
       summary: Financial Analysis Agent
       description: |
-        Fire-and-forget financial analysis agent API.
-        The financial analysis agent can analyze stocks, companies, and financial data.
-
-        Submits a prompt and returns the financial analysis report in a single call.
+        The financial analysis agent analyzes stocks, companies, and market data. This fire-and-forget endpoint submits a prompt and returns the final response in a single call.
       operationId: financial_analysis_agent_agent_financialanalysis_post
       security:
         - api_key: []
@@ -767,11 +758,10 @@ paths:
         - Subagents Interactive
       summary: Financial Analysis Agent Interactive
       description: |
-        Interactive financial analysis agent API for follow-up questions.
-        The financial analysis agent can analyze stocks, companies, and financial data.
-
-        Step 1: Submit prompt, get thread_id and initial analysis.
-        Step 2: Continue with thread_id and resume=true for follow-up questions.
+        The financial analysis agent analyzes stocks, companies, and market data. This interactive endpoint uses a two-step workflow:
+        
+        1. Submit a prompt to receive a thread_id and initial analysis
+        2. Continue with thread_id and resume=true for follow-up questions
       operationId: financial_analysis_agent_interactive_agent_financialanalysis_interactive_post
       security:
         - api_key: []
@@ -801,11 +791,7 @@ paths:
         - File Management
       summary: Download Agent File
       description: |
-        Download a file generated by an agent using Bearer token authentication.
-        This endpoint allows API users to download files (artifacts) returned by agent APIs.
-
-        Security: Files are scoped to users - you can only download your own files.
-        The storage layer verifies file ownership before returning data.
+        Download files (artifacts) generated by agent APIs using Bearer token authentication. Files are scoped to users, and the storage layer verifies ownership before returning data.
       operationId: download_agent_file_agent_files__file_id__get
       parameters:
         - in: path
