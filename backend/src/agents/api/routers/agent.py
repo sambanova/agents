@@ -39,6 +39,12 @@ router = APIRouter(
 
 
 class TaskModelOverride(BaseModel):
+    """
+    Per-task LLM override.
+
+    Use this to target a specific provider/model/base_url for a single task,
+    e.g. deep_research_writer or deep_research_planner.
+    """
     provider: Optional[str] = None
     model: Optional[str] = None
     base_url: Optional[str] = None
@@ -46,6 +52,23 @@ class TaskModelOverride(BaseModel):
 
 
 class LLMOverrides(BaseModel):
+    """
+    Request-scoped LLM configuration overrides.
+
+    Precedence:
+      1) task_models overrides (per task)
+      2) top-level overrides (provider/model/base_url/provider_type)
+      3) server defaults/config manager
+
+    Notes:
+      - api_keys is optional and not required for typical usage.
+      - If api_keys is omitted, the Authorization Bearer token is used as
+        the fallback key for the selected provider.
+      - api_keys is a map of provider name -> key. Provider names must match:
+        - top-level provider (provider)
+        - any per-task provider in task_models
+        - any custom provider names configured in the system
+    """
     provider: Optional[str] = None
     model: Optional[str] = None
     base_url: Optional[str] = None
@@ -73,6 +96,14 @@ class DataScienceInteractiveRequest(BaseModel):
 
 
 def _resolve_llm_overrides(api_key: str, llm_config: Optional[LLMOverrides]):
+    """
+    Resolve request-scoped LLM overrides into api_keys and override maps.
+
+    If api_keys is not provided, the Authorization Bearer token is used as the
+    fallback key for the chosen provider and any task-specific providers.
+    If api_keys is provided, its keys must match the provider names used in the
+    overrides (top-level provider and any task_models providers).
+    """
     if not llm_config:
         return {"sambanova": api_key}, None, "sambanova"
 

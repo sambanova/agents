@@ -153,13 +153,19 @@ def get_llm_for_task(
 
     Args:
         task: The task identifier (e.g., 'main_agent', 'data_science_agent')
-        api_keys: Dictionary of API keys by provider name
+        api_keys: Dictionary of API keys by provider name. Keys must match the
+            provider names used by the task configuration or request overrides.
         config_manager: Optional config manager instance
         user_id: Optional user ID for user-specific overrides
         overrides: Optional request-scoped overrides for provider/model/base_url
 
     Returns:
         An initialized LLM instance for the task
+
+    Overrides precedence:
+        1) task_models overrides (per task)
+        2) top-level overrides (provider/model/base_url/provider_type)
+        3) config manager defaults
     """
     if config_manager is None:
         from agents.config.llm_config_manager import get_config_manager
