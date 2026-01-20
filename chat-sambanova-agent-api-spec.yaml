@@ -170,6 +170,90 @@ components:
             plt.plot(x, y)
             plt.savefig("sine_wave.png")
             print("Chart created!")
+    TaskModelOverride:
+      title: TaskModelOverride
+      type: object
+      description: >-
+        Per-task override for provider and model selection. Use this to target a
+        specific model or base URL for a single task (e.g., deep_research_writer).
+      additionalProperties: false
+      properties:
+        provider:
+          title: Provider
+          type: string
+          description: Provider name to use for this task (e.g., sambanova, sambastack, sambamanaged, custom_provider_name).
+        model:
+          title: Model
+          type: string
+          description: Model identifier for the selected provider.
+        base_url:
+          title: Base Url
+          type: string
+          format: uri
+          description: Optional base URL override for the provider's API endpoint.
+        provider_type:
+          title: Provider Type
+          type: string
+          description: >-
+            Client type to use for this provider. When omitted, defaults to the provider.
+            Use "openai" for OpenAI-compatible endpoints, or "sambanova" for SambaNova-compatible
+          enum:
+            - openai
+            - sambanova
+      examples:
+        - provider: "sambastack"
+          model: "gpt-oss-120b"
+          base_url: "https://api.sambastack-env.ai/v1"
+          provider_type: "sambanova"
+    LLMOverrides:
+      title: LLMOverrides
+      type: object
+      description: >-
+        Request-scoped LLM configuration overrides. These settings apply only to
+        this request and do not persist. Precedence: task_models overrides >
+        top-level overrides > server defaults.
+      additionalProperties: false
+      properties:
+        provider:
+          title: Provider
+          type: string
+          description: Default provider to use for this request (e.g., sambanova, sambastack, sambamanaged, custom_provider_name).
+        model:
+          title: Model
+          type: string
+          description: Default model identifier to use for this request.
+        base_url:
+          title: Base Url
+          type: string
+          format: uri
+          description: Optional base URL override for the selected provider's API endpoint.
+        provider_type:
+          title: Provider Type
+          type: string
+          description: >-
+            Client type to use for the provider. When omitted, defaults to the provider.
+            Use "openai" for OpenAI-compatible endpoints, or "sambanova" for SambaNova-compatible.
+          enum:
+            - openai
+            - sambanova
+        task_models:
+          title: Task Models
+          type: object
+          description: >-
+            Per-task overrides keyed by task id. Example task ids include
+            deep_research_planner, deep_research_writer, deep_research_summary.
+          additionalProperties:
+            $ref: '#/components/schemas/TaskModelOverride'
+      examples:
+        - provider: "sambastack"
+          base_url: "https://api.sambastack-env.ai/v1"
+          task_models:
+            deep_research_writer:
+              model: "gpt-oss-120b"
+            deep_research_planner:
+              model: "gpt-oss-120b"
+            deep_research_summary:
+              model: "gpt-oss-120b"
     DeepResearchInteractiveRequest:
       title: DeepResearchInteractiveRequest
       type: object
@@ -180,6 +264,8 @@ components:
           title: Prompt
           description: The main prompt for the deep research interactive agent
           type: string
+        llm_config:
+          $ref: '#/components/schemas/LLMOverrides'
         resume:
           default: false
           title: Resume
@@ -196,9 +282,23 @@ components:
       examples:
         - prompt: "Research AI accelerator market"
           resume: false
+          llm_config:
+            provider: "sambanova"
+            task_models:
+              deep_research_writer:
+                model: "gpt-oss-120b"
         - prompt: "approve"
           thread_id: "thread-abc123"
           resume: true
+          llm_config:
+            provider: "sambanova"
+          task_models:
+            deep_research_writer:
+              model: "gpt-oss-120b"
+            deep_research_planner:
+              model: "gpt-oss-120b"
+            deep_research_summary:
+              model: "gpt-oss-120b"
     DeepResearchRequest:
       title: DeepResearchRequest
       type: object
@@ -209,10 +309,22 @@ components:
           title: Prompt
           description: The main prompt for the deep research agent
           type: string
+        llm_config:
+          $ref: '#/components/schemas/LLMOverrides'
       required:
         - prompt
       examples:
         - prompt: "Conduct research on quantum computing advances in 2024"
+          llm_config:
+            provider: "sambastack"
+            base_url: "https://api.sambastack-env.ai/v1"
+          task_models:
+            deep_research_writer:
+              model: "gpt-oss-120b"
+            deep_research_planner:
+              model: "gpt-oss-120b"
+            deep_research_summary:
+              model: "gpt-oss-120b"
     FinancialAnalysisInteractiveRequest:
       title: FinancialAnalysisInteractiveRequest
       type: object
@@ -666,6 +778,8 @@ paths:
         
         1. Submit a prompt to receive a thread_id and research plan for approval
         2. Submit a prompt with thread_id and resume=true to generate the final report
+
+        Optional: include `llm_config` to override provider/model/base_url/API keys for this request.
       operationId: deepresearch_agent_agent_deepresearch_post
       security:
         - api_key: []
@@ -697,7 +811,9 @@ paths:
 
         Step 1: Submit prompt, get thread_id and research plan for approval.
 
-        Step 2: Submit prompt with thread_id and resume=true to get the final report.'
+        Step 2: Submit prompt with thread_id and resume=true to get the final report.
+
+        Optional: include `llm_config` to override provider/model/base_url/API keys for this request.'
       operationId: deepresearch_interactive_agent_agent_deepresearch_interactive_post
       security:
         - api_key: []
