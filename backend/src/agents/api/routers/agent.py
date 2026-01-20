@@ -2,7 +2,7 @@ import base64
 import json
 import re
 import uuid
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import markdown
 import structlog
@@ -38,20 +38,70 @@ router = APIRouter(
 )
 
 
+class TaskModelOverride(BaseModel):
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    base_url: Optional[str] = None
+    provider_type: Optional[str] = None
+
+
+class LLMOverrides(BaseModel):
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    base_url: Optional[str] = None
+    provider_type: Optional[str] = None
+    api_keys: Optional[Dict[str, str]] = None
+    task_models: Optional[Dict[str, TaskModelOverride]] = None
+
+
 class DeepResearchRequest(BaseModel):
     prompt: str
+    llm_config: Optional[LLMOverrides] = None
 
 
 class DeepResearchInteractiveRequest(BaseModel):
     prompt: str
     thread_id: Optional[str] = None
     resume: bool = False
+    llm_config: Optional[LLMOverrides] = None
 
 
 class DataScienceInteractiveRequest(BaseModel):
     prompt: str
     thread_id: Optional[str] = None
     resume: bool = False
+
+
+def _resolve_llm_overrides(api_key: str, llm_config: Optional[LLMOverrides]):
+    if not llm_config:
+        return {"sambanova": api_key}, None, "sambanova"
+
+    api_keys = dict(llm_config.api_keys or {})
+    provider = llm_config.provider or "sambanova"
+
+    if api_key:
+        api_keys.setdefault(provider, api_key)
+        if llm_config.task_models:
+            for task_config in llm_config.task_models.values():
+                if task_config.provider:
+                    api_keys.setdefault(task_config.provider, api_key)
+
+    overrides = {
+        "provider": llm_config.provider,
+        "model": llm_config.model,
+        "base_url": llm_config.base_url,
+        "provider_type": llm_config.provider_type,
+        "task_models": (
+            {
+                task: task_config.model_dump(exclude_none=True)
+                for task, task_config in llm_config.task_models.items()
+            }
+            if llm_config.task_models
+            else None
+        ),
+    }
+
+    return api_keys, overrides, provider
 
 
 @router.post("/datascience", tags=["Analysis"])
@@ -358,17 +408,22 @@ async def deepresearch_agent(
         )
 
     api_key = authorization.replace("Bearer ", "")
+    llm_api_keys, llm_overrides, provider_override = _resolve_llm_overrides(
+        api_key, research_request.llm_config
+    )
     redis_storage = request.app.state.redis_storage_service
     checkpointer = get_global_checkpointer()
 
     # Create and execute the deep research graph
     agent = create_deep_research_graph(
         api_key=api_key,
-        provider="sambanova",
+        provider=provider_override,
         request_timeout=120,
         redis_storage=redis_storage,
         user_id=api_key,
         checkpointer=checkpointer,
+        api_keys=llm_api_keys,
+        llm_overrides=llm_overrides,
     )
 
     thread_id = str(uuid.uuid4())
@@ -436,17 +491,22 @@ async def deepresearch_interactive_agent(
         )
 
     api_key = authorization.replace("Bearer ", "")
+    llm_api_keys, llm_overrides, provider_override = _resolve_llm_overrides(
+        api_key, research_request.llm_config
+    )
     redis_storage = request.app.state.redis_storage_service
     checkpointer = get_global_checkpointer()
 
     # Create and execute the deep research graph
     agent = create_deep_research_graph(
         api_key=api_key,
-        provider="sambanova",
+        provider=provider_override,
         request_timeout=120,
         redis_storage=redis_storage,
         user_id=api_key,
         checkpointer=checkpointer,
+        api_keys=llm_api_keys,
+        llm_overrides=llm_overrides,
     )
 
     if research_request.resume is False:

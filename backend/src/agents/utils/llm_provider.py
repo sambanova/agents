@@ -145,7 +145,8 @@ def get_llm_for_task(
     task: str,
     api_keys: dict,
     config_manager: Any = None,
-    user_id: Optional[str] = None
+    user_id: Optional[str] = None,
+    overrides: Optional[dict] = None,
 ) -> LanguageModelLike:
     """
     Get an LLM instance for a specific task using configuration.
@@ -155,6 +156,7 @@ def get_llm_for_task(
         api_keys: Dictionary of API keys by provider name
         config_manager: Optional config manager instance
         user_id: Optional user ID for user-specific overrides
+        overrides: Optional request-scoped overrides for provider/model/base_url
 
     Returns:
         An initialized LLM instance for the task
@@ -164,7 +166,22 @@ def get_llm_for_task(
         config_manager = get_config_manager()
 
     # Get task configuration
-    task_config = config_manager.get_task_model(task, user_id)
+    task_config = config_manager.get_task_model(task, user_id).copy()
+
+    # Apply request-scoped overrides without mutating config_manager
+    task_overrides = {}
+    if overrides:
+        task_models = overrides.get("task_models") or {}
+        task_overrides = task_models.get(task, {}) or {}
+
+        for key in ("provider", "model", "base_url", "provider_type"):
+            if task_overrides.get(key):
+                task_config[key] = task_overrides[key]
+
+        for key in ("provider", "model", "base_url", "provider_type"):
+            override_value = overrides.get(key)
+            if override_value and key not in task_overrides:
+                task_config[key] = override_value
     provider = task_config.get("provider", "sambanova")
     model = task_config.get("model")
 
