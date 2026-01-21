@@ -322,7 +322,7 @@ becomes:
 and
 
 ```js
-<option value="sambanova"><custx> Compatible</option>
+<option value="sambanova"><Custx> Compatible</option>
 ```
 
 - Provider name display helper (Admin Panel):
