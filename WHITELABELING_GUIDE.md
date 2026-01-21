@@ -646,6 +646,17 @@ Notes:
 
 ### 6.1 Enable the Admin Panel
 
+Why enable it:
+
+- Lets users switch models and providers without a code change.
+- Lets your users to use new available or custom models without redeploying the app.
+
+What it enables:
+
+- Adds an Admin tab in Settings for model and provider configuration.
+- Allows adding custom providers and updating default model selections.
+- Saves provider config per user in Redis (update `llm_config.yaml` for org-wide defaults)
+
 Backend:
 
 ```bash
@@ -670,6 +681,13 @@ Control user key behavior:
 Behavior is enforced in:
 
 - `agents/backend/src/agents/api/websocket_manager.py`
+
+Reminder: you must supply your own enterprise keys for add-on services used by the app (for example Daytona, Tavily, Exa, Serper, Hume, and LangSmith). See the "Prerequisites" and "Environment variables setup" sections in `agents/README.md` for the full list and context.
+
+Also review the example env files for the full variable list:
+
+- `agents/backend/.env.example`
+- `agents/frontend/sales-agent-crew/.env.example`
 
 ### 6.3 Redis Master Salt (Required for Encryption)
 
