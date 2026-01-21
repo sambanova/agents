@@ -7,7 +7,7 @@
 ## Table of Contents
 
 - [Overview](#overview)
-- [Section 1: Getting Your Agents Fork](#section-1-getting-your-agents-fork)
+- [Section 1: Getting Your Agents Fork Set Up](#section-1-getting-your-agents-fork)
 - [Section 2: Documentation Branding](#section-2-documentation-branding)
 - [Section 3: Frontend Branding](#section-3-frontend-branding)
 - [Section 4: LLM Provider and Base URL Configuration](#section-4-llm-provider-and-base-url-configuration)
@@ -72,7 +72,7 @@ Use these placeholders consistently throughout your fork:
 
 ---
 
-## Section 1: Getting Your Agents Fork
+## Section 1: Getting Your Agents Fork Set Up
 
 - Fork the [SambaNova Agents repository](https://github.com/sambanova/agents).
 - Clone your fork:
@@ -110,7 +110,7 @@ git checkout -b whitelabel-customization origin/sambamanaged
 Find and replace the following patterns (be careful around legal and attribution text):
 
 | Original | Replace with (example) | Files |
-|---|---|---|
+|----------|------------------------|-------|
 | `SambaNova` | `<Custx>` | Docs and UI text (carefully) |
 | `https://sambanova.ai/` | `https://<custx_domain>/` | Docs, UI links |
 | `https://cloud.sambanova.ai/` | `<custx_cloud_url>` | Docs, UI links |
@@ -244,7 +244,7 @@ Example:
 
 ### 3.3 Header and Login Branding
 
-In Files:
+In files:
 
 - `agents/frontend/sales-agent-crew/src/components/Header.vue`
 - `agents/frontend/sales-agent-crew/src/views/LoginPage.vue`
@@ -487,6 +487,7 @@ Update the provider metadata shown in the admin UI:
     "url": "<custx_cloud_url>",
     "description": "Get your API key from <Custx> console"
 }
+```
 
 
 ### 4.3 Model Registry URLs
@@ -637,7 +638,7 @@ Notes:
 Why enable it:
 
 - Lets users switch models and providers without a code change.
-- Lets your users to use new available or custom models without redeploying the app.
+- Lets your users use new available or custom models without redeploying the app.
 
 What it enables:
 
