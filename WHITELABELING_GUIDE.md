@@ -121,15 +121,17 @@ Find and replace the following patterns (be careful around legal and attribution
 
 ### 2.2.1 README Logo URL
 
-The README currently references a SambaNova-hosted logo URL. The bulk replace script will only swap the domain, which can leave a broken image. Update the logo link manually before running the script.
+The README currently references a SambaNova-hosted logo path. The bulk replace script will only swap the domain, which can leave a broken image. Update the logo link manually before running the script.
 
 File: `agents/README.md`
 
 Example replacement:
 
 ```markdown
-![<Custx> Agents Logo](https://<custx>.com/logo.png)
+![<Custx> Agents Logo](./frontend/sales-agent-crew/public/Images/logo-nsai.svg)
 ```
+
+If you prefer a hosted logo, replace the URL with your own CDN location.
 
 ### 2.3 API Spec Metadata (OpenAPI)
 
@@ -150,20 +152,6 @@ info:
 servers:
   - url: <custx_cloud_url>
 ```
-
-### 2.3.1 README Logo URL (Manual Step Before Bulk Replace)
-
-The README currently references a SambaNova-hosted logo URL. The bulk replace script will only swap the domain, which can leave a broken image. Update the logo link manually before running the script.
-
-File: `agents/README.md`
-
-Example replacement:
-
-```markdown
-![<Custx> Agents Logo](./frontend/sales-agent-crew/public/Images/logo-nsai.svg)
-```
-
-If you prefer a hosted logo, replace the URL with your own CDN location instead of using the SambaNova HubSpot URL.
 
 ### 2.4 Bulk Find/Replace (Optional, Docs Only)
 
