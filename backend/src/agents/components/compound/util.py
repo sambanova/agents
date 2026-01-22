@@ -20,3 +20,10 @@ def extract_user_id(config: RunnableConfig = None):
     if config and "configurable" in config:
         return config["configurable"].get("user_id")
     return None
+
+
+def extract_llm_overrides(config: RunnableConfig = None):
+    """Extract request-scoped llm_overrides from config"""
+    if config and "configurable" in config:
+        return config["configurable"].get("llm_overrides")
+    return None
