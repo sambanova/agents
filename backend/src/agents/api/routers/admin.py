@@ -508,10 +508,12 @@ async def test_provider_connection(
             model=test_model
         )
 
+        display_name = provider_config_dict.get("name") or provider_config.provider
+        
         return {
             "success": True,
-            "provider": provider_config.provider,
-            "message": f"Successfully connected to {provider_config.provider}",
+            "provider": display_name,
+            "message": f"Successfully connected to {display_name}",
             "tested_model": test_model
         }
 
