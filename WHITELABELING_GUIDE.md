@@ -7,7 +7,7 @@
 ## Table of Contents
 
 - [Overview](#overview)
-- [Section 1: Getting Your Agents Fork](#section-1-getting-your-agents-fork)
+- [Section 1: Getting Your Agents Fork Set Up](#section-1-getting-your-agents-fork)
 - [Section 2: Documentation Branding](#section-2-documentation-branding)
 - [Section 3: Frontend Branding](#section-3-frontend-branding)
 - [Section 4: LLM Provider and Base URL Configuration](#section-4-llm-provider-and-base-url-configuration)
@@ -72,7 +72,7 @@ Use these placeholders consistently throughout your fork:
 
 ---
 
-## Section 1: Getting Your Agents Fork
+## Section 1: Getting Your Agents Fork Set Up
 
 - Fork the [SambaNova Agents repository](https://github.com/sambanova/agents).
 - Clone your fork:
@@ -110,7 +110,7 @@ git checkout -b whitelabel-customization origin/sambamanaged
 Find and replace the following patterns (be careful around legal and attribution text):
 
 | Original | Replace with (example) | Files |
-|---|---|---|
+|----------|------------------------|-------|
 | `SambaNova` | `<Custx>` | Docs and UI text (carefully) |
 | `https://sambanova.ai/` | `https://<custx_domain>/` | Docs, UI links |
 | `https://cloud.sambanova.ai/` | `<custx_cloud_url>` | Docs, UI links |
@@ -121,15 +121,17 @@ Find and replace the following patterns (be careful around legal and attribution
 
 ### 2.2.1 README Logo URL
 
-The README currently references a SambaNova-hosted logo URL. The bulk replace script will only swap the domain, which can leave a broken image. Update the logo link manually before running the script.
+The README currently references a SambaNova-hosted logo path. The bulk replace script will only swap the domain, which can leave a broken image. Update the logo link manually before running the script.
 
 File: `agents/README.md`
 
 Example replacement:
 
 ```markdown
-![<Custx> Agents Logo](https://<custx>.com/logo.png)
+![<Custx> Agents Logo](./frontend/sales-agent-crew/public/Images/logo-nsai.svg)
 ```
+
+If you prefer a hosted logo, replace the URL with your own CDN location.
 
 ### 2.3 API Spec Metadata (OpenAPI)
 
@@ -150,20 +152,6 @@ info:
 servers:
   - url: <custx_cloud_url>
 ```
-
-### 2.3.1 README Logo URL (Manual Step Before Bulk Replace)
-
-The README currently references a SambaNova-hosted logo URL. The bulk replace script will only swap the domain, which can leave a broken image. Update the logo link manually before running the script.
-
-File: `agents/README.md`
-
-Example replacement:
-
-```markdown
-![<Custx> Agents Logo](./frontend/sales-agent-crew/public/Images/logo-nsai.svg)
-```
-
-If you prefer a hosted logo, replace the URL with your own CDN location instead of using the SambaNova HubSpot URL.
 
 ### 2.4 Bulk Find/Replace (Optional, Docs Only)
 
@@ -256,7 +244,7 @@ Example:
 
 ### 3.3 Header and Login Branding
 
-In Files:
+In files:
 
 - `agents/frontend/sales-agent-crew/src/components/Header.vue`
 - `agents/frontend/sales-agent-crew/src/views/LoginPage.vue`
@@ -334,7 +322,7 @@ becomes:
 and
 
 ```js
-<option value="sambanova"><custx> Compatible</option>
+<option value="sambanova"><Custx> Compatible</option>
 ```
 
 - Provider name display helper (Admin Panel):
@@ -499,6 +487,7 @@ Update the provider metadata shown in the admin UI:
     "url": "<custx_cloud_url>",
     "description": "Get your API key from <Custx> console"
 }
+```
 
 
 ### 4.3 Model Registry URLs
@@ -646,6 +635,17 @@ Notes:
 
 ### 6.1 Enable the Admin Panel
 
+Why enable it:
+
+- Lets users switch models and providers without a code change.
+- Lets your users use new available or custom models without redeploying the app.
+
+What it enables:
+
+- Adds an Admin tab in Settings for model and provider configuration.
+- Allows adding custom providers and updating default model selections.
+- Saves provider config per user in Redis (update `llm_config.yaml` for org-wide defaults)
+
 Backend:
 
 ```bash
@@ -670,6 +670,13 @@ Control user key behavior:
 Behavior is enforced in:
 
 - `agents/backend/src/agents/api/websocket_manager.py`
+
+Reminder: you must supply your own enterprise keys for add-on services used by the app (for example Daytona, Tavily, Exa, Serper, Hume, and LangSmith). See the "Prerequisites" and "Environment variables setup" sections in `agents/README.md` for the full list and context.
+
+Also review the example env files for the full variable list:
+
+- `agents/backend/.env.example`
+- `agents/frontend/sales-agent-crew/.env.example`
 
 ### 6.3 Redis Master Salt (Required for Encryption)
 
