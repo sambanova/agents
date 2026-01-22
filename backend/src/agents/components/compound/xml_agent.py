@@ -10,7 +10,12 @@ import structlog
 from agents.components.compound.data_types import LiberalFunctionMessage, LLMType
 from agents.components.compound.prompts import xml_template
 from agents.components.compound.timing_aggregator import WorkflowTimingAggregator
-from agents.components.compound.util import extract_api_key, extract_api_keys, extract_user_id
+from agents.components.compound.util import (
+    extract_api_key,
+    extract_api_keys,
+    extract_llm_overrides,
+    extract_user_id,
+)
 from agents.utils.logging_utils import setup_logging_context
 from langchain.tools import BaseTool
 from langchain_core.language_models.base import LanguageModelLike
@@ -387,13 +392,21 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
         api_key = extract_api_key(config)
         api_keys = extract_api_keys(config)  # Get all API keys if admin panel is enabled
         user_id = extract_user_id(config)  # Get user_id for admin panel support
+        llm_overrides = extract_llm_overrides(config)
 
         # Call your LLM partial with api_key (and optionally api_keys and user_id)
         # Pass api_keys and user_id if available for admin panel support
         if api_keys:
-            initialised_llm = llm(api_key=api_key, api_keys=api_keys, user_id=user_id)
+            initialised_llm = llm(
+                api_key=api_key,
+                api_keys=api_keys,
+                user_id=user_id,
+                llm_overrides=llm_overrides,
+            )
         else:
-            initialised_llm = llm(api_key=api_key)
+            initialised_llm = llm(
+                api_key=api_key, user_id=user_id, llm_overrides=llm_overrides
+            )
 
         llm_with_stop = initialised_llm.bind(
             stop=["</subgraph_input>", "<observation>", "\n\nHuman:", "\n\nAssistant:"]

@@ -83,6 +83,7 @@ def create_all_subgraphs(
     directory_content: Optional[list] = None,
     enable_data_science: bool = False,
     admin_api_keys: Optional[Dict] = None,
+    llm_overrides: Optional[Dict] = None,
 ) -> Dict:
     """
     Creates all available subgraphs following the pattern from websocket_manager.py.
@@ -119,6 +120,7 @@ def create_all_subgraphs(
             redis_client=redis_storage,
             user_id=user_id,
             api_keys=admin_api_keys,
+            llm_overrides=llm_overrides,
         ),
         "state_input_mapper": lambda x: [HumanMessage(content=x)],
         "state_output_mapper": lambda x: x[-1],
@@ -135,6 +137,7 @@ def create_all_subgraphs(
             redis_storage=redis_storage,
             user_id=user_id,
             api_keys=admin_api_keys,
+            llm_overrides=llm_overrides,
         ),
         "state_input_mapper": lambda x: {"topic": x},
         "state_output_mapper": lambda x: _create_deep_research_output(x),
@@ -150,6 +153,7 @@ def create_all_subgraphs(
             redis_storage=redis_storage,
             daytona_manager=daytona_manager,
             api_keys=admin_api_keys,
+            llm_overrides=llm_overrides,
         ),
         "state_input_mapper": lambda x: {
             "code": x,
@@ -192,6 +196,7 @@ def create_all_subgraphs(
                 daytona_manager=daytona_manager,
                 directory_content=directory_content,
                 api_keys=admin_api_keys,
+                llm_overrides=llm_overrides,
             ),
             "state_input_mapper": lambda x: {
                 "internal_messages": [HumanMessage(content=x, id=str(uuid.uuid4()))],

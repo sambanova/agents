@@ -198,6 +198,7 @@ class FinancialAnalysisCrew:
         message_id: str = None,
         verbose: bool = True,
         admin_api_keys: dict = None,
+        llm_overrides: dict = None,
         message_interceptor = None,
     ):
         # Use config manager if admin_api_keys are provided
@@ -214,6 +215,24 @@ class FinancialAnalysisCrew:
             competitor_task = config_manager.get_task_model("financial_competitor_finder", user_id)
             default_task = config_manager.get_task_model("financial_analysis_main", user_id)
             aggregator_task = config_manager.get_task_model("financial_aggregator", user_id)
+
+            if llm_overrides:
+                task_overrides = llm_overrides.get("task_models") or {}
+                top_level = llm_overrides
+
+                def apply_overrides(task_id, task_config):
+                    updated = task_config.copy()
+                    specific = task_overrides.get(task_id, {}) or {}
+                    for key in ("provider", "model", "base_url", "provider_type"):
+                        if key in specific and specific[key] is not None:
+                            updated[key] = specific[key]
+                        elif key in top_level and top_level.get(key) and key not in specific:
+                            updated[key] = top_level.get(key)
+                    return updated
+
+                competitor_task = apply_overrides("financial_competitor_finder", competitor_task)
+                default_task = apply_overrides("financial_analysis_main", default_task)
+                aggregator_task = apply_overrides("financial_aggregator", aggregator_task)
 
             logger.info(f"[CREWAI_INIT] competitor_task: provider={competitor_task.get('provider')}, model={competitor_task.get('model')}, has_api_key={bool(competitor_task.get('api_key'))}")
             logger.info(f"[CREWAI_INIT] default_task: provider={default_task.get('provider')}, model={default_task.get('model')}, has_api_key={bool(default_task.get('api_key'))}")
