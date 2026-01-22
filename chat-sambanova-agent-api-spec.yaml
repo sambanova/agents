@@ -2,7 +2,29 @@ openapi: 3.1.0
 info:
   title: Sambanova Agents Service
   description:  >-
-    Service for Sambanova agents
+    Service for Sambanova agents.
+
+
+    This API provides access to specialized AI agents for deep research, data science,
+    financial analysis, coding, and general-purpose tasks.
+
+
+    Execution Modes:
+
+
+    Each agent supports two execution modes to fit different use cases:
+
+
+    1. Fire-and-forget mode: Standard endpoints (e.g., /agent/deepresearch, /agent/datascience)
+    that automatically handle all intermediate steps and return the final result in a single API call.
+    Any required approvals (like research plans or hypotheses) are automatically approved.
+
+
+    2. Interactive mode: Interactive endpoints (e.g., /agent/deepresearch/interactive,
+    /agent/datascience/interactive) that allow you to review and approve intermediate steps
+    before the agent continues. When an interrupt occurs, the API returns status="interrupted"
+    with a message containing the plan or hypothesis. You can then approve it or provide feedback
+    by calling the endpoint again with resume=true and the same thread_id.
   version: 0.0.1
   termsOfService: https://sambanova.ai/cloud-end-user-license-agreement
   contact:
@@ -31,145 +53,6 @@ components:
 # BASE SCHEMAS DEFINITIONS
 ############################
   schemas:
-    DatascienceAgentRequest:
-      title: DatascienceAgentRequest
-      type: object
-      description: Request for data science agent json object
-      additionalProperties: false
-      properties:
-        files:
-          description: One or more files to be analyzed.
-          items:
-            format: binary
-            type: string
-          title: Files
-          type: array
-        prompt:
-          description: The main prompt for the data science agent.
-          title: Prompt
-          type: string
-      required:
-        - prompt
-        - files
-      examples:
-        - prompt: "Perform exploratory data analysis on this dataset"
-          files: "@dataset.csv"
-    DatascienceAgentInteractiveRequest:
-      title: DatascienceAgentInteractiveRequest
-      type: object
-      description: Request for data science interactive agent json object
-      additionalProperties: false
-      properties:
-        file_ids_json:
-          anyOf:
-            - type: string
-            - type: 'null'
-          description: A JSON string of file IDs, required for resuming a session
-          title: File Ids Json
-        files:
-          anyOf:
-            - items:
-                format: binary
-                type: string
-              type: array
-            - type: 'null'
-          description: file to upload
-          title: Files
-        prompt:
-          title: Prompt
-          description: The main prompt for the data science interactive agent
-          type: string
-        resume:
-          default: false
-          title: Resume
-          description: Whether to describe the results or not
-          type: boolean
-        thread_id:
-          anyOf:
-            - type: string
-            - type: 'null'
-          title: Thread Id
-          description: thread id for persistent context
-      required:
-        - prompt
-      examples:
-        - prompt: "Perform exploratory data analysis on this dataset"
-          files: "@dataset.csv"
-          resume: false
-        - prompt: "approve"
-          thread_id: "thread-abc123"
-          file_ids_json: ["file-id-1", "file-id-2"]
-          resume: true
-    CodingAgentInteractiveRequest:
-      title: CodingAgentInteractiveRequest
-      type: object
-      description: Request for coding interactive agent json object
-      additionalProperties: false
-      properties:
-        code:
-          title: Code
-          description: Code to run
-          type: string
-        prompt:
-          title: Prompt
-          description: The main prompt for the coding interactive agent
-          type: string
-        resume:
-          default: false
-          title: Resume
-          description: Whether to describe the results or not
-          type: boolean
-        thread_id:
-          anyOf:
-            - type: string
-            - type: 'null'
-          title: Thread Id
-          description: thread id for persistent context
-      required:
-        - prompt
-        - code
-      examples:
-        - prompt: "Create a function to calculate fibonacci"
-          code: |
-            def fib(n):
-              return fib(n-1) + fib(n-2)
-          resume: false
-        - prompt: "Fix the base case issue"
-          code: |
-            def fib(n):
-              if n <= 1:
-                  return n
-              return fib(n-1) + fib(n-2)
-          thread_id: "thread-abc123"
-          resume: true
-    CodingAgentRequest:
-      title: CodingAgentRequest
-      type: object
-      description: Request for coding agent json object
-      additionalProperties: false
-      properties:
-        code:
-          title: Code
-          description: Code to run
-          type: string
-        prompt:
-          title: Prompt
-          description: The main prompt for the coding agent
-          type: string
-      required:
-        - prompt
-        - code
-      examples:
-        - prompt: "Run this code and explain the output"
-          code: |
-            import numpy as np
-            import matplotlib.pyplot as plt
-
-            x = np.linspace(0, 2 * np.pi, 100)
-            y = np.sin(x)
-            plt.plot(x, y)
-            plt.savefig("sine_wave.png")
-            print("Chart created!")
     TaskModelOverride:
       title: TaskModelOverride
       type: object
@@ -201,9 +84,10 @@ components:
             - openai
             - sambanova
       examples:
+        - model: "gpt-oss-120b"
         - provider: "sambastack"
           model: "gpt-oss-120b"
-          base_url: "https://api.sambastack-env.ai/v1"
+          base_url: "https://api.sambanova.ai/v1"
           provider_type: "sambanova"
     LLMOverrides:
       title: LLMOverrides
@@ -240,20 +124,247 @@ components:
           title: Task Models
           type: object
           description: >-
-            Per-task overrides keyed by task id. Example task ids include
-            deep_research_planner, deep_research_writer, deep_research_summary.
+            Per-task overrides keyed by task id. Different agents use different task IDs:
+
+
+            Main Agent tasks: main_agent, code_execution, vision_agent
+
+
+            Deep Research tasks: deep_research_planner, deep_research_writer, deep_research_summary
+
+
+            Data Science tasks: data_science_report, data_science_code, data_science_note,
+            data_science_process, data_science_hypothesis, data_science_quality_review,
+            data_science_refiner, data_science_visualization, data_science_searcher,
+            data_science_human_choice
+
+
+            Financial Analysis tasks: financial_competitor_finder, financial_analysis_main,
+            financial_aggregator
+
+
+            Coding Agent tasks: code_execution
           additionalProperties:
             $ref: '#/components/schemas/TaskModelOverride'
       examples:
         - provider: "sambastack"
-          base_url: "https://api.sambastack-env.ai/v1"
+          base_url: "https://api.sambanova.ai/v1"
           task_models:
             deep_research_writer:
-              model: "gpt-oss-120b"
+              model: "Llama-4-Maverick-17B-128E-Instruct"
             deep_research_planner:
-              model: "gpt-oss-120b"
+              model: "Llama-4-Maverick-17B-128E-Instruct"
             deep_research_summary:
-              model: "gpt-oss-120b"
+              model: "Llama-4-Maverick-17B-128E-Instruct"
+    DatascienceAgentRequest:
+      title: DatascienceAgentRequest
+      type: object
+      description: Request for data science agent json object
+      additionalProperties: false
+      properties:
+        files:
+          description: One or more files to be analyzed.
+          items:
+            format: binary
+            type: string
+          title: Files
+          type: array
+        prompt:
+          description: The main prompt for the data science agent.
+          title: Prompt
+          type: string
+        llm_config_json:
+          title: LLM Config Json
+          description: >-
+            Optional JSON string for request-scoped LLM overrides. The JSON
+            should match the LLMOverrides schema and is applied only to this request.
+          type: string
+      required:
+        - prompt
+        - files
+      examples:
+        - prompt: "Perform exploratory data analysis on this dataset"
+          files: "@dataset.csv"
+        - prompt: "Perform exploratory data analysis on this dataset"
+          files: "@dataset.csv"
+          llm_config_json: '{"provider":"sambastack","base_url":"https://api.sambanova.ai/v1","model":"gpt-oss-120b"}'
+        - prompt: "Perform exploratory data analysis on this dataset"
+          files: "@dataset.csv"
+          llm_config_json: '{"provider":"sambastack","base_url":"https://api.sambanova.ai/v1","task_models":{"data_science_report":{"model":"DeepSeek-V3-0324"},"data_science_code":{"model":"DeepSeek-V3-0324"},"data_science_note":{"model":"Meta-Llama-3.3-70B-Instruct"},"data_science_process":{"model":"Qwen3-32B"},"data_science_hypothesis":{"model":"DeepSeek-V3-0324"},"data_science_quality_review":{"model":"Llama-4-Maverick-17B-128E-Instruct"},"data_science_refiner":{"model":"DeepSeek-R1-0528"},"data_science_visualization":{"model":"DeepSeek-V3-0324"},"data_science_searcher":{"model":"DeepSeek-V3-0324"},"data_science_human_choice":{"model":"DeepSeek-R1-Distill-Llama-70B"}}}'
+    DatascienceAgentInteractiveRequest:
+      title: DatascienceAgentInteractiveRequest
+      type: object
+      description: Request for data science interactive agent json object
+      additionalProperties: false
+      properties:
+        file_ids_json:
+          anyOf:
+            - type: string
+            - type: 'null'
+          description: A JSON string of file IDs, required for resuming a session
+          title: File Ids Json
+        files:
+          anyOf:
+            - items:
+                format: binary
+                type: string
+              type: array
+            - type: 'null'
+          description: file to upload
+          title: Files
+        prompt:
+          title: Prompt
+          description: The main prompt for the data science interactive agent
+          type: string
+        llm_config_json:
+          title: LLM Config Json
+          description: >-
+            Optional JSON string for request-scoped LLM overrides. The JSON
+            should match the LLMOverrides schema and is applied only to this request.
+          type: string
+        resume:
+          default: false
+          title: Resume
+          description: Whether to describe the results or not
+          type: boolean
+        thread_id:
+          anyOf:
+            - type: string
+            - type: 'null'
+          title: Thread Id
+          description: thread id for persistent context
+      required:
+        - prompt
+      examples:
+        - prompt: "Perform exploratory data analysis on this dataset"
+          files: "@dataset.csv"
+          resume: false
+        - prompt: "Perform exploratory data analysis on this dataset"
+          files: "@dataset.csv"
+          resume: false
+          llm_config_json: '{"provider":"sambastack","base_url":"https://api.sambanova.ai/v1","model":"gpt-oss-120b"}'
+        - prompt: "approve"
+          thread_id: "thread-abc123"
+          file_ids_json: ["file-id-1", "file-id-2"]
+          resume: true
+          llm_config_json: '{"provider":"sambastack","base_url":"https://api.sambanova.ai/v1","task_models":{"data_science_report":{"model":"DeepSeek-V3-0324"},"data_science_code":{"model":"DeepSeek-V3-0324"},"data_science_note":{"model":"Meta-Llama-3.3-70B-Instruct"},"data_science_process":{"model":"Qwen3-32B"},"data_science_hypothesis":{"model":"DeepSeek-V3-0324"},"data_science_quality_review":{"model":"Llama-4-Maverick-17B-128E-Instruct"},"data_science_refiner":{"model":"DeepSeek-R1-0528"},"data_science_visualization":{"model":"DeepSeek-V3-0324"},"data_science_searcher":{"model":"DeepSeek-V3-0324"},"data_science_human_choice":{"model":"DeepSeek-R1-Distill-Llama-70B"}}}'
+    CodingAgentInteractiveRequest:
+      title: CodingAgentInteractiveRequest
+      type: object
+      description: Request for coding interactive agent json object
+      additionalProperties: false
+      properties:
+        code:
+          title: Code
+          description: Code to run
+          type: string
+        prompt:
+          title: Prompt
+          description: The main prompt for the coding interactive agent
+          type: string
+        llm_config:
+          $ref: '#/components/schemas/LLMOverrides'
+        resume:
+          default: false
+          title: Resume
+          description: Whether to describe the results or not
+          type: boolean
+        thread_id:
+          anyOf:
+            - type: string
+            - type: 'null'
+          title: Thread Id
+          description: thread id for persistent context
+      required:
+        - prompt
+        - code
+      examples:
+        - prompt: "Create a function to calculate fibonacci"
+          code: |
+            def fib(n):
+              return fib(n-1) + fib(n-2)
+        - prompt: "Create a function to calculate fibonacci"
+          code: |
+            def fib(n):
+              return fib(n-1) + fib(n-2)
+          llm_config:
+            provider: "sambastack"
+            base_url: "https://api.sambanova.ai/v1"
+            model: "gpt-oss-120b"
+        - prompt: "Fix the base case issue"
+          code: |
+            def fib(n):
+              if n <= 1:
+                  return n
+              return fib(n-1) + fib(n-2)
+          thread_id: "thread-abc123"
+          resume: true
+          llm_config:
+            provider: "sambastack"
+            base_url: "https://api.sambanova.ai/v1"
+            task_models:
+              code_execution:
+                model: "DeepSeek-V3-0324"
+    CodingAgentRequest:
+      title: CodingAgentRequest
+      type: object
+      description: Request for coding agent json object
+      additionalProperties: false
+      properties:
+        code:
+          title: Code
+          description: Code to run
+          type: string
+        prompt:
+          title: Prompt
+          description: The main prompt for the coding agent
+          type: string
+        llm_config:
+          $ref: '#/components/schemas/LLMOverrides'
+      required:
+        - prompt
+        - code
+      examples:
+        - prompt: "Run this code and explain the output"
+          code: |
+            import numpy as np
+            import matplotlib.pyplot as plt
+
+            x = np.linspace(0, 2 * np.pi, 100)
+            y = np.sin(x)
+            plt.plot(x, y)
+            plt.savefig("sine_wave.png")
+            print("Chart created!")
+        - prompt: "Run this code and explain the output"
+          code: |
+            import numpy as np
+            import matplotlib.pyplot as plt
+
+            x = np.linspace(0, 2 * np.pi, 100)
+            y = np.sin(x)
+            plt.plot(x, y)
+            plt.savefig("sine_wave.png")
+            print("Chart created!")
+          llm_config:
+            provider: "sambastack"
+            base_url: "https://api.sambanova.ai/v1"
+            model: "gpt-oss-120b"
+        - prompt: "Run this code and explain the output"
+          code: |
+            import numpy as np
+            import matplotlib.pyplot as plt
+
+            x = np.linspace(0, 2 * np.pi, 100)
+            y = np.sin(x)
+            plt.plot(x, y)
+            plt.savefig("sine_wave.png")
+            print("Chart created!")
+          llm_config:
+            provider: "sambastack"
+            base_url: "https://api.sambanova.ai/v1"
+            task_models:
+              code_execution:
+                model: "DeepSeek-V3-0324"
     DeepResearchInteractiveRequest:
       title: DeepResearchInteractiveRequest
       type: object
@@ -281,24 +392,24 @@ components:
         - prompt
       examples:
         - prompt: "Research AI accelerator market"
-          resume: false
+        - prompt: "Research AI accelerator market"
           llm_config:
-            provider: "sambanova"
-            task_models:
-              deep_research_writer:
-                model: "gpt-oss-120b"
+            provider: "sambastack"
+            base_url: "https://api.sambanova.ai/v1"
+            model: "gpt-oss-120b"
         - prompt: "approve"
           thread_id: "thread-abc123"
           resume: true
           llm_config:
-            provider: "sambanova"
-          task_models:
-            deep_research_writer:
-              model: "gpt-oss-120b"
-            deep_research_planner:
-              model: "gpt-oss-120b"
-            deep_research_summary:
-              model: "gpt-oss-120b"
+            provider: "sambastack"
+            base_url: "https://api.sambanova.ai/v1"
+            task_models:
+              deep_research_writer:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
+              deep_research_planner:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
+              deep_research_summary:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
     DeepResearchRequest:
       title: DeepResearchRequest
       type: object
@@ -315,16 +426,22 @@ components:
         - prompt
       examples:
         - prompt: "Conduct research on quantum computing advances in 2024"
+        - prompt: "Conduct research on quantum computing advances in 2024"
           llm_config:
             provider: "sambastack"
-            base_url: "https://api.sambastack-env.ai/v1"
-          task_models:
-            deep_research_writer:
-              model: "gpt-oss-120b"
-            deep_research_planner:
-              model: "gpt-oss-120b"
-            deep_research_summary:
-              model: "gpt-oss-120b"
+            base_url: "https://api.sambanova.ai/v1"
+            model: "gpt-oss-120b"
+        - prompt: "Conduct research on quantum computing advances in 2024"
+          llm_config:
+            provider: "sambastack"
+            base_url: "https://api.sambanova.ai/v1"
+            task_models:
+              deep_research_writer:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
+              deep_research_planner:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
+              deep_research_summary:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
     FinancialAnalysisInteractiveRequest:
       title: FinancialAnalysisInteractiveRequest
       type: object
@@ -335,6 +452,8 @@ components:
           title: Prompt
           description: The main prompt for the financial interactive agent
           type: string
+        llm_config:
+          $ref: '#/components/schemas/LLMOverrides'
         resume:
           default: false
           title: Resume
@@ -350,6 +469,22 @@ components:
         - prompt
       examples:
         - prompt: "Perform a financial analysis of Apple"
+        - prompt: "Perform a financial analysis of Apple"
+          llm_config:
+            provider: "sambastack"
+            base_url: "https://api.sambanova.ai/v1"
+            model: "gpt-oss-120b"
+        - prompt: "Perform a financial analysis of Apple"
+          llm_config:
+            provider: "sambastack"
+            base_url: "https://api.sambanova.ai/v1"
+            task_models:
+              financial_competitor_finder:
+                model: "Meta-Llama-3.1-8B-Instruct"
+              financial_analysis_main:
+                model: "Meta-Llama-3.1-8B-Instruct"
+              financial_aggregator:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
     FinancialAnalysisRequest:
       title: FinancialAnalysisRequest
       type: object
@@ -360,10 +495,28 @@ components:
           title: Prompt
           description: The main prompt for the financial agent
           type: string
+        llm_config:
+          $ref: '#/components/schemas/LLMOverrides'
       required:
         - prompt
       examples:
         - prompt: "Perform a financial analysis of Apple"
+        - prompt: "Perform a financial analysis of Apple"
+          llm_config:
+            provider: "sambastack"
+            base_url: "https://api.sambanova.ai/v1"
+            model: "gpt-oss-120b"
+        - prompt: "Perform a financial analysis of Apple"
+          llm_config:
+            provider: "sambastack"
+            base_url: "https://api.sambanova.ai/v1"
+            task_models:
+              financial_competitor_finder:
+                model: "Meta-Llama-3.1-8B-Instruct"
+              financial_analysis_main:
+                model: "Meta-Llama-3.1-8B-Instruct"
+              financial_aggregator:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
     HTTPValidationError:
       title: HTTPValidationError
       type: object
@@ -383,6 +536,8 @@ components:
           title: Prompt
           description: The main prompt for the main interactive agent
           type: string
+        llm_config:
+          $ref: '#/components/schemas/LLMOverrides'
         resume:
           default: false
           title: Resume
@@ -398,10 +553,56 @@ components:
         - prompt
       examples:
         - prompt: "Create a bar chart for Q1 sales"
-          resume: false 
+        - prompt: "Create a bar chart for Q1 sales"
+          llm_config:
+            provider: "sambastack"
+            base_url: "https://api.sambanova.ai/v1"
+            model: "gpt-oss-120b"
         - prompt: "Now create a pie chart showing the distribution"
           resume: true
           thread_id: "thread-abc"
+          llm_config:
+            provider: "sambastack"
+            base_url: "https://api.sambanova.ai/v1"
+            task_models:
+              main_agent:
+                model: "DeepSeek-V3-0324"
+              code_execution:
+                model: "DeepSeek-V3-0324"
+              deep_research_planner:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
+              deep_research_writer:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
+              deep_research_summary:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
+              data_science_report:
+                model: "DeepSeek-V3-0324"
+              data_science_code:
+                model: "DeepSeek-V3-0324"
+              data_science_note:
+                model: "Meta-Llama-3.3-70B-Instruct"
+              data_science_process:
+                model: "Qwen3-32B"
+              data_science_hypothesis:
+                model: "DeepSeek-V3-0324"
+              data_science_quality_review:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
+              data_science_refiner:
+                model: "DeepSeek-R1-0528"
+              data_science_visualization:
+                model: "DeepSeek-V3-0324"
+              data_science_searcher:
+                model: "DeepSeek-V3-0324"
+              data_science_human_choice:
+                model: "DeepSeek-R1-Distill-Llama-70B"
+              vision_agent:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
+              financial_competitor_finder:
+                model: "Meta-Llama-3.1-8B-Instruct"
+              financial_analysis_main:
+                model: "Meta-Llama-3.1-8B-Instruct"
+              financial_aggregator:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
     MainAgentRequest:
       type: object
       title: MainAgentRequest
@@ -412,11 +613,60 @@ components:
           title: prompt
           description: The main prompt for the main agent
           type: string
+        llm_config:
+          $ref: '#/components/schemas/LLMOverrides'
       required:
         - prompt
       examples:
         - prompt: "Create a bar chart for Q1 sales"
-          resume: false
+        - prompt: "Create a bar chart for Q1 sales"
+          llm_config:
+            provider: "sambastack"
+            base_url: "https://api.sambanova.ai/v1"
+            model: "gpt-oss-120b"
+        - prompt: "Create a bar chart for Q1 sales and summarize the result"
+          llm_config:
+            provider: "sambastack"
+            base_url: "https://api.sambanova.ai/v1"
+            task_models:
+              main_agent:
+                model: "DeepSeek-V3-0324"
+              code_execution:
+                model: "DeepSeek-V3-0324"
+              deep_research_planner:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
+              deep_research_writer:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
+              deep_research_summary:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
+              data_science_report:
+                model: "DeepSeek-V3-0324"
+              data_science_code:
+                model: "DeepSeek-V3-0324"
+              data_science_note:
+                model: "Meta-Llama-3.3-70B-Instruct"
+              data_science_process:
+                model: "Qwen3-32B"
+              data_science_hypothesis:
+                model: "DeepSeek-V3-0324"
+              data_science_quality_review:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
+              data_science_refiner:
+                model: "DeepSeek-R1-0528"
+              data_science_visualization:
+                model: "DeepSeek-V3-0324"
+              data_science_searcher:
+                model: "DeepSeek-V3-0324"
+              data_science_human_choice:
+                model: "DeepSeek-R1-Distill-Llama-70B"
+              vision_agent:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
+              financial_competitor_finder:
+                model: "Meta-Llama-3.1-8B-Instruct"
+              financial_analysis_main:
+                model: "Meta-Llama-3.1-8B-Instruct"
+              financial_aggregator:
+                model: "Llama-4-Maverick-17B-128E-Instruct"
     ValidationError:
       properties:
         loc:
@@ -469,26 +719,53 @@ components:
         - result
         - artifacts
         - thread_id
-      example:
-        status: success
-        result: I've created the bar chart...
-        artifacts: 
-          - file-id-123
-        thread_id: thread-abc
+      examples:
+        - status: success
+          result: I've created the bar chart...
+          artifacts: 
+            - file-id-123
+          thread_id: thread-abc
     
     AgentResponse:
       type: object
       title: Agent Response Object
-      description: Unified schema for agent responses, including success and interrupt states.
+      description: >-
+        Unified schema for agent responses, including success and interrupt states.
+
+
+        Agent Execution Modes:
+
+
+        1. Fire-and-forget mode: Standard endpoints (e.g., /agent/deepresearch, /agent/datascience)
+        automatically approve any interrupts and return the final result in a single call.
+
+
+        2. Interactive mode: Interactive endpoints (e.g., /agent/deepresearch/interactive,
+        /agent/datascience/interactive) return interrupts to the user for approval. When an
+        interrupt occurs (status="interrupted"), the user must review the interrupt.message
+        (typically a plan or hypothesis) and then resume the workflow by calling the same
+        endpoint with resume=true, thread_id, and their response (e.g., "approve" or feedback).
+
+
+        Common interrupt scenarios:
+
+        - Deep Research: Interrupts after generating a research plan for user approval
+
+        - Data Science: Interrupts after generating a hypothesis for user approval
       additionalProperties: false
       properties:
         status:
           title: status
-          description: status of agent gereneration
+          description: >-
+            Status of agent execution. Values: "completed" (task finished successfully),
+            "interrupted" (requires user input), "error" (execution failed).
           type: string
         result:
           title: Result
-          description: results description
+          description: >-
+            Results description. For completed status, contains the final output.
+            For interrupted status, contains the interrupt message (plan/hypothesis).
+            For error status, contains error details.
           type: string
         artifacts:
           title: Artifacts
@@ -510,16 +787,21 @@ components:
           type: string
         interrupt:
           title: Interrupt
-          description: Information about an interrupt event requiring user action
+          description: >-
+            Present when status="interrupted". Contains information about the interrupt
+            event requiring user action before continuing execution.
           type: object
           properties:
             type:
               title: Type
-              description: Type of interrupt (e.g., approval)
+              description: Type of interrupt (e.g., "approval" for plan/hypothesis approval)
               type: string
             message:
               title: Message
-              description: Plan or information message for the user
+              description: >-
+                Plan, hypothesis, or information message for the user to review.
+                User should respond with "approve" to continue or provide feedback
+                for revision.
               type: string
           required:
             - type
@@ -527,9 +809,9 @@ components:
       required:
         - status
         - thread_id
-      example:
-        status: interrupt
-        thread_id: thread-a
+      examples:
+        - status: interrupt
+          thread_id: thread-a
 
     DataScienceAgentHTMLResponse:
       type: object
@@ -541,39 +823,42 @@ components:
           title: content_type
           description: MIME type of the generated report (should be 'text/html')
           type: string
-          example: text/html
+          examples: 
+            - text/html
         title:
           title: title
           description: Title of the analysis report
           type: string
-          example: Data Science Analysis Report
+          examples: 
+            - Data Science Analysis Report
         html:
           title: html
           description: Full HTML content of the generated report
           type: string
-          example: |
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <title>Data Science Analysis Report</title>
-              <style>/* Professional styling */</style>
-            </head>
-            <body>
-              <h1>Exploratory Data Analysis Report</h1>
-              <h2>Dataset Overview</h2>
-              <p>The dataset contains 1,000 rows and 15 columns...</p>
-              <h2>Statistical Summary</h2>
-              <table><!-- Summary statistics --></table>
-              <h2>Visualizations</h2>
-              <img src="data:image/png;base64,..." alt="Distribution Plot">
-              <img src="data:image/png;base64,..." alt="Correlation Heatmap">
-              <h2>Key Findings</h2>
-              <ul>
-                <li>Strong correlation between features X and Y</li>
-                <li>Missing values detected in column Z</li>
-              </ul>
-            </body>
-            </html>
+          examples: 
+            - |
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <title>Data Science Analysis Report</title>
+                <style>/* Professional styling */</style>
+              </head>
+              <body>
+                <h1>Exploratory Data Analysis Report</h1>
+                <h2>Dataset Overview</h2>
+                <p>The dataset contains 1,000 rows and 15 columns...</p>
+                <h2>Statistical Summary</h2>
+                <table><!-- Summary statistics --></table>
+                <h2>Visualizations</h2>
+                <img src="data:image/png;base64,..." alt="Distribution Plot">
+                <img src="data:image/png;base64,..." alt="Correlation Heatmap">
+                <h2>Key Findings</h2>
+                <ul>
+                  <li>Strong correlation between features X and Y</li>
+                  <li>Missing values detected in column Z</li>
+                </ul>
+              </body>
+              </html>
       required:
         - content_type
         - title
@@ -589,6 +874,8 @@ paths:
       summary: Main Agent
       description: |
         The main agent is a general-purpose AI assistant that coordinates with specialized subagents (coding, financial analysis, deep research, and data science) to complete complex tasks. This fire-and-forget endpoint submits a prompt and returns the final response in a single call.
+
+        Optional: include `llm_config` to override provider/model/base_url for this request.
       operationId: main_agent_agent_mainagent_post
       security:
         - api_key: []
@@ -620,8 +907,15 @@ paths:
       description: |
         The main agent is a general-purpose AI assistant that coordinates with specialized subagents (coding, financial analysis, deep research, and data science) to complete complex tasks. This interactive endpoint supports multi-turn conversations with persistent context.
 
-        Step 1: Submit prompt, get thread_id and initial response.
-        Step 2: Continue conversation with thread_id and resume=true.
+        Multi-turn workflow:
+        - Step 1: Submit prompt with resume=false (or omit it) to start a new conversation. Get thread_id and initial response.
+        - Step 2+: Continue conversation with the same thread_id and resume=true, adding new prompts.
+
+        Interrupts: When the main agent delegates to subagents (like deep research), it may return status="interrupted"
+        if the subagent needs approval (e.g., research plan). Review the interrupt.message and respond with
+        "approve" or feedback to continue.
+
+        Optional: include `llm_config` to override provider/model/base_url for this request.
       operationId: main_agent_interactive_agent_mainagent_interactive_post
       security:
         - api_key: []
@@ -652,6 +946,8 @@ paths:
       summary: Coding Agent
       description: |
         The coding agent executes Python code in a sandboxed environment, fixes errors, and returns results. This fire-and-forget endpoint submits a prompt and returns the final response in a single call.
+
+        Optional: include `llm_config` to override provider/model/base_url for this request.
       operationId: coding_agent_agent_coding_post
       security:
         - api_key: []
@@ -684,6 +980,8 @@ paths:
 
         Step 1: Submit code with prompt, get thread_id and execution result.
         Step 2: Continue with thread_id and resume=true to iterate on code.
+
+        Optional: include `llm_config` to override provider/model/base_url for this request.
       operationId: coding_agent_interactive_agent_coding_interactive_post
       security:
         - api_key: []
@@ -713,6 +1011,8 @@ paths:
       - Subagents
       description: |
         The data science agent analyzes datasets, generates visualizations, and produces comprehensive reports. This fire-and-forget endpoint submits a prompt and returns the final report in a single call.
+
+        Optional: include `llm_config_json` in the multipart form to override provider/model/base_url for this request.
       operationId: datascience_agent_and_report_agent_datascience_post
       security:
         - api_key: []
@@ -741,10 +1041,21 @@ paths:
       tags:
         - Subagents Interactive
       description: |
-        The data science agent analyzes datasets, generates visualizations, and produces comprehensive reports. This interactive endpoint uses a two-step workflow:
-        
-        1. Submit a prompt and files to receive a thread_id and hypothesis for approval
-        2. Submit a prompt with thread_id, file_ids_json, and resume=true to generate the final report
+        The data science agent analyzes datasets, generates visualizations, and produces comprehensive reports. This interactive endpoint uses a two-step workflow with user approval:
+
+        Step 1: Submit a prompt and files with resume=false (or omit it). The agent analyzes the data and returns:
+        - status: "interrupted"
+        - result: The analysis hypothesis for your review
+        - thread_id: Use this to continue the workflow
+        - file_ids: Pass these in step 2
+
+        Step 2: Review the hypothesis and submit with resume=true, the same thread_id, and file_ids_json. Set prompt to:
+        - "approve" to proceed with the hypothesis as-is
+        - Provide feedback to revise the hypothesis (e.g., "Focus on correlation analysis")
+
+        The agent will then execute the analysis and return status="completed" with the final HTML report.
+
+        Optional: include `llm_config_json` in the multipart form to override provider/model/base_url for this request.
       operationId: datascience_interactive_agent_datascience_interactive_post
       security:
         - api_key: []
@@ -774,12 +1085,11 @@ paths:
       tags:
       - Subagents
       description: |
-        The deep research agent conducts multi-iteration research and produces comprehensive reports. This interactive endpoint uses a two-step workflow:
-        
-        1. Submit a prompt to receive a thread_id and research plan for approval
-        2. Submit a prompt with thread_id and resume=true to generate the final report
+        The deep research agent conducts multi-iteration research and produces comprehensive reports. This fire-and-forget endpoint automatically approves the research plan and returns the final report in a single call.
 
-        Optional: include `llm_config` to override provider/model/base_url/API keys for this request.
+        Workflow: The agent generates a research plan internally, auto-approves it, conducts the research, and returns the complete report.
+
+        Optional: include `llm_config` to override provider/model/base_url for this request.
       operationId: deepresearch_agent_agent_deepresearch_post
       security:
         - api_key: []
@@ -807,13 +1117,21 @@ paths:
     post:
       tags:
       - Subagents Interactive
-      description: 'Two-step interactive deep research API:
+      description: |
+        Two-step interactive deep research API with user approval:
 
-        Step 1: Submit prompt, get thread_id and research plan for approval.
+        Step 1: Submit prompt with resume=false (or omit it). The agent generates a research plan and returns:
+        - status: "interrupted"
+        - result: The research plan for your review
+        - thread_id: Use this to continue the workflow
 
-        Step 2: Submit prompt with thread_id and resume=true to get the final report.
+        Step 2: Review the plan and submit with resume=true and the same thread_id. Set prompt to:
+        - "approve" or "true" to proceed with the plan as-is
+        - Provide feedback to revise the plan (e.g., "Focus more on recent developments")
 
-        Optional: include `llm_config` to override provider/model/base_url/API keys for this request.'
+        The agent will then conduct the research and return status="completed" with the final report.
+
+        Optional: include `llm_config` to override provider/model/base_url for this request.
       operationId: deepresearch_interactive_agent_agent_deepresearch_interactive_post
       security:
         - api_key: []
@@ -845,6 +1163,8 @@ paths:
       summary: Financial Analysis Agent
       description: |
         The financial analysis agent analyzes stocks, companies, and market data. This fire-and-forget endpoint submits a prompt and returns the final response in a single call.
+
+        Optional: include `llm_config` to override provider/model/base_url for this request.
       operationId: financial_analysis_agent_agent_financialanalysis_post
       security:
         - api_key: []
@@ -878,6 +1198,8 @@ paths:
         
         1. Submit a prompt to receive a thread_id and initial analysis
         2. Continue with thread_id and resume=true for follow-up questions
+
+        Optional: include `llm_config` to override provider/model/base_url for this request.
       operationId: financial_analysis_agent_interactive_agent_financialanalysis_interactive_post
       security:
         - api_key: []
