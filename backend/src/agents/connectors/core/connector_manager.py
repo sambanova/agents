@@ -527,13 +527,19 @@ class ConnectorManager:
         try:
             # Get all custom MCP connectors for this user
             pattern = f"user:{user_id}:custom_mcp:*"
-            keys = await self.redis_storage.redis_client.keys(pattern)
-            
+            keys = []
+            cursor = 0
+            while True:
+                cursor, partial_keys = await self.redis_storage.redis_client.scan(cursor, match=pattern, count=100)
+                keys.extend(partial_keys)
+                if cursor == 0:
+                    break
+
             if user_id not in self._user_custom_connectors:
                 self._user_custom_connectors[user_id] = {}
-            
+
             for key in keys:
-                data = await self.redis_storage.redis_client.get(key)
+                data = await self.redis_storage.redis_client.get(key, user_id)
                 if data:
                     connector_data = json.loads(data)
                     provider_id = connector_data["provider_id"]

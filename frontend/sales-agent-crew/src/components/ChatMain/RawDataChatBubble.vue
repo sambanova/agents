@@ -181,7 +181,7 @@ const messageContent = computed(() => {
             } else if (item.type === 'image_url' && item.image_url?.url) {
               const imageUrl = item.image_url.url
               if (imageUrl.startsWith('data:image/') || imageUrl.startsWith('https://')) {
-                return `<div class="my-2"><img src="${imageUrl}" alt="Attached image" class="max-w-full h-auto rounded border" style="max-height: 300px;" /></div>`
+                return `<div class="my-2"><img src="${escapeHtml(imageUrl)}" alt="Attached image" class="max-w-full h-auto rounded border" style="max-height: 300px;" /></div>`
               } else {
                 return escapeHtml(`[image: ${imageUrl}]`)
               }
@@ -196,7 +196,7 @@ const messageContent = computed(() => {
       }
       
       if (contentValue && typeof contentValue === 'string') {
-        return contentValue
+        return escapeHtml(contentValue)
       }
       
       // For stream_complete and other events, don't show full JSON by default

@@ -379,7 +379,12 @@ class BaseOAuthConnector(ABC):
         
         await self.redis_storage.redis_client.set(state_key, state_value, user_id)
         await self.redis_storage.redis_client.expire(state_key, 600)  # 10 minute TTL
-        
+
+        # Store plain index: state → user_id (not sensitive, enables callback lookup)
+        state_user_key = f"oauth:state_user:{state}"
+        await self.redis_storage.redis_client.set_plain(state_user_key, user_id)
+        await self.redis_storage.redis_client.expire(state_user_key, 600)
+
         logger.info("OAuth state stored successfully", state_key=state_key)
         
         # DEBUG: Log OAuth configuration details
@@ -445,7 +450,10 @@ class BaseOAuthConnector(ABC):
 
         # Delete state from Redis
         await self.redis_storage.redis_client.delete(state_key)
-        
+        # Clean up the plain user_id index key
+        state_user_key = f"oauth:state_user:{state}"
+        await self.redis_storage.redis_client.delete(state_user_key)
+
         logger.info("OAuth state validated and deleted", state_key=state_key)
         
         client = await self.get_oauth_client(user_id)

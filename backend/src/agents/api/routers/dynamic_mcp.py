@@ -121,7 +121,8 @@ async def add_mcp_connector(
         
         await redis_storage.redis_client.set(
             custom_connector_key,
-            json.dumps(custom_connector_data)
+            json.dumps(custom_connector_data),
+            user_id
         )
         
         # Try to discover tools from the MCP server
@@ -174,11 +175,17 @@ async def list_custom_mcp_connectors(
     try:
         # Get all custom MCP connectors for this user
         pattern = f"user:{user_id}:custom_mcp:*"
-        keys = await redis_storage.redis_client.keys(pattern)
-        
+        keys = []
+        cursor = 0
+        while True:
+            cursor, partial_keys = await redis_storage.redis_client.scan(cursor, match=pattern, count=100)
+            keys.extend(partial_keys)
+            if cursor == 0:
+                break
+
         connectors = []
         for key in keys:
-            data = await redis_storage.redis_client.get(key)
+            data = await redis_storage.redis_client.get(key, user_id)
             if data:
                 connector_data = json.loads(data)
                 connectors.append({

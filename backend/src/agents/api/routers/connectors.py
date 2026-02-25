@@ -7,6 +7,7 @@ Handles OAuth flows, connector management, and tool selection at the user level.
 import json
 import os
 from typing import Any, Dict, List, Optional, Set
+from urllib.parse import quote
 
 import structlog
 from agents.auth.auth0_config import get_current_user_id
@@ -227,7 +228,7 @@ async def oauth_callback(
             # Redirect to OAuth callback page with error
             frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
             return RedirectResponse(
-                url=f"{frontend_url}/oauth-callback?error={error}&provider={provider_id}"
+                url=f"{frontend_url}/oauth-callback?error={quote(error, safe='')}&provider={quote(provider_id, safe='')}"
             )
         
         manager = get_connector_manager()
@@ -249,24 +250,37 @@ async def oauth_callback(
             state=state[:10] + "..." if state else None
         )
         
-        from redis.asyncio import Redis
-        plain_redis = Redis(connection_pool=connector.redis_storage.redis_client.connection_pool, decode_responses=True)
-        state_json = await plain_redis.get(state_key)
-        await plain_redis.close()
-        
+        # Look up user_id from plain index key, then decrypt state
+        state_user_key = f"oauth:state_user:{state}"
+        user_id = await connector.redis_storage.redis_client.get_plain(state_user_key)
+        if not user_id:
+            logger.error("OAuth state user index not found", state_user_key=state_user_key)
+            raise HTTPException(status_code=400, detail="Invalid or expired state")
+        if isinstance(user_id, bytes):
+            user_id = user_id.decode('utf-8')
+
+        # Now decrypt the full state using the user_id
+        state_json = await connector.redis_storage.redis_client.get(state_key, user_id)
+
         logger.info(
             "Retrieved OAuth state",
             state_exists=bool(state_json),
             state_length=len(state_json) if state_json else 0
         )
-        
+
         if not state_json:
             logger.error("OAuth state not found in Redis", state_key=state_key)
             raise HTTPException(status_code=400, detail="Invalid or expired state")
-        
+
         state_data = json.loads(state_json)
-        
-        user_id = state_data.get("user_id")
+
+        # Validate user_id consistency
+        if state_data.get("user_id") != user_id:
+            logger.error("OAuth state user_id mismatch")
+            raise HTTPException(status_code=400, detail="Invalid or expired state")
+
+        # Clean up the plain index key
+        await connector.redis_storage.redis_client.delete(state_user_key)
         
         # Exchange code for token
         token = await connector.exchange_code_for_token(code, state, user_id)
@@ -293,7 +307,7 @@ async def oauth_callback(
         # Redirect to OAuth callback page which will close the popup
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         return RedirectResponse(
-            url=f"{frontend_url}/oauth-callback?success=true&provider={provider_id}"
+            url=f"{frontend_url}/oauth-callback?success=true&provider={quote(provider_id, safe='')}"
         )
         
     except HTTPException:
@@ -302,12 +316,13 @@ async def oauth_callback(
         logger.error(
             "OAuth callback failed",
             provider_id=provider_id,
-            error=str(e)
+            error_type=type(e).__name__,
+            exc_info=True,
         )
         # Redirect to OAuth callback page with error
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         return RedirectResponse(
-            url=f"{frontend_url}/oauth-callback?error=callback_failed&provider={provider_id}"
+            url=f"{frontend_url}/oauth-callback?error=callback_failed&provider={quote(provider_id, safe='')}"
         )
 
 

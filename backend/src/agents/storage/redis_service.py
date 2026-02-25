@@ -45,6 +45,14 @@ class SecureRedisService(redis.Redis):
         encrypted_value = self.encryption.encrypt(value, user_id)
         return await super().rpush(name, encrypted_value)
 
+    async def set_plain(self, key: str, value: str) -> bool:
+        """Store a value without encryption (for non-sensitive index keys)."""
+        return await super().set(key, value)
+
+    async def get_plain(self, key: str) -> Any:
+        """Retrieve a value without decryption (for non-sensitive index keys)."""
+        return await super().get(key)
+
     async def hsetnx(self, name: str, key: str, value: Any, user_id: str) -> bool:
         """Set hash field only if it doesn't exist. Returns True if set, False if already existed."""
         encrypted_value = self.encryption.encrypt(value, user_id)
