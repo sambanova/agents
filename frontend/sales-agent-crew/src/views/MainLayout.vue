@@ -312,11 +312,11 @@ onMounted(async () => {
 
         // Check if the selected provider has an API key
         let hasApiKey = false;
-        if (selectedProvider === 'sambanova' && apiKeys.sambanova_key) {
+        if (selectedProvider === 'sambanova' && apiKeys.sambanova_key_set) {
           hasApiKey = true;
-        } else if (selectedProvider === 'fireworks' && apiKeys.fireworks_key) {
+        } else if (selectedProvider === 'fireworks' && apiKeys.fireworks_key_set) {
           hasApiKey = true;
-        } else if (selectedProvider === 'together' && apiKeys.together_key) {
+        } else if (selectedProvider === 'together' && apiKeys.together_key_set) {
           hasApiKey = true;
         }
 

@@ -85,7 +85,7 @@ async def get_available_connectors(user_id: str = Depends(get_current_user_id)):
         ]
     except Exception as e:
         logger.error("Failed to get available connectors", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/user", response_model=List[ConnectorStatusResponse])
@@ -118,7 +118,7 @@ async def get_user_connectors(user_id: str = Depends(get_current_user_id)):
         return connectors
     except Exception as e:
         logger.error("Failed to get user connectors", user_id=user_id, error=str(e), exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/{provider_id}", response_model=ConnectorStatusResponse)
@@ -146,7 +146,7 @@ async def get_user_connector(
             provider_id=provider_id,
             error=str(e)
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/{provider_id}/auth/init")
@@ -199,7 +199,7 @@ async def init_oauth_flow(
             provider_id=provider_id,
             error=str(e)
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/{provider_id}/callback")
@@ -342,7 +342,7 @@ async def refresh_connector_token(
             provider_id=provider_id,
             error=str(e)
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.delete("/{provider_id}/disconnect")
@@ -371,7 +371,7 @@ async def disconnect_connector(
             provider_id=provider_id,
             error=str(e)
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/{provider_id}/tools")
@@ -424,7 +424,7 @@ async def get_connector_tools(
             provider_id=provider_id,
             error=str(e)
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/{provider_id}/tools/update")
@@ -453,7 +453,7 @@ async def update_connector_tools(
         }
         
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Invalid request")
     except Exception as e:
         logger.error(
             "Failed to update connector tools",
@@ -461,7 +461,7 @@ async def update_connector_tools(
             provider_id=provider_id,
             error=str(e)
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/{provider_id}/enable")
@@ -484,7 +484,7 @@ async def enable_connector(
         }
         
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Invalid request")
     except Exception as e:
         logger.error(
             "Failed to enable connector",
@@ -492,7 +492,7 @@ async def enable_connector(
             provider_id=provider_id,
             error=str(e)
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/{provider_id}/disable")
@@ -521,7 +521,7 @@ async def disable_connector(
             provider_id=provider_id,
             error=str(e)
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/{provider_id}/toggle-chat")
@@ -584,4 +584,4 @@ async def toggle_connector_chat(
             provider_id=provider_id,
             error=str(e)
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")

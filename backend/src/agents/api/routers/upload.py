@@ -1,3 +1,4 @@
+import os
 import time
 import uuid
 
@@ -13,6 +14,18 @@ router = APIRouter(
     prefix="/upload",
 )
 
+ALLOWED_CONTENT_TYPES = {
+    "application/pdf",
+    "text/plain",
+    "text/csv",
+    "application/json",
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
 
 async def process_and_store_file(
     request: Request,
@@ -22,16 +35,20 @@ async def process_and_store_file(
     # Generate unique file ID
     file_id = str(uuid.uuid4())
 
+    # Sanitise filename — strip path components, reject traversal
+    safe_filename = os.path.basename(file.filename or "unnamed").replace("\x00", "")
+    safe_content_type = file.content_type if file.content_type in ALLOWED_CONTENT_TYPES else "application/octet-stream"
+
     # Read file content
     content = await file.read()
     indexed = False
     vector_ids = []
 
     upload_time = time.time()
-    logger.info(f"[UPLOAD_TRACE] Processing file: {file.filename}, content_type: {file.content_type}, file_id: {file_id}")
-    if file.content_type == "application/pdf":
+    logger.info(f"[UPLOAD_TRACE] Processing file: {safe_filename}, content_type: {safe_content_type}, file_id: {file_id}")
+    if safe_content_type == "application/pdf":
         logger.info(f"[UPLOAD_TRACE] File is PDF, starting indexing for {file_id}")
-        file_blobs = await convert_ingestion_input_to_blob(content, file.filename)
+        file_blobs = await convert_ingestion_input_to_blob(content, safe_filename)
         api_keys = await request.app.state.redis_storage_service.get_user_api_key(
             user_id
         )
@@ -47,15 +64,15 @@ async def process_and_store_file(
         logger.info(f"[UPLOAD_TRACE] Indexed file successfully - file_id: {file_id}, vector_ids: {len(vector_ids)}")
         indexed = True
     else:
-        logger.warning(f"[UPLOAD_TRACE] File is NOT PDF ({file.content_type}), skipping indexing for {file_id}")
+        logger.warning(f"[UPLOAD_TRACE] File is NOT PDF ({safe_content_type}), skipping indexing for {file_id}")
 
     logger.info(f"[UPLOAD_TRACE] Storing file in Redis - file_id: {file_id}, indexed: {indexed}")
     await request.app.state.redis_storage_service.put_file(
         user_id,
         file_id,
         data=content,
-        filename=file.filename,
-        format=file.content_type,
+        filename=safe_filename,
+        format=safe_content_type,
         upload_timestamp=upload_time,
         indexed=indexed,
         source="upload",
@@ -64,8 +81,8 @@ async def process_and_store_file(
     logger.info(f"[UPLOAD_TRACE] File stored successfully in Redis - file_id: {file_id}")
     return {
         "file_id": file_id,
-        "filename": file.filename,
-        "type": file.content_type,
+        "filename": safe_filename,
+        "type": safe_content_type,
         "created_at": upload_time,
         "user_id": user_id,
     }
@@ -98,4 +115,4 @@ async def upload_document(
 
     except Exception as e:
         logger.error(f"Error processing file: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return JSONResponse(status_code=500, content={"error": "An internal error occurred"})

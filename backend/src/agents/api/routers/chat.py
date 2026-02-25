@@ -183,7 +183,7 @@ async def init_chat(
         logger.error(f"Error initializing chat: {str(e)}")
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to initialize chat: {str(e)}"},
+            content={"error": "An internal error occurred"},
         )
 
 
@@ -229,7 +229,7 @@ async def get_conversation_messages(
         )
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to retrieve messages: {str(e)}"},
+            content={"error": "An internal error occurred"},
         )
 
 
@@ -353,7 +353,7 @@ async def list_chats(
         logger.error(f"Error retrieving chats: {str(e)}")
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to retrieve chats: {str(e)}"},
+            content={"error": "An internal error occurred"},
         )
 
 
@@ -454,7 +454,7 @@ async def delete_chat(
         logger.error(f"Error deleting chat: {str(e)}", conversation_id=conversation_id)
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to delete chat: {str(e)}"},
+            content={"error": "An internal error occurred"},
         )
 
 
@@ -479,11 +479,11 @@ async def create_conversation_share(
             },
         )
 
-    except ValueError as e:
-        return JSONResponse(status_code=404, content={"error": str(e)})
+    except ValueError:
+        return JSONResponse(status_code=404, content={"error": "Conversation not found"})
     except Exception as e:
         logger.error(f"Error creating share: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return JSONResponse(status_code=500, content={"error": "An internal error occurred"})
 
 
 @router.get("/{conversation_id}/shares")
@@ -514,4 +514,4 @@ async def list_conversation_shares(
 
     except Exception as e:
         logger.error(f"Error listing shares: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return JSONResponse(status_code=500, content={"error": "An internal error occurred"})

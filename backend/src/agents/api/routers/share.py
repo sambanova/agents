@@ -1,3 +1,6 @@
+import os
+from urllib.parse import quote
+
 import structlog
 from agents.auth.auth0_config import get_current_user_id
 from fastapi import APIRouter, Depends, Request, Response
@@ -29,7 +32,7 @@ async def get_shared_conversation(request: Request, share_token: str):
 
     except Exception as e:
         logger.error(f"Error accessing shared conversation: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return JSONResponse(status_code=500, content={"error": "An internal error occurred"})
 
 
 @router.get("/{share_token}/files/{file_id}")
@@ -96,11 +99,12 @@ async def get_shared_file(
                 content={"error": "File not found in shared conversation"},
             )
 
+        safe_filename = quote(os.path.basename(file_metadata.get("filename", file_id)))
         return Response(
             content=file_data,
-            media_type=file_metadata["format"],
+            media_type="application/octet-stream",
             headers={
-                "Content-Disposition": f"inline; filename={file_metadata['filename']}"
+                "Content-Disposition": f'attachment; filename="{safe_filename}"'
             },
         )
 
@@ -110,7 +114,7 @@ async def get_shared_file(
             share_token=share_token,
             file_id=file_id,
         )
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return JSONResponse(status_code=500, content={"error": "An internal error occurred"})
 
 
 @router.delete("/{share_token}")
@@ -136,4 +140,4 @@ async def delete_share(
 
     except Exception as e:
         logger.error(f"Error deleting share: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return JSONResponse(status_code=500, content={"error": "An internal error occurred"})

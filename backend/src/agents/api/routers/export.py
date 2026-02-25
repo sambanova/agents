@@ -154,7 +154,7 @@ async def request_export(
         logger.error("Error processing export request", user_id=user_id, error=str(e))
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to process export request: {str(e)}"}
+            content={"error": "An internal error occurred"}
         )
 
 
@@ -198,7 +198,7 @@ async def get_export_status(
         logger.error("Error getting export status", user_id=user_id, error=str(e))
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to get export status: {str(e)}"}
+            content={"error": "An internal error occurred"}
         )
 
 
@@ -253,7 +253,7 @@ async def download_export(
         logger.error("Error downloading export", user_id=user_id, error=str(e))
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to download export: {str(e)}"}
+            content={"error": "An internal error occurred"}
         )
 
 
@@ -281,5 +281,5 @@ async def clear_export(
         logger.error("Error clearing export", user_id=user_id, error=str(e))
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to clear export: {str(e)}"}
+            content={"error": "An internal error occurred"}
         )

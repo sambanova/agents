@@ -1038,19 +1038,15 @@ const loadConfiguration = async () => {
       })
 
       if (keysResponse.data) {
+        // Backend now returns boolean indicators (_set) instead of actual keys.
+        // We only use this to know whether keys exist server-side;
+        // actual key values are never returned from the server.
         apiKeys.value = {
-          sambanova: keysResponse.data.sambanova_key || '',
-          fireworks: keysResponse.data.fireworks_key || '',
-          together: keysResponse.data.together_key || '',
-          paypal_invoicing_email: keysResponse.data.paypal_invoicing_email || ''
+          sambanova: keysResponse.data.sambanova_key_set ? '********' : '',
+          fireworks: keysResponse.data.fireworks_key_set ? '********' : '',
+          together: keysResponse.data.together_key_set ? '********' : '',
+          paypal_invoicing_email: ''
         }
-
-        // Load custom provider API keys (they come with "custom_" prefix)
-        Object.keys(keysResponse.data).forEach(key => {
-          if (key.startsWith('custom_')) {
-            apiKeys.value[key] = keysResponse.data[key]
-          }
-        })
 
         console.log('Loaded API keys:', {
           sambanova: apiKeys.value.sambanova ? 'present' : 'empty',

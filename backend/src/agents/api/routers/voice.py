@@ -92,7 +92,7 @@ async def get_voice_token(
         logger.error(f"Error generating voice token: {str(e)}")
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to generate voice token: {str(e)}"},
+            content={"error": "An internal error occurred"},
         )
 
 
@@ -120,7 +120,7 @@ async def get_voice_config(
         logger.error(f"Error retrieving voice config: {str(e)}")
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to retrieve voice config: {str(e)}"},
+            content={"error": "An internal error occurred"},
         )
 
 
@@ -154,7 +154,7 @@ async def save_voice_config(
         logger.error(f"Error saving voice config: {str(e)}")
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to save voice config: {str(e)}"},
+            content={"error": "An internal error occurred"},
         )
 
 
@@ -370,7 +370,7 @@ async def voice_chat_websocket(
             if websocket.client_state != WebSocketState.DISCONNECTED:
                 await websocket.send_json({
                     "type": "error",
-                    "error": str(e),
+                    "error": "An internal error occurred",
                 })
         except:
             pass

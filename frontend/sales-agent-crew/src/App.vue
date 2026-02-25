@@ -78,7 +78,7 @@ const syncLocalStorageToRedis = async () => {
       const keysResponse = await axios.get(`${apiBaseUrl}/get_api_keys`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-      if (!keysResponse.data || !keysResponse.data.sambanova_key) {
+      if (!keysResponse.data || !keysResponse.data.sambanova_key_set) {
         needsSync = true
       }
     } catch (keysError) {

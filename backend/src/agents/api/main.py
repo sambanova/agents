@@ -120,12 +120,17 @@ async def lifespan(app: FastAPI):
 # get_user_id_from_token is now imported from auth0_config.py
 
 
+enable_docs = os.getenv("ENABLE_API_DOCS", "false").lower() == "true"
+
 app = FastAPI(
     title="Sambanova Agents Service",
     description="Service for Sambanova agents",
     version="0.0.1",
     lifespan=lifespan,
     root_path="/api",
+    docs_url="/docs" if enable_docs else None,
+    redoc_url="/redoc" if enable_docs else None,
+    openapi_url="/openapi.json" if enable_docs else None,
 )
 
 # Add logging middleware first (so it wraps all other middleware)
@@ -189,7 +194,7 @@ async def health_check():
         )
     except Exception as e:
         return JSONResponse(
-            status_code=503, content={"status": "unhealthy", "message": str(e)}
+            status_code=503, content={"status": "unhealthy", "message": "Service unavailable"}
         )
 
 
@@ -247,7 +252,7 @@ async def set_api_keys(
         logger.error(f"Error storing API keys: {str(e)}")
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to store API keys: {str(e)}"},
+            content={"error": "An internal error occurred"},
         )
 
 
@@ -273,27 +278,12 @@ async def get_api_keys(
             )
 
         response_data = {
-            "sambanova_key": stored_keys.sambanova_key,
-            "serper_key": stored_keys.serper_key,
-            "exa_key": stored_keys.exa_key,
-            "fireworks_key": stored_keys.fireworks_key,
-            "together_key": stored_keys.together_key,
+            "sambanova_key_set": bool(stored_keys.sambanova_key),
+            "serper_key_set": bool(stored_keys.serper_key),
+            "exa_key_set": bool(stored_keys.exa_key),
+            "fireworks_key_set": bool(stored_keys.fireworks_key),
+            "together_key_set": bool(stored_keys.together_key),
         }
-
-        # Also include custom provider API keys from LLM config
-        config_key = f"llm_config:{user_id}"
-        stored_config = await app.state.redis_storage_service.redis_client.get(
-            config_key,
-            user_id=user_id
-        )
-
-        if stored_config:
-            import json
-            overrides = json.loads(stored_config)
-
-            # Add custom provider API keys if they exist
-            if "custom_api_keys" in overrides:
-                response_data.update(overrides["custom_api_keys"])
 
         return JSONResponse(
             status_code=200,
@@ -304,5 +294,5 @@ async def get_api_keys(
         logger.error(f"Error retrieving API keys: {str(e)}")
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to retrieve API keys: {str(e)}"},
+            content={"error": "An internal error occurred"},
         )

@@ -1,8 +1,10 @@
 import base64
 import json
+import os
 import re
 import uuid
 from typing import List, Optional
+from urllib.parse import quote
 
 import markdown
 import structlog
@@ -144,7 +146,7 @@ async def datascience_agent_and_report(
             content={
                 "thread_id": thread_id,
                 "status": "error",
-                "error": str(e),
+                "error": "An internal error occurred",
             },
         )
 
@@ -330,7 +332,7 @@ async def datascience_interactive(
     except Exception as e:
         error_content = {
             "status": "error",
-            "error": str(e),
+            "error": "An internal error occurred",
         }
         if thread_id:
             error_content["thread_id"] = thread_id
@@ -412,7 +414,7 @@ async def deepresearch_agent(
             content={
                 "thread_id": thread_id,
                 "status": "error",
-                "error": str(e),
+                "error": "An internal error occurred",
             },
         )
 
@@ -506,7 +508,7 @@ async def deepresearch_interactive_agent(
             content={
                 "thread_id": thread_id,
                 "status": "error",
-                "error": str(e),
+                "error": "An internal error occurred",
             },
         )
 
@@ -704,7 +706,7 @@ async def main_agent(
             content={
                 "thread_id": thread_id,
                 "status": "error",
-                "error": str(e),
+                "error": "An internal error occurred",
             },
         )
 
@@ -918,7 +920,7 @@ async def main_agent_interactive(
             content={
                 "thread_id": thread_id,
                 "status": "error",
-                "error": str(e),
+                "error": "An internal error occurred",
             },
         )
 
@@ -1030,7 +1032,7 @@ async def coding_agent(
             content={
                 "thread_id": thread_id,
                 "status": "error",
-                "error": str(e),
+                "error": "An internal error occurred",
             },
         )
 
@@ -1138,7 +1140,7 @@ async def coding_agent_interactive(
             content={
                 "thread_id": thread_id,
                 "status": "error",
-                "error": str(e),
+                "error": "An internal error occurred",
             },
         )
 
@@ -1242,7 +1244,7 @@ async def financial_analysis_agent(
             content={
                 "thread_id": thread_id,
                 "status": "error",
-                "error": str(e),
+                "error": "An internal error occurred",
             },
         )
 
@@ -1343,7 +1345,7 @@ async def financial_analysis_agent_interactive(
             content={
                 "thread_id": thread_id,
                 "status": "error",
-                "error": str(e),
+                "error": "An internal error occurred",
             },
         )
 
@@ -1386,16 +1388,17 @@ async def download_agent_file(
             )
 
         # Return the file with appropriate headers
+        safe_filename = quote(os.path.basename(file_metadata.get("filename", file_id)))
         return Response(
             content=file_data,
-            media_type=file_metadata.get("format", "application/octet-stream"),
+            media_type="application/octet-stream",
             headers={
-                "Content-Disposition": f'attachment; filename="{file_metadata.get("filename", file_id)}"'
+                "Content-Disposition": f'attachment; filename="{safe_filename}"'
             },
         )
 
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"error": f"Error downloading file: {str(e)}"},
+            content={"error": "An internal error occurred"},
         )

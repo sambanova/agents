@@ -75,5 +75,5 @@ async def delete_user_data(
         logger.error(f"Error deleting user data: {str(e)}")
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to delete user data: {str(e)}"},
+            content={"error": "An internal error occurred"},
         )

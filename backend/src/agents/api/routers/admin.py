@@ -151,6 +151,14 @@ async def get_configuration(
 
     config = config_manager.get_full_config(user_id)
 
+    # Strip sensitive data before returning
+    if "custom_api_keys" in config:
+        del config["custom_api_keys"]
+    if "custom_providers" in config:
+        for provider in config["custom_providers"]:
+            if "apiKey" in provider:
+                provider["apiKey"] = "********" if provider["apiKey"] else ""
+
     # Add metadata about admin panel
     config["admin_metadata"] = {
         "user_has_override": user_id in config_manager._user_overrides if user_id else False,
@@ -526,8 +534,7 @@ async def test_provider_connection(
         return {
             "success": False,
             "provider": provider_config.provider,
-            "message": f"Connection failed: {str(e)}",
-            "error": str(e)
+            "message": "Connection failed",
         }
 
 

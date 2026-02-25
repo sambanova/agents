@@ -4,6 +4,7 @@ Voice service for managing Hume AI EVI (Empathic Voice Interface) sessions.
 import os
 from typing import Dict, Optional
 import structlog
+import httpx
 from hume import AsyncHumeClient
 from agents.storage.redis_storage import RedisStorage
 
@@ -32,32 +33,37 @@ class HumeVoiceService:
 
     async def generate_access_token(self) -> Optional[Dict[str, str]]:
         """
-        Generate a short-lived access token for Hume EVI.
-
-        For Hume EVI, we can use the API key directly for WebSocket connections.
-        The secret key is used for OAuth2 flows which we'll implement if needed.
+        Generate a short-lived, scoped access token for Hume EVI
+        using the OAuth2 client-credentials flow.
 
         Returns:
-            Dict with access_token (API key) and expires_in, or None if not configured
+            Dict with access_token and expires_in, or None if not configured
         """
-        if not self.api_key:
-            logger.error("Cannot generate token: Hume API key not configured")
+        if not self.api_key or not self.secret_key:
+            logger.error("Cannot generate token: Hume API key or secret key not configured")
             return None
 
         try:
-            # For Hume EVI WebSocket connections, the API key itself can be used
-            # The secret key is for OAuth2 client credentials flow
-            # For now, return the API key as the access token
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://api.hume.ai/oauth2-cc/token",
+                    auth=(self.api_key, self.secret_key),
+                    data={"grant_type": "client_credentials"},
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                    timeout=10.0,
+                )
+                response.raise_for_status()
+                token_data = response.json()
 
-            logger.info("Prepared Hume EVI access credentials successfully")
+            logger.info("Generated scoped Hume EVI access token successfully")
 
             return {
-                "access_token": self.api_key,
-                "token_type": "api_key",
-                "expires_in": 3600,  # API keys don't expire, but we set a long duration
+                "access_token": token_data["access_token"],
+                "token_type": token_data.get("token_type", "Bearer"),
+                "expires_in": token_data.get("expires_in", 600),
             }
         except Exception as e:
-            logger.error(f"Failed to prepare Hume access credentials: {str(e)}")
+            logger.error(f"Failed to generate Hume access token: {str(e)}")
             return None
 
     async def get_user_context(

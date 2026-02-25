@@ -660,3 +660,51 @@ class RedisStorage:
             "conversation_id": conversation_id,
             "user_id": user_id,
         }
+
+    async def delete_share(self, user_id: str, share_token: str) -> bool:
+        """Delete a share, verifying ownership first."""
+        share_key = self._get_share_key(share_token)
+        share_data = await self.redis_client.get(share_key, "public_shared")
+
+        if not share_data:
+            return False
+
+        share_info = json.loads(share_data)
+
+        # Verify the requesting user is the creator
+        if share_info.get("user_id") != user_id:
+            return False
+
+        # Delete the share key
+        await self.redis_client.delete(share_key)
+
+        # Remove from user's shares set (sadd stored share_token and user_id as members)
+        user_shares_key = self._get_user_shares_key(user_id)
+        await self.redis_client.srem(user_shares_key, share_token)
+
+        return True
+
+    async def get_user_shares(self, user_id: str) -> list:
+        """Get all shares created by a user."""
+        user_shares_key = self._get_user_shares_key(user_id)
+        share_tokens = await self.redis_client.smembers(user_shares_key)
+
+        shares = []
+        for token in share_tokens:
+            # smembers may return bytes or strings; also skip user_id entries
+            if isinstance(token, bytes):
+                token = token.decode("utf-8")
+            # Skip entries that aren't valid UUIDs (e.g. user_id stored by sadd)
+            if not token or len(token) != 36:
+                continue
+            share_key = self._get_share_key(token)
+            share_data = await self.redis_client.get(share_key, "public_shared")
+            if share_data:
+                info = json.loads(share_data)
+                shares.append({
+                    "share_token": token,
+                    "conversation_id": info.get("conversation_id"),
+                    "title": info.get("title"),
+                    "created_at": info.get("created_at"),
+                })
+        return shares
