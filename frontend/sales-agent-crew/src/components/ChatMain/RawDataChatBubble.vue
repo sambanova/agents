@@ -180,10 +180,10 @@ const messageContent = computed(() => {
               return escapeHtml(item.text || '[text content]')
             } else if (item.type === 'image_url' && item.image_url?.url) {
               const imageUrl = item.image_url.url
-              if (imageUrl.startsWith('data:image/')) {
+              if (imageUrl.startsWith('data:image/') || imageUrl.startsWith('https://')) {
                 return `<div class="my-2"><img src="${imageUrl}" alt="Attached image" class="max-w-full h-auto rounded border" style="max-height: 300px;" /></div>`
               } else {
-                return `<div class="my-2"><img src="${imageUrl}" alt="Attached image" class="max-w-full h-auto rounded border" style="max-height: 300px;" /></div>`
+                return escapeHtml(`[image: ${imageUrl}]`)
               }
             } else {
               return escapeHtml(`[${item.type || 'content'}]`)

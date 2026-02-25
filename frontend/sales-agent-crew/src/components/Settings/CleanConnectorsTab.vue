@@ -582,6 +582,7 @@ onMounted(() => {
 
   // Listen for OAuth completion
   window.addEventListener('message', async (event) => {
+    if (event.origin !== window.location.origin) return
     if (event.data.type === 'oauth-complete') {
       if (oauthWindow.value) {
         oauthWindow.value.close()

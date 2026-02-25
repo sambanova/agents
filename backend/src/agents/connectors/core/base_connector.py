@@ -377,14 +377,8 @@ class BaseOAuthConnector(ABC):
             user_id=user_id
         )
         
-        from redis.asyncio import Redis
-        plain_redis = Redis(connection_pool=self.redis_storage.redis_client.connection_pool, decode_responses=True)
-        await plain_redis.setex(
-            state_key, 
-            600,  # 10 minute TTL
-            state_value
-        )
-        await plain_redis.close()
+        await self.redis_storage.redis_client.set(state_key, state_value, user_id)
+        await self.redis_storage.redis_client.expire(state_key, 600)  # 10 minute TTL
         
         logger.info("OAuth state stored successfully", state_key=state_key)
         
@@ -428,34 +422,29 @@ class BaseOAuthConnector(ABC):
         """
         Exchange authorization code for access token for a specific user
         """
-        # Retrieve state from Redis using plain Redis
+        # Retrieve state from encrypted Redis
         state_key = f"oauth:state:{state}"
-        from redis.asyncio import Redis
-        plain_redis = Redis(connection_pool=self.redis_storage.redis_client.connection_pool, decode_responses=True)
-        state_json = await plain_redis.get(state_key)
-        
+        state_json = await self.redis_storage.redis_client.get(state_key, user_id)
+
         if not state_json:
-            await plain_redis.close()
             logger.error("OAuth state not found during token exchange", state_key=state_key)
             raise ValueError("Invalid or expired state parameter")
-        
+
         state_data = json.loads(state_json)
-        
+
         # Validate user matches
         if state_data.get("user_id") != user_id:
-            await plain_redis.close()
             logger.error(
                 "State user mismatch",
                 state_user_id=state_data.get("user_id"),
                 provided_user_id=user_id
             )
             raise ValueError("State does not match user")
-        
+
         code_verifier = state_data.get("code_verifier")
-        
+
         # Delete state from Redis
-        await plain_redis.delete(state_key)
-        await plain_redis.close()
+        await self.redis_storage.redis_client.delete(state_key)
         
         logger.info("OAuth state validated and deleted", state_key=state_key)
         

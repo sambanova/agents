@@ -1154,15 +1154,7 @@ function parsePythonStyleJSON(jsonString) {
 
       return JSON.parse(processedString);
     } catch (e2) {
-      // If still failing, try using eval as last resort (safer than before)
-      try {
-        // This is a controlled eval - we know the source is from our backend
-        const result = eval('(' + jsonString + ')');
-        return result;
-      } catch (e3) {
-        // Fail silently for production
-        return null;
-      }
+      return null;
     }
   }
 }
