@@ -33,6 +33,7 @@ from agents.utils.logging_config import configure_logging
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from langgraph.checkpoint.redis import AsyncRedisSaver
 
 logger = structlog.get_logger(__name__)
@@ -133,8 +134,19 @@ app = FastAPI(
     openapi_url="/openapi.json" if enable_docs else None,
 )
 
+# Security headers middleware
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=()"
+        return response
+
 # Add logging middleware first (so it wraps all other middleware)
 app.add_middleware(LoggingMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 def get_allowed_origins():

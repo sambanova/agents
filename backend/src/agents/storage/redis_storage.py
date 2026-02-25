@@ -631,6 +631,10 @@ class RedisStorage:
         # Store the mapping with dummy user ID for encryption
         await self.redis_client.set(share_key, json.dumps(share_data), "public_shared")
 
+        # 30-day expiry for share tokens
+        SHARE_TTL_SECONDS = 30 * 24 * 60 * 60
+        await super(type(self.redis_client), self.redis_client).expire(share_key, SHARE_TTL_SECONDS)
+
         # Add to user's shares list for management
         user_shares_key = self._get_user_shares_key(user_id)
         await self.redis_client.sadd(user_shares_key, share_token, user_id)
@@ -657,8 +661,6 @@ class RedisStorage:
             "title": share_info["title"],
             "messages": messages,
             "created_at": share_info["created_at"],
-            "conversation_id": conversation_id,
-            "user_id": user_id,
         }
 
     async def delete_share(self, user_id: str, share_token: str) -> bool:

@@ -1,6 +1,6 @@
 const ENCRYPTION_KEY_NAME = 'app_encryption_key'
 
-// Generate or retrieve the encryption key
+// Generate or retrieve the AES-256-GCM encryption key
 const getEncryptionKey = async () => {
   try {
     // Try to get existing key
@@ -33,14 +33,43 @@ const getEncryptionKey = async () => {
   }
 }
 
-// Simple encryption/decryption for demo purposes
-// In production, use a more secure encryption method
+// Encrypt a string using AES-256-GCM with a random IV
 export const encryptKey = async (key) => {
-  // For demo, just using base64 encoding
-  return btoa(key)
+  const cryptoKey = await getEncryptionKey()
+  const iv = window.crypto.getRandomValues(new Uint8Array(12))
+  const encoded = new TextEncoder().encode(key)
+  const encrypted = await window.crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    cryptoKey,
+    encoded
+  )
+  // Prepend IV to ciphertext, encode as base64 for storage
+  const combined = new Uint8Array(iv.length + encrypted.byteLength)
+  combined.set(iv)
+  combined.set(new Uint8Array(encrypted), iv.length)
+  return btoa(String.fromCharCode(...combined))
 }
 
+// Decrypt a string using AES-256-GCM
+// Falls back to plain base64 decode for backward compatibility with old stored keys
 export const decryptKey = async (encryptedKey) => {
-  // For demo, just using base64 decoding
-  return atob(encryptedKey)
-} 
+  try {
+    const cryptoKey = await getEncryptionKey()
+    const combined = Uint8Array.from(atob(encryptedKey), c => c.charCodeAt(0))
+    const iv = combined.slice(0, 12)
+    const ciphertext = combined.slice(12)
+    const decrypted = await window.crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      cryptoKey,
+      ciphertext
+    )
+    return new TextDecoder().decode(decrypted)
+  } catch {
+    // Backward compatibility: old keys stored as plain base64
+    try {
+      return atob(encryptedKey)
+    } catch {
+      return encryptedKey
+    }
+  }
+}

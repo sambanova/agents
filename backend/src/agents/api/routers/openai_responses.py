@@ -28,6 +28,7 @@ from agents.api.subgraph_factory import create_all_subgraphs
 from agents.components.compound.agent import enhanced_agent
 from agents.components.compound.data_types import LLMType
 from agents.components.compound.xml_agent import get_global_checkpointer
+from agents.api.utils import validate_external_url
 from agents.tools.langgraph_tools import load_static_tools
 from fastapi import APIRouter, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -531,6 +532,17 @@ async def create_response(
                 has_images = True
                 # Handle image input - convert to LangChain format
                 if item.source.type == "url":
+                    # SSRF protection: block internal/private image URLs
+                    if not validate_external_url(item.source.url):
+                        error_response = create_error_response(
+                            message="Image URL must be an external, publicly-routable address",
+                            error_type="invalid_request_error",
+                            code="invalid_image_url"
+                        )
+                        return JSONResponse(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            content=error_response.model_dump()
+                        )
                     content_list.append({
                         "type": "image_url",
                         "image_url": {"url": item.source.url}

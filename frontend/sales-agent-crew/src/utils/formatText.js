@@ -28,7 +28,14 @@ export function formattedText(data) {
         const title = urlMatch[1].trim();
         const url = urlMatch[2].trim();
 
-        bulletLine = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="underline">${title}</a>`;
+        // Only allow http/https URLs to prevent javascript: protocol injection
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          bulletLine = `<a href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer" class="underline">${escapeHTML(title)}</a>`;
+        } else {
+          bulletLine = escapeHTML(bulletLine);
+        }
+      } else {
+        bulletLine = escapeHTML(bulletLine);
       }
 
       // Each bullet item gets an inline span for the bullet marker
@@ -46,18 +53,18 @@ export function formattedText(data) {
         )
       ) {
         // Format "provide feedback" and "type 'true'" in bold
-        const formattedLine = trimmed
+        const escapedLine = escapeHTML(trimmed)
           .replace('provide feedback', '<strong>provide feedback</strong>')
-          .replace("type 'true'", "<strong>type 'true'</strong>");
+          .replace("type &#039;true&#039;", "<strong>type 'true'</strong>");
 
         // Add a new line after this sentence
-        html += `<p class="md-paragraph">${formattedLine}</p><br>`;
+        html += `<p class="md-paragraph">${escapedLine}</p><br>`;
       } else if (trimmed.length > 0) {
         // If the line ends with a colon, treat it as a heading
         if (trimmed.endsWith(':')) {
-          html += `<h2 class="md-heading text-[16px] font-semibold">${trimmed}</h2>`;
+          html += `<h2 class="md-heading text-[16px] font-semibold">${escapeHTML(trimmed)}</h2>`;
         } else {
-          html += `<p class="md-paragraph">${trimmed}</p>`;
+          html += `<p class="md-paragraph">${escapeHTML(trimmed)}</p>`;
         }
       }
     }

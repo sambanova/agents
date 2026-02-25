@@ -3,8 +3,13 @@ import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import VueDevTools from 'vite-plugin-vue-devtools';
 
+const plugins = [vue()];
+if (process.env.NODE_ENV !== 'production') {
+  plugins.push(VueDevTools());
+}
+
 export default defineConfig({
-  plugins: [vue(), VueDevTools()],
+  plugins,
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
