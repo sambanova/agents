@@ -494,7 +494,7 @@ async def create_response(
     internal_model = MODEL_MAPPING.get(response_request.model)
     if not internal_model:
         error_response = create_error_response(
-            message=f"Model '{response_request.model}' not found. Available models: {list(MODEL_MAPPING.keys())}",
+            message=f"Model '{response_request.model}' not found.",
             error_type="invalid_request_error",
             code="model_not_found"
         )
@@ -728,7 +728,7 @@ async def create_response(
             exc_info=True
         )
         error_response = create_error_response(
-            message=f"Internal server error: {str(e)}",
+            message="An internal error occurred",
             error_type="server_error",
             code="internal_error"
         )

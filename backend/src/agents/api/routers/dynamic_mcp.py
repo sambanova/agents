@@ -145,7 +145,7 @@ async def add_mcp_connector(
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to add MCP connector: {str(e)}"
+            detail="An internal error occurred"
         )
 
 
@@ -187,7 +187,7 @@ async def list_custom_mcp_connectors(
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to list MCP connectors: {str(e)}"
+            detail="An internal error occurred"
         )
 
 
@@ -233,5 +233,5 @@ async def remove_custom_mcp_connector(
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to remove MCP connector: {str(e)}"
+            detail="An internal error occurred"
         )
