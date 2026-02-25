@@ -138,18 +138,16 @@ app.add_middleware(LoggingMiddleware)
 
 
 def get_allowed_origins():
-    allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
-    if not allowed_origins or (len(allowed_origins) == 1 and allowed_origins[0] == "*"):
-        allowed_origins = ["*"]
-    else:
-        allowed_origins.extend(
-            [
-                "http://localhost:5173",
-                "http://localhost:5174",
-                "http://localhost:8000",
-            ]
-        )
-    return allowed_origins
+    env_origins = os.getenv("ALLOWED_ORIGINS", "")
+    if not env_origins:
+        # Safe defaults — only known deployment URLs and local dev
+        return [
+            "https://aiskagents-dev.cloud.snova.ai",
+            "https://chat.sambanova.ai",
+            "http://localhost:5173",
+            "http://localhost:5174",
+        ]
+    return [o.strip() for o in env_origins.split(",") if o.strip()]
 
 
 app.add_middleware(

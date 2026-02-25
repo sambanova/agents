@@ -422,7 +422,7 @@ async def _stream_agent_with_auto_resume(
 
 
 @router.get("/tools", response_model=list[ResponseTool])
-async def list_tools():
+async def list_tools(authorization: Optional[str] = Header(None)):
     """
     List all available tools/functions that can be used with the agent.
 
@@ -441,6 +441,15 @@ async def list_tools():
     tools = client.get("/tools")
     ```
     """
+    if not authorization or not authorization.startswith("Bearer "):
+        return JSONResponse(
+            status_code=401,
+            content=create_error_response(
+                "Authorization header with Bearer token is required",
+                "authentication_error",
+                "missing_auth"
+            ).model_dump()
+        )
     return AVAILABLE_TOOLS
 
 

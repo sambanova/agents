@@ -57,19 +57,18 @@ async def send_email_notification(user_email: str, user_id: str, export_size: in
 
 
 async def process_export_background(
-    user_id: str, 
-    token: str, 
-    redis_storage_service, 
+    user_id: str,
+    redis_storage_service,
     user_email: Optional[str] = None
 ):
     """Background task to process export and send email"""
     try:
         logger.info(f"Processing background export for user {user_id}")
-        
+
         export_service = ExportService(redis_storage_service)
-        zip_data, filename, detected_email = await export_service.export_user_data(user_id, token)
-        
-        email_to_use = user_email or detected_email
+        zip_data, filename = await export_service.export_user_data(user_id, user_email)
+
+        email_to_use = user_email
         
         if email_to_use:
             await send_email_notification(email_to_use, user_id, len(zip_data))
@@ -122,23 +121,23 @@ async def request_export(
     """
     try:
         logger.info(f"Export requested by user {user_id}")
-        
-        # Get the access token from the request headers
+
+        # Extract user email from the token synchronously so the raw JWT
+        # is never passed to the background task (prevents token leakage).
         auth_header = request.headers.get("authorization", "")
-        if not auth_header.startswith("Bearer "):
-            return JSONResponse(
-                status_code=401,
-                content={"error": "Invalid authorization header"}
-            )
-        
-        token = auth_header[7:]  # Remove "Bearer " prefix
-        
-        # Start background processing
+        user_email = None
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            export_service = ExportService(request.app.state.redis_storage_service)
+            user_info = await export_service.get_user_info_from_token(token)
+            user_email = user_info.get("email") if user_info else None
+
+        # Start background processing — only pass email, not the token
         background_tasks.add_task(
             process_export_background,
             user_id,
-            token,
-            request.app.state.redis_storage_service
+            request.app.state.redis_storage_service,
+            user_email
         )
         
         return JSONResponse(

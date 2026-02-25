@@ -188,7 +188,6 @@ async def init_oauth_flow(
         
         return {
             "authorization_url": auth_url,
-            "state": state,
             "provider_id": provider_id
         }
         

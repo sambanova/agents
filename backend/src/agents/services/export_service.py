@@ -485,35 +485,38 @@ This export contains all your personal data from Samba Co-Pilot.
 Please keep this archive secure as it contains your private conversations and files.
 """
 
-    async def export_user_data(self, user_id: str, token: str) -> Tuple[bytes, str, Optional[str]]:
+    async def export_user_data(self, user_id: str, user_email: Optional[str] = None) -> Tuple[bytes, str]:
         """
-        Main export function that gathers all user data and creates a zip file
-        
+        Main export function that gathers all user data and creates a zip file.
+
+        Args:
+            user_id: The user ID to export data for.
+            user_email: Pre-resolved user email (avoids passing raw JWTs to background tasks).
+
         Returns:
-            Tuple of (zip_data, filename, user_email)
+            Tuple of (zip_data, filename)
         """
         try:
             logger.info(f"Starting export for user {user_id}")
-            
-            # Get user info including email
-            user_info = await self.get_user_info_from_token(token)
-            user_email = user_info.get("email") if user_info else None
-            
+
+            # Build minimal user_info for the zip metadata
+            user_info = {"email": user_email} if user_email else None
+
             # Gather files first, then conversations with file context for better association
             files = await self.gather_user_files(user_id)
             conversations = await self.gather_user_conversations(user_id, files)
-            
+
             # Create zip file
             zip_data = self.create_export_zip(user_id, conversations, files, user_info)
-            
+
             # Create filename with timestamp
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             filename = f"samba_copilot_export_{timestamp}.zip"
-            
+
             logger.info(f"Export completed for user {user_id}, file size: {len(zip_data)} bytes")
-            
-            return zip_data, filename, user_email
-            
+
+            return zip_data, filename
+
         except Exception as e:
             logger.error("Error during user data export", user_id=user_id, error=str(e))
             raise

@@ -14,6 +14,7 @@ from agents.storage.redis_storage import RedisStorage
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, HttpUrl
 
+from agents.api.utils import validate_external_url
 from agents.auth.auth0_config import get_current_user_id
 
 logger = structlog.get_logger(__name__)
@@ -56,6 +57,18 @@ async def add_mcp_connector(
     This allows users to add any MCP-compatible server through the API.
     """
     
+    # SSRF protection: block internal/private URLs
+    if not validate_external_url(str(request.mcp_server_url)):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid MCP server URL: must be an external, publicly-routable address"
+        )
+    if request.icon_url and not validate_external_url(str(request.icon_url)):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid icon URL: must be an external, publicly-routable address"
+        )
+
     try:
         # Generate provider_id from name
         provider_id = request.name.lower().replace(" ", "_").replace("-", "_")

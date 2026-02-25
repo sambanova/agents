@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Header, Depends, Request
 from pydantic import BaseModel
 import structlog
 
+from agents.api.utils import validate_external_url
 from agents.config.llm_config_manager import get_config_manager
 from agents.utils.llm_provider import get_llm
 from agents.storage.redis_storage import RedisStorage
@@ -200,6 +201,17 @@ async def update_configuration(
         Success message with updated configuration
     """
     config_manager = get_config_manager()
+
+    # SSRF protection: validate custom provider baseUrls before accepting
+    if update.custom_providers:
+        for cp in update.custom_providers:
+            base_url = cp.get("baseUrl")
+            if base_url and not validate_external_url(base_url):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid base URL for custom provider '{cp.get('name', 'unknown')}': "
+                           "must be an external, publicly-routable address"
+                )
 
     # Prepare user overrides
     overrides = {}

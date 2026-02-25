@@ -1,10 +1,13 @@
 import base64
+import ipaddress
 import json
 import re
+import socket
 import uuid
 from datetime import datetime
 from io import BytesIO
 from typing import List, Optional
+from urllib.parse import urlparse
 
 from agents.storage.redis_storage import RedisStorage
 import markdown
@@ -14,6 +17,65 @@ from agents.storage.redis_service import SecureRedisService
 from weasyprint import HTML
 
 logger = structlog.get_logger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# SSRF protection — URL validation
+# ---------------------------------------------------------------------------
+
+# Blocked hostnames that should never be allowed regardless of IP resolution
+_BLOCKED_HOSTNAMES = {
+    "metadata.google.internal",
+    "metadata.goog",
+}
+
+
+def validate_external_url(url: str) -> bool:
+    """
+    Validate that a URL points to an external (public) host.
+
+    Blocks private IPs, loopback, link-local, reserved ranges,
+    and cloud metadata endpoints to prevent SSRF.
+
+    Returns True if the URL is safe to call, False otherwise.
+    """
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+
+        if not hostname:
+            return False
+
+        # Block known dangerous hostnames
+        if hostname.lower() in _BLOCKED_HOSTNAMES:
+            logger.warning("Blocked SSRF attempt to known metadata hostname", hostname=hostname)
+            return False
+
+        # Try parsing as an IP address directly
+        try:
+            ip = ipaddress.ip_address(hostname)
+        except ValueError:
+            # It's a hostname — resolve it to an IP
+            try:
+                resolved = socket.gethostbyname(hostname)
+                ip = ipaddress.ip_address(resolved)
+            except socket.gaierror:
+                logger.warning("Could not resolve hostname", hostname=hostname)
+                return False
+
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            logger.warning(
+                "Blocked SSRF attempt to internal/private IP",
+                hostname=hostname,
+                resolved_ip=str(ip),
+            )
+            return False
+
+        return True
+
+    except Exception as e:
+        logger.error("URL validation error", url=url, error=str(e))
+        return False
 
 session_state_manager = SessionStateManager()
 
