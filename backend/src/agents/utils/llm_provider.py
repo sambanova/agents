@@ -59,6 +59,7 @@ def get_llm(
                 "temperature": temperature,
                 "max_tokens": max_tokens,
                 "sambanova_api_key": api_key,
+                "stream_options": {"include_usage": True},
             }
 
             # If custom base_url provided, use sambanova_url parameter

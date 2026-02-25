@@ -26,6 +26,7 @@ def get_sambanova_llm(api_key: str, model: str = "Meta-Llama-3.3-70B-Instruct"):
             temperature=0,
             max_tokens=max_tokens,
             api_key=api_key,
+            stream_options={"include_usage": True},
         )
 
         logger.info(
