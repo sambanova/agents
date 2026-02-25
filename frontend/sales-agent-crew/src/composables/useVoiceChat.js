@@ -286,7 +286,7 @@ export function useVoiceChat(conversationIdGetter) {
 
       // Initialize Hume client
       humeClient = new HumeClient({
-        apiKey: accessToken
+        accessToken: accessToken
       })
 
       // Connect to EVI WebSocket with config_id
