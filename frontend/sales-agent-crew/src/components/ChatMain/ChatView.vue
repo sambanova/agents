@@ -143,7 +143,7 @@
             />
             
             <!-- Token Usage Display for Final Messages -->
-            <div v-if="isFinalMessage(msgItem) && getRunSummary(msgItem)?.total_tokens > 0" class="mt-2">
+            <div v-if="isFinalMessage(msgItem) && (getRunSummary(msgItem)?.total_tokens > 0 || getRunSummary(msgItem)?.total_latency > 0)" class="mt-2">
               <!-- Run Summary Metrics -->
               <div class="bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-lg px-3 py-2 block shadow-sm hover:shadow-md transition-shadow duration-200 max-w-full w-fit">
                 <div class="flex flex-wrap items-center gap-2 sm:gap-3">
