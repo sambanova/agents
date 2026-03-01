@@ -21,6 +21,7 @@ from agents.utils.code_validator import (
     strip_markdown_code_blocks,
     validate_and_fix_html_content,
 )
+from agents.utils.sandbox_security import log_security_event, validate_pip_package
 from agents.utils.llms import get_sambanova_llm
 from agents.utils.message_interceptor import MessageInterceptor
 from daytona_sdk import AsyncDaytona as DaytonaClient
@@ -740,6 +741,18 @@ def create_code_execution_graph(
         aggregated_result = ""
         installation_successful = True
         for package in state["additional_packages"]:
+            # Validate package name before constructing pip command
+            pkg_ok, pkg_reason = validate_pip_package(package)
+            if not pkg_ok:
+                log_security_event(
+                    "pip_package_rejected",
+                    "warning",
+                    package=package[:200],
+                    reason=pkg_reason,
+                    context="code_execution_subgraph",
+                )
+                aggregated_result += f"Skipped invalid package '{package}': {pkg_reason}\n\n"
+                continue
             pip_command = f"pip install {package}"
             result = await daytona_manager.execute(pip_command, timeout=300)
             if not result.startswith("Error"):

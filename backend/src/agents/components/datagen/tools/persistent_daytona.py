@@ -8,6 +8,13 @@ from typing import Any, Dict, List, Optional
 import structlog
 from agents.storage.redis_storage import RedisStorage
 from agents.utils.code_validator import patch_plot_code_str, strip_markdown_code_blocks
+from agents.utils.sandbox_security import (
+    log_security_event,
+    redact_sensitive_output,
+    sanitize_pip_packages,
+    validate_filename,
+    validate_shell_command,
+)
 
 # Import Daytona SDK components - using sync versions
 from daytona_sdk import AsyncDaytona as DaytonaClient
@@ -217,6 +224,9 @@ class PersistentDaytonaManager:
             # Ensure result is a string, even if None or other types
             result_str = str(response.result) if response.result is not None else ""
 
+            # Redact sensitive patterns before returning to LLM
+            result_str = redact_sensitive_output(result_str)
+
             # Cap the result length to prevent overwhelming output
             MAX_RESULT_LENGTH = 1000
             if len(result_str) > MAX_RESULT_LENGTH:
@@ -252,6 +262,18 @@ class PersistentDaytonaManager:
 
     async def execute(self, command: str, timeout: int = 60) -> str:
         """Execute a shell command in the persistent sandbox."""
+        # Validate command against blocklist
+        allowed, reason = validate_shell_command(command)
+        if not allowed:
+            log_security_event(
+                "command_blocked",
+                "warning",
+                command=command[:200],
+                reason=reason,
+                user_id=self._user_id,
+            )
+            return f"Error: Command blocked — {reason}"
+
         sandbox = await self._get_sandbox()
         if not sandbox:
             raise RuntimeError(
@@ -265,6 +287,14 @@ class PersistentDaytonaManager:
 
             # Ensure result is a string, even if None or other types
             result_str = str(response.result) if response.result is not None else ""
+
+            # Redact sensitive output and truncate
+            result_str = redact_sensitive_output(result_str)
+            MAX_EXEC_OUTPUT_LENGTH = 5000
+            if len(result_str) > MAX_EXEC_OUTPUT_LENGTH:
+                first_part = result_str[: MAX_EXEC_OUTPUT_LENGTH // 2]
+                last_part = result_str[-(MAX_EXEC_OUTPUT_LENGTH // 2) :]
+                result_str = f"{first_part}\n\n{last_part}\n\n[OUTPUT TRUNCATED - Original length: {len(result_str)} characters]"
 
             if response.exit_code != 0:
                 error_detail = result_str
@@ -653,6 +683,16 @@ def get_daytona_describe_data(manager: PersistentDaytonaManager):
         """
         # First check if file exists
         try:
+            # Validate filename to prevent path traversal and injection
+            fn_ok, fn_reason = validate_filename(filename)
+            if not fn_ok:
+                log_security_event(
+                    "filename_rejected",
+                    "warning",
+                    filename=filename[:200],
+                    reason=fn_reason,
+                )
+                return f"Error: Invalid filename — {fn_reason}"
 
             # Generate pandas analysis code to run in sandbox
             analysis_code = f'''
@@ -760,11 +800,18 @@ def get_daytona_pip_install(manager: PersistentDaytonaManager):
             - Install with version: packages="requests==2.28.0"
         """
         try:
-            # Split packages by space and clean them
-            package_list = [pkg.strip() for pkg in packages.split() if pkg.strip()]
+            # Validate and sanitize package names
+            package_list, pkg_errors = sanitize_pip_packages(packages)
+
+            if pkg_errors:
+                logger.warning(
+                    "Some pip packages rejected",
+                    errors=pkg_errors,
+                )
 
             if not package_list:
-                return "Error: No packages specified for installation"
+                error_detail = "; ".join(pkg_errors) if pkg_errors else "no packages specified"
+                return f"Error: No valid packages to install — {error_detail}"
 
             # Create pip install command
             pip_command = f"pip install {' '.join(package_list)}"

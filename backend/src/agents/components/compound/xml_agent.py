@@ -12,6 +12,7 @@ from agents.components.compound.prompts import xml_template
 from agents.components.compound.timing_aggregator import WorkflowTimingAggregator
 from agents.components.compound.util import extract_api_key, extract_api_keys, extract_user_id
 from agents.utils.logging_utils import setup_logging_context
+from agents.utils.sandbox_security import redact_sensitive_output
 from langchain.tools import BaseTool
 from langchain_core.language_models.base import LanguageModelLike
 from langchain_core.messages import (
@@ -1247,6 +1248,10 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                         response[:50000] + "\n\n[Response truncated due to length]"
                     )
 
+                # Redact sensitive patterns from tool response
+                if isinstance(response, str):
+                    response = redact_sensitive_output(response)
+
             except Exception as e:
                 duration = time.time() - start_time
                 error_msg = f"Error executing tool '{_tool}': {str(e)}"
@@ -1409,6 +1414,9 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                 result_text = f"Error executing {tool_name}: {str(result)}"
             else:
                 result_text = str(result) if result else "No response from tool"
+
+            # Redact sensitive patterns from tool result
+            result_text = redact_sensitive_output(result_text)
 
             # Format each result as a separate observation
             combined_results.append(f"[Tool: {tool_name}]\n{result_text}")

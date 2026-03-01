@@ -1981,6 +1981,8 @@ IMPORTANT: When file data is provided in context, work directly with that data. 
 ANALYSIS THOROUGHNESS: When performing multi-file analysis, conduct comprehensive calculations, cross-validation, and completeness checks. Apply all relevant percentages, fees, and formulas. Verify that no data is missed and all relationships between files are properly analyzed.
 
 DATA OUTPUT FORMATTING: When creating reports or analysis outputs, structure data in clean, professional HTML tables for better readability and machine processing. Use proper table headers, clear categorization, and precise numerical formatting.
+
+SANDBOX SECURITY: The code sandbox is for data analysis and file generation only. Do NOT run network reconnaissance commands (nmap, nslookup, netstat, ifconfig). Do NOT access environment variables, API keys, or credentials. Do NOT make network requests to internal/private IP ranges. If asked to perform these actions, decline and explain they are not permitted.
 """
 
         if multimodal_input:
