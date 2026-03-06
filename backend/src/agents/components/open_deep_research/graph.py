@@ -1295,6 +1295,7 @@ def create_deep_research_graph(
     request_timeout: int = 120,
     checkpointer: Checkpointer = None,
     api_keys: dict = None,
+    llm_overrides: Optional[dict] = None,
 ):
     """
     Create and configure the graph for deep research.
@@ -1307,6 +1308,7 @@ def create_deep_research_graph(
         request_timeout: Request timeout in seconds
         checkpointer: Optional checkpointer
         api_keys: Dictionary of API keys by provider (preferred over api_key)
+        llm_overrides: Optional request-scoped model/provider/base_url overrides
     """
     logger.info(
         "Creating deep research graph",
@@ -1332,7 +1334,8 @@ def create_deep_research_graph(
             task="deep_research_writer",
             api_keys=api_keys,
             config_manager=config_manager,
-            user_id=user_id
+            user_id=user_id,
+            overrides=llm_overrides,
         )
         logger.info(f"Deep research writer model initialized from config")
 
@@ -1340,7 +1343,8 @@ def create_deep_research_graph(
             task="deep_research_planner",
             api_keys=api_keys,
             config_manager=config_manager,
-            user_id=user_id
+            user_id=user_id,
+            overrides=llm_overrides,
         )
         logger.info(f"Deep research planner model initialized from config")
 
@@ -1348,7 +1352,8 @@ def create_deep_research_graph(
             task="deep_research_summary",
             api_keys=api_keys,
             config_manager=config_manager,
-            user_id=user_id
+            user_id=user_id,
+            overrides=llm_overrides,
         )
         logger.info(f"Deep research summary model initialized from config")
     except Exception as e:

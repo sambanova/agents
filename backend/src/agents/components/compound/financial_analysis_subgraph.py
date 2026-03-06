@@ -6,7 +6,11 @@ import langsmith as ls
 import structlog
 from agents.components.compound.data_types import LiberalAIMessage
 from agents.components.compound.timing_aggregator import WorkflowTimingAggregator
-from agents.components.compound.util import extract_api_key
+from agents.components.compound.util import (
+    extract_api_key,
+    extract_api_keys,
+    extract_llm_overrides,
+)
 from agents.components.crewai_message_interceptor import CrewAIMessageInterceptor
 from agents.components.financial_analysis.financial_analysis_crew import (
     FinancialAnalysisCrew,
@@ -14,6 +18,7 @@ from agents.components.financial_analysis.financial_analysis_crew import (
 from agents.services.financial_user_prompt_extractor_service import (
     FinancialPromptExtractor,
 )
+from agents.registry.model_registry import model_registry
 from agents.storage.redis_service import SecureRedisService
 from agents.utils.logging_utils import setup_logging_context
 from langchain_core.messages import AIMessage
@@ -24,7 +29,12 @@ from langgraph.graph.message import MessageGraph
 logger = structlog.get_logger(__name__)
 
 
-def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: str = None, api_keys: dict = None):
+def create_financial_analysis_graph(
+    redis_client: SecureRedisService,
+    user_id: str = None,
+    api_keys: dict = None,
+    llm_overrides: dict = None,
+):
     """Create a simple subgraph with just one node that greets the user."""
     logger.info("Creating financial analysis subgraph", user_id=user_id[:8] if user_id else "None")
 
@@ -37,11 +47,28 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
 
         try:
             api_key = extract_api_key(config)
+            config_api_keys = extract_api_keys(config)
+            config_overrides = extract_llm_overrides(config)
+            effective_api_keys = config_api_keys or api_keys
+            effective_overrides = config_overrides or llm_overrides
+            extractor_provider = "sambanova"
+            if effective_overrides and effective_overrides.get("provider"):
+                candidate_provider = effective_overrides["provider"]
+                try:
+                    model_registry.list_available_models(candidate_provider)
+                    extractor_provider = candidate_provider
+                except ValueError:
+                    logger.warning(
+                        "Provider not available for financial prompt extraction, falling back to sambanova",
+                        provider=candidate_provider,
+                    )
+            if effective_api_keys and extractor_provider in effective_api_keys:
+                api_key = effective_api_keys[extractor_provider]
 
             logger.info("Extracting financial info from prompt")
             start_time = time.time()
             fextractor = FinancialPromptExtractor(
-                llm_api_key=api_key, provider="sambanova"
+                llm_api_key=api_key, provider=extractor_provider
             )
             extracted_ticker, extracted_company = fextractor.extract_info(
                 messages[-1].content
@@ -74,7 +101,8 @@ def create_financial_analysis_graph(redis_client: SecureRedisService, user_id: s
                 redis_client=redis_client,
                 verbose=False,
                 message_id=config["metadata"]["message_id"],
-                admin_api_keys=api_keys,  # Pass api_keys dict for admin panel support
+                admin_api_keys=effective_api_keys,  # Pass api_keys dict for overrides support
+                llm_overrides=effective_overrides,
                 message_interceptor=message_interceptor,  # Pass interceptor to crew
             )
 

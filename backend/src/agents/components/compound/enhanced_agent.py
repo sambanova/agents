@@ -37,7 +37,13 @@ except ImportError:
 
 
 # Local get_llm function to avoid circular imports
-def get_llm(llm_type: LLMType, api_key: str = None, user_id: Optional[str] = None, api_keys: dict = None):
+def get_llm(
+    llm_type: LLMType,
+    api_key: str = None,
+    user_id: Optional[str] = None,
+    api_keys: dict = None,
+    llm_overrides: Optional[dict] = None,
+):
     """Get LLM instance based on type and API key.
 
     Note: When called from xml_agent, api_key and optionally api_keys are provided.
@@ -47,7 +53,12 @@ def get_llm(llm_type: LLMType, api_key: str = None, user_id: Optional[str] = Non
     # Check if admin panel is enabled and config system is available
     admin_enabled = os.getenv("SHOW_ADMIN_PANEL", "false").lower() == "true"
 
-    if CONFIG_SYSTEM_AVAILABLE and admin_enabled and user_id and (api_keys or api_key):
+    if (
+        CONFIG_SYSTEM_AVAILABLE
+        and user_id
+        and (api_keys or api_key)
+        and (admin_enabled or llm_overrides)
+    ):
         # Use new config system when admin panel is enabled
         config_manager = get_config_manager()
 
@@ -100,7 +111,8 @@ def get_llm(llm_type: LLMType, api_key: str = None, user_id: Optional[str] = Non
             task=task,
             api_keys=api_keys,
             config_manager=config_manager,
-            user_id=user_id
+            user_id=user_id,
+            overrides=llm_overrides,
         )
     else:
         # Use original behavior when admin panel is disabled or api_key is not provided
@@ -157,10 +169,21 @@ class EnhancedConfigurableAgent(RunnableBinding):
         init_user_id = user_id
 
         # Create a wrapper function that xml_agent can call with api_key
-        def llm_wrapper(api_key: str, api_keys: dict = None, user_id: str = None):
+        def llm_wrapper(
+            api_key: str,
+            api_keys: dict = None,
+            user_id: str = None,
+            llm_overrides: dict = None,
+        ):
             # Use the user_id passed from xml_agent if available, otherwise use the one from init
             effective_user_id = user_id if user_id else init_user_id
-            return get_llm(llm_type, api_key=api_key, user_id=effective_user_id, api_keys=api_keys)
+            return get_llm(
+                llm_type,
+                api_key=api_key,
+                user_id=effective_user_id,
+                api_keys=api_keys,
+                llm_overrides=llm_overrides,
+            )
 
         llm = llm_wrapper
 

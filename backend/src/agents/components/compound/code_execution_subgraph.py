@@ -160,6 +160,7 @@ def create_code_execution_graph(
     redis_storage: RedisStorage,
     daytona_manager: PersistentDaytonaManager,
     api_keys: dict = None,
+    llm_overrides: dict = None,
 ):
     logger.info("Creating code execution subgraph", user_id=user_id[:8] if user_id else "None")
 
@@ -395,7 +396,7 @@ def create_code_execution_graph(
 
         try:
             # Use config manager if api_keys dict is provided (admin panel enabled)
-            if api_keys is not None:
+            if api_keys is not None or llm_overrides:
                 from agents.config.llm_config_manager import get_config_manager
                 from agents.utils.llm_provider import get_llm_for_task
 
@@ -404,7 +405,8 @@ def create_code_execution_graph(
                     task="code_execution",
                     api_keys=api_keys,
                     config_manager=config_manager,
-                    user_id=user_id
+                    user_id=user_id,
+                    overrides=llm_overrides,
                 )
                 logger.info("Code execution agent using model from config")
             else:

@@ -8,6 +8,7 @@ from urllib.parse import quote
 
 import markdown
 import structlog
+from agents.api.llm_overrides import LLMOverrides, parse_llm_config_json, resolve_llm_overrides
 from agents.api.routers.upload import process_and_store_file, upload_document
 from agents.api.utils import process_data_science_report
 from agents.components.compound.data_science_subgraph import (
@@ -42,12 +43,14 @@ router = APIRouter(
 
 class DeepResearchRequest(BaseModel):
     prompt: str
+    llm_config: Optional[LLMOverrides] = None
 
 
 class DeepResearchInteractiveRequest(BaseModel):
     prompt: str
     thread_id: Optional[str] = None
     resume: bool = False
+    llm_config: Optional[LLMOverrides] = None
 
 
 class DataScienceInteractiveRequest(BaseModel):
@@ -62,6 +65,10 @@ async def datascience_agent_and_report(
     prompt: str = Form(..., description="The main prompt for the data science agent."),
     files: List[UploadFile] = File(
         ..., description="One or more files to be analyzed."
+    ),
+    llm_config_json: Optional[str] = Form(
+        None,
+        description="Optional JSON string for request-scoped LLM overrides.",
     ),
     authorization: Optional[str] = Header(
         None, description="Authorization header with Bearer token."
@@ -80,6 +87,14 @@ async def datascience_agent_and_report(
 
     thread_id = str(uuid.uuid4())
     api_key = authorization.replace("Bearer ", "")
+    try:
+        llm_config = parse_llm_config_json(llm_config_json)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid llm_config_json: {exc}",
+        ) from exc
+    llm_api_keys, llm_overrides, _ = resolve_llm_overrides(api_key, llm_config)
 
     try:
         file_ids = []
@@ -104,6 +119,8 @@ async def datascience_agent_and_report(
             daytona_manager=daytona_manager,
             directory_content=file_names,
             checkpointer=checkpointer,
+            api_keys=llm_api_keys,
+            llm_overrides=llm_overrides,
         )
         results = await agent.ainvoke(
             {
@@ -162,6 +179,9 @@ async def datascience_interactive(
     file_ids_json: Optional[str] = Form(
         None, description="A JSON string of file IDs, required for resuming a session"
     ),
+    llm_config_json: Optional[str] = Form(
+        None, description="Optional JSON string for request-scoped LLM overrides."
+    ),
 ):
     """
     Two-step interactive data science API:
@@ -174,6 +194,14 @@ async def datascience_interactive(
             detail="Authorization header with Bearer token is required",
         )
     api_key = authorization.replace("Bearer ", "")
+    try:
+        llm_config = parse_llm_config_json(llm_config_json)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid llm_config_json: {exc}",
+        ) from exc
+    llm_api_keys, llm_overrides, _ = resolve_llm_overrides(api_key, llm_config)
 
     try:
         if not resume:
@@ -207,6 +235,8 @@ async def datascience_interactive(
                 daytona_manager=daytona_manager,
                 directory_content=file_names,
                 checkpointer=checkpointer,
+                api_keys=llm_api_keys,
+                llm_overrides=llm_overrides,
             )
 
             result = await agent.ainvoke(
@@ -287,6 +317,8 @@ async def datascience_interactive(
                 daytona_manager=daytona_manager,
                 directory_content=file_names,
                 checkpointer=checkpointer,
+                api_keys=llm_api_keys,
+                llm_overrides=llm_overrides,
             )
 
             graph_input_step2 = Command(resume=prompt)
@@ -360,17 +392,22 @@ async def deepresearch_agent(
         )
 
     api_key = authorization.replace("Bearer ", "")
+    llm_api_keys, llm_overrides, provider_override = resolve_llm_overrides(
+        api_key, research_request.llm_config
+    )
     redis_storage = request.app.state.redis_storage_service
     checkpointer = get_global_checkpointer()
 
     # Create and execute the deep research graph
     agent = create_deep_research_graph(
         api_key=api_key,
-        provider="sambanova",
+        provider=provider_override,
         request_timeout=120,
         redis_storage=redis_storage,
         user_id=api_key,
         checkpointer=checkpointer,
+        api_keys=llm_api_keys,
+        llm_overrides=llm_overrides,
     )
 
     thread_id = str(uuid.uuid4())
@@ -438,17 +475,22 @@ async def deepresearch_interactive_agent(
         )
 
     api_key = authorization.replace("Bearer ", "")
+    llm_api_keys, llm_overrides, provider_override = resolve_llm_overrides(
+        api_key, research_request.llm_config
+    )
     redis_storage = request.app.state.redis_storage_service
     checkpointer = get_global_checkpointer()
 
     # Create and execute the deep research graph
     agent = create_deep_research_graph(
         api_key=api_key,
-        provider="sambanova",
+        provider=provider_override,
         request_timeout=120,
         redis_storage=redis_storage,
         user_id=api_key,
         checkpointer=checkpointer,
+        api_keys=llm_api_keys,
+        llm_overrides=llm_overrides,
     )
 
     if research_request.resume is False:
@@ -518,12 +560,14 @@ async def deepresearch_interactive_agent(
 
 class MainAgentRequest(BaseModel):
     prompt: str
+    llm_config: Optional[LLMOverrides] = None
 
 
 class MainAgentInteractiveRequest(BaseModel):
     prompt: str
     thread_id: Optional[str] = None
     resume: bool = False
+    llm_config: Optional[LLMOverrides] = None
 
 
 @router.post("/mainagent", tags=["Agents"])
@@ -546,6 +590,9 @@ async def main_agent(
         )
 
     api_key = authorization.replace("Bearer ", "")
+    llm_api_keys, llm_overrides, provider_override = resolve_llm_overrides(
+        api_key, agent_request.llm_config
+    )
     redis_storage = request.app.state.redis_storage_service
     checkpointer = get_global_checkpointer()
     thread_id = str(uuid.uuid4())
@@ -586,8 +633,10 @@ async def main_agent(
             user_id=api_key,
             api_key=api_key,
             redis_storage=redis_storage,
-            provider="sambanova",
+            provider=provider_override,
             enable_data_science=False,  # No files uploaded in this API
+            admin_api_keys=llm_api_keys,
+            llm_overrides=llm_overrides,
         )
 
         # Configure and execute the main agent with correct config keys
@@ -612,6 +661,8 @@ async def main_agent(
                 "configurable": {
                     "thread_id": thread_id,
                     "api_key": api_key,
+                    "api_keys": llm_api_keys,
+                    "llm_overrides": llm_overrides,
                 },
                 "metadata": {
                     "user_id": api_key,
@@ -645,6 +696,8 @@ async def main_agent(
                         "configurable": {
                             "thread_id": thread_id,
                             "api_key": api_key,
+                            "api_keys": llm_api_keys,
+                            "llm_overrides": llm_overrides,
                         },
                         "metadata": {
                             "user_id": api_key,
@@ -732,6 +785,9 @@ async def main_agent_interactive(
         )
 
     api_key = authorization.replace("Bearer ", "")
+    llm_api_keys, llm_overrides, provider_override = resolve_llm_overrides(
+        api_key, agent_request.llm_config
+    )
     redis_storage = request.app.state.redis_storage_service
     checkpointer = get_global_checkpointer()
 
@@ -781,8 +837,10 @@ async def main_agent_interactive(
             user_id=api_key,
             api_key=api_key,
             redis_storage=redis_storage,
-            provider="sambanova",
+            provider=provider_override,
             enable_data_science=False,  # No files uploaded in this API
+            admin_api_keys=llm_api_keys,
+            llm_overrides=llm_overrides,
         )
 
         # Configure and execute the main agent with correct config keys
@@ -812,6 +870,8 @@ async def main_agent_interactive(
                 "configurable": {
                     "thread_id": thread_id,
                     "api_key": api_key,
+                    "api_keys": llm_api_keys,
+                    "llm_overrides": llm_overrides,
                 },
                 "metadata": {
                     "user_id": api_key,
@@ -845,6 +905,8 @@ async def main_agent_interactive(
                         "configurable": {
                             "thread_id": thread_id,
                             "api_key": api_key,
+                            "api_keys": llm_api_keys,
+                            "llm_overrides": llm_overrides,
                         },
                         "metadata": {
                             "user_id": api_key,
@@ -930,6 +992,7 @@ async def main_agent_interactive(
 class CodingAgentRequest(BaseModel):
     prompt: str
     code: str
+    llm_config: Optional[LLMOverrides] = None
 
 
 class CodingAgentInteractiveRequest(BaseModel):
@@ -937,6 +1000,7 @@ class CodingAgentInteractiveRequest(BaseModel):
     code: str
     thread_id: Optional[str] = None
     resume: bool = False
+    llm_config: Optional[LLMOverrides] = None
 
 
 @router.post("/coding", tags=["Agents"])
@@ -958,6 +1022,9 @@ async def coding_agent(
         )
 
     api_key = authorization.replace("Bearer ", "")
+    llm_api_keys, llm_overrides, _ = resolve_llm_overrides(
+        api_key, agent_request.llm_config
+    )
     redis_storage = request.app.state.redis_storage_service
     thread_id = str(uuid.uuid4())
 
@@ -980,6 +1047,8 @@ async def coding_agent(
             sambanova_api_key=api_key,
             redis_storage=redis_storage,
             daytona_manager=daytona_manager,
+            api_keys=llm_api_keys,
+            llm_overrides=llm_overrides,
         )
 
         # Execute the code
@@ -1000,7 +1069,11 @@ async def coding_agent(
                 "files": [],
             },
             config={
-                "configurable": {"thread_id": thread_id},
+                "configurable": {
+                    "thread_id": thread_id,
+                    "api_keys": llm_api_keys,
+                    "llm_overrides": llm_overrides,
+                },
                 "metadata": {
                     "user_id": api_key,
                     "thread_id": thread_id,
@@ -1057,6 +1130,9 @@ async def coding_agent_interactive(
         )
 
     api_key = authorization.replace("Bearer ", "")
+    llm_api_keys, llm_overrides, _ = resolve_llm_overrides(
+        api_key, agent_request.llm_config
+    )
     redis_storage = request.app.state.redis_storage_service
 
     if agent_request.resume is False:
@@ -1088,6 +1164,8 @@ async def coding_agent_interactive(
             sambanova_api_key=api_key,
             redis_storage=redis_storage,
             daytona_manager=daytona_manager,
+            api_keys=llm_api_keys,
+            llm_overrides=llm_overrides,
         )
 
         # Execute the code
@@ -1108,7 +1186,11 @@ async def coding_agent_interactive(
                 "files": [],
             },
             config={
-                "configurable": {"thread_id": thread_id},
+                "configurable": {
+                    "thread_id": thread_id,
+                    "api_keys": llm_api_keys,
+                    "llm_overrides": llm_overrides,
+                },
                 "metadata": {
                     "user_id": api_key,
                     "thread_id": thread_id,
@@ -1150,12 +1232,14 @@ async def coding_agent_interactive(
 
 class FinancialAnalysisRequest(BaseModel):
     prompt: str
+    llm_config: Optional[LLMOverrides] = None
 
 
 class FinancialAnalysisInteractiveRequest(BaseModel):
     prompt: str
     thread_id: Optional[str] = None
     resume: bool = False
+    llm_config: Optional[LLMOverrides] = None
 
 
 @router.post("/financialanalysis", tags=["Agents"])
@@ -1177,6 +1261,9 @@ async def financial_analysis_agent(
         )
 
     api_key = authorization.replace("Bearer ", "")
+    llm_api_keys, llm_overrides, _ = resolve_llm_overrides(
+        api_key, agent_request.llm_config
+    )
     redis_storage = request.app.state.redis_storage_service
     thread_id = str(uuid.uuid4())
 
@@ -1188,13 +1275,20 @@ async def financial_analysis_agent(
         financial_graph = create_financial_analysis_graph(
             redis_client=redis_storage,
             user_id=api_key,
+            api_keys=llm_api_keys,
+            llm_overrides=llm_overrides,
         )
 
         # Execute the analysis
         result = await financial_graph.ainvoke(
             [HumanMessage(content=agent_request.prompt)],
             config={
-                "configurable": {"thread_id": thread_id, "api_key": api_key},
+                "configurable": {
+                    "thread_id": thread_id,
+                    "api_key": api_key,
+                    "api_keys": llm_api_keys,
+                    "llm_overrides": llm_overrides,
+                },
                 "metadata": {
                     "user_id": api_key,
                     "thread_id": thread_id,
@@ -1269,6 +1363,9 @@ async def financial_analysis_agent_interactive(
         )
 
     api_key = authorization.replace("Bearer ", "")
+    llm_api_keys, llm_overrides, _ = resolve_llm_overrides(
+        api_key, agent_request.llm_config
+    )
     redis_storage = request.app.state.redis_storage_service
 
     if agent_request.resume is False:
@@ -1289,13 +1386,20 @@ async def financial_analysis_agent_interactive(
         financial_graph = create_financial_analysis_graph(
             redis_client=redis_storage,
             user_id=api_key,
+            api_keys=llm_api_keys,
+            llm_overrides=llm_overrides,
         )
 
         # Execute the analysis
         result = await financial_graph.ainvoke(
             [HumanMessage(content=agent_request.prompt)],
             config={
-                "configurable": {"thread_id": thread_id, "api_key": api_key},
+                "configurable": {
+                    "thread_id": thread_id,
+                    "api_key": api_key,
+                    "api_keys": llm_api_keys,
+                    "llm_overrides": llm_overrides,
+                },
                 "metadata": {
                     "user_id": api_key,
                     "thread_id": thread_id,
