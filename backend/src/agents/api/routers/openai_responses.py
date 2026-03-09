@@ -5,6 +5,7 @@ Specification: https://platform.openai.com/docs/api-reference/responses
 """
 import asyncio
 import json
+import re
 import time
 import uuid
 from typing import AsyncGenerator, Optional
@@ -36,6 +37,36 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langgraph.types import Command, Interrupt
 
 logger = structlog.get_logger(__name__)
+
+# UUID v4 pattern for API key validation
+_API_KEY_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
+)
+
+
+def _validate_api_key(authorization: Optional[str]):
+    """Validate Bearer token format and return (api_key, error_response)."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None, JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content=create_error_response(
+                "Authorization header with Bearer token is required",
+                "authentication_error",
+                "missing_auth"
+            ).model_dump()
+        )
+    api_key = authorization.replace("Bearer ", "").strip()
+    if not api_key or not _API_KEY_PATTERN.match(api_key):
+        return None, JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content=create_error_response(
+                "Invalid API key",
+                "authentication_error",
+                "invalid_api_key"
+            ).model_dump()
+        )
+    return api_key, None
+
 
 router = APIRouter(
     prefix="/v1",
@@ -442,15 +473,9 @@ async def list_tools(authorization: Optional[str] = Header(None)):
     tools = client.get("/tools")
     ```
     """
-    if not authorization or not authorization.startswith("Bearer "):
-        return JSONResponse(
-            status_code=401,
-            content=create_error_response(
-                "Authorization header with Bearer token is required",
-                "authentication_error",
-                "missing_auth"
-            ).model_dump()
-        )
+    _, error = _validate_api_key(authorization)
+    if error:
+        return error
     return AVAILABLE_TOOLS
 
 
@@ -487,18 +512,9 @@ async def create_response(
     ```
     """
     # Validate authorization
-    if not authorization or not authorization.startswith("Bearer "):
-        error_response = create_error_response(
-            message="Authorization header with Bearer token is required",
-            error_type="authentication_error",
-            code="missing_auth"
-        )
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content=error_response.model_dump()
-        )
-
-    api_key = authorization.replace("Bearer ", "")
+    api_key, error = _validate_api_key(authorization)
+    if error:
+        return error
 
     # Validate model
     internal_model = MODEL_MAPPING.get(response_request.model)

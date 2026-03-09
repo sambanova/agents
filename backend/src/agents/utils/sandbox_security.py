@@ -5,6 +5,7 @@ Provides input validation (command blocklist, pip package sanitization, filename
 output redaction (detect-secrets + infrastructure patterns), and structured security logging.
 """
 
+import base64
 import re
 from typing import List, Tuple
 
@@ -220,6 +221,116 @@ _CONNECTION_STRING_PATTERN = re.compile(
 # Env var dump detection: multiple lines matching KEY=value pattern
 _ENV_LINE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]+=.+$", re.MULTILINE)
 
+# Base64-encoded env var pattern: lines that decode to KEY=value
+_BASE64_LINE_PATTERN = re.compile(r"^[A-Za-z0-9+/]{20,}={0,2}$")
+
+# Sensitive file content patterns (Python open() bypass detection)
+_PASSWD_LINE_PATTERN = re.compile(
+    r"^[a-zA-Z0-9._-]+:[x*]:(\d+):(\d+):[^:]*:[^:]+:[^\s]*$", re.MULTILINE
+)
+
+
+def _redact_encoded_env_dumps(text: str) -> str:
+    """Detect and redact base64-encoded environment variable dumps.
+
+    Uses two strategies:
+    1. Run detection: 2+ consecutive base64 lines that decode to KEY=value → redact the block.
+    2. Individual detection: any single base64 line decoding to a known sensitive KEY=value → redact it.
+    """
+    # Known sensitive env var prefixes that should always be redacted even as single lines
+    _SENSITIVE_KEY_PREFIXES = (
+        "DAYTONA_", "AWS_", "SAMBANOVA", "DATABASE_", "REDIS_", "API_KEY",
+        "SECRET", "TOKEN", "PASSWORD", "PRIVATE_KEY", "HOSTNAME=",
+        "GPG_KEY=", "PYTHON_",
+    )
+
+    lines = text.split("\n")
+    redacted_lines = []
+    b64_run = []
+
+    for line in lines:
+        stripped = line.strip()
+        is_b64_env = False
+        if _BASE64_LINE_PATTERN.match(stripped) and len(stripped) >= 16:
+            try:
+                decoded = base64.b64decode(stripped).decode("utf-8", errors="ignore")
+                if re.match(r"^[A-Z][A-Z0-9_]+=.+$", decoded):
+                    is_b64_env = True
+            except Exception:
+                pass
+
+        if is_b64_env:
+            b64_run.append(line)
+            continue
+
+        # Not a base64 env line — flush any accumulated run
+        if len(b64_run) >= 2:
+            redacted_lines.append(
+                f"[REDACTED_ENCODED_ENV_DUMP — {len(b64_run)} encoded environment variables hidden]"
+            )
+            log_security_event(
+                "encoded_env_dump_redacted",
+                "warning",
+                encoding="base64",
+                lines_redacted=len(b64_run),
+            )
+        elif len(b64_run) == 1:
+            # Single line — check if it decodes to a sensitive key
+            try:
+                decoded = base64.b64decode(b64_run[0].strip()).decode("utf-8", errors="ignore")
+                if any(decoded.startswith(p) for p in _SENSITIVE_KEY_PREFIXES):
+                    redacted_lines.append("[REDACTED_ENCODED_ENV_VAR]")
+                    log_security_event(
+                        "encoded_env_var_redacted",
+                        "warning",
+                        encoding="base64",
+                    )
+                else:
+                    redacted_lines.extend(b64_run)
+            except Exception:
+                redacted_lines.extend(b64_run)
+        b64_run = []
+        redacted_lines.append(line)
+
+    # Handle trailing run
+    if len(b64_run) >= 2:
+        redacted_lines.append(
+            f"[REDACTED_ENCODED_ENV_DUMP — {len(b64_run)} encoded environment variables hidden]"
+        )
+        log_security_event(
+            "encoded_env_dump_redacted",
+            "warning",
+            encoding="base64",
+            lines_redacted=len(b64_run),
+        )
+    elif len(b64_run) == 1:
+        try:
+            decoded = base64.b64decode(b64_run[0].strip()).decode("utf-8", errors="ignore")
+            if any(decoded.startswith(p) for p in _SENSITIVE_KEY_PREFIXES):
+                redacted_lines.append("[REDACTED_ENCODED_ENV_VAR]")
+            else:
+                redacted_lines.extend(b64_run)
+        except Exception:
+            redacted_lines.extend(b64_run)
+
+    return "\n".join(redacted_lines)
+
+
+def _redact_sensitive_file_content(text: str) -> str:
+    """Redact content from sensitive system files like /etc/passwd."""
+    # Detect /etc/passwd-style content (3+ lines matching user:x:uid:gid:... pattern)
+    lines = text.split("\n")
+    passwd_lines = [l for l in lines if _PASSWD_LINE_PATTERN.match(l)]
+    if len(passwd_lines) >= 3:
+        text = _PASSWD_LINE_PATTERN.sub("[REDACTED_SYSTEM_FILE_CONTENT]", text)
+        log_security_event(
+            "system_file_redacted",
+            "warning",
+            file_type="passwd",
+            lines_redacted=len(passwd_lines),
+        )
+    return text
+
 
 def _redact_with_detect_secrets(text: str) -> str:
     """Use detect-secrets library to find and redact credentials in text."""
@@ -324,9 +435,11 @@ def _redact_infrastructure_patterns(text: str) -> str:
 
 def redact_sensitive_output(output: str) -> str:
     """
-    Two-layer output redaction:
+    Multi-layer output redaction:
     1. detect-secrets for credentials/tokens
-    2. Custom regex for infrastructure patterns
+    2. Custom regex for infrastructure patterns (IPs, DNS, env dumps)
+    3. Base64-encoded environment variable dumps
+    4. Sensitive system file content (/etc/passwd etc.)
     """
     if not output:
         return output
@@ -336,6 +449,12 @@ def redact_sensitive_output(output: str) -> str:
 
     # Layer 2: Infrastructure patterns
     output = _redact_infrastructure_patterns(output)
+
+    # Layer 3: Encoded env dumps (base64, hex etc.)
+    output = _redact_encoded_env_dumps(output)
+
+    # Layer 4: Sensitive file content
+    output = _redact_sensitive_file_content(output)
 
     return output
 

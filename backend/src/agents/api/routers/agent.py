@@ -6,6 +6,11 @@ import uuid
 from typing import List, Optional
 from urllib.parse import quote
 
+# UUID v4 pattern for API key validation
+_API_KEY_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
+)
+
 import markdown
 import structlog
 from agents.api.routers.upload import process_and_store_file, upload_document
@@ -34,6 +39,23 @@ from langgraph.types import Command, Interrupt
 from pydantic import BaseModel
 
 logger = structlog.get_logger(__name__)
+
+
+def _validate_api_key(authorization: Optional[str]):
+    """Validate Bearer token format and return (api_key, error_response)."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None, JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "Authorization header with Bearer token is required"},
+        )
+    api_key = authorization.replace("Bearer ", "").strip()
+    if not api_key or not _API_KEY_PATTERN.match(api_key):
+        return None, JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "Invalid API key"},
+        )
+    return api_key, None
+
 
 router = APIRouter(
     prefix="/agent",
@@ -71,15 +93,11 @@ async def datascience_agent_and_report(
     Fire-and-forget data science API.
     Submits a prompt and returns the final report in a single call.
     """
-    # Extract API key from Authorization header (Bearer token)
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authorization header with Bearer token is required",
-        )
+    api_key, error = _validate_api_key(authorization)
+    if error:
+        return error
 
     thread_id = str(uuid.uuid4())
-    api_key = authorization.replace("Bearer ", "")
 
     try:
         file_ids = []
@@ -168,12 +186,9 @@ async def datascience_interactive(
     Step 1: Submit prompt and files, get thread_id and hypothesis for approval.
     Step 2: Submit prompt with thread_id, file_ids_json, and resume=true to get the final report.
     """
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authorization header with Bearer token is required",
-        )
-    api_key = authorization.replace("Bearer ", "")
+    api_key, error = _validate_api_key(authorization)
+    if error:
+        return error
 
     try:
         if not resume:
@@ -352,14 +367,10 @@ async def deepresearch_agent(
     Fire-and-forget deep research API.
     Submits a prompt and returns the final report in a single call.
     """
-    # Extract API key from Authorization header (Bearer token)
-    if not authorization or not authorization.startswith("Bearer "):
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"error": "Authorization header with Bearer token is required"},
-        )
+    api_key, error = _validate_api_key(authorization)
+    if error:
+        return error
 
-    api_key = authorization.replace("Bearer ", "")
     redis_storage = request.app.state.redis_storage_service
     checkpointer = get_global_checkpointer()
 
@@ -430,14 +441,10 @@ async def deepresearch_interactive_agent(
     Step 1: Submit prompt, get thread_id and research plan for approval.
     Step 2: Submit prompt with thread_id and resume=true to get the final report.
     """
-    # Extract API key from Authorization header (Bearer token)
-    if not authorization or not authorization.startswith("Bearer "):
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"error": "Authorization header with Bearer token is required"},
-        )
+    api_key, error = _validate_api_key(authorization)
+    if error:
+        return error
 
-    api_key = authorization.replace("Bearer ", "")
     redis_storage = request.app.state.redis_storage_service
     checkpointer = get_global_checkpointer()
 
@@ -539,13 +546,10 @@ async def main_agent(
 
     Submits a prompt and returns the final response in a single call.
     """
-    if not authorization or not authorization.startswith("Bearer "):
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"error": "Authorization header with Bearer token is required"},
-        )
+    api_key, error = _validate_api_key(authorization)
+    if error:
+        return error
 
-    api_key = authorization.replace("Bearer ", "")
     redis_storage = request.app.state.redis_storage_service
     checkpointer = get_global_checkpointer()
     thread_id = str(uuid.uuid4())
@@ -725,13 +729,10 @@ async def main_agent_interactive(
     Step 1: Submit prompt, get thread_id and initial response.
     Step 2: Continue conversation with thread_id and resume=true.
     """
-    if not authorization or not authorization.startswith("Bearer "):
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"error": "Authorization header with Bearer token is required"},
-        )
+    api_key, error = _validate_api_key(authorization)
+    if error:
+        return error
 
-    api_key = authorization.replace("Bearer ", "")
     redis_storage = request.app.state.redis_storage_service
     checkpointer = get_global_checkpointer()
 
@@ -951,13 +952,10 @@ async def coding_agent(
 
     Submits code with an optional prompt and returns the execution result in a single call.
     """
-    if not authorization or not authorization.startswith("Bearer "):
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"error": "Authorization header with Bearer token is required"},
-        )
+    api_key, error = _validate_api_key(authorization)
+    if error:
+        return error
 
-    api_key = authorization.replace("Bearer ", "")
     redis_storage = request.app.state.redis_storage_service
     thread_id = str(uuid.uuid4())
 
@@ -1050,13 +1048,10 @@ async def coding_agent_interactive(
     Step 1: Submit code with prompt, get thread_id and execution result.
     Step 2: Continue with thread_id and resume=true to iterate on code.
     """
-    if not authorization or not authorization.startswith("Bearer "):
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"error": "Authorization header with Bearer token is required"},
-        )
+    api_key, error = _validate_api_key(authorization)
+    if error:
+        return error
 
-    api_key = authorization.replace("Bearer ", "")
     redis_storage = request.app.state.redis_storage_service
 
     if agent_request.resume is False:
@@ -1170,13 +1165,10 @@ async def financial_analysis_agent(
 
     Submits a prompt and returns the financial analysis report in a single call.
     """
-    if not authorization or not authorization.startswith("Bearer "):
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"error": "Authorization header with Bearer token is required"},
-        )
+    api_key, error = _validate_api_key(authorization)
+    if error:
+        return error
 
-    api_key = authorization.replace("Bearer ", "")
     redis_storage = request.app.state.redis_storage_service
     thread_id = str(uuid.uuid4())
 
@@ -1262,13 +1254,10 @@ async def financial_analysis_agent_interactive(
     Step 1: Submit prompt, get thread_id and initial analysis.
     Step 2: Continue with thread_id and resume=true for follow-up questions.
     """
-    if not authorization or not authorization.startswith("Bearer "):
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"error": "Authorization header with Bearer token is required"},
-        )
+    api_key, error = _validate_api_key(authorization)
+    if error:
+        return error
 
-    api_key = authorization.replace("Bearer ", "")
     redis_storage = request.app.state.redis_storage_service
 
     if agent_request.resume is False:
@@ -1366,14 +1355,10 @@ async def download_agent_file(
     Security: Files are scoped to users - you can only download your own files.
     The storage layer verifies file ownership before returning data.
     """
-    if not authorization or not authorization.startswith("Bearer "):
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"error": "Authorization header with Bearer token is required"},
-        )
+    user_id, error = _validate_api_key(authorization)
+    if error:
+        return error
 
-    # The API key IS the user_id in the agent system
-    user_id = authorization.replace("Bearer ", "")
     redis_storage = request.app.state.redis_storage_service
 
     try:
