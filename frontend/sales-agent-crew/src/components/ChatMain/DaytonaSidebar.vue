@@ -279,7 +279,7 @@
                     :src="artifact.url"
                     class="w-full h-96 rounded border-2 border-gray-200"
                     title="HTML Viewer"
-                    sandbox="allow-scripts allow-same-origin"
+                    sandbox="allow-scripts"
                     @load="artifact.loading = false"
                     @error="handleArtifactError(artifact)"
                   ></iframe>
@@ -1337,7 +1337,19 @@ async function fetchArtifactContent(artifact) {
     } else {
       // For image, pdf, html, powerpoint etc.
       const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
+      // Backend serves all files as octet-stream for security, but we need
+      // the correct MIME type for blob URLs to render properly in iframes
+      const mimeTypes = {
+        'html': 'text/html',
+        'pdf': 'application/pdf',
+        'image': blob.type !== 'application/octet-stream' ? blob.type : 'image/png',
+        'powerpoint': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      };
+      const correctType = mimeTypes[updatedArtifact.type] || blob.type;
+      const typedBlob = (correctType && correctType !== blob.type)
+        ? new Blob([blob], { type: correctType })
+        : blob;
+      const blobUrl = URL.createObjectURL(typedBlob);
       updatedArtifact.url = blobUrl;
       // Also update downloadUrl to the blob so it can be downloaded directly
       updatedArtifact.downloadUrl = blobUrl;
