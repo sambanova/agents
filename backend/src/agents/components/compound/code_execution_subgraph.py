@@ -377,7 +377,7 @@ def create_code_execution_graph(
     @ls.traceable(
         metadata={
             "agent_type": "daytona_coding_agent",
-            "llm_type": LLMType.SN_DEEPSEEK_V3.value,
+            "llm_type": LLMType.SN_MINIMAX_M2_5.value,
         },
         process_inputs=lambda x: None,
     )
@@ -410,7 +410,7 @@ def create_code_execution_graph(
                 logger.info("Code execution agent using model from config")
             else:
                 # Fallback to old behavior when admin panel is disabled
-                llm = get_sambanova_llm(api_key=sambanova_api_key, model="DeepSeek-V3-0324")
+                llm = get_sambanova_llm(api_key=sambanova_api_key, model="MiniMax-M2.5")
 
             messages = [
                 SystemMessage(

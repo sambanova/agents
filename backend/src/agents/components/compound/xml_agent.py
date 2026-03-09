@@ -379,7 +379,7 @@ For example, if you have a subgraph called 'research_agent' that could conduct r
 
     # Create agent node that extracts api_key from config
     @ls.traceable(
-        metadata={"agent_type": "xml_agent", "llm_type": LLMType.SN_DEEPSEEK_V3.value},
+        metadata={"agent_type": "xml_agent", "llm_type": LLMType.SN_MINIMAX_M2_5.value},
         process_inputs=lambda x: None,
     )
     async def agent_node(messages, *, config: RunnableConfig = None):
@@ -510,7 +510,7 @@ Make sure to include both opening and closing tags for both tool and tool_input.
                     metadata={
                         "model": "gpt-oss-120b",
                         "fallback_reason": "context_length_exceeded",
-                        "original_model": "DeepSeek-V3-0324"
+                        "original_model": "MiniMax-M2.5"
                     }
                 )
                 async def call_gpt_oss_120b(messages_dict, api_key):

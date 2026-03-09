@@ -161,7 +161,7 @@ class WorkflowManager:
         @ls.traceable(
             metadata={
                 "agent_type": "data_science_agent",
-                "llm_type": LLMType.SN_DEEPSEEK_V3.value,
+                "llm_type": LLMType.SN_MINIMAX_M2_5.value,
             },
             process_inputs=lambda x: None,
         )
@@ -192,7 +192,7 @@ class WorkflowManager:
         @ls.traceable(
             metadata={
                 "agent_type": "data_science_agent",
-                "llm_type": LLMType.SN_DEEPSEEK_V3.value,
+                "llm_type": LLMType.SN_MINIMAX_M2_5.value,
             },
             process_inputs=lambda x: None,
         )
@@ -207,7 +207,7 @@ class WorkflowManager:
         @ls.traceable(
             metadata={
                 "agent_type": "data_science_agent",
-                "llm_type": LLMType.SN_DEEPSEEK_V3.value,
+                "llm_type": LLMType.SN_MINIMAX_M2_5.value,
             },
             process_inputs=lambda x: None,
         )
@@ -219,7 +219,7 @@ class WorkflowManager:
         @ls.traceable(
             metadata={
                 "agent_type": "data_science_agent",
-                "llm_type": LLMType.SN_DEEPSEEK_V3.value,
+                "llm_type": LLMType.SN_MINIMAX_M2_5.value,
             },
             process_inputs=lambda x: None,
         )
@@ -231,7 +231,7 @@ class WorkflowManager:
         @ls.traceable(
             metadata={
                 "agent_type": "data_science_agent",
-                "llm_type": LLMType.SN_DEEPSEEK_V3.value,
+                "llm_type": LLMType.SN_MINIMAX_M2_5.value,
             },
             process_inputs=lambda x: None,
         )

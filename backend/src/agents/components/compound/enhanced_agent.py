@@ -76,12 +76,14 @@ def get_llm(llm_type: LLMType, api_key: str = None, user_id: Optional[str] = Non
         # Map LLMType to task name
         # Handle both enum and string values
         task_map = {
+            LLMType.SN_MINIMAX_M2_5: "main_agent",
             LLMType.SN_DEEPSEEK_V3: "main_agent",
             LLMType.SN_LLAMA_3_3_70B: "main_agent",
             LLMType.SN_LLAMA_MAVERICK: "vision_agent",
             LLMType.SN_DEEPSEEK_R1_DISTILL_LLAMA: "main_agent",
             LLMType.FIREWORKS_LLAMA_3_3_70B: "main_agent",
             # String values that might come from frontend
+            "MiniMax M2.5": "main_agent",
             "DeepSeek V3": "main_agent",
             "DeepSeek R1 Distill Llama": "main_agent",
             "Llama 3.3 70B": "main_agent",
@@ -115,6 +117,8 @@ def get_llm(llm_type: LLMType, api_key: str = None, user_id: Optional[str] = Non
             llm = get_sambanova_llm(
                 model="Llama-4-Maverick-17B-128E-Instruct", api_key=api_key
             )
+        elif llm_type == LLMType.SN_MINIMAX_M2_5:
+            llm = get_sambanova_llm(model="MiniMax-M2.5", api_key=api_key)
         elif llm_type == LLMType.SN_DEEPSEEK_V3:
             llm = get_sambanova_llm(model="DeepSeek-V3-0324", api_key=api_key)
         elif llm_type == LLMType.SN_DEEPSEEK_R1_DISTILL_LLAMA:
@@ -125,16 +129,16 @@ def get_llm(llm_type: LLMType, api_key: str = None, user_id: Optional[str] = Non
             )
         else:
             # When admin panel is off and we get an unexpected type,
-            # default to DeepSeek V3 for backward compatibility
-            logger.warning(f"Unexpected agent type: {llm_type}, defaulting to DeepSeek V3")
-            llm = get_sambanova_llm(model="DeepSeek-V3-0324", api_key=api_key)
+            # default to MiniMax M2.5 for backward compatibility
+            logger.warning(f"Unexpected agent type: {llm_type}, defaulting to MiniMax M2.5")
+            llm = get_sambanova_llm(model="MiniMax-M2.5", api_key=api_key)
 
         return llm
 
 
 class EnhancedConfigurableAgent(RunnableBinding):
     tools: Sequence[BaseTool]
-    llm_type: LLMType = LLMType.SN_DEEPSEEK_V3
+    llm_type: LLMType = LLMType.SN_MINIMAX_M2_5
     system_message: str = DEFAULT_SYSTEM_MESSAGE
     subgraphs: Optional[dict] = None
     user_id: Optional[str] = None
@@ -143,7 +147,7 @@ class EnhancedConfigurableAgent(RunnableBinding):
         self,
         *,
         tools: Sequence[BaseTool] = [],
-        llm_type: LLMType = LLMType.SN_DEEPSEEK_V3,
+        llm_type: LLMType = LLMType.SN_MINIMAX_M2_5,
         system_message: str = DEFAULT_SYSTEM_MESSAGE,
         subgraphs: Optional[dict] = None,
         user_id: str = None,

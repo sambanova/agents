@@ -40,17 +40,17 @@ def setup_language_models(sambanova_api_key: str, user_id: Optional[str] = None,
         human_choice_llm = get_llm_for_task("data_science_human_choice", api_keys, config_manager, user_id)
     else:
         # Use default SambaNova configuration (original behavior)
-        report_agent_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-V3-0324")
-        code_agent_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-V3-0324")
+        report_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
+        code_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
         note_agent_llm = get_sambanova_llm(sambanova_api_key, "Meta-Llama-3.3-70B-Instruct")
         process_agent_llm = get_sambanova_llm(sambanova_api_key, "Qwen3-32B")
-        hypothesis_agent_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-V3-0324")
+        hypothesis_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
         quality_review_agent_llm = get_sambanova_llm(
             sambanova_api_key, "Llama-4-Maverick-17B-128E-Instruct"
         )
         refiner_agent_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-R1-0528")
-        visualization_agent_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-V3-0324")
-        searcher_agent_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-V3-0324")
+        visualization_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
+        searcher_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
         human_choice_llm = get_sambanova_llm(
             sambanova_api_key, "DeepSeek-R1-Distill-Llama-70B"
         )

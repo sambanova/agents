@@ -26,6 +26,12 @@
                     "url": "https://api.sambanova.ai/v1",
                     "long_url": "https://api.sambanova.ai/v1/chat/completions"
                 },
+                "minimax-m2.5": {
+                    "model": "MiniMax-M2.5",
+                    "crewai_prefix": "sambanova",
+                    "url": "https://api.sambanova.ai/v1",
+                    "long_url": "https://api.sambanova.ai/v1/chat/completions"
+                },
                 "deepseek-r1-distill-llama-70b": {
                     "model": "DeepSeek-R1-Distill-Llama-70B",
                     "crewai_prefix": "sambanova",

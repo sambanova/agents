@@ -17,6 +17,7 @@ class LLMType(str, Enum):
     SN_LLAMA_3_3_70B = "Llama 3.3 70B"
     SN_LLAMA_MAVERICK = "Llama 4 Maverick"
     SN_DEEPSEEK_V3 = "DeepSeek V3"
+    SN_MINIMAX_M2_5 = "MiniMax M2.5"
     SN_DEEPSEEK_R1_DISTILL_LLAMA = "DeepSeek R1 Distill Llama"
     SN_DEEPSEEK_R1 = "DeepSeek R1"
     SN_QWEN3_3_72B = "Qwen3 32B"

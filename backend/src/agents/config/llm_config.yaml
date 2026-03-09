@@ -12,6 +12,10 @@ providers:
         name: "DeepSeek V3"
         context_window: 131072
         max_tokens: 8192
+      MiniMax-M2.5:
+        name: "MiniMax M2.5"
+        context_window: 160000
+        max_tokens: 16384
       DeepSeek-R1-Distill-Llama-70B:
         name: "DeepSeek R1 Distill Llama 70B"
         context_window: 131072
@@ -110,6 +114,8 @@ providers:
 # Model mappings for cross-provider equivalents
 # Maps logical model to actual model IDs for each provider
 model_mappings:
+  minimax-m2.5:
+    sambanova: "MiniMax-M2.5"
   deepseek-v3:
     sambanova: "DeepSeek-V3-0324"
     fireworks: "accounts/fireworks/models/deepseek-v3-0324"
@@ -152,7 +158,7 @@ task_models:
   # Main XML Agent (enhanced_agent)
   main_agent:
     provider: sambanova
-    model: DeepSeek-V3-0324
+    model: MiniMax-M2.5
     description: "Primary conversational agent for general queries"
 
   # Deep Research Subgraph
@@ -172,11 +178,11 @@ task_models:
   # Data Science Subgraph
   data_science_report:
     provider: sambanova
-    model: DeepSeek-V3-0324
+    model: MiniMax-M2.5
     description: "Data science report generation"
   data_science_code:
     provider: sambanova
-    model: DeepSeek-V3-0324
+    model: MiniMax-M2.5
     description: "Data science code generation"
   data_science_note:
     provider: sambanova
@@ -188,7 +194,7 @@ task_models:
     description: "Data science process management"
   data_science_hypothesis:
     provider: sambanova
-    model: DeepSeek-V3-0324
+    model: MiniMax-M2.5
     description: "Data science hypothesis generation"
   data_science_quality_review:
     provider: sambanova
@@ -200,11 +206,11 @@ task_models:
     description: "Data science refinement agent"
   data_science_visualization:
     provider: sambanova
-    model: DeepSeek-V3-0324
+    model: MiniMax-M2.5
     description: "Data visualization generation"
   data_science_searcher:
     provider: sambanova
-    model: DeepSeek-V3-0324
+    model: MiniMax-M2.5
     description: "Data science research/search agent"
   data_science_human_choice:
     provider: sambanova
@@ -214,7 +220,7 @@ task_models:
   # Code Execution Subgraph
   code_execution:
     provider: sambanova
-    model: DeepSeek-V3-0324
+    model: MiniMax-M2.5
     description: "Code error analysis and fixing agent"
 
   # Financial Analysis Subgraph (Crew)

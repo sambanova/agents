@@ -597,7 +597,7 @@ async def main_agent(
         # Configure and execute the main agent with correct config keys
         agent = enhanced_agent.with_config(
             configurable={
-                "llm_type": LLMType.SN_DEEPSEEK_V3,
+                "llm_type": LLMType.SN_MINIMAX_M2_5,
                 "type==default/system_message": "You are a helpful AI assistant. You can help with general questions, coding tasks, financial analysis, deep research, and data science. When a user asks for something specific, you can delegate to specialized subagents.",
                 "type==default/tools": all_tools,
                 "type==default/subgraphs": subgraphs,
@@ -789,7 +789,7 @@ async def main_agent_interactive(
         # Configure and execute the main agent with correct config keys
         agent = enhanced_agent.with_config(
             configurable={
-                "llm_type": LLMType.SN_DEEPSEEK_V3,
+                "llm_type": LLMType.SN_MINIMAX_M2_5,
                 "type==default/system_message": "You are a helpful AI assistant. You can help with general questions, coding tasks, financial analysis, deep research, and data science. When a user asks for something specific, you can delegate to specialized subagents.",
                 "type==default/tools": all_tools,
                 "type==default/subgraphs": subgraphs,

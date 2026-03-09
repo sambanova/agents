@@ -637,7 +637,7 @@ async def create_response(
         )
 
         # Configure agent with appropriate model
-        llm_type = LLMType.SN_LLAMA_MAVERICK if use_vision_model else LLMType.SN_DEEPSEEK_V3
+        llm_type = LLMType.SN_LLAMA_MAVERICK if use_vision_model else LLMType.SN_MINIMAX_M2_5
 
         agent = enhanced_agent.with_config(
             configurable={
