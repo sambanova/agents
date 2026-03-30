@@ -8,7 +8,7 @@ providers:
     base_url: "https://api.sambanova.ai/v1"
     models:
       # Primary models used in production - using actual model IDs from the code
-      DeepSeek-V3-0324:
+      DeepSeek-V3.1:
         name: "DeepSeek V3"
         context_window: 131072
         max_tokens: 8192
@@ -16,34 +16,18 @@ providers:
         name: "MiniMax M2.5"
         context_window: 160000
         max_tokens: 16384
-      DeepSeek-R1-Distill-Llama-70B:
-        name: "DeepSeek R1 Distill Llama 70B"
-        context_window: 131072
-        max_tokens: 8192
-      DeepSeek-R1-0528:
-        name: "DeepSeek R1"
-        context_window: 131072
-        max_tokens: 8192
-      Meta-Llama-3.3-70B-Instruct:
-        name: "Llama 3.3 70B"
-        context_window: 131072
-        max_tokens: 8192
-      Llama-4-Maverick-17B-128E-Instruct:
-        name: "Llama 4 Maverick"
-        context_window: 131072
-        max_tokens: 7000
-      Meta-Llama-3.1-8B-Instruct:
-        name: "Llama 3.1 8B"
-        context_window: 131072
-        max_tokens: 8192
-      Qwen3-32B:
-        name: "Qwen3 32B"
-        context_window: 131072
-        max_tokens: 8192
       gpt-oss-120b:
         name: "GPT OSS 120B"
         context_window: 131072
         max_tokens: 16384
+      Meta-Llama-3.3-70B-Instruct:
+        name: "Llama 3.3 70B"
+        context_window: 131072
+        max_tokens: 8192
+      gemma-3-12b-it:
+        name: "Gemma 3 12B"
+        context_window: 131072
+        max_tokens: 8192
 
   fireworks:
     name: "Fireworks AI"

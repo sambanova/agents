@@ -371,7 +371,7 @@ class QueryRouterService:
         }
 
         payload = {
-            "model": "Meta-Llama-3.1-8B-Instruct",
+            "model": "MiniMax-M2.5",
             "messages": [
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_message},

@@ -15,13 +15,13 @@
                     "long_url": "https://api.sambanova.ai/v1/chat/completions"
                 },
                 "llama-3.1-8b": {
-                    "model": "Meta-Llama-3.1-8B-Instruct",
+                    "model": "MiniMax-M2.5",
                     "crewai_prefix": "sambanova",
                     "url": "https://api.sambanova.ai/v1",
                     "long_url": "https://api.sambanova.ai/v1/chat/completions"
                 },
                 "deepseek-v3-0324": {
-                    "model": "DeepSeek-V3-0324",
+                    "model": "DeepSeek-V3.1",
                     "crewai_prefix": "sambanova",
                     "url": "https://api.sambanova.ai/v1",
                     "long_url": "https://api.sambanova.ai/v1/chat/completions"
@@ -33,19 +33,19 @@
                     "long_url": "https://api.sambanova.ai/v1/chat/completions"
                 },
                 "deepseek-r1-distill-llama-70b": {
-                    "model": "DeepSeek-R1-Distill-Llama-70B",
+                    "model": "gpt-oss-120b",
                     "crewai_prefix": "sambanova",
                     "url": "https://api.sambanova.ai/v1",
                     "long_url": "https://api.sambanova.ai/v1/chat/completions"
                 },
                 "deepseek-r1-0528": {
-                    "model": "DeepSeek-R1-0528",
+                    "model": "gpt-oss-120b",
                     "crewai_prefix": "sambanova",
                     "url": "https://api.sambanova.ai/v1",
                     "long_url": "https://api.sambanova.ai/v1/chat/completions"
                 },
                 "llama-4-maverick": {
-                    "model": "Llama-4-Maverick-17B-128E-Instruct",
+                    "model": "gemma-3-12b-it",
                     "crewai_prefix": "sambanova",
                     "url": "https://api.sambanova.ai/v1",
                     "long_url": "https://api.sambanova.ai/v1/chat/completions"
@@ -57,7 +57,7 @@
                     "long_url": "https://api.sambanova.ai/v1/chat/completions"
                 },
                 "qwen3-32b": {
-                    "model": "Qwen3-32B",
+                    "model": "MiniMax-M2.5",
                     "crewai_prefix": "sambanova",
                     "url": "https://api.sambanova.ai/v1",
                     "long_url": "https://api.sambanova.ai/v1/chat/completions"

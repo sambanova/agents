@@ -69,6 +69,7 @@ def create_user_vector_store(
     api_key: str, redis_client: redis.Redis
 ) -> RedisVectorStore:
     # Initialize vector store with shared Redis client
+    # Note: E5-Mistral-7B-Instruct is now On-Demand - contact platform for access
     vstore = RedisVectorStore(
         embeddings=SambaNovaEmbeddings(
             model="E5-Mistral-7B-Instruct",

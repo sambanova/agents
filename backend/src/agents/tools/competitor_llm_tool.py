@@ -49,7 +49,7 @@ class CompetitorLLMTool(BaseTool):
         """
 
         payload = {
-            "model": "Meta-Llama-3.1-8B-Instruct",
+            "model": "MiniMax-M2.5",
             "messages": [
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": user_msg},

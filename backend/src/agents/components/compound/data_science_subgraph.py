@@ -43,16 +43,16 @@ def setup_language_models(sambanova_api_key: str, user_id: Optional[str] = None,
         report_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
         code_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
         note_agent_llm = get_sambanova_llm(sambanova_api_key, "Meta-Llama-3.3-70B-Instruct")
-        process_agent_llm = get_sambanova_llm(sambanova_api_key, "Qwen3-32B")
+        process_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
         hypothesis_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
         quality_review_agent_llm = get_sambanova_llm(
-            sambanova_api_key, "Llama-4-Maverick-17B-128E-Instruct"
+            sambanova_api_key, "gemma-3-12b-it"
         )
-        refiner_agent_llm = get_sambanova_llm(sambanova_api_key, "DeepSeek-R1-0528")
+        refiner_agent_llm = get_sambanova_llm(sambanova_api_key, "gpt-oss-120b")
         visualization_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
         searcher_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
         human_choice_llm = get_sambanova_llm(
-            sambanova_api_key, "DeepSeek-R1-Distill-Llama-70B"
+            sambanova_api_key, "gpt-oss-120b"
         )
 
     return {

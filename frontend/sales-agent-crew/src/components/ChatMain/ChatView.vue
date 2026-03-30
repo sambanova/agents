@@ -2081,6 +2081,7 @@ async function transcribeAudio(audioBlob) {
       )
     );
     const requestBody = {
+      // Note: Whisper-Large-v3 is now On-Demand - contact platform for access
       model: 'Whisper-Large-v3',
       messages: [
         {
