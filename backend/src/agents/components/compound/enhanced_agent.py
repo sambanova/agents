@@ -115,14 +115,14 @@ def get_llm(llm_type: LLMType, api_key: str = None, user_id: Optional[str] = Non
             llm = get_sambanova_llm(model="Meta-Llama-3.3-70B-Instruct", api_key=api_key)
         elif llm_type == LLMType.SN_LLAMA_MAVERICK:
             llm = get_sambanova_llm(
-                model="Llama-4-Maverick-17B-128E-Instruct", api_key=api_key
+                model="gemma-3-12b-it", api_key=api_key
             )
         elif llm_type == LLMType.SN_MINIMAX_M2_5:
             llm = get_sambanova_llm(model="MiniMax-M2.5", api_key=api_key)
         elif llm_type == LLMType.SN_DEEPSEEK_V3:
-            llm = get_sambanova_llm(model="DeepSeek-V3-0324", api_key=api_key)
+            llm = get_sambanova_llm(model="DeepSeek-V3.1", api_key=api_key)
         elif llm_type == LLMType.SN_DEEPSEEK_R1_DISTILL_LLAMA:
-            llm = get_sambanova_llm(model="DeepSeek-R1-Distill-Llama-70B", api_key=api_key)
+            llm = get_sambanova_llm(model="gpt-oss-120b", api_key=api_key)
         elif llm_type == LLMType.FIREWORKS_LLAMA_3_3_70B:
             llm = get_fireworks_llm(
                 model="accounts/fireworks/models/llama-v3p1-70b-instruct", api_key=api_key

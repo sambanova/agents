@@ -28,7 +28,6 @@ class LLMConfigManager:
                 "models": {
                     "Meta-Llama-3.3-70B-Instruct": {"name": "Llama 3.3 70B", "context_window": 32768, "max_tokens": 8192},
                     "Meta-Llama-3.1-70B-Instruct": {"name": "Llama 3.1 70B", "context_window": 32768, "max_tokens": 8192},
-                    "Meta-Llama-3.1-8B-Instruct": {"name": "Llama 3.1 8B", "context_window": 32768, "max_tokens": 8192},
                     "DeepSeek-V3.1": {"name": "DeepSeek V3", "context_window": 32768, "max_tokens": 8192},
                     "MiniMax-M2.5": {"name": "MiniMax M2.5", "context_window": 160000, "max_tokens": 16384},
                     "gpt-oss-120b": {"name": "GPT OSS 120B", "context_window": 128000, "max_tokens": 16384},
