@@ -125,6 +125,14 @@ ragApi:
   env:
     EMBEDDINGS_PROVIDER: "huggingface"
     EMBEDDINGS_MODEL: "sentence-transformers/all-MiniLM-L6-v2"
+    DB_HOST: "aiskagents-postgresql.default.svc.cluster.local"
+    DB_PORT: "5432"
+    DB_USER: "postgres"
+    DB_PASSWORD: ""
+    DB_NAME: "postgres"
+    COLLECTION_NAME: "rag_embeddings"
+    CHUNK_SIZE: "1500"
+    CHUNK_OVERLAP: "100"
   resources:
     limits:
       cpu: "2"
