@@ -125,7 +125,7 @@ ragApi:
   env:
     EMBEDDINGS_PROVIDER: "huggingface"
     EMBEDDINGS_MODEL: "sentence-transformers/all-MiniLM-L6-v2"
-    DB_HOST: "aiskagents-postgresql.default.svc.cluster.local"
+    DB_HOST: "rag-pgvector.default.svc.cluster.local"
     DB_PORT: "5432"
     POSTGRES_USER: "postgres"
     POSTGRES_PASSWORD: ""
