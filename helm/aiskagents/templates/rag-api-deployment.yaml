@@ -1,0 +1,53 @@
+{{- if .Values.ragApi.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.ragApi.name }}
+  namespace: {{ .Values.global.namespace }}
+spec:
+  replicas: {{ .Values.ragApi.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.ragApi.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.ragApi.name }}
+    spec:
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+      - name: {{ .name }}
+      {{- end }}
+      containers:
+      - name: {{ .Values.ragApi.name }}-container
+        image: "{{ .Values.ragApi.image.repository }}:{{ .Values.ragApi.image.tag }}"
+        imagePullPolicy: {{ .Values.ragApi.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.ragApi.service.targetPort }}
+        env:
+        {{- range $key, $value := .Values.ragApi.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        resources:
+          limits:
+            cpu: {{ .Values.ragApi.resources.limits.cpu | quote }}
+            memory: {{ .Values.ragApi.resources.limits.memory | quote }}
+          requests:
+            cpu: {{ .Values.ragApi.resources.requests.cpu | quote }}
+            memory: {{ .Values.ragApi.resources.requests.memory | quote }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.ragApi.service.targetPort }}
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.ragApi.service.targetPort }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+{{- end }}

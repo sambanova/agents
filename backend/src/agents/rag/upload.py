@@ -4,6 +4,8 @@ import mimetypes
 from functools import lru_cache
 from typing import BinaryIO, List, Optional
 
+import os
+
 import numpy as np
 import redis
 import structlog
@@ -18,7 +20,7 @@ from langchain_core.runnables import (
     RunnableSerializable,
 )
 from langchain_redis import RedisVectorStore
-from langchain_sambanova import SambaNovaEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import TextSplitter, TokenTextSplitter
 from pydantic import BaseModel, ConfigDict
 from redisvl.index import SearchIndex
@@ -35,7 +37,7 @@ class RedisHybridRetriever(BaseRetriever, BaseModel):
     """
 
     search_index: SearchIndex
-    embedding_model: SambaNovaEmbeddings
+    embedding_model: OpenAIEmbeddings
     filter_expr: FilterExpression
 
     class Config:
@@ -64,18 +66,20 @@ class RedisHybridRetriever(BaseRetriever, BaseModel):
         return docs
 
 
+RAG_API_URL = os.getenv("RAG_API_URL", "http://rag-api:8000/v1")
+
+
 @lru_cache(maxsize=100)
 def create_user_vector_store(
     api_key: str, redis_client: redis.Redis
 ) -> RedisVectorStore:
-    # Initialize vector store with shared Redis client
-    # Note: E5-Mistral-7B-Instruct is now On-Demand - contact platform for access
     vstore = RedisVectorStore(
-        embeddings=SambaNovaEmbeddings(
-            model="E5-Mistral-7B-Instruct",
-            api_key=api_key,
+        embeddings=OpenAIEmbeddings(
+            model="sentence-transformers/all-MiniLM-L6-v2",
+            api_key=api_key or "not-needed",
+            base_url=RAG_API_URL,
         ),
-        index_name="sambanova-rag-index",
+        index_name="rag-index",
         metadata_schema=[
             {"name": "user_id", "type": "tag"},
             {"name": "document_id", "type": "tag"},
