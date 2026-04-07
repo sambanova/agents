@@ -31,7 +31,7 @@ dependencies = [
   "exa_py==1.8.8",
   "langgraph==0.4.5",
   "langchain-sambanova>=0.2.0",
-  "langchain-openai>=0.1.0",
+  "langchain-huggingface>=0.1.0",
   "langchain-fireworks==0.3.0",
   "fireworks-ai==0.17.4",
   "tavily-python==0.5.1",

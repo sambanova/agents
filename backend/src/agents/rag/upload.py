@@ -4,8 +4,6 @@ import mimetypes
 from functools import lru_cache
 from typing import BinaryIO, List, Optional
 
-import os
-
 import numpy as np
 import redis
 import structlog
@@ -20,7 +18,7 @@ from langchain_core.runnables import (
     RunnableSerializable,
 )
 from langchain_redis import RedisVectorStore
-from langchain_openai import OpenAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import TextSplitter, TokenTextSplitter
 from pydantic import BaseModel, ConfigDict
 from redisvl.index import SearchIndex
@@ -37,7 +35,7 @@ class RedisHybridRetriever(BaseRetriever, BaseModel):
     """
 
     search_index: SearchIndex
-    embedding_model: OpenAIEmbeddings
+    embedding_model: HuggingFaceEmbeddings
     filter_expr: FilterExpression
 
     class Config:
@@ -66,18 +64,13 @@ class RedisHybridRetriever(BaseRetriever, BaseModel):
         return docs
 
 
-RAG_API_URL = os.getenv("RAG_API_URL", "http://rag-api:8000/v1")
-
-
 @lru_cache(maxsize=100)
 def create_user_vector_store(
     api_key: str, redis_client: redis.Redis
 ) -> RedisVectorStore:
     vstore = RedisVectorStore(
-        embeddings=OpenAIEmbeddings(
-            model="sentence-transformers/all-MiniLM-L6-v2",
-            api_key=api_key or "not-needed",
-            base_url=RAG_API_URL,
+        embeddings=HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
         ),
         index_name="rag-index",
         metadata_schema=[

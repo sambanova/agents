@@ -64,17 +64,6 @@ services:
     depends_on:
       - backend
 
-  rag-api:
-    image: ghcr.io/danny-avila/librechat-rag-api-dev:latest
-    container_name: rag-api
-    environment:
-      - EMBEDDINGS_PROVIDER=huggingface
-      - EMBEDDINGS_MODEL=sentence-transformers/all-MiniLM-L6-v2
-    ports:
-      - "8100:8000"
-    networks:
-      - app-network
-
   redis:
     image: "redis:7.0-alpine"
     container_name: redis

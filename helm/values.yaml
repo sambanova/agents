@@ -109,38 +109,6 @@ ingress:
       pathType: Prefix
       service: aiskagents-backend
       port: 80
-# RAG API configuration (self-hosted embeddings)
-ragApi:
-  enabled: false
-  name: rag-api
-  image:
-    repository: ghcr.io/danny-avila/librechat-rag-api-dev
-    tag: "latest"
-    pullPolicy: IfNotPresent
-  replicas: 1
-  service:
-    type: ClusterIP
-    port: 8000
-    targetPort: 8000
-  env:
-    EMBEDDINGS_PROVIDER: "huggingface"
-    EMBEDDINGS_MODEL: "sentence-transformers/all-MiniLM-L6-v2"
-    DB_HOST: "rag-pgvector.default.svc.cluster.local"
-    DB_PORT: "5432"
-    POSTGRES_USER: "postgres"
-    POSTGRES_PASSWORD: ""
-    POSTGRES_DB: "postgres"
-    COLLECTION_NAME: "rag_embeddings"
-    CHUNK_SIZE: "1500"
-    CHUNK_OVERLAP: "100"
-  resources:
-    limits:
-      cpu: "2"
-      memory: "4Gi"
-    requests:
-      cpu: "500m"
-      memory: "1Gi"
-
 # Redis configuration
 redis:
   enabled: true
