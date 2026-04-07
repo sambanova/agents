@@ -79,9 +79,9 @@ class LLMConfigManager:
             "research_agent": {"provider": "sambanova", "model": "Meta-Llama-3.3-70B-Instruct"},
             "financial_analysis_agent": {"provider": "sambanova", "model": "Meta-Llama-3.3-70B-Instruct"},
             "vision_agent": {"provider": "sambanova", "model": "gemma-3-12b-it"},
-            "crewai_default": {"provider": "sambanova", "model": "Meta-Llama-3.1-70B-Instruct"},
-            "crewai_competitor_finder": {"provider": "sambanova", "model": "Meta-Llama-3.1-70B-Instruct"},
-            "crewai_aggregator": {"provider": "sambanova", "model": "Meta-Llama-3.1-70B-Instruct"},
+            "crewai_default": {"provider": "sambanova", "model": "Meta-Llama-3.3-70B-Instruct"},
+            "crewai_competitor_finder": {"provider": "sambanova", "model": "Meta-Llama-3.3-70B-Instruct"},
+            "crewai_aggregator": {"provider": "sambanova", "model": "Llama-4-Maverick-17B-128E-Instruct"},
             "deep_research_planner": {"provider": "sambanova", "model": "Meta-Llama-3.1-70B-Instruct"},
             "deep_research_writer": {"provider": "sambanova", "model": "Meta-Llama-3.3-70B-Instruct"},
             "deep_research_summary": {"provider": "sambanova", "model": "Meta-Llama-3.1-70B-Instruct"}

@@ -210,15 +210,15 @@ task_models:
   # Financial Analysis Subgraph (Crew)
   financial_analysis_main:
     provider: sambanova
-    model: MiniMax-M2.5
+    model: Meta-Llama-3.3-70B-Instruct
     description: "Main financial analysis agent"
   financial_competitor_finder:
     provider: sambanova
-    model: MiniMax-M2.5
+    model: Meta-Llama-3.3-70B-Instruct
     description: "Financial competitor analysis"
   financial_aggregator:
     provider: sambanova
-    model: gemma-3-12b-it
+    model: Llama-4-Maverick-17B-128E-Instruct
     description: "Financial data aggregation"
 
   # Vision Agent - for image/multimodal inputs

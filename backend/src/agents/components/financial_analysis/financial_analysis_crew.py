@@ -287,7 +287,7 @@ class FinancialAnalysisCrew:
         else:
             # Fallback to old behavior when admin panel is disabled
             competitor_finder_model_info = model_registry.get_model_info(
-                model_key="llama-3.1-8b", provider=provider
+                model_key="llama-3.3-70b", provider=provider
             )
             self.competitor_finder_llm = CustomLLM(
                 model=competitor_finder_model_info["crewai_prefix"]
@@ -299,7 +299,7 @@ class FinancialAnalysisCrew:
                 base_url=competitor_finder_model_info["url"],
             )
             model_info = model_registry.get_model_info(
-                model_key="llama-3.1-8b", provider=provider
+                model_key="llama-3.3-70b", provider=provider
             )
             self.llm = CustomLLM(
                 model=model_info["crewai_prefix"] + "/" + model_info["model"],
