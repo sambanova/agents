@@ -265,9 +265,10 @@ StaticToolConfig = Union[
 ]
 
 
-RETRIEVAL_DESCRIPTION = """Can be used to look up information that was uploaded to this assistant.
-If the user is referencing particular files, that is often a good hint that information may be here.
-If the user asks a vague question, they are likely meaning to look up info from this retriever, and you should call it!"""
+RETRIEVAL_DESCRIPTION = """IMPORTANT: You MUST use this tool to search and retrieve content from the user's uploaded documents.
+When a user has uploaded files and asks about them (summarize, explain, analyze, review, etc.), ALWAYS call this tool first.
+This tool searches the uploaded documents and returns relevant content. Without calling it, you cannot see the document contents.
+If the user asks a vague question and has uploaded files, assume they want information from those files and call this tool."""
 
 
 def _get_retrieval_tool(
