@@ -40,17 +40,17 @@ def setup_language_models(sambanova_api_key: str, user_id: Optional[str] = None,
         human_choice_llm = get_llm_for_task("data_science_human_choice", api_keys, config_manager, user_id)
     else:
         # Use default SambaNova configuration (original behavior)
-        report_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
-        code_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
+        report_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.7")
+        code_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.7")
         note_agent_llm = get_sambanova_llm(sambanova_api_key, "Meta-Llama-3.3-70B-Instruct")
-        process_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
-        hypothesis_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
+        process_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.7")
+        hypothesis_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.7")
         quality_review_agent_llm = get_sambanova_llm(
             sambanova_api_key, "gemma-3-12b-it"
         )
         refiner_agent_llm = get_sambanova_llm(sambanova_api_key, "gpt-oss-120b")
-        visualization_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
-        searcher_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.5")
+        visualization_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.7")
+        searcher_agent_llm = get_sambanova_llm(sambanova_api_key, "MiniMax-M2.7")
         human_choice_llm = get_sambanova_llm(
             sambanova_api_key, "gpt-oss-120b"
         )

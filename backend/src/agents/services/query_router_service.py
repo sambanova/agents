@@ -371,7 +371,7 @@ class QueryRouterService:
         }
 
         payload = {
-            "model": "MiniMax-M2.5",
+            "model": "MiniMax-M2.7",
             "messages": [
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_message},

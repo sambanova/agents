@@ -53,7 +53,7 @@ DEFAULT_API_KEY = "unknown"
 
 enhanced_agent: Pregel = (
     EnhancedConfigurableAgent(
-        llm_type=LLMType.SN_MINIMAX_M2_5,
+        llm_type=LLMType.SN_MINIMAX_M2_7,
         tools=[],
         system_message=DEFAULT_SYSTEM_MESSAGE,
         user_id=None,

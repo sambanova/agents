@@ -1684,7 +1684,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                 api_keys=api_keys,
                 provider=provider,
                 message_id=message_id,
-                llm_type="MiniMax M2.5",  # Default model for voice
+                llm_type="MiniMax M2.7",  # Default model for voice
                 doc_ids=tuple(),  # No documents for voice messages (for now)
                 multimodal_input=False,
             )

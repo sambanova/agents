@@ -12,8 +12,8 @@ providers:
         name: "DeepSeek V3"
         context_window: 131072
         max_tokens: 8192
-      MiniMax-M2.5:
-        name: "MiniMax M2.5"
+      MiniMax-M2.7:
+        name: "MiniMax M2.7"
         context_window: 160000
         max_tokens: 16384
       gpt-oss-120b:
@@ -98,8 +98,8 @@ providers:
 # Model mappings for cross-provider equivalents
 # Maps logical model to actual model IDs for each provider
 model_mappings:
-  minimax-m2.5:
-    sambanova: "MiniMax-M2.5"
+  minimax-m2.7:
+    sambanova: "MiniMax-M2.7"
   deepseek-v3:
     sambanova: "DeepSeek-V3.1"
     fireworks: "accounts/fireworks/models/deepseek-v3-0324"
@@ -121,11 +121,11 @@ model_mappings:
     fireworks: "accounts/fireworks/models/llama4-maverick-instruct-basic"
     together: "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
   llama-3.1-8b:
-    sambanova: "MiniMax-M2.5"
+    sambanova: "MiniMax-M2.7"
     fireworks: "accounts/fireworks/models/llama-v3p1-8b-instruct"
     together: "meta-llama/Llama-3.1-8B-Instruct-Turbo"
   qwen3-32b:
-    sambanova: "MiniMax-M2.5"
+    sambanova: "MiniMax-M2.7"
     fireworks: "accounts/fireworks/models/qwen2.5-32b-instruct"
     together: "Qwen/Qwen2.5-32B-Instruct"
   gpt-oss-120b:
@@ -142,7 +142,7 @@ task_models:
   # Main XML Agent (enhanced_agent)
   main_agent:
     provider: sambanova
-    model: MiniMax-M2.5
+    model: MiniMax-M2.7
     description: "Primary conversational agent for general queries"
 
   # Deep Research Subgraph
@@ -162,11 +162,11 @@ task_models:
   # Data Science Subgraph
   data_science_report:
     provider: sambanova
-    model: MiniMax-M2.5
+    model: MiniMax-M2.7
     description: "Data science report generation"
   data_science_code:
     provider: sambanova
-    model: MiniMax-M2.5
+    model: MiniMax-M2.7
     description: "Data science code generation"
   data_science_note:
     provider: sambanova
@@ -174,11 +174,11 @@ task_models:
     description: "Data science note-taking agent"
   data_science_process:
     provider: sambanova
-    model: MiniMax-M2.5
+    model: MiniMax-M2.7
     description: "Data science process management"
   data_science_hypothesis:
     provider: sambanova
-    model: MiniMax-M2.5
+    model: MiniMax-M2.7
     description: "Data science hypothesis generation"
   data_science_quality_review:
     provider: sambanova
@@ -190,11 +190,11 @@ task_models:
     description: "Data science refinement agent"
   data_science_visualization:
     provider: sambanova
-    model: MiniMax-M2.5
+    model: MiniMax-M2.7
     description: "Data visualization generation"
   data_science_searcher:
     provider: sambanova
-    model: MiniMax-M2.5
+    model: MiniMax-M2.7
     description: "Data science research/search agent"
   data_science_human_choice:
     provider: sambanova
@@ -204,7 +204,7 @@ task_models:
   # Code Execution Subgraph
   code_execution:
     provider: sambanova
-    model: MiniMax-M2.5
+    model: MiniMax-M2.7
     description: "Code error analysis and fixing agent"
 
   # Financial Analysis Subgraph (Crew)

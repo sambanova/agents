@@ -215,7 +215,6 @@ const handleEmailAuth = async () => {
   try {
     await loginWithPopup({
       authorizationParams: {
-        connection: 'Username-Password-Authentication',
         screen_hint: isSignUp.value ? 'signup' : 'login',
         login_hint: email.value
       }

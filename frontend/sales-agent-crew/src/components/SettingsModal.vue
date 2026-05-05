@@ -327,7 +327,7 @@
               @change="handleModelSelection"
               class="block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
             >
-              <option value="MiniMax M2.5">MiniMax M2.5 - 160K</option>
+              <option value="MiniMax M2.7">MiniMax M2.7 - 160K</option>
             </select>
           </div>
 
@@ -595,7 +595,7 @@ const fireworksKey = ref('')
 const errorMessage = ref('')
 const successMessage = ref('')
 // Available model options - update both here and in the template when adding new models
-const AVAILABLE_MODELS = ['MiniMax M2.5']
+const AVAILABLE_MODELS = ['MiniMax M2.7']
 const selectedModel = ref(null)
 const keysLoaded = ref(false)
 // Key visibility controls
@@ -640,8 +640,8 @@ const loadKeys = async () => {
 
     // Handle model selection
     if (!savedModel || savedModel === 'null' || savedModel === 'undefined' || savedModel.trim() === '' || !AVAILABLE_MODELS.includes(savedModel)) {
-      selectedModel.value = 'MiniMax M2.5';
-      localStorage.setItem(`selected_model_${userId.value}`, 'MiniMax M2.5');
+      selectedModel.value = 'MiniMax M2.7';
+      localStorage.setItem(`selected_model_${userId.value}`, 'MiniMax M2.7');
     } else {
       selectedModel.value = savedModel;
     }
