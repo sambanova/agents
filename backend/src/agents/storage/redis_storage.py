@@ -1,0 +1,712 @@
+import base64
+import json
+import time
+from typing import Any, Dict, List, Optional, Tuple
+
+import structlog
+from agents.storage.redis_service import SecureRedisService
+
+logger = structlog.get_logger(__name__)
+
+
+class RedisStorage:
+    """Service for handling all message storage operations"""
+
+    def __init__(self, redis_client: SecureRedisService):
+        self.redis_client = redis_client
+
+    def _get_message_key(self, user_id: str, conversation_id: str) -> str:
+        """Get the Redis key for storing messages"""
+        return f"messages:{user_id}:{conversation_id}"
+
+    def _get_dedup_key(self, user_id: str, conversation_id: str) -> str:
+        """Get the Redis key for message deduplication"""
+        return f"message_ids:{user_id}:{conversation_id}"
+
+    def _get_chat_metadata_key(self, user_id: str, conversation_id: str) -> str:
+        """Get the Redis key for chat metadata"""
+        return f"chat_metadata:{user_id}:{conversation_id}"
+
+    def _get_file_metadata_key(self, user_id: str, file_id: str) -> str:
+        """Get the Redis key for file metadata"""
+        return f"file_metadata:{user_id}:{file_id}"
+
+    def _get_user_files_key(self, user_id: str) -> str:
+        """Get the Redis key for user files"""
+        return f"user_files:{user_id}"
+
+    def _get_file_data_key(self, user_id: str, file_id: str) -> str:
+        """Get the Redis key for file data"""
+        return f"file_data:{user_id}:{file_id}"
+
+    def _get_api_key_key(self, user_id: str) -> str:
+        """Get the Redis key for user API keys"""
+        return f"api_keys:{user_id}"
+
+    def _get_cumulative_usage_key(self, user_id: str, conversation_id: str) -> str:
+        """Get the Redis key for cumulative usage data"""
+        return f"cumulative_usage:{user_id}:{conversation_id}"
+
+    def _get_share_key(self, share_token: str) -> str:
+        """Get the Redis key for share token data"""
+        return f"share:{share_token}"
+
+    def _get_user_shares_key(self, user_id: str) -> str:
+        """Get the Redis key for user's created shares"""
+        return f"user_shares:{user_id}"
+
+    async def is_message_new(
+        self, user_id: str, conversation_id: str, message_id: str
+    ) -> bool:
+        """Check if a message is new"""
+
+        dedup_key = self._get_dedup_key(user_id, conversation_id)
+        is_new = await self.redis_client.hsetnx(dedup_key, message_id, "1", user_id)
+
+        if not is_new:
+            return False
+
+        return True
+
+    async def save_message_if_new(
+        self, user_id: str, conversation_id: str, message_data: Dict[str, Any]
+    ) -> bool:
+        """
+        Save a message if it doesn't already exist (based on message ID).
+        Returns True if message was saved, False if it was a duplicate.
+        """
+        message_key = self._get_message_key(user_id, conversation_id)
+
+        # Check for duplicates if message has an ID
+        if "id" in message_data:
+            dedup_key = self._get_dedup_key(user_id, conversation_id)
+
+            # Atomic check-and-set: returns True if newly set, False if already existed
+            is_new = await self.redis_client.hsetnx(
+                dedup_key, message_data["id"], "1", user_id
+            )
+
+            if not is_new:
+                return False
+
+        # Save the message
+        await self.redis_client.rpush(
+            message_key,
+            json.dumps(message_data),
+            user_id,
+        )
+        return True
+
+    async def save_message(
+        self, user_id: str, conversation_id: str, message_data: Dict[str, Any]
+    ) -> None:
+        """
+        Save a message.
+        """
+        message_key = self._get_message_key(user_id, conversation_id)
+
+        # Save the message
+        await self.redis_client.rpush(
+            message_key,
+            json.dumps(message_data),
+            user_id,
+        )
+
+    async def get_messages(
+        self, user_id: str, conversation_id: str, start: int = 0, end: int = -1
+    ) -> List[Dict[str, Any]]:
+        """
+        Get messages for a conversation.
+        start and end work like Redis LRANGE (0-based, -1 means last element)
+        """
+        message_key = self._get_message_key(user_id, conversation_id)
+
+        messages_raw = await self.redis_client.lrange(message_key, start, end, user_id)
+
+        if not messages_raw:
+            return []
+
+        # Parse JSON messages
+        messages = []
+        for msg_json in messages_raw:
+            try:
+                messages.append(json.loads(msg_json))
+            except json.JSONDecodeError as e:
+                logger.error("Failed to parse message JSON", error=str(e))
+                continue
+
+        return messages
+
+    async def get_last_message(
+        self, user_id: str, conversation_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get the last message in a conversation"""
+        messages = await self.get_messages(user_id, conversation_id, -1, -1)
+        return messages[0] if messages else None
+
+    async def message_exists(
+        self, user_id: str, conversation_id: str, message_id: str
+    ) -> bool:
+        """Check if a message ID already exists"""
+        dedup_key = self._get_dedup_key(user_id, conversation_id)
+        return await self.redis_client.hget(dedup_key, message_id, user_id) is not None
+
+    async def delete_conversation_messages(
+        self, user_id: str, conversation_id: str
+    ) -> bool:
+        """Delete all messages for a conversation"""
+        message_key = self._get_message_key(user_id, conversation_id)
+        dedup_key = self._get_dedup_key(user_id, conversation_id)
+
+        # Delete both the message list and deduplication hash
+        deleted_messages = await self.redis_client.delete(message_key)
+        deleted_dedup = await self.redis_client.delete(dedup_key)
+
+        return deleted_messages > 0 or deleted_dedup > 0
+
+    async def get_message_count(self, user_id: str, conversation_id: str) -> int:
+        """Get the total number of messages in a conversation"""
+        message_key = self._get_message_key(user_id, conversation_id)
+        return await self.redis_client.llen(message_key)
+
+    async def verify_conversation_exists(
+        self, user_id: str, conversation_id: str
+    ) -> bool:
+        """
+        Verify if a conversation's metadata exists for the given user.
+        """
+        meta_key = self._get_chat_metadata_key(user_id, conversation_id)
+        return bool(await self.redis_client.exists(meta_key))
+
+    async def delete_all_user_data(self, user_id: str, conversation_id: str) -> int:
+        """
+        Delete the metadata for a given conversation.
+        """
+        meta_key = self._get_chat_metadata_key(user_id, conversation_id)
+        message_key = f"messages:{user_id}:{conversation_id}"
+        user_chats_key = f"user_chats:{user_id}"
+
+        # Execute all deletions
+        await self.redis_client.delete(meta_key)
+        await self.redis_client.delete(message_key)
+        return await self.redis_client.zrem(user_chats_key, conversation_id)
+
+    async def put_file(
+        self,
+        user_id: str,
+        file_id: str,
+        *,
+        data: bytes,
+        filename: str,
+        format: str,
+        upload_timestamp: float,
+        indexed: bool,
+        source: str,
+        vector_ids: Optional[List[str]] = None,
+    ):
+        """Put a file in Redis storage."""
+        try:
+            # Ensure data is bytes
+            if isinstance(data, str):
+                data = data.encode("utf-8")
+
+            # Store file data with user-namespaced key
+            file_data_key = f"file_data:{user_id}:{file_id}"
+            await self.redis_client.set(file_data_key, data, user_id)
+
+            await self.store_file_metadata(
+                user_id,
+                file_id,
+                filename=filename,
+                format=format,
+                upload_timestamp=upload_timestamp,
+                file_size=len(data),
+                indexed=indexed,
+                source=source,
+                vector_ids=vector_ids,
+            )
+
+            await self.add_file_to_user_list(user_id, file_id)
+
+            logger.info(
+                "File stored in Redis",
+                file_id=file_id,
+                size_bytes=len(data),
+                user_id=user_id,
+            )
+
+        except Exception as e:
+            logger.error(
+                "Error storing file in Redis",
+                file_id=file_id,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
+
+    async def get_file(
+        self, user_id: str, file_id: str
+    ) -> Optional[Tuple[bytes, dict]]:
+        """Get a file from Redis storage."""
+        try:
+
+            if not await self.verify_file_belongs_to_user(user_id, file_id):
+                return None, None
+
+            file_metadata = await self.get_file_metadata(user_id, file_id)
+
+            if not file_metadata:
+                return None, None
+
+            # Get file data
+            file_data_key = self._get_file_data_key(user_id, file_id)
+            file_data = await self.redis_client.get(file_data_key, user_id)
+
+            if isinstance(file_data, str):
+                file_data = file_data.encode("utf-8")
+
+            return file_data, file_metadata
+
+        except Exception as e:
+            logger.error(
+                "Error retrieving file from Redis",
+                file_id=file_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return None, None
+
+    async def get_file_metadata(self, user_id: str, file_id: str) -> Optional[dict]:
+        """Get file metadata from Redis storage."""
+        try:
+
+            if not await self.verify_file_belongs_to_user(user_id, file_id):
+                return None
+
+            file_metadata_key = self._get_file_metadata_key(user_id, file_id)
+            metadata_str = await self.redis_client.get(file_metadata_key, user_id)
+
+            if not metadata_str:
+                return None
+
+            return json.loads(metadata_str)
+
+        except Exception as e:
+            logger.error(
+                "Error retrieving file metadata from Redis",
+                file_id=file_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return None
+
+    async def get_file_as_base64(self, user_id: str, file_id: str) -> Optional[str]:
+        """Get a file as base64 string."""
+        data, _ = await self.get_file(user_id, file_id)
+        if data:
+            return base64.b64encode(data).decode("utf-8")
+        return None
+
+    async def get_file_data_url(self, user_id: str, file_id: str) -> Optional[str]:
+        """Get file as data URL for direct embedding."""
+        try:
+            # Get metadata to determine MIME type
+            metadata = await self.get_file_metadata(user_id, file_id)
+            if not metadata:
+                return None
+
+            # Get file data
+            data = await self.get_file(user_id, file_id)
+            if not data:
+                return None
+
+            base64_data = base64.b64encode(data).decode("utf-8")
+
+            # Determine MIME type
+            format_lower = metadata["format"].lower()
+            mime_types = {
+                "png": "image/png",
+                "jpg": "image/jpeg",
+                "jpeg": "image/jpeg",
+                "gif": "image/gif",
+                "svg": "image/svg+xml",
+            }
+            mime_type = mime_types.get(format_lower, "application/octet-stream")
+
+            return f"data:{mime_type};base64,{base64_data}"
+
+        except Exception as e:
+            logger.error(
+                "Error creating data URL", file_id=file_id, error=str(e), exc_info=True
+            )
+            return None
+
+    async def delete_file(self, user_id: str, file_id: str) -> bool:
+        """Delete a file from Redis storage."""
+        try:
+
+            if not await self.verify_file_belongs_to_user(user_id, file_id):
+                return False
+
+            # Delete file data and metadata
+            file_data_key = self._get_file_data_key(user_id, file_id)
+            file_metadata_key = self._get_file_metadata_key(user_id, file_id)
+            user_files_key = self._get_user_files_key(user_id)
+
+            # Remove from all locations
+            await self.redis_client.delete(file_data_key)
+            await self.redis_client.delete(file_metadata_key)
+            await self.redis_client.srem(user_files_key, file_id)
+
+            logger.info("File deleted from Redis", file_id=file_id, user_id=user_id)
+            return True
+
+        except Exception as e:
+            logger.error(
+                "Error deleting file from Redis",
+                file_id=file_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return False
+
+    async def list_user_files(self, user_id: str) -> list:
+        """List all files for a user."""
+        try:
+            import asyncio
+            import os
+
+            user_files_key = self._get_user_files_key(user_id)
+            file_ids = await self.redis_client.smembers(user_files_key)
+
+            if not file_ids:
+                return []
+
+            # Optimize: Use controlled concurrent Redis calls to avoid connection pool exhaustion
+            # Limit concurrent connections to prevent pool exhaustion
+            max_concurrent_connections = int(
+                os.getenv("REDIS_MAX_CONCURRENT_CONNECTIONS", "5")
+            )
+            semaphore = asyncio.Semaphore(max_concurrent_connections)
+
+            async def get_metadata_with_semaphore(file_id):
+                async with semaphore:
+                    if isinstance(file_id, bytes):
+                        file_id = file_id.decode("utf-8")
+                    metadata = await self.get_file_metadata(user_id, file_id)
+                    if metadata:
+                        metadata["file_id"] = file_id
+                    return metadata
+
+            # Try concurrent approach first
+            try:
+                # Execute metadata retrieval calls with controlled concurrency
+                metadata_tasks = [
+                    get_metadata_with_semaphore(file_id) for file_id in file_ids
+                ]
+                metadata_results = await asyncio.gather(
+                    *metadata_tasks, return_exceptions=True
+                )
+
+                # Check if we got connection errors
+                connection_errors = [
+                    r
+                    for r in metadata_results
+                    if isinstance(r, Exception) and "Too many connections" in str(r)
+                ]
+                if connection_errors:
+                    logger.warning(
+                        f"Connection pool exhausted, falling back to sequential calls for user {user_id}"
+                    )
+                    raise Exception("Connection pool exhausted")
+
+            except Exception as e:
+                # Fallback to sequential calls if concurrent approach fails
+                logger.info(f"Using sequential Redis calls for user {user_id}")
+                metadata_results = []
+                for file_id in file_ids:
+                    try:
+                        if isinstance(file_id, bytes):
+                            file_id = file_id.decode("utf-8")
+                        metadata = await self.get_file_metadata(user_id, file_id)
+                        if metadata:
+                            metadata["file_id"] = file_id
+                        metadata_results.append(metadata)
+                    except Exception as get_error:
+                        logger.error(
+                            f"Failed to get metadata for file {file_id}: {get_error}"
+                        )
+                        metadata_results.append(None)
+
+            # Process results
+            files = []
+            for metadata in metadata_results:
+                if isinstance(metadata, Exception):
+                    logger.error(f"Failed to get file metadata: {metadata}")
+                    continue
+
+                if metadata:
+                    files.append(metadata)
+
+            return files
+
+        except Exception as e:
+            logger.error(
+                "Error listing files for user",
+                user_id=user_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return []
+
+    # Document storage methods
+    async def store_file_metadata(
+        self,
+        user_id: str,
+        file_id: str,
+        *,
+        filename: str,
+        format: str,
+        upload_timestamp: float,
+        file_size: int,
+        indexed: bool,
+        source: str,
+        vector_ids: Optional[List[str]] = None,
+    ) -> None:
+        """Store document metadata in Redis."""
+        metadata = {
+            "user_id": user_id,
+            "filename": filename,
+            "format": format,
+            "created_at": upload_timestamp or time.time(),
+            "file_size": file_size,
+            "indexed": indexed,
+            "source": source,
+        }
+        if vector_ids:
+            metadata["vector_ids"] = vector_ids
+        file_metadata_key = self._get_file_metadata_key(user_id, file_id)
+        await self.redis_client.set(file_metadata_key, json.dumps(metadata), user_id)
+
+    async def add_file_to_user_list(self, user_id: str, file_id: str) -> None:
+        """Add file to user's file list."""
+        user_files_key = self._get_user_files_key(user_id)
+        await self.redis_client.sadd(user_files_key, file_id)
+
+    async def verify_file_belongs_to_user(self, user_id: str, file_id: str) -> bool:
+        """Verify if a document belongs to a user."""
+        user_files_key = self._get_user_files_key(user_id)
+        return await self.redis_client.sismember(user_files_key, file_id)
+
+    async def get_user_api_key(self, user_id: str) -> "APIKeys":
+        """Get a user's API key."""
+        from agents.api.data_types import APIKeys
+
+        user_api_key_key = self._get_api_key_key(user_id)
+        api_keys = await self.redis_client.hgetall(user_api_key_key, user_id)
+        return APIKeys(
+            sambanova_key=api_keys.get("sambanova_key", ""),
+            serper_key=api_keys.get("serper_key", ""),
+            exa_key=api_keys.get("exa_key", ""),
+            fireworks_key=api_keys.get("fireworks_key", ""),
+            together_key=api_keys.get("together_key", ""),
+            paypal_invoicing_email=api_keys.get("paypal_invoicing_email", ""),
+        )
+
+    async def set_user_api_key(self, user_id: str, keys: "APIKeys") -> None:
+        """Set a user's API key."""
+
+        # Store keys in Redis with user-specific prefix
+        key_prefix = self._get_api_key_key(user_id)
+        await self.redis_client.hset(
+            key_prefix,
+            mapping={
+                "sambanova_key": keys.sambanova_key,
+                "serper_key": keys.serper_key,
+                "exa_key": keys.exa_key,
+                "fireworks_key": keys.fireworks_key,
+                "together_key": getattr(keys, 'together_key', ''),  # Use getattr for backward compatibility
+                "paypal_invoicing_email": getattr(keys, 'paypal_invoicing_email', ''),
+            },
+            user_id=user_id,
+        )
+
+    async def update_metadata(
+        self, message_data: str, user_id: str, conversation_id: str
+    ):
+        """Helper method to update metadata asynchronously"""
+        try:
+            meta_key = self._get_chat_metadata_key(user_id, conversation_id)
+            meta_data = await self.redis_client.get(meta_key, user_id)
+            if meta_data:
+                metadata = json.loads(meta_data)
+                if "name" not in metadata:
+                    metadata["name"] = message_data
+                    await self.redis_client.set(meta_key, json.dumps(metadata), user_id)
+        except Exception as e:
+            logger.error("Error updating metadata", error=str(e), exc_info=True)
+
+    async def delete_vectors(self, vector_ids: List[str]) -> None:
+        """Delete vectors from the vector store."""
+        if not vector_ids:
+            return
+        try:
+            await self.redis_client.delete(*vector_ids)
+            logger.info("Successfully deleted vectors", num_deleted=len(vector_ids))
+        except Exception as e:
+            logger.error(
+                "Error deleting vectors",
+                error=str(e),
+                exc_info=True,
+            )
+
+    async def update_and_get_cumulative_usage(
+        self,
+        user_id: str,
+        conversation_id: str,
+        current_usage: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Updates and retrieves the cumulative usage for a session.
+        """
+        cumulative_usage_key = self._get_cumulative_usage_key(user_id, conversation_id)
+        # Fetch existing cumulative usage
+        existing_cumulative_usage_str = await self.redis_client.get(
+            cumulative_usage_key, user_id
+        )
+
+        if existing_cumulative_usage_str:
+            try:
+                cumulative_usage = json.loads(existing_cumulative_usage_str)
+            except json.JSONDecodeError:
+                cumulative_usage = {}
+        else:
+            cumulative_usage = {}
+
+        if current_usage:
+            for key, value in current_usage.items():
+                if isinstance(value, (int, float)):
+                    cumulative_usage[key] = cumulative_usage.get(key, 0) + value
+
+            # Store the updated cumulative usage back to Redis
+            await self.redis_client.set(
+                cumulative_usage_key, json.dumps(cumulative_usage), user_id
+            )
+
+        return cumulative_usage
+
+    async def create_share(
+        self, user_id: str, conversation_id: str, title: Optional[str] = None
+    ) -> str:
+        """Create a new share token for a conversation"""
+        import uuid
+        from datetime import datetime
+
+        # Verify conversation exists and belongs to user
+        if not await self.verify_conversation_exists(user_id, conversation_id):
+            raise ValueError("Conversation not found or access denied")
+
+        # Generate UUID-style share token like ChatGPT
+        share_token = str(uuid.uuid4())
+
+        # Get conversation title from metadata if not provided
+        if not title:
+            meta_key = self._get_chat_metadata_key(user_id, conversation_id)
+            meta_data = await self.redis_client.get(meta_key, user_id)
+            if meta_data:
+                metadata = json.loads(meta_data)
+                title = metadata.get("name", "Shared Conversation")
+            else:
+                title = "Shared Conversation"
+
+        # Create simple mapping: share_token -> user_id:conversation_id
+        share_key = self._get_share_key(share_token)
+        share_data = {
+            "user_id": user_id,
+            "conversation_id": conversation_id,
+            "title": title,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+
+        # Store the mapping with dummy user ID for encryption
+        await self.redis_client.set(share_key, json.dumps(share_data), "public_shared")
+
+        # 30-day expiry for share tokens
+        SHARE_TTL_SECONDS = 30 * 24 * 60 * 60
+        await super(type(self.redis_client), self.redis_client).expire(share_key, SHARE_TTL_SECONDS)
+
+        # Add to user's shares list for management
+        user_shares_key = self._get_user_shares_key(user_id)
+        await self.redis_client.sadd(user_shares_key, share_token, user_id)
+
+        return share_token
+
+    async def get_shared_conversation(self, share_token: str) -> Optional[dict]:
+        """Get full shared conversation data by reading original user data"""
+        share_key = self._get_share_key(share_token)
+        share_data = await self.redis_client.get(share_key, "public_shared")
+
+        if not share_data:
+            return None
+
+        share_info = json.loads(share_data)
+        user_id = share_info["user_id"]
+        conversation_id = share_info["conversation_id"]
+
+        # Read the original conversation data directly
+        messages = await self.get_messages(user_id, conversation_id)
+
+        return {
+            "share_token": share_token,
+            "title": share_info["title"],
+            "messages": messages,
+            "created_at": share_info["created_at"],
+        }
+
+    async def delete_share(self, user_id: str, share_token: str) -> bool:
+        """Delete a share, verifying ownership first."""
+        share_key = self._get_share_key(share_token)
+        share_data = await self.redis_client.get(share_key, "public_shared")
+
+        if not share_data:
+            return False
+
+        share_info = json.loads(share_data)
+
+        # Verify the requesting user is the creator
+        if share_info.get("user_id") != user_id:
+            return False
+
+        # Delete the share key
+        await self.redis_client.delete(share_key)
+
+        # Remove from user's shares set (sadd stored share_token and user_id as members)
+        user_shares_key = self._get_user_shares_key(user_id)
+        await self.redis_client.srem(user_shares_key, share_token)
+
+        return True
+
+    async def get_user_shares(self, user_id: str) -> list:
+        """Get all shares created by a user."""
+        user_shares_key = self._get_user_shares_key(user_id)
+        share_tokens = await self.redis_client.smembers(user_shares_key)
+
+        shares = []
+        for token in share_tokens:
+            # smembers may return bytes or strings; also skip user_id entries
+            if isinstance(token, bytes):
+                token = token.decode("utf-8")
+            # Skip entries that aren't valid UUIDs (e.g. user_id stored by sadd)
+            if not token or len(token) != 36:
+                continue
+            share_key = self._get_share_key(token)
+            share_data = await self.redis_client.get(share_key, "public_shared")
+            if share_data:
+                info = json.loads(share_data)
+                shares.append({
+                    "share_token": token,
+                    "conversation_id": info.get("conversation_id"),
+                    "title": info.get("title"),
+                    "created_at": info.get("created_at"),
+                })
+        return shares

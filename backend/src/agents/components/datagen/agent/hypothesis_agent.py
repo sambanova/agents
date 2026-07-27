@@ -1,0 +1,46 @@
+from agents.components.datagen.create_agent import (
+    create_hypothesis_agent as create_hypothesis_agent_function,
+)
+from agents.components.datagen.tools.persistent_daytona import (
+    PersistentDaytonaManager,
+    get_daytona_describe_data,
+)
+from agents.tools.langgraph_tools import TOOL_REGISTRY
+
+
+def create_hypothesis_agent(
+    hypothesis_agent_llm,
+    members,
+    daytona_manager: PersistentDaytonaManager,
+    directory_content: list[str],
+):
+    """Create the hypothesis agent"""
+
+    base_tools = [
+        get_daytona_describe_data(daytona_manager),
+        TOOL_REGISTRY["wikipedia"]["factory"](),
+        TOOL_REGISTRY["search_tavily"]["factory"](),
+        TOOL_REGISTRY["arxiv"]["factory"](),
+    ]
+
+    system_prompt = """
+    As an esteemed expert in data analysis, your task is to formulate a set of research hypotheses and outline the steps to be taken based on the information table provided. Utilize statistics, machine learning, deep learning, and artificial intelligence in developing these hypotheses. Your hypotheses should be precise, achievable, professional, and innovative. To ensure the feasibility and uniqueness of your hypotheses, thoroughly investigate relevant information. For each hypothesis, include ample references to support your claims.
+
+    Upon analyzing the information table, you are required to:
+
+    1. Formulate research hypotheses that leverage statistics, machine learning, deep learning, and AI techniques.
+    2. Outline the steps involved in testing these hypotheses.
+    3. Verify the feasibility and uniqueness of each hypothesis through a comprehensive literature review.
+
+    At the conclusion of your analysis, present the complete research hypotheses, elaborate on their uniqueness and feasibility, and provide relevant references to support your assertions. Please answer in structured way to enhance readability.
+    Just answer a research hypothesis.
+    """
+
+    return create_hypothesis_agent_function(
+        llm=hypothesis_agent_llm,
+        tools=base_tools,
+        system_message=system_prompt,
+        team_members=members,
+        name="hypothesis_agent",
+        directory_content=directory_content,
+    )

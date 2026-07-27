@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles */
+.company-card {
+  @apply bg-gradient-to-r from-primary-50 to-blue-50 border border-primary-100 rounded-xl shadow-sm overflow-hidden transition-all duration-200;
+}
+
+.company-card:hover {
+  @apply shadow-md;
+}
+
+.card-header {
+  @apply p-6 bg-white bg-opacity-50 cursor-pointer;
+}
+
+.card-header:hover {
+  @apply bg-opacity-70;
+}
+
+.company-name {
+  @apply text-xl font-bold text-gray-900 flex items-center gap-3;
+}
+
+.company-avatar {
+  @apply w-12 h-12 bg-gradient-to-br from-primary-600 to-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl;
+}
+
+.status-badge {
+  @apply px-3 py-1 rounded-full text-sm font-semibold;
+}
+
+.status-badge.ipo {
+  @apply bg-green-100 text-green-800;
+}
+
+.status-badge.funding {
+  @apply bg-primary-100 text-primary-800;
+}
+
+.info-icon-container {
+  @apply p-2 rounded-lg bg-primary-100 bg-opacity-50;
+}
+
+.info-icon {
+  @apply w-4 h-4 text-primary-600;
+}
+
+.expand-button {
+  @apply p-2 rounded-lg border border-gray-200 hover:border-primary-200 hover:bg-white transition-all duration-200;
+}
+
+.email-content {
+  @apply border-t border-primary-100 bg-white;
+}
+
+.email-subject {
+  @apply p-6 flex items-center gap-3 border-b border-gray-100;
+}
+
+.email-body {
+  @apply p-6 bg-gray-50 m-6 rounded-xl relative;
+}
+
+.copy-button {
+  @apply absolute top-4 right-4 p-2 rounded-lg hover:bg-white transition-all duration-200;
+}
+
+.copy-button-success {
+  @apply text-green-600 bg-white;
+}
+
+/* Code block copy functionality */
+.prose pre {
+  @apply relative;
+}
+
+.prose pre:hover .code-copy-btn {
+  @apply opacity-100;
+}
+
+.code-copy-btn {
+  @apply absolute top-2 right-2 px-2 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded opacity-0 transition-opacity cursor-pointer z-10 flex items-center space-x-1;
+}
+
+

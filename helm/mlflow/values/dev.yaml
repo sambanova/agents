@@ -1,0 +1,104 @@
+# This is a placeholder file for the community-charts/mlflow helm chart.
+# You can get the default values by running:
+# helm show values community-charts/mlflow > helm/mlflow.values.dev.yaml
+# And then customize it. 
+
+# MLflow configuration for development environment
+replicaCount: 1
+
+image:
+  repository: burakince/mlflow
+  pullPolicy: IfNotPresent
+  tag: "3.1.0"
+
+# Connect to postgres for backend storage
+backendStore:
+  databaseMigration: true
+  postgres:
+    enabled: true
+    host: "postgres-postgresql.postgres.svc.cluster.local"
+    port: 5432
+    database: "mlflow"
+    user: "postgres"
+    password: "PLACEHOLDER_PASSWORD"
+    driver: "psycopg2"
+
+# Artifact storage persistence
+artifactRoot:
+  defaultArtifactRoot: "/mlflow/artifacts"
+  defaultArtifactsDestination: "/mlflow/artifacts"
+
+# Add persistent volume for artifacts
+extraVolumes:
+  - name: mlflow-artifacts
+    persistentVolumeClaim:
+      claimName: mlflow-artifacts-pvc
+
+extraVolumeMounts:
+  - name: mlflow-artifacts
+    mountPath: /mlflow/artifacts
+
+# Resource configuration for dev environment
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+# Configure MLflow to work behind /mlflow path
+extraArgs:
+  staticPrefix: "/mlflow"
+
+# Use TCP port check instead (minimal container)
+livenessProbe:
+  httpGet: null
+  tcpSocket:
+    port: 5000
+  initialDelaySeconds: 30
+  periodSeconds: 30
+
+readinessProbe:
+  httpGet: null
+  tcpSocket:
+    port: 5000
+  initialDelaySeconds: 10
+  periodSeconds: 10
+
+# Service configuration
+service:
+  enabled: true
+  type: ClusterIP
+  port: 5000
+
+# Authentication configuration
+auth:
+  enabled: true
+  adminUsername: "admin"
+  adminPassword: "PLACEHOLDER_ADMIN_PASSWORD"
+  defaultPermission: "READ"
+  postgres:
+    enabled: true
+    host: "postgres-postgresql.postgres.svc.cluster.local"
+    port: 5432
+    database: "mlflow_auth"
+    user: "postgres"
+    password: "PLACEHOLDER_PASSWORD"
+    driver: "psycopg2"
+
+# Security context
+podSecurityContext:
+  fsGroup: 1001
+  fsGroupChangePolicy: "OnRootMismatch"
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  privileged: false
+  runAsUser: 1001
+  runAsGroup: 1001 

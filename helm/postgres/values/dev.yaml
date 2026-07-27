@@ -1,0 +1,26 @@
+image:
+  tag: 15.4.0
+primary:
+  initdb:
+    scripts:
+      01-mlflow-db.sql: |
+        -- Create mlflow database
+        CREATE DATABASE mlflow;
+        -- Create mlflow auth database
+        CREATE DATABASE mlflow_auth;
+        -- Grant privileges to postgres user
+        GRANT ALL PRIVILEGES ON DATABASE mlflow TO postgres;
+        GRANT ALL PRIVILEGES ON DATABASE mlflow_auth TO postgres;
+  persistence:
+    enabled: true
+    storageClass: openebs-hostpath
+    size: 10Gi
+    accessModes:
+      - ReadWriteOnce
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

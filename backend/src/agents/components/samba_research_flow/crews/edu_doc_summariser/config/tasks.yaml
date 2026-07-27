@@ -1,0 +1,10 @@
+summarise_task:
+  description: >
+    Create a focused background summary about {topic} from the provided documents, adapted for {audience_level} understanding level.
+    Focus on core concepts, key definitions, and essential context that a reader needs to understand the topic.
+    Keep explanations clear and appropriate for the audience level.
+
+    Documents: {docs}
+  expected_output: >
+    A clear and focused background summary that provides essential context and understanding of the topic.
+  agent: summariser

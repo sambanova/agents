@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    deploy:
+      resources:
+        limits:
+          cpus: '3.5'
+          memory: 10G
+        reservations:
+          cpus: '2.5'
+          memory: 4G
+    ports:
+      - "8000:8000"
+    networks:
+      - app-network
+    volumes:
+      - ./backend:/app  # Optional: Mount the backend code for development
+    environment:
+      - ALLOWED_ORIGINS=*
+      # For production, you might specify:
+      # - ALLOWED_ORIGINS=https://yourdomain.com
+      # The environment below so the backend can find Redis in Docker:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend/sales-agent-crew
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: '/api'
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
+    container_name: frontend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 2G
+        reservations:
+          cpus: '0.2'
+          memory: 512M
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/sn-certs:/etc/sn-certs
+    environment:
+      - USE_OFFICIAL_CERTS=${USE_OFFICIAL_CERTS:-false}
+    networks:
+      - app-network
+    depends_on:
+      - backend
+
+  redis:
+    image: "redis:7.0-alpine"
+    container_name: redis
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 6G
+        reservations:
+          cpus: '0.5'
+          memory: 2G
+    networks:
+      - app-network
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --save 60 1000
+    # This configures:
+    # - AOF (Append Only File) persistence
+    # - RDB snapshots every 60 seconds if at least 1000 keys changed
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local
