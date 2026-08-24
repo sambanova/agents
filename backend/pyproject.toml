@@ -43,7 +43,7 @@ dependencies = [
   "langgraph-checkpoint-redis==0.0.6",
   "structlog>=24.1.0",
   "ftfy==6.3.1",
-  "nltk==3.9.1",
+  "nltk==3.10.3",
   "mlflow==3.1.0",
   "weasyprint==63.1",
   "markdown==3.7",
