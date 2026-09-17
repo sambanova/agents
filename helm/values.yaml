@@ -74,8 +74,6 @@ backend:
       TAVILY_API_KEY: ""
       CLERK_JWT_ISSUER: ""
       REDIS_MASTER_SALT: ""
-      # Must match the password in the Redis namespace's redis-auth secret.
-      # Leave empty to connect without auth.
       REDIS_PASSWORD: ""
       EXA_KEY: ""
       SERPER_KEY: ""
@@ -134,11 +132,8 @@ redis:
     registry: docker.io
     repository: redis/redis-stack-server
     tag: 7.4.0-v5
-  # Require a password. The password is held in a pre-existing secret rather
-  # than in this file; create it in the release namespace before upgrading:
-  #   kubectl create secret generic redis-auth \
-  #     --from-literal=redis-password=<password>
-  # The same value must be set as the backend's REDIS_PASSWORD.
+  # Password comes from a pre-existing redis-auth secret in the release
+  # namespace, which must exist before upgrading.
   auth:
     enabled: true
     existingSecret: redis-auth
@@ -150,11 +145,9 @@ redis:
   # backend:
   # ingressNSMatchLabels -> global.namespace, ingressNSPodMatchLabels -> backend.name.
   # Per-env overrides (e.g. dev uses app: aiskagents-backend-dev) are required.
-  # NOTE: this guards the subchart Redis in the release namespace, which is NOT
-  # the instance backend.env.REDIS_HOST points at. That one is a separate release
-  # in the redis namespace, configured from helm/redis/values/.
-  # NOTE: only enforced if the cluster CNI supports NetworkPolicy, and it does
-  # not block `kubectl port-forward`. The password remains the primary control.
+  # NOTE: guards the subchart Redis, not the REDIS_HOST instance, which is a
+  # separate release configured from helm/redis/values/.
+  # NOTE: only enforced if the cluster CNI supports NetworkPolicy.
   networkPolicy:
     enabled: true
     allowExternal: false

@@ -48,8 +48,7 @@ service:
   ports:
     redis: 6379 
 
-# See prod.yaml. ingressNSPodMatchLabels must match the dev backend's
-# backend.name label.
+# See prod.yaml. Selectors must match the dev backend's backend.name.
 networkPolicy:
   enabled: true
   allowExternal: false

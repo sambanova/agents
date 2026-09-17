@@ -1,8 +1,5 @@
-# Require a password. The password is held in a pre-existing secret rather than
-# in this file; create it in this Redis release's namespace before upgrading:
-#   kubectl create secret generic redis-auth -n redis \
-#     --from-literal=redis-password=<password>
-# The same value must be set as the backend's REDIS_PASSWORD.
+# Password comes from a pre-existing redis-auth secret in this namespace, which
+# must exist before upgrading. Same value as the backend's REDIS_PASSWORD.
 auth:
   enabled: true
   existingSecret: redis-auth
@@ -52,13 +49,8 @@ service:
   ports:
     redis: 6379
 
-# Restrict who can reach Redis at the network layer. This Redis runs in its own
-# namespace, so the policy must allow the backend's namespace (global.namespace
-# in helm/values.yaml) and pod label (backend.name) explicitly.
-# allowExternal:false means only the selectors below, plus Redis's own pods, may
-# connect. namespaceSelector and podSelector are ANDed by the chart template.
-# NOTE: only enforced if the cluster CNI supports NetworkPolicy, and it does not
-# block `kubectl port-forward`. The password remains the primary control.
+# Second layer after the password: only the backend's namespace and pod label
+# may connect. Selectors must track global.namespace and backend.name.
 networkPolicy:
   enabled: true
   allowExternal: false
