@@ -58,6 +58,9 @@ backend:
       TAVILY_API_KEY: ""
       CLERK_JWT_ISSUER: ""
       REDIS_MASTER_SALT: ""
+      # Must match the password in the Redis namespace's redis-auth secret.
+      # Leave empty to connect without auth.
+      REDIS_PASSWORD: ""
       EXA_KEY: ""
       SERPER_KEY: ""
       FIREWORKS_KEY: ""
