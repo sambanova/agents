@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Header, Depends, Request
 from pydantic import BaseModel
 import structlog
 
+from agents.api.data_types import ensure_ascii_api_key
 from agents.api.utils import validate_external_url
 from agents.config.llm_config_manager import get_config_manager
 from agents.utils.llm_provider import get_llm
@@ -61,6 +62,19 @@ def check_admin_enabled():
             detail="Admin panel is not enabled. Set SHOW_ADMIN_PANEL=true to enable."
         )
     return True
+
+
+def validate_api_key(key: str, label: str) -> str:
+    """Validate a custom-provider API key at the admin-config boundary.
+
+    Standard provider keys are validated by the ``APIKeys`` model; custom
+    provider keys are stored outside that model, so they are validated here
+    using the same shared helper (surfaced as an HTTP 400).
+    """
+    try:
+        return ensure_ascii_api_key(key, label)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/status")
@@ -212,6 +226,17 @@ async def update_configuration(
                     detail=f"Invalid base URL for custom provider '{cp.get('name', 'unknown')}': "
                            "must be an external, publicly-routable address"
                 )
+            api_key = cp.get("apiKey")
+            if api_key:
+                cp["apiKey"] = validate_api_key(api_key, cp.get("name", "custom provider"))
+
+    # Reject API keys with non-ASCII characters before they ever reach an LLM call
+    if update.api_keys:
+        update.api_keys = {
+            provider: validate_api_key(key, provider)
+            for provider, key in update.api_keys.items()
+            if key
+        }
 
     # Prepare user overrides
     overrides = {}

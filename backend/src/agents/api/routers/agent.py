@@ -15,6 +15,7 @@ import markdown
 import structlog
 from agents.api.routers.upload import process_and_store_file, upload_document
 from agents.api.utils import process_data_science_report
+from agents.auth.api_key_identity import api_key_identity
 from agents.components.compound.data_science_subgraph import (
     create_data_science_subgraph,
 )
@@ -42,19 +43,22 @@ logger = structlog.get_logger(__name__)
 
 
 def _validate_api_key(authorization: Optional[str]):
-    """Validate Bearer token format and return (api_key, error_response)."""
+    """Validate Bearer token format and return (api_key, user_id, error_response).
+
+    ``api_key`` is the credential; ``user_id`` is the identity derived from it.
+    """
     if not authorization or not authorization.startswith("Bearer "):
-        return None, JSONResponse(
+        return None, None, JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"error": "Authorization header with Bearer token is required"},
         )
     api_key = authorization.replace("Bearer ", "").strip()
     if not api_key or not _API_KEY_PATTERN.match(api_key):
-        return None, JSONResponse(
+        return None, None, JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"error": "Invalid API key"},
         )
-    return api_key, None
+    return api_key, api_key_identity(api_key), None
 
 
 router = APIRouter(
@@ -93,7 +97,7 @@ async def datascience_agent_and_report(
     Fire-and-forget data science API.
     Submits a prompt and returns the final report in a single call.
     """
-    api_key, error = _validate_api_key(authorization)
+    api_key, user_id, error = _validate_api_key(authorization)
     if error:
         return error
 
@@ -103,20 +107,20 @@ async def datascience_agent_and_report(
         file_ids = []
         file_names = []
         for file in files:
-            file_info = await process_and_store_file(request, file, api_key)
+            file_info = await process_and_store_file(request, file, user_id, api_key=api_key)
             file_ids.append(file_info["file_id"])
             file_names.append(file_info["filename"])
 
         checkpointer = get_global_checkpointer()
         daytona_manager = PersistentDaytonaManager(
-            user_id=api_key,
+            user_id=user_id,
             redis_storage=request.app.state.redis_storage_service,
             snapshot="data-analysis:0.0.10",
             file_ids=file_ids,
         )
 
         agent = create_data_science_subgraph(
-            user_id=api_key,
+            user_id=user_id,
             sambanova_api_key=api_key,
             redis_storage=request.app.state.redis_storage_service,
             daytona_manager=daytona_manager,
@@ -154,7 +158,7 @@ async def datascience_agent_and_report(
             markdown_report,
             files_from_report,
             request.app.state.redis_storage_service,
-            api_key,
+            user_id,
         )
 
         return HTMLResponse(content=final_html, status_code=status.HTTP_200_OK)
@@ -186,7 +190,7 @@ async def datascience_interactive(
     Step 1: Submit prompt and files, get thread_id and hypothesis for approval.
     Step 2: Submit prompt with thread_id, file_ids_json, and resume=true to get the final report.
     """
-    api_key, error = _validate_api_key(authorization)
+    api_key, user_id, error = _validate_api_key(authorization)
     if error:
         return error
 
@@ -203,20 +207,20 @@ async def datascience_interactive(
             file_ids = []
             file_names = []
             for file in files:
-                file_info = await process_and_store_file(request, file, api_key)
+                file_info = await process_and_store_file(request, file, user_id, api_key=api_key)
                 file_ids.append(file_info["file_id"])
                 file_names.append(file_info["filename"])
 
             checkpointer = get_global_checkpointer()
             daytona_manager = PersistentDaytonaManager(
-                user_id=api_key,
+                user_id=user_id,
                 redis_storage=request.app.state.redis_storage_service,
                 snapshot="data-analysis:0.0.10",
                 file_ids=file_ids,
             )
 
             agent = create_data_science_subgraph(
-                user_id=api_key,
+                user_id=user_id,
                 sambanova_api_key=api_key,
                 redis_storage=request.app.state.redis_storage_service,
                 daytona_manager=daytona_manager,
@@ -283,20 +287,20 @@ async def datascience_interactive(
             file_names = []
             for file_id in file_ids:
                 _, metadata = await request.app.state.redis_storage_service.get_file(
-                    api_key, file_id
+                    user_id, file_id
                 )
                 file_names.append(metadata["filename"])
 
             checkpointer = get_global_checkpointer()
             daytona_manager = PersistentDaytonaManager(
-                user_id=api_key,
+                user_id=user_id,
                 redis_storage=request.app.state.redis_storage_service,
                 snapshot="data-analysis:0.0.10",
                 file_ids=file_ids,
             )
 
             agent = create_data_science_subgraph(
-                user_id=api_key,
+                user_id=user_id,
                 sambanova_api_key=api_key,
                 redis_storage=request.app.state.redis_storage_service,
                 daytona_manager=daytona_manager,
@@ -339,7 +343,7 @@ async def datascience_interactive(
                 markdown_report,
                 files_from_report,
                 request.app.state.redis_storage_service,
-                api_key,
+                user_id,
             )
 
             return HTMLResponse(content=final_html, status_code=status.HTTP_200_OK)
@@ -367,7 +371,7 @@ async def deepresearch_agent(
     Fire-and-forget deep research API.
     Submits a prompt and returns the final report in a single call.
     """
-    api_key, error = _validate_api_key(authorization)
+    api_key, user_id, error = _validate_api_key(authorization)
     if error:
         return error
 
@@ -380,7 +384,7 @@ async def deepresearch_agent(
         provider="sambanova",
         request_timeout=120,
         redis_storage=redis_storage,
-        user_id=api_key,
+        user_id=user_id,
         checkpointer=checkpointer,
     )
 
@@ -441,7 +445,7 @@ async def deepresearch_interactive_agent(
     Step 1: Submit prompt, get thread_id and research plan for approval.
     Step 2: Submit prompt with thread_id and resume=true to get the final report.
     """
-    api_key, error = _validate_api_key(authorization)
+    api_key, user_id, error = _validate_api_key(authorization)
     if error:
         return error
 
@@ -454,7 +458,7 @@ async def deepresearch_interactive_agent(
         provider="sambanova",
         request_timeout=120,
         redis_storage=redis_storage,
-        user_id=api_key,
+        user_id=user_id,
         checkpointer=checkpointer,
     )
 
@@ -546,7 +550,7 @@ async def main_agent(
 
     Submits a prompt and returns the final response in a single call.
     """
-    api_key, error = _validate_api_key(authorization)
+    api_key, user_id, error = _validate_api_key(authorization)
     if error:
         return error
 
@@ -575,7 +579,7 @@ async def main_agent(
             from agents.connectors.core.connector_manager import get_connector_manager
             connector_manager = get_connector_manager()
             if connector_manager:
-                connector_tools = await connector_manager.get_user_tools(api_key)
+                connector_tools = await connector_manager.get_user_tools(user_id)
                 all_tools.extend(connector_tools)
                 logger.info(
                     "Loaded connector tools for main agent API",
@@ -587,7 +591,7 @@ async def main_agent(
 
         # Create all subgraphs for the main agent using centralized factory
         subgraphs = create_all_subgraphs(
-            user_id=api_key,
+            user_id=user_id,
             api_key=api_key,
             redis_storage=redis_storage,
             provider="sambanova",
@@ -601,7 +605,7 @@ async def main_agent(
                 "type==default/system_message": "You are a helpful AI assistant. You can help with general questions, coding tasks, financial analysis, deep research, and data science. When a user asks for something specific, you can delegate to specialized subagents.",
                 "type==default/tools": all_tools,
                 "type==default/subgraphs": subgraphs,
-                "type==default/user_id": api_key,
+                "type==default/user_id": user_id,
             }
         )
 
@@ -618,7 +622,7 @@ async def main_agent(
                     "api_key": api_key,
                 },
                 "metadata": {
-                    "user_id": api_key,
+                    "user_id": user_id,
                     "thread_id": thread_id,
                     "message_id": str(uuid.uuid4()),
                 }
@@ -651,7 +655,7 @@ async def main_agent(
                             "api_key": api_key,
                         },
                         "metadata": {
-                            "user_id": api_key,
+                            "user_id": user_id,
                             "thread_id": thread_id,
                             "message_id": str(uuid.uuid4()),
                         }
@@ -729,7 +733,7 @@ async def main_agent_interactive(
     Step 1: Submit prompt, get thread_id and initial response.
     Step 2: Continue conversation with thread_id and resume=true.
     """
-    api_key, error = _validate_api_key(authorization)
+    api_key, user_id, error = _validate_api_key(authorization)
     if error:
         return error
 
@@ -767,7 +771,7 @@ async def main_agent_interactive(
             from agents.connectors.core.connector_manager import get_connector_manager
             connector_manager = get_connector_manager()
             if connector_manager:
-                connector_tools = await connector_manager.get_user_tools(api_key)
+                connector_tools = await connector_manager.get_user_tools(user_id)
                 all_tools.extend(connector_tools)
                 logger.info(
                     "Loaded connector tools for main agent interactive API",
@@ -779,7 +783,7 @@ async def main_agent_interactive(
 
         # Create all subgraphs for the main agent using centralized factory
         subgraphs = create_all_subgraphs(
-            user_id=api_key,
+            user_id=user_id,
             api_key=api_key,
             redis_storage=redis_storage,
             provider="sambanova",
@@ -793,7 +797,7 @@ async def main_agent_interactive(
                 "type==default/system_message": "You are a helpful AI assistant. You can help with general questions, coding tasks, financial analysis, deep research, and data science. When a user asks for something specific, you can delegate to specialized subagents.",
                 "type==default/tools": all_tools,
                 "type==default/subgraphs": subgraphs,
-                "type==default/user_id": api_key,
+                "type==default/user_id": user_id,
             }
         )
 
@@ -815,7 +819,7 @@ async def main_agent_interactive(
                     "api_key": api_key,
                 },
                 "metadata": {
-                    "user_id": api_key,
+                    "user_id": user_id,
                     "thread_id": thread_id,
                     "message_id": str(uuid.uuid4()),
                 }
@@ -848,7 +852,7 @@ async def main_agent_interactive(
                             "api_key": api_key,
                         },
                         "metadata": {
-                            "user_id": api_key,
+                            "user_id": user_id,
                             "thread_id": thread_id,
                             "message_id": str(uuid.uuid4()),
                         }
@@ -952,7 +956,7 @@ async def coding_agent(
 
     Submits code with an optional prompt and returns the execution result in a single call.
     """
-    api_key, error = _validate_api_key(authorization)
+    api_key, user_id, error = _validate_api_key(authorization)
     if error:
         return error
 
@@ -966,7 +970,7 @@ async def coding_agent(
 
         # Create Daytona manager for code execution
         daytona_manager = PersistentDaytonaManager(
-            user_id=api_key,
+            user_id=user_id,
             redis_storage=redis_storage,
             snapshot="data-analysis:0.0.10",
             file_ids=[],
@@ -974,7 +978,7 @@ async def coding_agent(
 
         # Create code execution graph
         code_graph = create_code_execution_graph(
-            user_id=api_key,
+            user_id=user_id,
             sambanova_api_key=api_key,
             redis_storage=redis_storage,
             daytona_manager=daytona_manager,
@@ -1000,7 +1004,7 @@ async def coding_agent(
             config={
                 "configurable": {"thread_id": thread_id},
                 "metadata": {
-                    "user_id": api_key,
+                    "user_id": user_id,
                     "thread_id": thread_id,
                     "message_id": str(uuid.uuid4()),
                 }
@@ -1048,7 +1052,7 @@ async def coding_agent_interactive(
     Step 1: Submit code with prompt, get thread_id and execution result.
     Step 2: Continue with thread_id and resume=true to iterate on code.
     """
-    api_key, error = _validate_api_key(authorization)
+    api_key, user_id, error = _validate_api_key(authorization)
     if error:
         return error
 
@@ -1071,7 +1075,7 @@ async def coding_agent_interactive(
 
         # Create Daytona manager for code execution
         daytona_manager = PersistentDaytonaManager(
-            user_id=api_key,
+            user_id=user_id,
             redis_storage=redis_storage,
             snapshot="data-analysis:0.0.10",
             file_ids=[],
@@ -1079,7 +1083,7 @@ async def coding_agent_interactive(
 
         # Create code execution graph
         code_graph = create_code_execution_graph(
-            user_id=api_key,
+            user_id=user_id,
             sambanova_api_key=api_key,
             redis_storage=redis_storage,
             daytona_manager=daytona_manager,
@@ -1105,7 +1109,7 @@ async def coding_agent_interactive(
             config={
                 "configurable": {"thread_id": thread_id},
                 "metadata": {
-                    "user_id": api_key,
+                    "user_id": user_id,
                     "thread_id": thread_id,
                     "message_id": str(uuid.uuid4()),
                 }
@@ -1165,7 +1169,7 @@ async def financial_analysis_agent(
 
     Submits a prompt and returns the financial analysis report in a single call.
     """
-    api_key, error = _validate_api_key(authorization)
+    api_key, user_id, error = _validate_api_key(authorization)
     if error:
         return error
 
@@ -1179,7 +1183,7 @@ async def financial_analysis_agent(
         # Create financial analysis graph
         financial_graph = create_financial_analysis_graph(
             redis_client=redis_storage,
-            user_id=api_key,
+            user_id=user_id,
         )
 
         # Execute the analysis
@@ -1188,7 +1192,7 @@ async def financial_analysis_agent(
             config={
                 "configurable": {"thread_id": thread_id, "api_key": api_key},
                 "metadata": {
-                    "user_id": api_key,
+                    "user_id": user_id,
                     "thread_id": thread_id,
                     "message_id": str(uuid.uuid4()),
                 }
@@ -1254,7 +1258,7 @@ async def financial_analysis_agent_interactive(
     Step 1: Submit prompt, get thread_id and initial analysis.
     Step 2: Continue with thread_id and resume=true for follow-up questions.
     """
-    api_key, error = _validate_api_key(authorization)
+    api_key, user_id, error = _validate_api_key(authorization)
     if error:
         return error
 
@@ -1277,7 +1281,7 @@ async def financial_analysis_agent_interactive(
         # Create financial analysis graph
         financial_graph = create_financial_analysis_graph(
             redis_client=redis_storage,
-            user_id=api_key,
+            user_id=user_id,
         )
 
         # Execute the analysis
@@ -1286,7 +1290,7 @@ async def financial_analysis_agent_interactive(
             config={
                 "configurable": {"thread_id": thread_id, "api_key": api_key},
                 "metadata": {
-                    "user_id": api_key,
+                    "user_id": user_id,
                     "thread_id": thread_id,
                     "message_id": str(uuid.uuid4()),
                 }
@@ -1355,7 +1359,7 @@ async def download_agent_file(
     Security: Files are scoped to users - you can only download your own files.
     The storage layer verifies file ownership before returning data.
     """
-    user_id, error = _validate_api_key(authorization)
+    _, user_id, error = _validate_api_key(authorization)
     if error:
         return error
 

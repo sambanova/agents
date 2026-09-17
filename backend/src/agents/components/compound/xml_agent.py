@@ -24,6 +24,12 @@ from langchain_core.messages import (
 )
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.redis import AsyncRedisSaver
+from agents.storage.checkpoint_encryption import (
+    EncryptedAsyncRedisSaver,
+    EncryptingSerde,
+    checkpoint_encryption_enabled,
+)
+from agents.storage.encryption_service import EncryptionService
 from langgraph.graph import END
 from langgraph.graph.message import MessageGraph
 
@@ -112,8 +118,14 @@ def create_checkpointer(redis_client=None):
             ),
         }
 
-        # Create checkpointer and extend its serializer configuration
-        redis_checkpointer = AsyncRedisSaver(redis_client=redis_client)
+        # Create checkpointer and extend its serializer configuration. When
+        # checkpoint encryption is enabled, use the saver subclass that avoids
+        # storing channel values in plaintext.
+        encrypt_checkpoints = checkpoint_encryption_enabled()
+        saver_cls = (
+            EncryptedAsyncRedisSaver if encrypt_checkpoints else AsyncRedisSaver
+        )
+        redis_checkpointer = saver_cls(redis_client=redis_client)
 
         # Store the original loads method to delegate to it first
         original_loads = redis_checkpointer.serde.loads
@@ -155,6 +167,15 @@ def create_checkpointer(redis_client=None):
                 )
 
         redis_checkpointer.serde.loads = custom_loads
+
+        # Wrap the (custom_loads-enabled) serde so channel-value and write blobs
+        # are encrypted at rest. Decryption is format-sniffed, so pre-existing
+        # plaintext checkpoints keep loading.
+        if encrypt_checkpoints:
+            redis_checkpointer.serde = EncryptingSerde(
+                redis_checkpointer.serde, EncryptionService()
+            )
+            logger.info("Checkpoint payload encryption enabled")
 
         return redis_checkpointer
 

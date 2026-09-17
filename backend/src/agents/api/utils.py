@@ -351,6 +351,8 @@ def to_agent_thinking(payload: dict) -> Optional[dict]:
             "data_science_visualization_agent",
             "data_science_human_choice",
         ]:
+            response_metadata = payload.get("response_metadata") or {}
+            agent_type = payload["additional_kwargs"]["agent_type"]
             return {
                 "event": "think",
                 "data": json.dumps(
@@ -358,21 +360,21 @@ def to_agent_thinking(payload: dict) -> Optional[dict]:
                         "user_id": payload["user_id"],
                         "message_id": payload["message_id"],
                         "agent_name": event_to_agent_name_mapping.get(
-                            payload["additional_kwargs"]["agent_type"],
+                            agent_type,
                             "Agent",
                         ),
                         "text": payload["content"],
-                        "task": payload["additional_kwargs"]["agent_type"],
+                        "task": agent_type,
                         "metadata": {
                             "workflow_name": "deep_research",
                             "agent_name": event_to_agent_name_mapping.get(
-                                payload["additional_kwargs"]["agent_type"],
+                                agent_type,
                                 "Agent",
                             ),
-                            "llm_name": payload["response_metadata"]["model_name"],
-                            "duration": payload["response_metadata"]["usage"][
+                            "llm_name": response_metadata.get("model_name"),
+                            "duration": (response_metadata.get("usage") or {}).get(
                                 "total_latency"
-                            ],
+                            ),
                         },
                     }
                 ),

@@ -166,9 +166,11 @@ class WorkflowManager:
             process_inputs=lambda x: None,
         )
         async def hypothesis_node(state):
-            return await agent_node(
+            result = await agent_node(
                 state, self.agents["hypothesis_agent"], "hypothesis_agent", "hypothesis"
             )
+            result["hypothesis_retries"] = state.get("hypothesis_retries", 0) + 1
+            return result
 
         @ls.traceable(
             metadata={
@@ -178,16 +180,22 @@ class WorkflowManager:
             process_inputs=lambda x: None,
         )
         async def process_node(state):
-            output_processor = {
-                "task": lambda x: re.search(r"Task:\s*(.*)", x).group(1)
-            }
-            return await agent_node(
+            def extract_task(x):
+                match = re.search(r"Task:\s*(.*)", x)
+                return match.group(1) if match else x
+
+            output_processor = {"task": extract_task}
+            result = await agent_node(
                 state=state,
                 agent=self.agents["process_agent"],
                 name="process_agent",
                 state_key="process_decision",
                 output_processor=output_processor,
             )
+            result["process_decision_retries"] = (
+                state.get("process_decision_retries", 0) + 1
+            )
+            return result
 
         @ls.traceable(
             metadata={

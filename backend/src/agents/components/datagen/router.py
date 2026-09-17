@@ -64,6 +64,14 @@ def hypothesis_router(state: State) -> NodeType:
         NodeType: 'Hypothesis' if no hypothesis exists or tools were used, otherwise 'Process'.
     """
     logger.info("Entering hypothesis_router")
+
+    if state.get("hypothesis_retries", 0) > 15:
+        logger.warning(
+            "Hypothesis agent has retried 15 times without producing a hypothesis. "
+            "Routing to: HumanChoice"
+        )
+        return "HumanChoice"
+
     hypothesis: Union[AIMessage, str, None] = state.get("hypothesis")
 
     try:
@@ -158,6 +166,13 @@ def process_router(state: State) -> ProcessNodeType:
         ProcessNodeType: The next process node to route to based on the process decision.
     """
     logger.info("Entering process_router")
+
+    if state.get("process_decision_retries", 0) > 10:
+        logger.warning(
+            "Process agent has retried 10 times without a valid decision. Routing to: Refiner"
+        )
+        return "Refiner"
+
     process_decision: Union[AIMessage, Dict, str, None] = state.get(
         "process_decision", ""
     )

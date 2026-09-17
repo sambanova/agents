@@ -34,7 +34,7 @@ def create_report_agent(
     **CRITICAL - Image Embedding Instructions:**
     When creating HTML reports, you MUST embed all images/visualizations directly into the HTML document using base64 data URLs.
     - DO NOT use file path references like <img src="filename.png">
-    - Instead, read the image file, convert it to base64, and embed it as: <img src="data:image/png;base64,{base64_string}">
+    - Instead, read the image file, convert it to base64, and embed it as: <img src="data:image/png;base64,{{base64_string}}">
     - This ensures all visualizations are self-contained within the HTML report and display properly
     - Use the daytona_read_document tool to read image files and convert them to base64 format
 
