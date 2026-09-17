@@ -26,6 +26,7 @@ from agents.api.openai_models import (
     create_error_response,
 )
 from agents.api.subgraph_factory import create_all_subgraphs
+from agents.auth.api_key_identity import api_key_identity
 from agents.components.compound.agent import enhanced_agent
 from agents.components.compound.data_types import LLMType
 from agents.components.compound.xml_agent import get_global_checkpointer
@@ -45,9 +46,12 @@ _API_KEY_PATTERN = re.compile(
 
 
 def _validate_api_key(authorization: Optional[str]):
-    """Validate Bearer token format and return (api_key, error_response)."""
+    """Validate Bearer token format and return (api_key, user_id, error_response).
+
+    ``api_key`` is the credential; ``user_id`` is the identity derived from it.
+    """
     if not authorization or not authorization.startswith("Bearer "):
-        return None, JSONResponse(
+        return None, None, JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content=create_error_response(
                 "Authorization header with Bearer token is required",
@@ -57,7 +61,7 @@ def _validate_api_key(authorization: Optional[str]):
         )
     api_key = authorization.replace("Bearer ", "").strip()
     if not api_key or not _API_KEY_PATTERN.match(api_key):
-        return None, JSONResponse(
+        return None, None, JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content=create_error_response(
                 "Invalid API key",
@@ -65,7 +69,7 @@ def _validate_api_key(authorization: Optional[str]):
                 "invalid_api_key"
             ).model_dump()
         )
-    return api_key, None
+    return api_key, api_key_identity(api_key), None
 
 
 router = APIRouter(
@@ -473,7 +477,7 @@ async def list_tools(authorization: Optional[str] = Header(None)):
     tools = client.get("/tools")
     ```
     """
-    _, error = _validate_api_key(authorization)
+    _, _, error = _validate_api_key(authorization)
     if error:
         return error
     return AVAILABLE_TOOLS
@@ -512,7 +516,7 @@ async def create_response(
     ```
     """
     # Validate authorization
-    api_key, error = _validate_api_key(authorization)
+    api_key, user_id, error = _validate_api_key(authorization)
     if error:
         return error
 
@@ -617,14 +621,14 @@ async def create_response(
             from agents.connectors.core.connector_manager import get_connector_manager
             connector_manager = get_connector_manager()
             if connector_manager:
-                connector_tools = await connector_manager.get_user_tools(api_key)
+                connector_tools = await connector_manager.get_user_tools(user_id)
                 all_tools.extend(connector_tools)
         except Exception as e:
             logger.error("Failed to load connector tools", error=str(e))
 
         # Create subgraphs
         subgraphs = create_all_subgraphs(
-            user_id=api_key,
+            user_id=user_id,
             api_key=api_key,
             redis_storage=redis_storage,
             provider="sambanova",
@@ -645,7 +649,7 @@ async def create_response(
                 "type==default/system_message": "You are a helpful AI assistant. You can help with general questions, coding tasks, financial analysis, deep research, and data science.",
                 "type==default/tools": all_tools,
                 "type==default/subgraphs": subgraphs,
-                "type==default/user_id": api_key,
+                "type==default/user_id": user_id,
             }
         )
 
@@ -655,7 +659,7 @@ async def create_response(
                 "api_key": api_key,
             },
             "metadata": {
-                "user_id": api_key,
+                "user_id": user_id,
                 "thread_id": thread_id,
                 "message_id": str(uuid.uuid4()),
             }

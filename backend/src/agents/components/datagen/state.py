@@ -114,6 +114,10 @@ class State(TypedDict):
 
     agent_quality_review_retries: Annotated[int, lambda left, right: right] = 0
 
+    process_decision_retries: Annotated[int, lambda left, right: right] = 0
+
+    hypothesis_retries: Annotated[int, lambda left, right: right] = 0
+
     # Workflow timing tracking
     workflow_start_time: Annotated[float, lambda left, right: left or right] = 0
     workflow_timing: Annotated[dict, lambda left, right: right] = {}

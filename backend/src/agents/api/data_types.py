@@ -6,7 +6,27 @@ from typing import Any, Dict, List, Optional, Union
 from agents.components.samba_research_flow.crews.edu_research.edu_research_crew import (
     Section,
 )
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+def ensure_ascii_api_key(value: str, label: str) -> str:
+    """Strip surrounding whitespace and reject non-ASCII characters in a key.
+
+    API keys are sent as HTTP header values, so a non-ASCII character (usually a
+    copy-paste artifact) can't be used and would otherwise fail deep inside the
+    HTTP client. Validated once here, where keys enter the system.
+    """
+    if not value:
+        return value
+    stripped = value.strip()
+    try:
+        stripped.encode("ascii")
+    except UnicodeEncodeError:
+        raise ValueError(
+            f"API key for '{label}' contains invalid (non-ASCII) characters. "
+            "Please re-copy the key and try again."
+        )
+    return stripped
 
 
 # Enum to Define Agent Types
@@ -64,6 +84,13 @@ class APIKeys(BaseModel):
     serper_key: str
     exa_key: str
     paypal_invoicing_email: str = ""
+
+    @field_validator(
+        "sambanova_key", "fireworks_key", "together_key", "serper_key", "exa_key"
+    )
+    @classmethod
+    def _validate_key(cls, v: str, info) -> str:
+        return ensure_ascii_api_key(v, info.field_name)
 
 
 class ShareResponse(BaseModel):

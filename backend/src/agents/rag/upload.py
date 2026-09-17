@@ -64,10 +64,20 @@ class RedisHybridRetriever(BaseRetriever, BaseModel):
         return docs
 
 
-@lru_cache(maxsize=100)
 def create_user_vector_store(
     api_key: str, redis_client: redis.Redis
 ) -> RedisVectorStore:
+    """Return the shared RAG vector store.
+
+    ``api_key`` is accepted for backwards compatibility but is not used to cache
+    or identify the store: the store does not depend on it (embeddings are local
+    and the index name is fixed), so the cache is keyed on the Redis client only.
+    """
+    return _create_vector_store(redis_client)
+
+
+@lru_cache(maxsize=1)
+def _create_vector_store(redis_client: redis.Redis) -> RedisVectorStore:
     vstore = RedisVectorStore(
         embeddings=HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2",

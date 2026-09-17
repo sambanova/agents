@@ -36,6 +36,21 @@ backend:
     OTEL_SDK_DISABLED: "true"
     LOG_DIR: "/app/logs"
     ENABLE_USER_KEYS: "false"
+    # At-rest encryption for Redis-stored data.
+    #   salt (default): legacy per-user key derived from user_id + REDIS_MASTER_SALT.
+    #   kms:            envelope encryption; DEKs wrapped by a KEK held in AWS KMS.
+    # To enable KMS: set ENCRYPTION_PROVIDER=kms, KMS_BACKEND=aws, and KMS_KEY_ID
+    # to the KMS key ARN/id (the key ID/ARN is not secret, so it lives here, not
+    # in the Secret). The pod's IAM role/service account must be granted
+    # kms:GenerateDataKey and kms:Decrypt on that key.
+    ENCRYPTION_PROVIDER: "salt"
+    KMS_BACKEND: "aws"
+    KMS_KEY_ID: ""
+    AWS_REGION: "us-west-1"
+    # Encrypt LangGraph checkpoint payloads (channel values + write blobs) at
+    # rest using ENCRYPTION_PROVIDER above. Pre-existing plaintext checkpoints
+    # still load. Set to "false" to disable.
+    ENCRYPT_CHECKPOINTS: "true"
   volumes:
     logs:
       hostPath: /data/aiskagents-logs
@@ -119,6 +134,21 @@ redis:
   # Redis configuration
   auth:
     enabled: false
+  # Restrict who can reach Redis at the network layer. The Bitnami chart's own
+  # policy is used so intra-Redis (master/replica) traffic and probes keep
+  # working. allowExternal:false means only the namespaces/pods matched below
+  # (plus Redis's own pods) may connect. The ingress selectors must match the
+  # backend:
+  # ingressNSMatchLabels -> global.namespace, ingressNSPodMatchLabels -> backend.name.
+  # Per-env overrides (e.g. dev uses app: aiskagents-backend-dev) are required.
+  # NOTE: only enforced if the cluster CNI supports NetworkPolicy.
+  networkPolicy:
+    enabled: true
+    allowExternal: false
+    ingressNSMatchLabels:
+      kubernetes.io/metadata.name: default
+    ingressNSPodMatchLabels:
+      app: aiskagents-backend
   # Ensure Redis Stack modules are loaded
   commonConfiguration: |-
     loadmodule /opt/redis-stack/lib/redisearch.so
@@ -150,7 +180,7 @@ redis:
   service:
     type: ClusterIP
     ports:
-      redis: 6379 
+      redis: 6379
 
 postgresql:
   enabled: true

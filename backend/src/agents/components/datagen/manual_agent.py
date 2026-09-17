@@ -69,6 +69,39 @@ class ManualAgent(Runnable):
         self.llm_response: AIMessage = None
         logger.info(f"ManualAgent initialized with {len(tools)} tools.")
 
+    @staticmethod
+    def _safe_parse_dict_call(param_value: str) -> Dict[Any, Any]:
+        """
+        Parse a ``dict(...)`` expression using a restricted AST evaluator.
+
+        Accepts only a single call to the builtin ``dict`` whose positional
+        and keyword arguments are Python literals (validated via
+        ``ast.literal_eval``). Any other expression -- attribute access,
+        function calls, names, or ``**`` unpacking -- raises ``ValueError``
+        or ``SyntaxError``, which the caller handles via its string fallback.
+        """
+        node = ast.parse(param_value, mode="eval").body
+
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "dict"
+        ):
+            raise ValueError("Only a literal dict(...) expression is allowed")
+
+        # dict() accepts at most one positional (a mapping/iterable) argument,
+        # and it cannot be combined with keyword arguments.
+        if node.args and (len(node.args) > 1 or node.keywords):
+            raise ValueError("Invalid dict(...) arguments")
+
+        # Reject **unpacking (represented by a keyword with arg=None).
+        if any(kw.arg is None for kw in node.keywords):
+            raise ValueError("Unpacking is not allowed in dict(...)")
+
+        args = [ast.literal_eval(arg) for arg in node.args]
+        kwargs = {kw.arg: ast.literal_eval(kw.value) for kw in node.keywords}
+        return dict(*args, **kwargs)
+
     def _parse_tool_parameters(self, tool_input_content: str) -> Dict[str, Any]:
         """
         Parse structured XML parameters from tool_input content.
@@ -99,8 +132,9 @@ class ManualAgent(Runnable):
 
                 # Handle dict format: dict([(1, "value1"), (2, "value2")])
                 elif param_value.startswith("dict("):
-                    # Use eval for dict() format - this is safe for known patterns
-                    parsed_value = eval(param_value)
+                    # Parse the dict(...) format via a restricted AST evaluator
+                    # that only allows a single dict(...) call with literal args.
+                    parsed_value = self._safe_parse_dict_call(param_value)
                     params[param_name] = parsed_value
 
                 # Handle Python dict syntax with unquoted keys: {1: "value", 2: "value"}
@@ -224,12 +258,21 @@ class ManualAgent(Runnable):
                     tool_name = tool_match.group(1).strip()
                     tool_input_content = tool_input_match.group(1).strip()
 
-                    # Parse structured XML parameters
+                    # Parse structured XML parameters. Note this may return a
+                    # plain string (the no-tag fallback) as well as a dict, and
+                    # ToolExecutor handles both, so the logging below must not
+                    # assume a dict.
                     parsed_params = self._parse_tool_parameters(tool_input_content)
 
                     # Execute the tool with parsed parameters
+                    if isinstance(parsed_params, dict):
+                        params_summary = ", ".join(
+                            f"{k}: {str(v)[0:20]}" for k, v in parsed_params.items()
+                        )
+                    else:
+                        params_summary = str(parsed_params)[0:20]
                     logger.info(
-                        f"Executing tool {tool_name} with parameters {', '.join([f'{k}: {str(v)[0:20]}' for k, v in parsed_params.items()])} in {self.name}"
+                        f"Executing tool {tool_name} with parameters {params_summary} in {self.name}"
                     )
                     action = ToolInvocation(tool=tool_name, tool_input=parsed_params)
                     tool_result = await self.tool_executor.ainvoke(action)

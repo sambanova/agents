@@ -1,6 +1,7 @@
 import os
 import time
 import uuid
+from typing import Optional
 
 import structlog
 from agents.auth.auth0_config import get_current_user_id
@@ -31,7 +32,14 @@ async def process_and_store_file(
     request: Request,
     file: UploadFile,
     user_id: str,
+    api_key: Optional[str] = None,
 ):
+    """Store an uploaded file, indexing PDFs into the RAG store.
+
+    ``api_key`` is the key to index with. API-key-authenticated callers pass it
+    explicitly, since their ``user_id`` is derived from the key and so has no
+    stored key set of its own. Defaults to the user's stored SambaNova key.
+    """
     # Generate unique file ID
     file_id = str(uuid.uuid4())
 
@@ -49,15 +57,18 @@ async def process_and_store_file(
     if safe_content_type == "application/pdf":
         logger.info(f"[UPLOAD_TRACE] File is PDF, starting indexing for {file_id}")
         file_blobs = await convert_ingestion_input_to_blob(content, safe_filename)
-        api_keys = await request.app.state.redis_storage_service.get_user_api_key(
-            user_id
-        )
+        indexing_key = api_key
+        if not indexing_key:
+            api_keys = await request.app.state.redis_storage_service.get_user_api_key(
+                user_id
+            )
+            indexing_key = api_keys.sambanova_key
         vector_ids = await ingest_runnable.ainvoke(
             file_blobs,
             {
                 "user_id": user_id,
                 "document_id": file_id,
-                "api_key": api_keys.sambanova_key,
+                "api_key": indexing_key,
                 "redis_client": request.app.state.sync_redis_client,
             },
         )
