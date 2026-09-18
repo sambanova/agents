@@ -20,4 +20,7 @@
 .project
 .idea/
 *.tmproj
-.vscode/ 
+.vscode/
+# Environment values files hold secrets
+values.*.yaml
+aiskagents/values.*.yaml
