@@ -132,20 +132,12 @@ redis:
     registry: docker.io
     repository: redis/redis-stack-server
     tag: 7.4.0-v5
-  # Password comes from a pre-existing redis-auth secret in the release
-  # namespace, which must exist before upgrading.
+  # existingSecret must track backend.secrets.name (set per environment).
   auth:
     enabled: true
-    existingSecret: redis-auth
-    existingSecretPasswordKey: redis-password
-  # Restrict who can reach Redis at the network layer. The Bitnami chart's own
-  # policy is used so intra-Redis (master/replica) traffic and probes keep
-  # working. allowExternal:false means only Redis's own pods and pods labelled
-  # <release>-redis-client may connect; the backend deployment carries that
-  # label, so this needs no per-env backend name.
-  # NOTE: guards the subchart Redis, not the REDIS_HOST instance, which is a
-  # separate release configured from helm/redis/values/.
-  # NOTE: only enforced if the cluster CNI supports NetworkPolicy.
+    existingSecret: aiskagents-backend-secrets
+    existingSecretPasswordKey: REDIS_PASSWORD
+  # Admits Redis's own pods and pods labelled <release>-redis-client.
   networkPolicy:
     enabled: true
     allowExternal: false

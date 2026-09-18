@@ -13,8 +13,7 @@ spec:
     metadata:
       labels:
         app: {{ .Values.backend.name }}
-        # Lets the Redis subchart's NetworkPolicy admit us by label rather than
-        # by a per-env backend name.
+        # Admitted by the Redis NetworkPolicy.
         {{ .Release.Name }}-redis-client: "true"
     spec:
       terminationGracePeriodSeconds: 60
