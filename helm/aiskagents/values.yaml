@@ -58,6 +58,7 @@ backend:
       TAVILY_API_KEY: ""
       CLERK_JWT_ISSUER: ""
       REDIS_MASTER_SALT: ""
+      REDIS_PASSWORD: ""
       EXA_KEY: ""
       SERPER_KEY: ""
       FIREWORKS_KEY: ""

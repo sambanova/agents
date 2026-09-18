@@ -24,10 +24,13 @@ def get_redis_pool() -> aioredis.ConnectionPool:
     if _global_redis_pool is None:
         redis_host = os.getenv("REDIS_HOST", "localhost")
         redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        # Unset/empty means no auth, so local dev keeps working.
+        redis_password = os.getenv("REDIS_PASSWORD") or None
 
         _global_redis_pool = aioredis.ConnectionPool(
             host=redis_host,
             port=redis_port,
+            password=redis_password,
             db=0,
             decode_responses=True,
             max_connections=100,
@@ -47,10 +50,12 @@ def get_sync_redis_pool() -> redis.ConnectionPool:
     if _global_sync_redis_pool is None:
         redis_host = os.getenv("REDIS_HOST", "localhost")
         redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        redis_password = os.getenv("REDIS_PASSWORD") or None
 
         _global_sync_redis_pool = redis.ConnectionPool(
             host=redis_host,
             port=redis_port,
+            password=redis_password,
             db=0,
             decode_responses=True,
             max_connections=100,

@@ -1,6 +1,9 @@
-# Redis configuration
+# Password comes from a pre-existing redis-auth secret in this namespace, which
+# must exist before upgrading. Same value as the backend's REDIS_PASSWORD.
 auth:
-  enabled: false
+  enabled: true
+  existingSecret: redis-auth
+  existingSecretPasswordKey: redis-password
 
 image:
   repository: redis/redis-stack-server
@@ -44,4 +47,14 @@ replica:
 service:
   type: ClusterIP
   ports:
-    redis: 6379 
+    redis: 6379
+
+# Second layer after the password: only the backend's namespace and pod label
+# may connect. Selectors must track global.namespace and backend.name.
+networkPolicy:
+  enabled: true
+  allowExternal: false
+  ingressNSMatchLabels:
+    kubernetes.io/metadata.name: default
+  ingressNSPodMatchLabels:
+    app: aiskagents-backend

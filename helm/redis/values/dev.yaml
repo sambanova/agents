@@ -1,6 +1,8 @@
-# Redis configuration
+# Require a password. See prod.yaml for the redis-auth secret this expects.
 auth:
-  enabled: false
+  enabled: true
+  existingSecret: redis-auth
+  existingSecretPasswordKey: redis-password
 
 image:
   repository: redis/redis-stack-server
@@ -45,3 +47,12 @@ service:
   type: ClusterIP
   ports:
     redis: 6379 
+
+# See prod.yaml. Selectors must match the dev backend's backend.name.
+networkPolicy:
+  enabled: true
+  allowExternal: false
+  ingressNSMatchLabels:
+    kubernetes.io/metadata.name: default
+  ingressNSPodMatchLabels:
+    app: aiskagents-backend-dev
