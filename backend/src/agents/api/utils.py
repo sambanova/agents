@@ -14,7 +14,7 @@ import markdown
 import structlog
 from agents.api.session_state import SessionStateManager
 from agents.storage.redis_service import SecureRedisService
-from weasyprint import HTML
+from weasyprint import HTML, default_url_fetcher
 
 logger = structlog.get_logger(__name__)
 
@@ -76,6 +76,13 @@ def validate_external_url(url: str) -> bool:
     except Exception as e:
         logger.error("URL validation error", url=url, error=str(e))
         return False
+
+def pdf_url_fetcher(url: str, *args, **kwargs):
+    """WeasyPrint URL fetcher that only resolves inline ``data:`` URIs."""
+    if url.startswith("data:"):
+        return default_url_fetcher(url, *args, **kwargs)
+    raise ValueError(f"Resource not allowed in PDF rendering: {url[:100]}")
+
 
 session_state_manager = SessionStateManager()
 
@@ -290,7 +297,7 @@ async def generate_report_pdf(content: str, header: str) -> Optional[str]:
 
         # Generate PDF using WeasyPrint
         pdf_buffer = BytesIO()
-        HTML(string=full_html).write_pdf(pdf_buffer)
+        HTML(string=full_html, url_fetcher=pdf_url_fetcher).write_pdf(pdf_buffer)
         pdf_data = pdf_buffer.getvalue()
         pdf_buffer.close()
 

@@ -8,7 +8,11 @@ from io import BytesIO
 from typing import Any, Callable
 
 import structlog
-from agents.api.utils import generate_report_pdf, process_data_science_report
+from agents.api.utils import (
+    generate_report_pdf,
+    pdf_url_fetcher,
+    process_data_science_report,
+)
 from agents.components.datagen.manual_agent import ManualAgent
 from agents.components.datagen.message_capture_agent import MessageCaptureAgent
 from agents.components.datagen.state import Replace, State
@@ -460,7 +464,7 @@ async def refiner_node(
             )
 
             pdf_buffer = BytesIO()
-            HTML(string=html_result).write_pdf(pdf_buffer)
+            HTML(string=html_result, url_fetcher=pdf_url_fetcher).write_pdf(pdf_buffer)
             pdf_data = pdf_buffer.getvalue()
             pdf_buffer.close()
 
