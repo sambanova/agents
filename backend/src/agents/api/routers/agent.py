@@ -124,7 +124,7 @@ async def datascience_agent_and_report(
         file_ids = []
         file_names = []
         for file in files:
-            file_info = await process_and_store_file(request, file, user_id, api_key=api_key)
+            file_info = await process_and_store_file(request, file, user_id)
             file_ids.append(file_info["file_id"])
             file_names.append(file_info["filename"])
 
@@ -230,7 +230,7 @@ async def datascience_interactive(
             file_ids = []
             file_names = []
             for file in files:
-                file_info = await process_and_store_file(request, file, user_id, api_key=api_key)
+                file_info = await process_and_store_file(request, file, user_id)
                 file_ids.append(file_info["file_id"])
                 file_names.append(file_info["filename"])
 

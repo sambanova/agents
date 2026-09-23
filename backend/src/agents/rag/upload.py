@@ -145,7 +145,6 @@ class IngestRunnable(RunnableSerializable[BinaryIO, List[str]]):
     text_splitter: TextSplitter
     user_id: Optional[str] = None
     document_id: Optional[str] = None
-    api_key: Optional[str] = None
     redis_client: Optional[redis.Redis] = None
     """Ingested documents will be associated with user_id and document_id.
     
@@ -173,20 +172,15 @@ class IngestRunnable(RunnableSerializable[BinaryIO, List[str]]):
         if self.redis_client is None:
             raise ValueError("Redis client is required")
 
-        if self.api_key:
-            vectorstore = create_user_vector_store(self.api_key, self.redis_client)
-
-            out = await ingest_blob(
-                blob=blob,
-                parser=MIMETYPE_BASED_PARSER,
-                text_splitter=self.text_splitter,
-                vectorstore=vectorstore,
-                user_id=self.user_id,
-                document_id=self.document_id,
-            )
-            return out
-        else:
-            raise ValueError("API key is required")
+        vectorstore = _create_vector_store(self.redis_client)
+        return await ingest_blob(
+            blob=blob,
+            parser=MIMETYPE_BASED_PARSER,
+            text_splitter=self.text_splitter,
+            vectorstore=vectorstore,
+            user_id=self.user_id,
+            document_id=self.document_id,
+        )
 
 
 ingest_runnable = IngestRunnable(
@@ -201,11 +195,6 @@ ingest_runnable = IngestRunnable(
         id="document_id",
         annotation=Optional[str],
         name="Document ID",
-    ),
-    api_key=ConfigurableField(
-        id="api_key",
-        annotation=Optional[str],
-        name="API Key",
     ),
     redis_client=ConfigurableField(
         id="redis_client",
