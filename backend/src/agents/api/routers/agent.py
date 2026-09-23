@@ -19,6 +19,7 @@ from agents.auth.api_key_identity import api_key_identity
 from agents.components.compound.data_science_subgraph import (
     create_data_science_subgraph,
 )
+from agents.components.compound.util import secret_api_key
 from agents.components.compound.xml_agent import get_global_checkpointer
 from agents.components.datagen.tools.persistent_daytona import PersistentDaytonaManager
 from agents.components.open_deep_research.graph import create_deep_research_graph
@@ -665,7 +666,7 @@ async def main_agent(
             config={
                 "configurable": {
                     "thread_id": thread_id,
-                    "api_key": api_key,
+                    "api_key": secret_api_key(api_key),
                 },
                 "metadata": {
                     "user_id": user_id,
@@ -698,7 +699,7 @@ async def main_agent(
                     config={
                         "configurable": {
                             "thread_id": thread_id,
-                            "api_key": api_key,
+                            "api_key": secret_api_key(api_key),
                         },
                         "metadata": {
                             "user_id": user_id,
@@ -864,7 +865,7 @@ async def main_agent_interactive(
             config={
                 "configurable": {
                     "thread_id": thread_id,
-                    "api_key": api_key,
+                    "api_key": secret_api_key(api_key),
                 },
                 "metadata": {
                     "user_id": user_id,
@@ -897,7 +898,7 @@ async def main_agent_interactive(
                     config={
                         "configurable": {
                             "thread_id": thread_id,
-                            "api_key": api_key,
+                            "api_key": secret_api_key(api_key),
                         },
                         "metadata": {
                             "user_id": user_id,
@@ -1240,7 +1241,7 @@ async def financial_analysis_agent(
         result = await financial_graph.ainvoke(
             [HumanMessage(content=agent_request.prompt)],
             config={
-                "configurable": {"thread_id": thread_id, "api_key": api_key},
+                "configurable": {"thread_id": thread_id, "api_key": secret_api_key(api_key)},
                 "metadata": {
                     "user_id": user_id,
                     "thread_id": thread_id,
@@ -1340,7 +1341,7 @@ async def financial_analysis_agent_interactive(
         result = await financial_graph.ainvoke(
             [HumanMessage(content=agent_request.prompt)],
             config={
-                "configurable": {"thread_id": thread_id, "api_key": api_key},
+                "configurable": {"thread_id": thread_id, "api_key": secret_api_key(api_key)},
                 "metadata": {
                     "user_id": user_id,
                     "thread_id": thread_id,

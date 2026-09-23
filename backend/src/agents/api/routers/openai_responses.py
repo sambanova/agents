@@ -29,6 +29,7 @@ from agents.api.subgraph_factory import create_all_subgraphs
 from agents.auth.api_key_identity import api_key_identity
 from agents.components.compound.agent import enhanced_agent
 from agents.components.compound.data_types import LLMType
+from agents.components.compound.util import secret_api_key
 from agents.components.compound.xml_agent import get_global_checkpointer
 from agents.api.utils import validate_external_url
 from agents.tools.langgraph_tools import load_static_tools
@@ -656,7 +657,7 @@ async def create_response(
         config = {
             "configurable": {
                 "thread_id": thread_id,
-                "api_key": api_key,
+                "api_key": secret_api_key(api_key),
             },
             "metadata": {
                 "user_id": user_id,
