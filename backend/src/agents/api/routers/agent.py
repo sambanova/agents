@@ -61,6 +61,22 @@ def _validate_api_key(authorization: Optional[str]):
     return api_key, api_key_identity(api_key), None
 
 
+async def _owns_thread(thread_id: Optional[str], user_id: str) -> bool:
+    """Whether ``thread_id`` exists and its latest checkpoint belongs to ``user_id``."""
+    checkpointer = get_global_checkpointer()
+    if not thread_id or checkpointer is None:
+        return False
+    checkpoint = await checkpointer.aget_tuple({"configurable": {"thread_id": thread_id}})
+    return checkpoint is not None and checkpoint.metadata.get("user_id") == user_id
+
+
+def _thread_not_found() -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"error": "Thread not found"},
+    )
+
+
 router = APIRouter(
     prefix="/agent",
 )
@@ -143,12 +159,18 @@ async def datascience_agent_and_report(
                 "needs_revision": False,
                 "sender": "",
             },
-            config={"configurable": {"thread_id": thread_id}},
+            config={
+                "configurable": {"thread_id": thread_id},
+                "metadata": {"user_id": user_id},
+            },
         )
         graph_input_step2 = Command(resume="APPROVE")
         result_step2 = await agent.ainvoke(
             graph_input_step2,
-            config={"configurable": {"thread_id": thread_id}},
+            config={
+                "configurable": {"thread_id": thread_id},
+                "metadata": {"user_id": user_id},
+            },
         )
         markdown_report = result_step2["internal_messages"][-1].content
         files_from_report = result_step2["internal_messages"][-1].additional_kwargs.get(
@@ -244,7 +266,10 @@ async def datascience_interactive(
                     "needs_revision": False,
                     "sender": "",
                 },
-                config={"configurable": {"thread_id": new_thread_id}},
+                config={
+                    "configurable": {"thread_id": new_thread_id},
+                    "metadata": {"user_id": user_id},
+                },
             )
 
             # Manually stop sandbox
@@ -279,6 +304,8 @@ async def datascience_interactive(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="thread_id and file_ids_json are required for resuming.",
                 )
+            if not await _owns_thread(thread_id, user_id):
+                return _thread_not_found()
 
             file_ids = json.loads(file_ids_json)
             # We need file_names, but they are not passed from step 1.
@@ -311,7 +338,10 @@ async def datascience_interactive(
             graph_input_step2 = Command(resume=prompt)
             result_step2 = await agent.ainvoke(
                 graph_input_step2,
-                config={"configurable": {"thread_id": thread_id}},
+                config={
+                    "configurable": {"thread_id": thread_id},
+                    "metadata": {"user_id": user_id},
+                },
             )
 
             # User decided to revise graph
@@ -394,14 +424,20 @@ async def deepresearch_agent(
         graph_input_step1 = {"topic": research_request.prompt}
         await agent.ainvoke(
             graph_input_step1,
-            config={"configurable": {"thread_id": thread_id}},
+            config={
+                "configurable": {"thread_id": thread_id},
+                "metadata": {"user_id": user_id},
+            },
         )
 
         # Step 2: Auto-approve
         graph_input_step2 = Command(resume="APPROVE")
         result_step2 = await agent.ainvoke(
             graph_input_step2,
-            config={"configurable": {"thread_id": thread_id}},
+            config={
+                "configurable": {"thread_id": thread_id},
+                "metadata": {"user_id": user_id},
+            },
         )
 
         if "final_report" in result_step2:
@@ -466,6 +502,13 @@ async def deepresearch_interactive_agent(
         thread_id = str(uuid.uuid4())
     else:
         thread_id = research_request.thread_id
+        if not thread_id:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "thread_id is required when resume=true"},
+            )
+        if not await _owns_thread(thread_id, user_id):
+            return _thread_not_found()
 
     try:
         if research_request.resume is False:
@@ -481,7 +524,10 @@ async def deepresearch_interactive_agent(
 
         result = await agent.ainvoke(
             graph_input,
-            config={"configurable": {"thread_id": thread_id}},
+            config={
+                "configurable": {"thread_id": thread_id},
+                "metadata": {"user_id": user_id},
+            },
         )
         if "__interrupt__" in result and len(result["__interrupt__"]) > 0:
             interrupt_message = result["__interrupt__"][0]
@@ -749,6 +795,8 @@ async def main_agent_interactive(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={"error": "thread_id is required when resume=true"},
             )
+        if not await _owns_thread(thread_id, user_id):
+            return _thread_not_found()
 
     try:
         # Import here to avoid circular dependencies
@@ -1067,6 +1115,8 @@ async def coding_agent_interactive(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={"error": "thread_id is required when resume=true"},
             )
+        if not await _owns_thread(thread_id, user_id):
+            return _thread_not_found()
 
     try:
         # Import here to avoid circular dependencies
@@ -1273,6 +1323,8 @@ async def financial_analysis_agent_interactive(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={"error": "thread_id is required when resume=true"},
             )
+        if not await _owns_thread(thread_id, user_id):
+            return _thread_not_found()
 
     try:
         # Import here to avoid circular dependencies
