@@ -23,12 +23,12 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.redis import AsyncRedisSaver
 from agents.storage.checkpoint_encryption import (
     EncryptedAsyncRedisSaver,
     EncryptingSerde,
     checkpoint_encryption_enabled,
 )
+from agents.storage.checkpoint_serde import SafeAsyncRedisSaver
 from agents.storage.encryption_service import EncryptionService
 from langgraph.graph import END
 from langgraph.graph.message import MessageGraph
@@ -123,7 +123,7 @@ def create_checkpointer(redis_client=None):
         # storing channel values in plaintext.
         encrypt_checkpoints = checkpoint_encryption_enabled()
         saver_cls = (
-            EncryptedAsyncRedisSaver if encrypt_checkpoints else AsyncRedisSaver
+            EncryptedAsyncRedisSaver if encrypt_checkpoints else SafeAsyncRedisSaver
         )
         redis_checkpointer = saver_cls(redis_client=redis_client)
 
@@ -163,6 +163,7 @@ def create_checkpointer(redis_client=None):
                         "compound",
                         "message_types",
                     ],
+                    secrets_from_env=False,
                     additional_import_mappings=additional_import_mappings,
                 )
 

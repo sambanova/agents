@@ -38,8 +38,8 @@ import os
 from typing import Any, Tuple
 
 import structlog
-from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 
+from agents.storage.checkpoint_serde import SafeAsyncRedisSaver
 from agents.storage.encryption_service import EncryptionService
 
 logger = structlog.get_logger(__name__)
@@ -84,8 +84,8 @@ class EncryptingSerde:
         return getattr(self.inner, name)
 
 
-class EncryptedAsyncRedisSaver(AsyncRedisSaver):
-    """AsyncRedisSaver that does not store channel values in plaintext.
+class EncryptedAsyncRedisSaver(SafeAsyncRedisSaver):
+    """SafeAsyncRedisSaver that does not store channel values in plaintext.
 
     The channel values are persisted separately as encrypted blobs (via the
     EncryptingSerde) and overwritten from those on load, so the redundant inline

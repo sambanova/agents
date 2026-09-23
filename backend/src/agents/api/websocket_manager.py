@@ -20,6 +20,7 @@ from agents.components.compound.data_science_subgraph import (
     create_data_science_subgraph,
 )
 from agents.components.compound.data_types import LiberalFunctionMessage
+from agents.components.compound.util import secret_api_key
 from agents.components.compound.financial_analysis_subgraph import (
     create_financial_analysis_graph,
 )
@@ -1867,7 +1868,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                     "type==default/llm_type": llm_type,
                     "thread_id": thread_id,
                     "user_id": user_id,
-                    "api_key": api_key_to_use,  # Keep for backward compatibility
+                    "api_key": secret_api_key(api_key_to_use),  # Keep for backward compatibility
                     "api_keys": {
                         "sambanova": api_keys.sambanova_key,
                         "fireworks": api_keys.fireworks_key,
@@ -1892,7 +1893,7 @@ class WebSocketConnectionManager(WebSocketInterface):
                     "type==default/llm_type": llm_type,
                     "thread_id": thread_id,
                     "user_id": user_id,
-                    "api_key": api_key_to_use,
+                    "api_key": secret_api_key(api_key_to_use),
                     "message_id": message_id,
                 },
                 "recursion_limit": 50,
