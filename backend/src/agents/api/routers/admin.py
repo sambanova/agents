@@ -230,6 +230,18 @@ async def update_configuration(
             if api_key:
                 cp["apiKey"] = validate_api_key(api_key, cp.get("name", "custom provider"))
 
+    for kind, base_urls in (
+        ("provider", update.provider_base_urls),
+        ("task", update.task_base_urls),
+    ):
+        for name, base_url in (base_urls or {}).items():
+            if base_url and not validate_external_url(base_url):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid base URL for {kind} '{name}': "
+                           "must be an external, publicly-routable address"
+                )
+
     # Reject API keys with non-ASCII characters before they ever reach an LLM call
     if update.api_keys:
         update.api_keys = {
